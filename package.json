@@ -1,0 +1,41 @@
+{
+  "name": "practiceplan",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PracticePlan - build, track and share sports practice schedules",
+  "scripts": {
+    "dev": "concurrently -k -n server,client \"node --watch --disable-warning=ExperimentalWarning server/index.js\" \"vite\"",
+    "build": "tsc --noEmit -p client && vite build",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "typecheck": "tsc --noEmit -p client"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@tiptap/pm": "^3.33.1",
+    "@tiptap/react": "^3.33.1",
+    "@tiptap/starter-kit": "^3.33.1",
+    "dompurify": "^3.4.17",
+    "express": "^5.3.0",
+    "mammoth": "^1.13.0",
+    "papaparse": "^5.7.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5",
+    "read-excel-file": "^9.3.14",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "concurrently": "^10.0.7",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7"
+  }
+}
