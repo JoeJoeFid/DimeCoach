@@ -5881,3 +5881,16 @@ fieldset.plain {
   justify-content: flex-end;
   padding: 8px 12px 12px;
 }
+
+/* Steps can be dragged into a new order. */
+.step-thumb {
+  touch-action: none;
+}
+.step-thumb.moving {
+  z-index: 2;
+  box-shadow: var(--shadow-2);
+  cursor: grabbing;
+}
+.step-help {
+  margin: 0;
+}

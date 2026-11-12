@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
 import type { Play, PlayFrame, PlayLine, PlayMark, PlayObject, PlayShape } from '../types';
 import {
@@ -155,6 +158,8 @@ export default function PlayEditor() {
   const [step, setStep] = useState(0);
   const [tool, setTool] = useState<Tool>('select');
   const [selected, setSelectedOne] = useState<string | null>(null);
+  // Only the pointer drags a step, and only after a small move, so a click or Enter still opens it.
+  const stepSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   /** Two or more things selected together, by dragging an area or shift-clicking. Empty otherwise. */
   const [multi, setMulti] = useState<string[]>([]);
   const [sharing, setSharing] = useState(false);
@@ -680,6 +685,15 @@ export default function PlayEditor() {
     setSelected(null);
   };
   const addStep = () => setFrames([...play.frames.slice(0, index + 1), carryForward(frame, play), ...play.frames.slice(index + 1)], index + 1);
+  /** Drops a step in a new place in the running order. The step that was open stays open. */
+  const moveStep = (e: DragEndEvent) => {
+    if (!e.over || e.active.id === e.over.id) return;
+    const from = Number(e.active.id);
+    const to = Number(e.over.id);
+    const open = play.frames[index];
+    const next = arrayMove(play.frames, from, to);
+    setFrames(next, next.indexOf(open));
+  };
   const removeStep = async () => {
     if (frame.objects.length > 0 && !(await confirmDialog({ title: `Delete step ${index + 1}?`, body: 'Its drawing is removed. You can undo this.', confirmLabel: 'Delete step', danger: true }))) return;
     setFrames(play.frames.filter((_, i) => i !== index), Math.max(0, index - 1));
@@ -931,12 +945,13 @@ export default function PlayEditor() {
               </button>
             </div>
           </div>
-          <p className="muted small tool-hint" role="status">
-            {aim ? 'Now click where it ends. Click a player or the basket to attach it there. Press Escape to cancel.' : toolHint}
-          </p>
+          {(aim || tool !== 'select') && (
+            <p className="muted small tool-hint" role="status">
+              {aim ? 'Now click where it ends. Click a player or the basket to attach it there. Press Escape to cancel.' : toolHint}
+            </p>
+          )}
 
           <div className="selection">
-            {!selectedObject && group.length === 0 && <p className="muted small">Nothing selected. Drag across the court to select an area.</p>}
             {group.length > 0 && (
               <>
                 <p className="group-count">
@@ -1185,24 +1200,27 @@ export default function PlayEditor() {
 
         <div className="card builder-steps">
           <h4>Steps</h4>
-          <div className="step-list">
-            {play.frames.map((f, i) => (
-              <button
-                key={i}
-                type="button"
-                className={`step-thumb ${i === index ? 'on' : ''}`}
-                aria-pressed={i === index}
-                aria-label={`Step ${i + 1}`}
-                onClick={() => {
-                  setStep(i);
-                  setSelected(null);
-                }}
-              >
-                <PlayDiagram play={play} frame={f} />
-                <span>{i + 1}</span>
-              </button>
-            ))}
-          </div>
+          <DndContext sensors={stepSensors} collisionDetection={closestCenter} onDragEnd={moveStep}>
+            <SortableContext items={play.frames.map((_, i) => String(i))} strategy={rectSortingStrategy}>
+              <div className="step-list">
+                {play.frames.map((f, i) => (
+                  <StepThumb
+                    key={i}
+                    id={String(i)}
+                    number={i + 1}
+                    on={i === index}
+                    onOpen={() => {
+                      setStep(i);
+                      setSelected(null);
+                    }}
+                  >
+                    <PlayDiagram play={play} frame={f} />
+                  </StepThumb>
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+          {play.frames.length > 1 && <p className="muted small step-help">Drag a step to change the order.</p>}
           <button className="btn small" onClick={addStep} title="Players and the ball start where their lines end in this step">
             + Next step
           </button>
@@ -1350,4 +1368,25 @@ function ToolIcon({ tool }: { tool: Tool }) {
     default:
       return line(tool);
   }
+}
+
+/** One step in the strip: click to open it, drag to move it earlier or later. */
+function StepThumb({ id, number, on, onOpen, children }: { id: string; number: number; on: boolean; onOpen: () => void; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      className={`step-thumb ${on ? 'on' : ''} ${isDragging ? 'moving' : ''}`}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      aria-pressed={on}
+      aria-label={`Step ${number}`}
+      onClick={onOpen}
+    >
+      {children}
+      <span>{number}</span>
+    </button>
+  );
 }
