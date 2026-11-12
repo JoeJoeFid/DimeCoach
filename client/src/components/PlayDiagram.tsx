@@ -340,11 +340,12 @@ export function PlayDiagram({ play, frame, className = '' }: { play: Pick<Play, 
 }
 
 /** Every step of a play side by side, each with its number and note. Used on printed sheets and previews. */
-export function PlaySteps({ play, columns }: { play: Play; columns?: number }) {
+export function PlaySteps({ play, columns, only }: { play: Play; columns?: number; /** Step numbers to show, counting from 1. Left out, every step is shown. */ only?: Set<number> }) {
+  const shown = play.frames.map((f, i) => ({ f, i })).filter(({ i }) => !only || only.has(i + 1));
   const cols = columns ?? Math.min(play.frames.length, play.court === 'full' ? 4 : 3);
   return (
     <div className="play-steps" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, cols)}, minmax(0, 1fr))`, gap: '10px' }}>
-      {play.frames.map((f, i) => (
+      {shown.map(({ f, i }) => (
         <figure key={i} className="play-step" style={{ margin: 0 }}>
           <PlayDiagram play={play} frame={f} />
           {(play.frames.length > 1 || f.note) && (

@@ -6256,3 +6256,57 @@ fieldset.plain {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3v18'/%3E%3Cpath d='M6 4.500h12l-3 3.500 3 3.500H6'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3v18'/%3E%3Cpath d='M6 4.500h12l-3 3.500 3 3.500H6'/%3E%3C/svg%3E");
 }
+
+/* ---------- Print preview: the options above the sheet ---------- */
+.print-panel {
+  max-width: 8.5in;
+  margin: 0 auto 18px;
+  padding: 14px 18px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+.print-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.print-top h1 {
+  margin: 0 0 0 6px;
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+}
+.print-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 28px;
+  padding: 12px 0 10px;
+}
+.print-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.print-plays {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.print-plays .input {
+  width: 150px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.print-panel .seg button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.print-panel .print-hint {
+  max-width: none;
+  margin: 0;
+}

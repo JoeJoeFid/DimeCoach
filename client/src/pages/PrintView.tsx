@@ -16,6 +16,26 @@ const AUDIENCES: { id: Audience; label: string; hint: string }[] = [
   { id: 'coach', label: 'Coach copy', hint: 'Everything, including coach-only and player notes. Do not send to parents.' },
 ];
 
+/** Whether attached plays are printed: not at all, every step, or only the step numbers typed in. */
+type PlayMode = 'hide' | 'all' | 'some';
+const PLAY_MODES: { id: PlayMode; label: string }[] = [
+  { id: 'hide', label: 'Hide' },
+  { id: 'all', label: 'All steps' },
+  { id: 'some', label: 'Choose steps' },
+];
+/** "1, 3-5" as the numbers 1, 3, 4, 5. Anything that is not a number or a range is ignored. */
+function stepNumbers(text: string) {
+  const out = new Set<number>();
+  for (const part of text.split(/[,;\s]+/)) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m) continue;
+    const from = Number(m[1]);
+    const to = Math.min(Number(m[2] ?? m[1]), from + 99);
+    for (let n = from; n <= to; n++) out.add(n);
+  }
+  return out;
+}
+
 // Inline styles so the sheet keeps its shape when pasted into an email.
 const cell: CSSProperties = { border: '1px solid #999', padding: '6px 10px', verticalAlign: 'top', textAlign: 'left' };
 const table: CSSProperties = { borderCollapse: 'collapse', margin: '8px 0 12px' };
@@ -30,6 +50,8 @@ export default function PrintView() {
   const [audience, setAudience] = useState<Audience>('notes');
   const [showBreaks, setShowBreaks] = useState(false);
   const [showTags, setShowTags] = useState(false);
+  const [playMode, setPlayMode] = useState<PlayMode>('all');
+  const [stepText, setStepText] = useState('');
   const [copied, setCopied] = useState('');
   const sheet = useRef<HTMLDivElement>(null);
 
@@ -56,6 +78,10 @@ export default function PrintView() {
   const tagName = (tid: number) => app.tags.find((t) => t.id === tid)?.name;
   const heading = [plan.title || (isHomework ? 'Homework' : 'Practice'), fmtDateSheet(plan.date)].filter(Boolean).join(' - ');
   const assignedNames = plan.assigned.map(nameOf).filter(Boolean);
+  const hasPlays = plan.items.some((it) => (it.play_ids || []).length > 0);
+  const chosen = stepNumbers(stepText);
+  // With nothing usable typed yet, every step still shows.
+  const only = playMode === 'some' && chosen.size > 0 ? chosen : undefined;
 
   const recipients = players
     .filter((p) => p.active && p.parent_email && (plan.assigned.length === 0 || plan.assigned.includes(p.id)))
@@ -81,41 +107,78 @@ export default function PrintView() {
 
   return (
     <div className="print-page">
-      <div className="print-bar no-print">
-        <Link className="btn" to={`/plans/${plan.id}`}>
-          ← Back to editor
-        </Link>
-        <div className="seg" role="group" aria-label="Sheet version">
-          {AUDIENCES.map((a) => (
-            <button key={a.id} className={audience === a.id ? 'on' : ''} aria-pressed={audience === a.id} title={a.hint} onClick={() => setAudience(a.id)}>
-              {a.label}
-            </button>
-          ))}
+      <div className="print-panel no-print">
+        <div className="print-top">
+          <Link className="btn" to={`/plans/${plan.id}`}>
+            ← Back to editor
+          </Link>
+          <h1>Print preview</h1>
+          <span className="spacer" />
+          <button className="btn" onClick={copy}>
+            Copy for email
+          </button>
+          {recipients.length > 0 && audience !== 'coach' && (
+            <a className="btn" href={mailto} title="Opens your email app with parents in BCC. Paste the copied sheet into the message.">
+              Email parents ({new Set(recipients).size})
+            </a>
+          )}
+          <button className="btn primary" onClick={() => window.print()}>
+            Print
+          </button>
         </div>
-        {!isHomework && (
-          <label className="check">
-            <input type="checkbox" checked={showBreaks} onChange={(e) => setShowBreaks(e.target.checked)} /> Show breaks
-          </label>
-        )}
-        <label className="check">
-          <input type="checkbox" checked={showTags} onChange={(e) => setShowTags(e.target.checked)} /> Show categories
-        </label>
-        <span className="spacer" />
-        <button className="btn" onClick={copy}>
-          Copy for email
-        </button>
-        {recipients.length > 0 && audience !== 'coach' && (
-          <a className="btn" href={mailto} title="Opens your email app with parents in BCC. Paste the copied sheet into the message.">
-            Email parents ({new Set(recipients).size})
-          </a>
-        )}
-        <button className="btn primary" onClick={() => window.print()}>
-          Print
-        </button>
+        <div className="print-options">
+          <div className="print-option">
+            <span className="field-label">Version</span>
+            <div className="seg" role="group" aria-label="Sheet version">
+              {AUDIENCES.map((a) => (
+                <button key={a.id} className={audience === a.id ? 'on' : ''} aria-pressed={audience === a.id} title={a.hint} onClick={() => setAudience(a.id)}>
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {hasPlays && (
+            <div className="print-option">
+              <span className="field-label">Plays</span>
+              <div className="print-plays">
+                <div className="seg" role="group" aria-label="Plays on the sheet">
+                  {PLAY_MODES.map((m) => (
+                    <button key={m.id} className={playMode === m.id ? 'on' : ''} aria-pressed={playMode === m.id} disabled={audience === 'simple'} onClick={() => setPlayMode(m.id)}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                {playMode === 'some' && audience !== 'simple' && (
+                  <input className="input" autoFocus aria-label="Step numbers to print" placeholder="Such as 1, 3-4" value={stepText} onChange={(e) => setStepText(e.target.value)} />
+                )}
+              </div>
+            </div>
+          )}
+          <div className="print-option">
+            <span className="field-label">Also show</span>
+            <div className="chips">
+              {!isHomework && (
+                <button type="button" className={`chip toggle ${showBreaks ? 'on' : ''}`} aria-pressed={showBreaks} onClick={() => setShowBreaks(!showBreaks)}>
+                  Breaks
+                </button>
+              )}
+              <button type="button" className={`chip toggle ${showTags ? 'on' : ''}`} aria-pressed={showTags} onClick={() => setShowTags(!showTags)}>
+                Categories
+              </button>
+            </div>
+          </div>
+        </div>
+        <p className="print-hint" role="status">
+          {copied ||
+            [
+              AUDIENCES.find((a) => a.id === audience)!.hint,
+              hasPlays && audience === 'simple' && 'Plays are left off the simple version.',
+              hasPlays && audience !== 'simple' && playMode === 'some' && (only ? 'The same step numbers are used for every play. A play with none of them is left off.' : 'Type the step numbers to print. Until then every step shows.'),
+            ]
+              .filter(Boolean)
+              .join(' ')}
+        </p>
       </div>
-      <p className="print-hint no-print" role="status">
-        {copied || AUDIENCES.find((a) => a.id === audience)!.hint}
-      </p>
 
       <div className={`sheet ${audience === 'coach' ? 'coach' : ''}`} ref={sheet}>
         <p className="sheet-head" style={{ color: '#666', fontWeight: 700, fontSize: '15pt', margin: '0 0 14px' }}>
@@ -169,13 +232,13 @@ export default function PrintView() {
                       {im.caption && <figcaption style={{ fontSize: '9pt', color: '#444', marginTop: 3 }}>{im.caption}</figcaption>}
                     </figure>
                   ))}
-                  {(it.play_ids || [])
+                  {(playMode === 'hide' ? [] : it.play_ids || [])
                     .map((pid) => plays.find((p) => p.id === pid))
-                    .filter((p): p is Play => !!p)
+                    .filter((p): p is Play => !!p && (!only || p.frames.some((_, n) => only.has(n + 1))))
                     .map((p) => (
                       <div key={p.id} className="sheet-play" style={{ margin: '10px 0' }}>
                         <p style={{ fontWeight: 700, margin: '0 0 4px' }}>{p.name}</p>
-                        <PlaySteps play={p} columns={Math.max(3, Math.min(4, p.frames.length))} />
+                        <PlaySteps play={p} columns={Math.max(3, Math.min(4, p.frames.length))} only={only} />
                       </div>
                     ))}
                   <SheetLinks links={it.links || []} videos={(it.videos || []).length} />
