@@ -5894,3 +5894,100 @@ fieldset.plain {
 .step-help {
   margin: 0;
 }
+
+/* ---------- Play editor: tools across the top, steps on the left, step settings on the right ---------- */
+.builder-bar {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+}
+.builder-bar .toolbar {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.builder-bar .tool-group,
+.builder-bar .tool-group:has(.tool:nth-child(3):last-child) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.builder-bar .tool-group + .tool-group {
+  padding: 0 0 0 10px;
+  border-top: none;
+  border-left: 1px solid var(--line);
+}
+.builder-bar .tool-group:last-child {
+  margin-left: auto;
+}
+.builder-bar .tool,
+.builder-bar .tool-group:has(.tool:nth-child(3):last-child) .tool {
+  flex-direction: row;
+  gap: 4px;
+  padding: 0 7px;
+  font-size: 0.82rem;
+}
+.builder-bar .tool-icon {
+  width: 24px;
+}
+.builder-bar .tool-icon.plain,
+.builder-bar svg.tool-icon.mark {
+  width: 16px;
+  margin: 0 2px;
+}
+.builder-bar .tool-hint {
+  min-height: 0;
+  margin-top: 8px;
+}
+.builder {
+  grid-template-columns: 190px minmax(0, 1fr) 270px;
+}
+.builder-left,
+.builder-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 16px;
+}
+.builder-left > .card {
+  margin: 0;
+}
+.builder-left .builder-steps {
+  position: static;
+}
+.builder-left .step-list {
+  grid-template-columns: 1fr;
+}
+.builder-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.builder-selection .selection {
+  padding-top: 0;
+  border-top: none;
+}
+.builder-settings textarea,
+.play-about textarea {
+  width: 100%;
+  resize: vertical;
+}
+.builder-settings .btn.primary {
+  align-self: stretch;
+}
+.play-about {
+  margin-top: 16px;
+}
+@media (max-width: 1100px) {
+  .builder {
+    grid-template-columns: 1fr;
+  }
+  .builder-left,
+  .builder-settings {
+    position: static;
+  }
+  .builder-left .step-list {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  }
+}

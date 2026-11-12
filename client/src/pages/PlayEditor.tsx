@@ -914,72 +914,183 @@ export default function PlayEditor() {
         </div>
       </div>
 
-      <div className="builder">
-        <div className="card builder-tools">
-          <div className="toolbar" role="toolbar" aria-label="Drawing tools">
-            {(['pointer', 'mark', 'line', 'shape'] as const).map((g) => (
-              <div className="tool-group" key={g}>
-                {tools.filter((t) => t.group === g).map((t) => (
-                  <button key={t.id} type="button" className={`tool ${tool === t.id ? 'on' : ''} ${t.id === 'select' ? '' : 'draggable'}`}
-                    aria-pressed={tool === t.id}
-                    title={t.hint}
-                    onPointerDown={(e) => onToolDown(e, t.id)}
-                    onClick={() => {
-                      if (skipClick.current) return;
-                      if (aim) cancelAim();
-                      setTool(t.id);
-                    }}
-                  >
-                    <ToolIcon tool={t.id} />
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            ))}
-            <div className="tool-group">
-              <button type="button" className="tool" disabled={past.current.length === 0} onClick={undo} title="Undo (Ctrl+Z)">
-                Undo
-              </button>
-              <button type="button" className="tool" disabled={future.current.length === 0} onClick={redo} title="Redo (Ctrl+Y)">
-                Redo
-              </button>
+      <div className="card builder-bar">
+        <div className="toolbar" role="toolbar" aria-label="Drawing tools">
+          {(['pointer', 'mark', 'line', 'shape'] as const).map((g) => (
+            <div className="tool-group" key={g}>
+              {tools.filter((t) => t.group === g).map((t) => (
+                <button key={t.id} type="button" className={`tool ${tool === t.id ? 'on' : ''} ${t.id === 'select' ? '' : 'draggable'}`}
+                  aria-pressed={tool === t.id}
+                  title={t.hint}
+                  onPointerDown={(e) => onToolDown(e, t.id)}
+                  onClick={() => {
+                    if (skipClick.current) return;
+                    if (aim) cancelAim();
+                    setTool(t.id);
+                  }}
+                >
+                  <ToolIcon tool={t.id} />
+                  {t.label}
+                </button>
+              ))}
             </div>
+          ))}
+          <div className="tool-group">
+            <button type="button" className="tool" disabled={past.current.length === 0} onClick={undo} title="Undo (Ctrl+Z)">
+              Undo
+            </button>
+            <button type="button" className="tool" disabled={future.current.length === 0} onClick={redo} title="Redo (Ctrl+Y)">
+              Redo
+            </button>
           </div>
-          {(aim || tool !== 'select') && (
-            <p className="muted small tool-hint" role="status">
-              {aim ? 'Now click where it ends. Click a player or the basket to attach it there. Press Escape to cancel.' : toolHint}
-            </p>
-          )}
+        </div>
+        {(aim || tool !== 'select') && (
+          <p className="muted small tool-hint" role="status">
+            {aim ? 'Now click where it ends. Click a player or the basket to attach it there. Press Escape to cancel.' : toolHint}
+          </p>
+        )}
+      </div>
 
-          <div className="selection">
-            {group.length > 0 && (
-              <>
-                <p className="group-count">
-                  <strong>{group.length} selected</strong>
-                  <span className="muted small"> · {groupSummary}</span>
-                </p>
-                {groupPlayers && (
+      <div className="builder">
+        <div className="builder-left">
+          {/* What is selected in the drawing, and its options. Above the steps so it is never off the screen. */}
+          {(selectedObject || group.length > 0) && (
+            <div className="card builder-selection">
+              <h4>Selected</h4>
+              <div className="selection">
+                {group.length > 0 && (
                   <>
-                    <span className="field-label">Player color</span>
-                    {swatches(PLAYER_COLORS, sameValue(groupPlayers.map((m) => m.color || '')) ?? MIXED, (c) => patchGroup({ color: c || undefined }), 'Player')}
+                    <p className="group-count">
+                      <strong>{group.length} selected</strong>
+                      <span className="muted small"> · {groupSummary}</span>
+                    </p>
+                    {groupPlayers && (
+                      <>
+                        <span className="field-label">Player color</span>
+                        {swatches(PLAYER_COLORS, sameValue(groupPlayers.map((m) => m.color || '')) ?? MIXED, (c) => patchGroup({ color: c || undefined }), 'Player')}
+                      </>
+                    )}
+                    {groupLines && (
+                      <>
+                        <span className="field-label">Line type</span>
+                        <div className="seg">
+                          {LINE_KINDS.map((k) => (
+                            <button key={k} className={sameValue(groupLines.map((l) => l.kind)) === k ? 'on' : ''} aria-pressed={sameValue(groupLines.map((l) => l.kind)) === k} onClick={() => patchGroup({ kind: k })}>
+                              {k[0].toUpperCase() + k.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {groupShapes && (
+                      <>
+                        <span className="field-label">Shape color</span>
+                        {swatches(SHAPE_COLORS, sameValue(groupShapes.map((x) => x.color)) ?? MIXED, (c) => patchGroup({ color: c }), 'Shape')}
+                        <label className="opacity">
+                          <span className="field-label">See-through</span>
+                          <input
+                            type="range"
+                            min={5}
+                            max={100}
+                            step={5}
+                            value={Math.round(groupShapes[0].opacity * 100)}
+                            aria-label="Shape opacity"
+                            onPointerDown={remember}
+                            onChange={(e) => patchGroup({ opacity: Number(e.target.value) / 100 }, false)}
+                          />
+                          <span className="attach-pct">{sameValue(groupShapes.map((x) => x.opacity)) === null ? 'Mixed' : `${Math.round(groupShapes[0].opacity * 100)}%`}</span>
+                        </label>
+                        <div className="head-actions">
+                          <button className="btn small" onClick={() => setObjects((os) => os.map((o) => (multi.includes(o.id) && isShape(o) ? scaled(o, 1 / 1.15) : o)))}>
+                            Smaller
+                          </button>
+                          <button className="btn small" onClick={() => setObjects((os) => os.map((o) => (multi.includes(o.id) && isShape(o) ? scaled(o, 1.15) : o)))}>
+                            Larger
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    <p className="muted small group-hint">
+                      {groupPlayers || groupLines || groupShapes ? 'Changes apply to all of them. Drag any one to move them together.' : 'These are different kinds of things, so there is nothing to set for all of them. Drag any one to move them together.'}
+                    </p>
+                    <button className="btn small danger" onClick={removeSelected}>
+                      Delete {group.length} selected
+                    </button>
                   </>
                 )}
-                {groupLines && (
+                {selMark && (isPlayer(selMark) || selMark.type === 'text') && (
+                  <Field label={selMark.type === 'text' ? 'Label text' : 'Player label'}>
+                    <input className="input" value={selMark.label} maxLength={40} onChange={(e) => patchSelected({ label: e.target.value })} />
+                  </Field>
+                )}
+                {selMark && selMark.type === 'text' && (
+                  <>
+                    <span className="field-label">Size</span>
+                    <div className="seg">
+                      {TEXT_SIZES.map((z) => (
+                        <button key={z.label} className={(selMark.size ?? TEXT_SIZE) === z.size ? 'on' : ''} aria-pressed={(selMark.size ?? TEXT_SIZE) === z.size} aria-label={`${z.name} text`} onClick={() => patchSelected({ size: z.size === TEXT_SIZE ? undefined : z.size })}>
+                          {z.label}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="field-label">Font</span>
+                    <div className="seg font-seg">
+                      {TEXT_FONT_CHOICES.map((f) => (
+                        <button key={f.label} className={(selMark.font ?? '') === f.id ? 'on' : ''} aria-pressed={(selMark.font ?? '') === f.id} style={f.id ? { fontFamily: TEXT_FONTS[f.id] } : undefined} onClick={() => patchSelected({ font: f.id || undefined })}>
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="seg style-seg">
+                      <button className={selMark.bold !== false ? 'on' : ''} aria-pressed={selMark.bold !== false} aria-label="Bold" onClick={() => patchSelected({ bold: selMark.bold === false ? undefined : false })}>
+                        <strong>B</strong>
+                      </button>
+                      <button className={selMark.italic ? 'on' : ''} aria-pressed={!!selMark.italic} aria-label="Italic" onClick={() => patchSelected({ italic: selMark.italic ? undefined : true })}>
+                        <em>I</em>
+                      </button>
+                    </div>
+                    <span className="field-label">Text color</span>
+                    {swatches(PLAYER_COLORS, selMark.color || '', (c) => patchSelected({ color: c || undefined }), 'Text')}
+                  </>
+                )}
+                {selMark && isPlayer(selMark) && (
+                  <>
+                    <label className="has-ball-toggle">
+                      <input type="checkbox" checked={!!selMark.hasBall} onChange={(e) => giveBall(selMark.id, e.target.checked)} />
+                      <span>Has the ball</span>
+                    </label>
+                    <span className="field-label">Player color</span>
+                    {swatches(PLAYER_COLORS, selMark.color || '', (c) => patchSelected({ color: c || undefined }), 'Player')}
+                    <button className="btn small" onClick={() => colorAll(selMark.type as 'o' | 'x', selMark.color || '')}>
+                      Use for all {selMark.type === 'o' ? 'offense' : 'defense'}
+                    </button>
+                  </>
+                )}
+                {selLine && (
                   <>
                     <span className="field-label">Line type</span>
                     <div className="seg">
                       {LINE_KINDS.map((k) => (
-                        <button key={k} className={sameValue(groupLines.map((l) => l.kind)) === k ? 'on' : ''} aria-pressed={sameValue(groupLines.map((l) => l.kind)) === k} onClick={() => patchGroup({ kind: k })}>
+                        <button key={k} className={selLine.kind === k ? 'on' : ''} aria-pressed={selLine.kind === k} onClick={() => patchSelected({ kind: k })}>
                           {k[0].toUpperCase() + k.slice(1)}
                         </button>
                       ))}
                     </div>
+                    <p className="muted small attach-info">
+                      From {describeAnchor(selLine.from, frame)} to {describeAnchor(selLine.to, frame)}.
+                    </p>
+                    <button
+                      className="btn small"
+                      onClick={() => patchSelected({ points: [selLine.points[0], [(selLine.points[0][0] + selLine.points[2][0]) / 2, (selLine.points[0][1] + selLine.points[2][1]) / 2], selLine.points[2]] })}
+                    >
+                      Straighten
+                    </button>
                   </>
                 )}
-                {groupShapes && (
+                {selShape && (
                   <>
                     <span className="field-label">Shape color</span>
-                    {swatches(SHAPE_COLORS, sameValue(groupShapes.map((x) => x.color)) ?? MIXED, (c) => patchGroup({ color: c }), 'Shape')}
+                    {swatches(SHAPE_COLORS, selShape.color, (c) => patchSelected({ color: c }), 'Shape')}
                     <label className="opacity">
                       <span className="field-label">See-through</span>
                       <input
@@ -987,131 +1098,60 @@ export default function PlayEditor() {
                         min={5}
                         max={100}
                         step={5}
-                        value={Math.round(groupShapes[0].opacity * 100)}
+                        value={Math.round(selShape.opacity * 100)}
                         aria-label="Shape opacity"
                         onPointerDown={remember}
-                        onChange={(e) => patchGroup({ opacity: Number(e.target.value) / 100 }, false)}
+                        onChange={(e) => patchSelected({ opacity: Number(e.target.value) / 100 }, false)}
                       />
-                      <span className="attach-pct">{sameValue(groupShapes.map((x) => x.opacity)) === null ? 'Mixed' : `${Math.round(groupShapes[0].opacity * 100)}%`}</span>
+                      <span className="attach-pct">{Math.round(selShape.opacity * 100)}%</span>
                     </label>
                     <div className="head-actions">
-                      <button className="btn small" onClick={() => setObjects((os) => os.map((o) => (multi.includes(o.id) && isShape(o) ? scaled(o, 1 / 1.15) : o)))}>
+                      <button className="btn small" onClick={() => setObjects((os) => os.map((o) => (o.id === selected && isShape(o) ? scaled(o, 1 / 1.15) : o)))}>
                         Smaller
                       </button>
-                      <button className="btn small" onClick={() => setObjects((os) => os.map((o) => (multi.includes(o.id) && isShape(o) ? scaled(o, 1.15) : o)))}>
+                      <button className="btn small" onClick={() => setObjects((os) => os.map((o) => (o.id === selected && isShape(o) ? scaled(o, 1.15) : o)))}>
                         Larger
                       </button>
                     </div>
                   </>
                 )}
-                <p className="muted small group-hint">
-                  {groupPlayers || groupLines || groupShapes ? 'Changes apply to all of them. Drag any one to move them together.' : 'These are different kinds of things, so there is nothing to set for all of them. Drag any one to move them together.'}
-                </p>
-                <button className="btn small danger" onClick={removeSelected}>
-                  Delete {group.length} selected
-                </button>
-              </>
-            )}
-            {selMark && (isPlayer(selMark) || selMark.type === 'text') && (
-              <Field label={selMark.type === 'text' ? 'Label text' : 'Player label'}>
-                <input className="input" value={selMark.label} maxLength={40} onChange={(e) => patchSelected({ label: e.target.value })} />
-              </Field>
-            )}
-            {selMark && selMark.type === 'text' && (
-              <>
-                <span className="field-label">Size</span>
-                <div className="seg">
-                  {TEXT_SIZES.map((z) => (
-                    <button key={z.label} className={(selMark.size ?? TEXT_SIZE) === z.size ? 'on' : ''} aria-pressed={(selMark.size ?? TEXT_SIZE) === z.size} aria-label={`${z.name} text`} onClick={() => patchSelected({ size: z.size === TEXT_SIZE ? undefined : z.size })}>
-                      {z.label}
-                    </button>
+                {selectedObject && (
+                  <button className="btn small danger" onClick={removeSelected}>
+                    Delete selected
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="card builder-steps">
+            <h4>Steps</h4>
+            <DndContext sensors={stepSensors} collisionDetection={closestCenter} onDragEnd={moveStep}>
+              <SortableContext items={play.frames.map((_, i) => String(i))} strategy={rectSortingStrategy}>
+                <div className="step-list">
+                  {play.frames.map((f, i) => (
+                    <StepThumb
+                      key={i}
+                      id={String(i)}
+                      number={i + 1}
+                      on={i === index}
+                      onOpen={() => {
+                        setStep(i);
+                        setSelected(null);
+                      }}
+                    >
+                      <PlayDiagram play={play} frame={f} />
+                    </StepThumb>
                   ))}
                 </div>
-                <span className="field-label">Font</span>
-                <div className="seg font-seg">
-                  {TEXT_FONT_CHOICES.map((f) => (
-                    <button key={f.label} className={(selMark.font ?? '') === f.id ? 'on' : ''} aria-pressed={(selMark.font ?? '') === f.id} style={f.id ? { fontFamily: TEXT_FONTS[f.id] } : undefined} onClick={() => patchSelected({ font: f.id || undefined })}>
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="seg style-seg">
-                  <button className={selMark.bold !== false ? 'on' : ''} aria-pressed={selMark.bold !== false} aria-label="Bold" onClick={() => patchSelected({ bold: selMark.bold === false ? undefined : false })}>
-                    <strong>B</strong>
-                  </button>
-                  <button className={selMark.italic ? 'on' : ''} aria-pressed={!!selMark.italic} aria-label="Italic" onClick={() => patchSelected({ italic: selMark.italic ? undefined : true })}>
-                    <em>I</em>
-                  </button>
-                </div>
-                <span className="field-label">Text color</span>
-                {swatches(PLAYER_COLORS, selMark.color || '', (c) => patchSelected({ color: c || undefined }), 'Text')}
-              </>
-            )}
-            {selMark && isPlayer(selMark) && (
-              <>
-                <label className="has-ball-toggle">
-                  <input type="checkbox" checked={!!selMark.hasBall} onChange={(e) => giveBall(selMark.id, e.target.checked)} />
-                  <span>Has the ball</span>
-                </label>
-                <span className="field-label">Player color</span>
-                {swatches(PLAYER_COLORS, selMark.color || '', (c) => patchSelected({ color: c || undefined }), 'Player')}
-                <button className="btn small" onClick={() => colorAll(selMark.type as 'o' | 'x', selMark.color || '')}>
-                  Use for all {selMark.type === 'o' ? 'offense' : 'defense'}
-                </button>
-              </>
-            )}
-            {selLine && (
-              <>
-                <span className="field-label">Line type</span>
-                <div className="seg">
-                  {LINE_KINDS.map((k) => (
-                    <button key={k} className={selLine.kind === k ? 'on' : ''} aria-pressed={selLine.kind === k} onClick={() => patchSelected({ kind: k })}>
-                      {k[0].toUpperCase() + k.slice(1)}
-                    </button>
-                  ))}
-                </div>
-                <p className="muted small attach-info">
-                  From {describeAnchor(selLine.from, frame)} to {describeAnchor(selLine.to, frame)}.
-                </p>
-                <button
-                  className="btn small"
-                  onClick={() => patchSelected({ points: [selLine.points[0], [(selLine.points[0][0] + selLine.points[2][0]) / 2, (selLine.points[0][1] + selLine.points[2][1]) / 2], selLine.points[2]] })}
-                >
-                  Straighten
-                </button>
-              </>
-            )}
-            {selShape && (
-              <>
-                <span className="field-label">Shape color</span>
-                {swatches(SHAPE_COLORS, selShape.color, (c) => patchSelected({ color: c }), 'Shape')}
-                <label className="opacity">
-                  <span className="field-label">See-through</span>
-                  <input
-                    type="range"
-                    min={5}
-                    max={100}
-                    step={5}
-                    value={Math.round(selShape.opacity * 100)}
-                    aria-label="Shape opacity"
-                    onPointerDown={remember}
-                    onChange={(e) => patchSelected({ opacity: Number(e.target.value) / 100 }, false)}
-                  />
-                  <span className="attach-pct">{Math.round(selShape.opacity * 100)}%</span>
-                </label>
-                <div className="head-actions">
-                  <button className="btn small" onClick={() => setObjects((os) => os.map((o) => (o.id === selected && isShape(o) ? scaled(o, 1 / 1.15) : o)))}>
-                    Smaller
-                  </button>
-                  <button className="btn small" onClick={() => setObjects((os) => os.map((o) => (o.id === selected && isShape(o) ? scaled(o, 1.15) : o)))}>
-                    Larger
-                  </button>
-                </div>
-              </>
-            )}
-            {selectedObject && (
-              <button className="btn small danger" onClick={removeSelected}>
-                Delete selected
+              </SortableContext>
+            </DndContext>
+            {play.frames.length > 1 && <p className="muted small step-help">Drag a step to change the order.</p>}
+            <button className="btn small" onClick={addStep} title="Players and the ball start where their lines end in this step">
+              + Next step
+            </button>
+            {play.frames.length > 1 && (
+              <button className="btn small danger" onClick={removeStep}>
+                Delete step {index + 1}
               </button>
             )}
           </div>
@@ -1198,37 +1238,13 @@ export default function PlayEditor() {
           </svg>
         </div>
 
-        <div className="card builder-steps">
-          <h4>Steps</h4>
-          <DndContext sensors={stepSensors} collisionDetection={closestCenter} onDragEnd={moveStep}>
-            <SortableContext items={play.frames.map((_, i) => String(i))} strategy={rectSortingStrategy}>
-              <div className="step-list">
-                {play.frames.map((f, i) => (
-                  <StepThumb
-                    key={i}
-                    id={String(i)}
-                    number={i + 1}
-                    on={i === index}
-                    onOpen={() => {
-                      setStep(i);
-                      setSelected(null);
-                    }}
-                  >
-                    <PlayDiagram play={play} frame={f} />
-                  </StepThumb>
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-          {play.frames.length > 1 && <p className="muted small step-help">Drag a step to change the order.</p>}
-          <button className="btn small" onClick={addStep} title="Players and the ball start where their lines end in this step">
-            + Next step
+        <div className="card builder-settings">
+          <h4>
+            Step {index + 1} <span className="hint">of {play.frames.length}</span>
+          </h4>
+          <button className="btn primary" onClick={() => setWatching(true)}>
+            ▶ Play animation
           </button>
-          {play.frames.length > 1 && (
-            <button className="btn small danger" onClick={removeStep}>
-              Delete step {index + 1}
-            </button>
-          )}
           <div className="order">
             <h4>
               Order of movement <span className="hint">Step {index + 1}</span>
@@ -1292,9 +1308,6 @@ export default function PlayEditor() {
                     </li>
                   ))}
                 </ol>
-                <button className="btn small" onClick={() => setWatching(true)}>
-                  ▶ Play animation
-                </button>
               </>
             )}
           </div>
@@ -1307,10 +1320,13 @@ export default function PlayEditor() {
               onChange={(e) => update({ frames: play.frames.map((f, i) => (i === index ? { ...f, note: e.target.value } : f)) })}
             />
           </Field>
-          <Field label="About this play">
-            <textarea className="input" rows={4} placeholder="When to call it, what to look for" value={play.notes} onChange={(e) => update({ notes: e.target.value })} />
-          </Field>
         </div>
+      </div>
+
+      <div className="card play-about">
+        <Field label="About this play">
+          <textarea className="input" rows={4} placeholder="When to call it, what to look for" value={play.notes} onChange={(e) => update({ notes: e.target.value })} />
+        </Field>
       </div>
 
       {sharing && <ShareDialog kind="play" itemId={play.id} title={play.name || 'Play'} onClose={() => setSharing(false)} />}
