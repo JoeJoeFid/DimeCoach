@@ -51,8 +51,9 @@ export default function PlanEditor() {
   /** True while the place it would land is beside an item already there, sharing its time. */
   const [dropBeside, setDropBeside] = useState(false);
   const column = useRef<HTMLDivElement>(null);
-  // Compact rows show only the time, title and minutes, to see more of the practice at once. Remembered on this computer.
-  const [compact, setCompact] = useState(() => localStorage.getItem(COMPACT_KEY) === '1');
+  // Compact rows show only the time, title and minutes, to see more of the practice at once. That is
+  // how it starts; choosing Detailed is remembered on this computer.
+  const [compact, setCompact] = useState(() => localStorage.getItem(COMPACT_KEY) !== '0');
   const chooseCompact = (on: boolean) => {
     setCompact(on);
     localStorage.setItem(COMPACT_KEY, on ? '1' : '0');

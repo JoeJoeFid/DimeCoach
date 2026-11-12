@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser, type UserActivity } from '../api';
 import { useApp } from '../App';
-import { Field, Modal } from '../components/bits';
+import { Field, Modal, MoreMenu } from '../components/bits';
 import RegistrationCard from '../components/RegistrationCard';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
@@ -300,7 +300,7 @@ export default function SystemAdmin() {
                 Everyone <span className="muted">({users.length})</span>
               </h2>
             </div>
-            <div className="table-scroll">
+            <div className="table-scroll people-scroll">
               <table className="table">
                 <thead>
                   <tr>
@@ -358,31 +358,18 @@ export default function SystemAdmin() {
                         </span>
                       </td>
                       <td className="num">
-                        <span className="row-actions">
-                          <button className="btn small" onClick={() => setViewing(u)}>
-                            Details
-                          </button>
-                          {!u.is_system_admin && (
-                            <button className="btn small" onClick={() => setRole(u, !u.is_admin)}>
-                              {u.is_admin ? 'Remove admin' : 'Make admin'}
-                            </button>
-                          )}
-                          {u.id !== me.id && (
-                            <button className="btn small" onClick={() => setPasswordFor(u)}>
-                              Set password
-                            </button>
-                          )}
-                          {!u.is_system_admin && u.status !== 'pending' && (
-                            <button className={`btn small ${u.status === 'active' ? 'danger' : ''}`} onClick={() => setStatus(u, u.status === 'active' ? 'disabled' : 'active')}>
-                              {u.status === 'active' ? 'Turn off' : 'Turn on'}
-                            </button>
-                          )}
-                          {!u.is_system_admin && u.id !== me.id && (
-                            <button className="btn small danger" onClick={() => deleteAccount(u)}>
-                              Delete account
-                            </button>
-                          )}
-                        </span>
+                        <MoreMenu
+                          label={`Options for ${u.name}`}
+                          items={[
+                            { label: 'Details', onSelect: () => setViewing(u) },
+                            ...(u.id !== me.id ? [{ label: 'Set password', onSelect: () => setPasswordFor(u) }] : []),
+                            ...(!u.is_system_admin ? [{ label: u.is_admin ? 'Remove admin' : 'Make admin', onSelect: () => setRole(u, !u.is_admin) }] : []),
+                            ...(!u.is_system_admin && u.status !== 'pending'
+                              ? [{ label: u.status === 'active' ? 'Turn off account' : 'Turn on account', onSelect: () => setStatus(u, u.status === 'active' ? 'disabled' : 'active') }]
+                              : []),
+                            ...(!u.is_system_admin && u.id !== me.id ? [{ label: 'Delete account', onSelect: () => deleteAccount(u), danger: true }] : []),
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}

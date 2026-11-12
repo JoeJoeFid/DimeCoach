@@ -6826,3 +6826,19 @@ fieldset.plain {
 .plan-column.compact .slot-shared {
   margin-bottom: 6px;
 }
+
+/* System admin people list: the options menu must be able to open past the edge of the table. */
+@media (min-width: 1101px) {
+  .people-scroll {
+    overflow: visible;
+  }
+}
+.people-scroll .more-menu {
+  display: inline-block;
+}
+
+/* An options list with no room below its button opens above it. */
+.more-list.up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}

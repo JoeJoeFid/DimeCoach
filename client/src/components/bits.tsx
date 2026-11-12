@@ -74,7 +74,15 @@ export interface MenuItem {
 /** A "..." button that opens a short list of less-used actions. */
 export function MoreMenu({ items, label = 'More options' }: { items: MenuItem[]; label?: string }) {
   const [open, setOpen] = useState(false);
+  /** True when there is not room for the list under the button, so it opens above it instead. */
+  const [up, setUp] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const toggle = () => {
+    const r = root.current?.getBoundingClientRect();
+    const needed = items.length * 38 + 24;
+    setUp(!!r && r.bottom + needed > window.innerHeight && r.top > needed);
+    setOpen(!open);
+  };
   useEffect(() => {
     if (!open) return;
     const away = (e: Event) => {
@@ -90,7 +98,7 @@ export function MoreMenu({ items, label = 'More options' }: { items: MenuItem[];
   if (items.length === 0) return null;
   return (
     <div className="more-menu" ref={root}>
-      <button type="button" className="btn more-btn" aria-haspopup="menu" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen(!open)}>
+      <button type="button" className="btn more-btn" aria-haspopup="menu" aria-expanded={open} aria-label={label} title={label} onClick={toggle}>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
           <circle cx="5" cy="12" r="1.900" />
           <circle cx="12" cy="12" r="1.900" />
@@ -98,7 +106,7 @@ export function MoreMenu({ items, label = 'More options' }: { items: MenuItem[];
         </svg>
       </button>
       {open && (
-        <div className="more-list" role="menu">
+        <div className={`more-list ${up ? 'up' : ''}`} role="menu">
           {items.map((it) => (
             <button
               key={it.label}
