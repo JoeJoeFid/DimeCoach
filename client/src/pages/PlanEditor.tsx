@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEventHandler, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useDraggable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useDraggable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent, type Modifier } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
@@ -15,6 +15,19 @@ import { deleteLater, showUndo } from '../components/toasts';
 import { DraftReview, SourcePicker, defaultChoices, resolveDraft, useAiStatus, type DraftChoices } from '../components/planImport';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
+/**
+ * Keeps the tile being dragged in centred on the pointer. The place it will land is judged by
+ * the pointer, so the tile and its landing place stay together wherever the tile was picked up.
+ */
+const centreOnPointer: Modifier = ({ activatorEvent, activeNodeRect, overlayNodeRect, transform }) => {
+  if (!activatorEvent || !activeNodeRect || !overlayNodeRect) return transform;
+  const at = activatorEvent as PointerEvent;
+  return {
+    ...transform,
+    x: transform.x + (at.clientX - activeNodeRect.left) - overlayNodeRect.width / 2,
+    y: transform.y + (at.clientY - activeNodeRect.top) - overlayNodeRect.height / 2,
+  };
+};
 const COMPACT_KEY = 'practiceplan.planCompact';
 
 // Things dragged in from the side list are not in the plan yet. Their ids say what to make:
@@ -51,6 +64,19 @@ export default function PlanEditor() {
   /** True while the place it would land is beside an item already there, sharing its time. */
   const [dropBeside, setDropBeside] = useState(false);
   const column = useRef<HTMLDivElement>(null);
+  // The pointer's place on the screen while something is being dragged in from the side list.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!incoming) return;
+    const follow = (e: PointerEvent) => {
+      pointer.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('pointermove', follow, true);
+    return () => {
+      window.removeEventListener('pointermove', follow, true);
+      pointer.current = null;
+    };
+  }, [incoming]);
   // Compact rows show only the time, title and minutes, to see more of the practice at once. That is
   // how it starts; choosing Detailed is remembered on this computer.
   const [compact, setCompact] = useState(() => localStorage.getItem(COMPACT_KEY) !== '0');
@@ -209,9 +235,10 @@ export default function PlanEditor() {
   const landing = (e: DragMoveEvent | DragEndEvent) => {
     const el = column.current;
     if (!el) return null;
+    // Where the pointer really is on the screen. Working it out from how far the drag has moved
+    // goes wrong as soon as the page scrolls under it, which put the landing place below the tile being held.
     const start = e.activatorEvent as PointerEvent;
-    const x = start.clientX + e.delta.x;
-    const y = start.clientY + e.delta.y;
+    const { x, y } = pointer.current ?? { x: start.clientX + e.delta.x, y: start.clientY + e.delta.y };
     const box = el.getBoundingClientRect();
     if (x < box.left || x > box.right) return null;
     // The "Drop here" space pushes the rows after it down. Judge by where they would be without
@@ -439,7 +466,12 @@ export default function PlanEditor() {
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        onDragStart={(e) => isNew(e.active.id) && setIncoming(String(e.active.id))}
+        onDragStart={(e) => {
+          if (!isNew(e.active.id)) return;
+          const at = e.activatorEvent as PointerEvent;
+          pointer.current = { x: at.clientX, y: at.clientY };
+          setIncoming(String(e.active.id));
+        }}
         onDragMove={(e) => {
           if (!isNew(e.active.id) || !incoming) return;
           const spot = landing(e);
@@ -454,35 +486,74 @@ export default function PlanEditor() {
         onDragEnd={onDragEnd}
       >
         <div className="card plan-head">
-          <div className="fields">
-            <Field label={plan.is_template ? 'Template name' : 'Title'} grow>
-              <input className="input" value={plan.title} onChange={(e) => update({ title: e.target.value })} />
-            </Field>
-            {!plan.is_template && (
-              <Field label={isHomework ? 'Date assigned' : 'Date'}>
-                <input className="input" type="date" value={plan.date} onChange={(e) => update({ date: e.target.value })} />
+          {/* Left: what and when and where, one row each. Right: the coach's notes for the day. */}
+          <div className="plan-head-grid">
+            <div className="plan-head-left">
+              <Field label={plan.is_template ? 'Template name' : 'Title'}>
+                <input className="input" value={plan.title} onChange={(e) => update({ title: e.target.value })} />
               </Field>
-            )}
-            {!isHomework && (
-              <>
-                <Field label="Start time">
-                  <input
-                    className="input"
-                    type="time"
-                    value={plan.start_time}
-                    onChange={(e) => update({ start_time: e.target.value || '17:30' })}
-                  />
+              <div className="fields plan-when">
+                {!plan.is_template && (
+                  <Field label={isHomework ? 'Date assigned' : 'Date'}>
+                    <input className="input" type="date" value={plan.date} onChange={(e) => update({ date: e.target.value })} />
+                  </Field>
+                )}
+                {!isHomework && (
+                  <Field label="Start time">
+                    <input
+                      className="input"
+                      type="time"
+                      value={plan.start_time}
+                      onChange={(e) => update({ start_time: e.target.value || '17:30' })}
+                    />
+                  </Field>
+                )}
+              </div>
+              {!isHomework && (
+                <Field label="Location">
+                  <input className="input" value={plan.location} onChange={(e) => update({ location: e.target.value })} />
                 </Field>
-              </>
-            )}
-          </div>
-
-          <div className={`plan-extra ${isHomework ? 'one' : ''}`}>
-            {!isHomework && (
-              <Field label="Location">
-                <input className="input" value={plan.location} onChange={(e) => update({ location: e.target.value })} />
-              </Field>
-            )}
+              )}
+              {!isHomework && (
+                <label className="check game-check">
+                  <input type="checkbox" checked={plan.is_game} onChange={(e) => update({ is_game: e.target.checked })} />
+                  <span>
+                    This is a game plan <span className="muted">(kept out of dashboard category totals and targets)</span>
+                  </span>
+                </label>
+              )}
+              {isHomework && !plan.is_template && (
+                <div className="assigned">
+                  <span className="field-label">For</span>
+                  <div className="chips">
+                    <button
+                      type="button"
+                      className={`chip toggle ${plan.assigned.length === 0 ? 'on' : ''}`}
+                      aria-pressed={plan.assigned.length === 0}
+                      onClick={() => update({ assigned: [] })}
+                    >
+                      Whole team
+                    </button>
+                    {players
+                      .filter((p) => p.active)
+                      .map((p) => {
+                        const on = plan.assigned.includes(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className={`chip toggle ${on ? 'on' : ''}`}
+                            aria-pressed={on}
+                            onClick={() => update({ assigned: on ? plan.assigned.filter((x) => x !== p.id) : [...plan.assigned, p.id] })}
+                          >
+                            {p.name}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="plan-notes">
               <Field label="Notes">
                 <textarea
@@ -499,55 +570,13 @@ export default function PlanEditor() {
               </label>
             </div>
           </div>
-
-          {!isHomework && (
-            <label className="check game-check">
-              <input type="checkbox" checked={plan.is_game} onChange={(e) => update({ is_game: e.target.checked })} />
-              <span>
-                This is a game plan <span className="muted">(kept out of dashboard category totals and targets)</span>
-              </span>
-            </label>
-          )}
-
-          {isHomework && !plan.is_template && (
-            <div className="assigned">
-              <span className="field-label">For</span>
-              <div className="chips">
-                <button
-                  type="button"
-                  className={`chip toggle ${plan.assigned.length === 0 ? 'on' : ''}`}
-                  aria-pressed={plan.assigned.length === 0}
-                  onClick={() => update({ assigned: [] })}
-                >
-                  Whole team
-                </button>
-                {players
-                  .filter((p) => p.active)
-                  .map((p) => {
-                    const on = plan.assigned.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        className={`chip toggle ${on ? 'on' : ''}`}
-                        aria-pressed={on}
-                        onClick={() => update({ assigned: on ? plan.assigned.filter((x) => x !== p.id) : [...plan.assigned, p.id] })}
-                      >
-                        {p.name}
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-
         </div>
 
         <div className="plan-layout">
           <Palette drills={libraryDrills} tags={tags} withBreak={!isHomework} sheet={sheet} onAdd={addNew} />
-          <div className={`plan-column ${compact ? 'compact' : ''}`} ref={column}>
+          <div className={`plan-column ${compact ? 'compact' : ''} ${app.keyboard_access ? '' : 'drag-only'}`} ref={column}>
             <div className="plan-column-head">
-              <h2 className="plan-column-title">{isHomework ? 'Homework' : 'Practice schedule'}</h2>
+              <h2 className="plan-column-title">{isHomework ? plan.title.trim() || 'Homework' : `${plan.title.trim() || 'Practice'} schedule`}</h2>
               <div className="seg" role="group" aria-label="How much each item shows">
                 <button type="button" className={compact ? '' : 'on'} aria-pressed={!compact} onClick={() => chooseCompact(false)}>
                   Detailed
@@ -637,7 +666,7 @@ export default function PlanEditor() {
             <PreviousPractices current={plan} tags={tags} />
           </div>
         </div>
-        <DragOverlay dropAnimation={null}>{incoming && <div className="palette-tile lifted">{paletteLabel(incoming, drills)}</div>}</DragOverlay>
+        <DragOverlay dropAnimation={null} modifiers={[centreOnPointer]}>{incoming && <div className="palette-tile lifted">{paletteLabel(incoming, drills)}</div>}</DragOverlay>
       </DndContext>
 
       {importing && team && (
@@ -916,7 +945,7 @@ function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; t
         </p>
       ) : (
         <>
-          <input className="input" aria-label="Search drills" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="input search-input" type="search" aria-label="Search drills" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
           {usedTags.length > 0 && (
             <select className="input" aria-label="Filter drills by category" value={tagId} onChange={(e) => setTagId(Number(e.target.value))}>
               <option value={0}>All categories</option>

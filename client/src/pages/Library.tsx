@@ -85,7 +85,7 @@ export default function Library() {
       {error && !draft && <p className="error">{error}</p>}
 
       <div className="picker-filters">
-        <input className="input grow" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input grow search-input" type="search" aria-label="Search drills" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="input" aria-label="Filter by category" value={tagId} onChange={(e) => setTagId(Number(e.target.value))}>
           <option value={0}>All categories</option>
           {sportTags.map((t) => (

@@ -4,6 +4,7 @@ import { useApp } from '../App';
 import { Field } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import RegistrationCard from '../components/RegistrationCard';
+import AccessibilityCard from '../components/AccessibilityCard';
 
 const fmtWhen = (iso: string | null) =>
   iso ? new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Never';
@@ -172,6 +173,7 @@ export default function Admin() {
       </div>
 
       {settings && <RegistrationCard settings={settings} run={run} />}
+      {settings && <AccessibilityCard settings={settings} run={run} />}
     </div>
   );
 }

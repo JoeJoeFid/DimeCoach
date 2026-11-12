@@ -74,6 +74,9 @@ app.get('/api/bootstrap', (req, res) => {
     sports: all('SELECT id, name FROM sports WHERE owner_id=? ORDER BY name', req.ownerId),
     teams: all(`SELECT ${TEAM_COLS} FROM teams WHERE owner_id=? ORDER BY id DESC`, req.ownerId).filter((t) => !req.staff || t.id === req.staff.teamId),
     tags: all('SELECT * FROM tags WHERE owner_id=? ORDER BY name', req.ownerId).map(tagOut),
+    // Turned on by an administrator for sites where people work without a mouse: adds buttons for
+    // things that are otherwise done by dragging.
+    keyboard_access: get("SELECT value FROM system_settings WHERE key='keyboard_access'")?.value === '1',
     ...staffBootstrap(req),
   });
 });

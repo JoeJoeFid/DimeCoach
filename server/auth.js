@@ -420,6 +420,7 @@ export function mountAuth(app) {
   const settingsOut = () => ({
     registration_mode: registrationMode(),
     registration_enabled: registrationMode() !== 'closed',
+    keyboard_access: setting('keyboard_access') === '1',
     registration_open: registrationOpen(),
     mailer: mailerStatus(),
     unsent_emails: get('SELECT COUNT(*) AS n FROM outbox WHERE sent_at IS NULL').n,
@@ -667,6 +668,7 @@ export function mountAuth(app) {
     res.json({ ok: true, to: req.user.email });
   });
   app.put('/api/admin/settings', admin, (req, res) => {
+    if (typeof req.body.keyboard_access === 'boolean') setSetting('keyboard_access', req.body.keyboard_access ? '1' : '0');
     const mode = typeof req.body.registration_enabled === 'boolean' ? (req.body.registration_enabled ? 'verify' : 'closed') : req.body.registration_mode;
     if (mode !== undefined) {
       if (!['closed', 'open', 'verify'].includes(mode)) return res.status(400).json({ error: 'Choose how people sign up.' });

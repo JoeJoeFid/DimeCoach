@@ -3,6 +3,7 @@ import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser
 import { useApp } from '../App';
 import { Field, Modal, MoreMenu } from '../components/bits';
 import RegistrationCard from '../components/RegistrationCard';
+import AccessibilityCard from '../components/AccessibilityCard';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 import { SpaceMeter, fmtSpace } from '../components/SpaceMeter';
@@ -33,6 +34,7 @@ function fmtAgo(iso: string | null) {
 const SECTIONS = [
   ['people', 'People'],
   ['signup', 'Sign-up and email'],
+  ['accessibility', 'Accessibility'],
   ['storage', 'Upload space'],
   ['backup', 'Backup'],
 ];
@@ -387,6 +389,11 @@ export default function SystemAdmin() {
             Sign-up and email
           </h2>
           {settings && <RegistrationCard settings={settings} run={run} />}
+
+          <h2 className="sys-section" id="accessibility">
+            Accessibility
+          </h2>
+          {settings && <AccessibilityCard settings={settings} run={run} />}
 
           <h2 className="sys-section" id="storage">
             Upload space

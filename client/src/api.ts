@@ -38,6 +38,8 @@ export interface Bootstrap {
   shared_teams: SharedTeam[];
   /** Null in your own workspace. */
   access: TeamAccess | null;
+  /** On when an administrator has turned on keyboard accessibility: buttons appear for things otherwise done by dragging. */
+  keyboard_access: boolean;
 }
 
 /** Whether the Claude Code program is installed on this computer for automatic plan import. */
@@ -224,6 +226,7 @@ export interface MyShareState {
 }
 export interface AdminSettings {
   registration_mode: 'closed' | 'open' | 'verify';
+  keyboard_access: boolean;
   registration_enabled: boolean;
   registration_open: boolean;
   mailer: { configured: boolean; transport: string };
@@ -283,7 +286,7 @@ export const api = {
   communityLibrary: (kind: ShareKind, community: 'all' | number) => req<CommunityShare[]>('GET', `/community-library?kind=${kind}&community=${community}`),
   communityShare: (shareId: number) => req<CommunityShareDetail>('GET', `/community-library/${shareId}`),
   copyShare: (shareId: number, b: { sport_id?: number; team_id?: number; date?: string }) => req<{ kind: ShareKind; id: number }>('POST', `/community-library/${shareId}/copy`, b),
-  adminSetSettings: (b: { registration_mode: AdminSettings['registration_mode'] }) => req<AdminSettings>('PUT', '/admin/settings', b),
+  adminSetSettings: (b: { registration_mode?: AdminSettings['registration_mode']; keyboard_access?: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
   adminTestEmail: () => req<{ ok: true; to: string }>('POST', '/admin/test-email'),
 
   aiStatus: () => req<AiStatus>('GET', '/ai/status'),
