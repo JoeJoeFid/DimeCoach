@@ -11,13 +11,36 @@ const MIN_PASSWORD = 10;
  * Every signed-out screen: what Dime Coach is on one side, the form on the other.
  * `tab` adds the Sign in / Sign up switch, for the two screens a visitor chooses between.
  */
-export function AuthShell({ title, lead, children, tab }: { title: string; lead?: string; children: ReactNode; tab?: 'in' | 'up' }) {
+export function AuthShell({
+  title,
+  lead,
+  children,
+  tab,
+  onTab,
+}: {
+  title: string;
+  lead?: string;
+  children: ReactNode;
+  tab?: 'in' | 'up';
+  /** Switches tabs in place. Without it the tabs are links to the sign-in and sign-up addresses. */
+  onTab?: (tab: 'in' | 'up') => void;
+}) {
   return (
     <div className="landing">
       <AuthHero />
       <main className="landing-side">
         <div className="auth-card">
-          {tab && (
+          {tab && onTab && (
+            <div className="auth-tabs" role="group" aria-label="Sign in or sign up">
+              <button type="button" className={tab === 'in' ? 'on' : ''} aria-pressed={tab === 'in'} onClick={() => onTab('in')}>
+                Sign in
+              </button>
+              <button type="button" className={tab === 'up' ? 'on' : ''} aria-pressed={tab === 'up'} onClick={() => onTab('up')}>
+                Sign up
+              </button>
+            </div>
+          )}
+          {tab && !onTab && (
             <nav className="auth-tabs" aria-label="Sign in or sign up">
               <Link to="/" className={tab === 'in' ? 'on' : ''} aria-current={tab === 'in' ? 'page' : undefined}>
                 Sign in
@@ -57,8 +80,12 @@ function useSubmit(action: () => Promise<void>) {
   return { busy, error, submit };
 }
 
-/** First run: whoever sets the app up becomes its administrator. */
+/**
+ * The very first visit, before anyone has an account. It reads as an ordinary sign-up. Whoever
+ * creates this first account also runs the site, which the page says in one plain line.
+ */
 export function Setup({ onDone }: { onDone: () => void }) {
+  const [tab, setTab] = useState<'in' | 'up'>('up');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -67,11 +94,17 @@ export function Setup({ onDone }: { onDone: () => void }) {
     await api.setup({ name, email, password, setup_token: code || undefined });
     onDone();
   });
+  if (tab === 'in')
+    return (
+      <AuthShell title="Welcome back, Coach" lead="Nobody has an account on this site yet, so there is nothing to sign in to." tab="in" onTab={setTab}>
+        <p className="auth-empty">Create the first account under Sign up. After that, this is where you sign in.</p>
+        <button type="button" className="btn primary" onClick={() => setTab('up')}>
+          Create an account
+        </button>
+      </AuthShell>
+    );
   return (
-    <AuthShell
-      title="Set up Dime Coach"
-      lead="Create the administrator account. It takes over the teams and practices already on this install, and it is the account that adds other people."
-    >
+    <AuthShell title="Create your account" lead="You are the first one here, so this account also looks after the site and adds other coaches." tab="up" onTab={setTab}>
       <form className="fields stack" onSubmit={submit}>
         {error && <p className="error">{error}</p>}
         <Field label="Your name">
@@ -83,13 +116,19 @@ export function Setup({ onDone }: { onDone: () => void }) {
         <Field label={`Password (at least ${MIN_PASSWORD} characters)`}>
           <input className="input" type="password" required minLength={MIN_PASSWORD} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         </Field>
-        <Field label="Setup code (only needed on a hosted server)">
+        <Field label="Setup code (from the hosting settings)">
           <input className="input" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" />
         </Field>
         <button className="btn primary" disabled={busy}>
-          {busy ? 'Creating…' : 'Create administrator account'}
+          {busy ? 'Creating…' : 'Create account'}
         </button>
       </form>
+      <p className="muted small auth-foot">
+        Already have an account?{' '}
+        <button type="button" className="link" onClick={() => setTab('in')}>
+          Sign in
+        </button>
+      </p>
     </AuthShell>
   );
 }

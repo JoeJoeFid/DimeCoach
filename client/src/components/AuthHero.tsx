@@ -73,7 +73,6 @@ export default function AuthHero() {
           <span className="brand-mark" aria-hidden="true" />
           Dime Coach
         </div>
-        <span className="hero-tag">Basketball practice planner</span>
       </div>
 
       <div className="hero-main">
