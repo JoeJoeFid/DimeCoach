@@ -221,14 +221,16 @@ function Login({ registrationOpen, onSignedIn }: { registrationOpen: boolean; on
   );
 }
 
-function Register() {
+function Register({ confirm, onSignedIn }: { /** Whether a confirmation link is emailed before the account works. */ confirm: boolean; onSignedIn: () => void }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [sent, setSent] = useState(false);
   const { busy, error, submit } = useSubmit(async () => {
-    await api.register({ name, email, password });
-    setSent(true);
+    const r = await api.register({ name, email, password });
+    // With no confirmation step the account is ready and already signed in.
+    if (r.user) onSignedIn();
+    else setSent(true);
   });
   if (sent)
     return (
@@ -239,7 +241,7 @@ function Register() {
       </AuthShell>
     );
   return (
-    <AuthShell title="Join the bench" lead="Create your account. You will get an email with a link to confirm your address." tab="up">
+    <AuthShell title="Join the bench" lead={confirm ? 'Create your account. You will get an email with a link to confirm your address.' : 'Create your account with an email and a password, and you are in.'} tab="up">
       <form className="fields stack" onSubmit={submit}>
         {error && <p className="error">{error}</p>}
         <Field label="Your name">
@@ -252,7 +254,7 @@ function Register() {
           <input className="input" type="password" required minLength={MIN_PASSWORD} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         </Field>
         <button className="btn primary" disabled={busy}>
-          {busy ? 'Sending…' : 'Create account'}
+          {busy ? (confirm ? 'Sending…' : 'Creating…') : 'Create account'}
         </button>
       </form>
       <p className="muted small auth-foot">
@@ -316,11 +318,11 @@ function InviteOnly() {
 }
 
 /** Everything a signed-out visitor can reach. */
-export function SignedOut({ registrationOpen, onSignedIn }: { registrationOpen: boolean; onSignedIn: () => void }) {
+export function SignedOut({ registrationOpen, confirmEmail, onSignedIn }: { registrationOpen: boolean; confirmEmail: boolean; onSignedIn: () => void }) {
   return (
     <Routes>
       <Route path="/confirm" element={<Confirm />} />
-      <Route path="/register" element={registrationOpen ? <Register /> : <InviteOnly />} />
+      <Route path="/register" element={registrationOpen ? <Register confirm={confirmEmail} onSignedIn={onSignedIn} /> : <InviteOnly />} />
       <Route path="*" element={<Login registrationOpen={registrationOpen} onSignedIn={onSignedIn} />} />
     </Routes>
   );

@@ -121,6 +121,18 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP, expires_at TEXT NOT NULL
 );
+-- One row per sign-in, kept after the session itself is gone. active_seconds adds up the time
+-- between requests that came within a few minutes of each other: time actually spent in the app.
+CREATE TABLE IF NOT EXISTS logins (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  started_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, ended_at TEXT,
+  active_seconds INTEGER DEFAULT 0,
+  ip TEXT DEFAULT '', agent TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS logins_user ON logins(user_id, started_at);
+CREATE INDEX IF NOT EXISTS logins_token ON logins(token_hash);
 CREATE TABLE IF NOT EXISTS system_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS outbox (
   id INTEGER PRIMARY KEY, to_email TEXT NOT NULL, subject TEXT NOT NULL, body TEXT NOT NULL,

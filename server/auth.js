@@ -56,10 +56,46 @@ function setSessionCookie(req, res, token, maxAgeSeconds) {
 function startSession(req, res, userId) {
   const token = crypto.randomBytes(32).toString('base64url');
   const expires = new Date(Date.now() + SESSION_DAYS * 86400_000).toISOString();
+  const now = new Date().toISOString();
   run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?,?,?)', sha256(token), userId, expires);
-  run('UPDATE users SET last_login_at=? WHERE id=?', new Date().toISOString(), userId);
+  run('INSERT INTO logins (user_id, token_hash, started_at, last_seen_at, ip, agent) VALUES (?,?,?,?,?,?)', userId, sha256(token), now, now, str(req.ip), agentOf(req));
+  run('UPDATE users SET last_login_at=? WHERE id=?', now, userId);
   setSessionCookie(req, res, token, SESSION_DAYS * 86400);
 }
+// --- Sign-in history: when each person signed in, and how long they spent in the app ---
+const agentOf = (req) => str(req.headers['user-agent']).slice(0, 300);
+/** Requests closer together than this count as one stretch of use. A longer gap is time away. */
+const IDLE_SECONDS = 5 * 60;
+/** How often, at most, a sign-in's "last seen" time is written. */
+const TOUCH_SECONDS = 20;
+function touchLogin(req, userId) {
+  const hash = sha256(readCookie(req, COOKIE));
+  const now = new Date();
+  const row = get('SELECT id, last_seen_at FROM logins WHERE token_hash=? AND ended_at IS NULL', hash);
+  if (!row) {
+    // Signed in before sign-ins were recorded: start the record from when that session began.
+    const s = get('SELECT created_at FROM sessions WHERE token_hash=?', hash);
+    const began = s ? new Date(s.created_at.includes('T') ? s.created_at : s.created_at.replace(' ', 'T') + 'Z').toISOString() : now.toISOString();
+    run('INSERT INTO logins (user_id, token_hash, started_at, last_seen_at, ip, agent) VALUES (?,?,?,?,?,?)', userId, hash, began, now.toISOString(), str(req.ip), agentOf(req));
+    return;
+  }
+  const gap = Math.round((now.getTime() - Date.parse(row.last_seen_at)) / 1000);
+  if (gap < TOUCH_SECONDS) return;
+  run('UPDATE logins SET last_seen_at=?, active_seconds=active_seconds+? WHERE id=?', now.toISOString(), gap <= IDLE_SECONDS ? gap : 0, row.id);
+}
+/** Signs a person out everywhere, or everywhere but one device, and closes those sign-in records. */
+function endSessions(userId, keepHash = '') {
+  run('DELETE FROM sessions WHERE user_id=? AND token_hash<>?', userId, keepHash);
+  run('UPDATE logins SET ended_at=? WHERE user_id=? AND token_hash<>? AND ended_at IS NULL', new Date().toISOString(), userId, keepHash);
+}
+/** "Chrome on Windows", from what the browser says about itself. */
+function deviceOf(agent) {
+  const a = str(agent);
+  const browser = /Edg\//.test(a) ? 'Edge' : /OPR\//.test(a) ? 'Opera' : /Firefox\//.test(a) ? 'Firefox' : /Chrome\//.test(a) ? 'Chrome' : /Safari\//.test(a) ? 'Safari' : '';
+  const system = /iPhone/.test(a) ? 'iPhone' : /iPad/.test(a) ? 'iPad' : /Android/.test(a) ? 'Android' : /Windows/.test(a) ? 'Windows' : /Mac OS X/.test(a) ? 'Mac' : /Linux/.test(a) ? 'Linux' : '';
+  return [browser, system].filter(Boolean).join(' on ') || 'Unknown device';
+}
+
 function currentUser(req) {
   const token = readCookie(req, COOKIE);
   if (!token) return null;
@@ -115,8 +151,29 @@ function noteFailure(key) {
 const setting = (key) => get('SELECT value FROM system_settings WHERE key=?', key)?.value ?? '';
 const setSetting = (key, value) =>
   run('INSERT INTO system_settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', key, value);
-/** Self-service signup is open only when the administrator turned it on AND email can be sent. */
-const registrationOpen = () => setting('registration_enabled') === '1' && mailerStatus().configured;
+/**
+ * How people get an account. 'closed': only an administrator creates them. 'open': anyone signs up
+ * with an email and password and is in straight away. 'verify': the same, but they must first
+ * open a link sent to that address.
+ */
+const registrationMode = () => {
+  const mode = setting('registration_mode');
+  if (['closed', 'open', 'verify'].includes(mode)) return mode;
+  // Before there was a choice, "on" meant with email confirmation.
+  return setting('registration_enabled') === '1' ? 'verify' : 'closed';
+};
+/** Confirmation by email only works while email can be sent. */
+const registrationOpen = () => registrationMode() === 'open' || (registrationMode() === 'verify' && mailerStatus().configured);
+
+// Open sign-up has nothing else slowing down a script, so each address may make only a few accounts an hour.
+const signups = new Map();
+const SIGNUP_LIMIT = 5;
+const SIGNUP_WINDOW_MS = 60 * 60_000;
+function tooManySignups(ip) {
+  const recent = (signups.get(ip) || []).filter((t) => Date.now() - t < SIGNUP_WINDOW_MS);
+  signups.set(ip, recent);
+  return recent.length >= SIGNUP_LIMIT;
+}
 const userCount = () => get('SELECT COUNT(*) AS n FROM users').n;
 
 /** Creates an active user with a workspace of their own. Call inside a transaction. */
@@ -158,7 +215,7 @@ export function mountAuth(app) {
 
   app.get('/api/auth/status', (req, res) => {
     const user = currentUser(req);
-    res.json({ setup_needed: userCount() === 0, registration_open: registrationOpen(), user: user ? userOut(user) : null });
+    res.json({ setup_needed: userCount() === 0, registration_open: registrationOpen(), registration_mode: registrationOpen() ? registrationMode() : 'closed', user: user ? userOut(user) : null });
   });
 
   // First run: create the administrator, who takes over the data already on this install.
@@ -248,12 +305,15 @@ export function mountAuth(app) {
 
   app.post('/api/auth/logout', (req, res) => {
     const token = readCookie(req, COOKIE);
-    if (token) run('DELETE FROM sessions WHERE token_hash=?', sha256(token));
+    if (token) {
+      run('DELETE FROM sessions WHERE token_hash=?', sha256(token));
+      run('UPDATE logins SET ended_at=? WHERE token_hash=? AND ended_at IS NULL', new Date().toISOString(), sha256(token));
+    }
     setSessionCookie(req, res, '', 0);
     res.json({ ok: true });
   });
 
-  // --- Registration with email confirmation. Built, but closed until email can be sent. ---
+  // --- Registration. Closed unless an administrator opens it, with or without email confirmation. ---
   app.post('/api/auth/register', (req, res) => {
     if (!registrationOpen()) return res.status(403).json({ error: 'Registration is not open yet. Ask the administrator for an account.' });
     const email = normEmail(req.body.email);
@@ -264,6 +324,21 @@ export function mountAuth(app) {
     if (problem) return res.status(400).json({ error: problem });
 
     const existing = get('SELECT id, status FROM users WHERE email=?', email);
+    if (registrationMode() === 'open') {
+      if (tooManySignups(req.ip)) return res.status(429).json({ error: 'Too many new accounts from here. Try again in an hour.' });
+      // With no email to send, the only honest answer to a taken address is to say so.
+      if (existing && existing.status !== 'pending') return res.status(409).json({ error: 'There is already an account with that email. Sign in instead.' });
+      const userId = tx(() => {
+        if (!existing) return createUser({ email, name, password: str(req.body.password) });
+        // Someone who started under email confirmation and never finished: this completes it.
+        run("UPDATE users SET name=?, password_hash=?, status='active', confirm_token_hash=NULL, confirm_expires_at=NULL WHERE id=?", name, hashPassword(str(req.body.password)), existing.id);
+        run("INSERT INTO memberships (user_id, owner_id, role) VALUES (?,?,'owner')", existing.id, createWorkspace(`${name}'s workspace`));
+        return existing.id;
+      });
+      signups.get(req.ip).push(Date.now());
+      startSession(req, res, userId);
+      return res.json({ ok: true, user: userOut(get('SELECT * FROM users WHERE id=?', userId)) });
+    }
     // An address that already has a working account gets no new account and no hint that it exists.
     if (!existing || existing.status === 'pending') {
       const token = crypto.randomBytes(32).toString('base64url');
@@ -305,6 +380,7 @@ export function mountAuth(app) {
     if (!membership) return res.status(403).json({ error: 'This account has no workspace. Contact the administrator.' });
     req.user = user;
     req.ownerId = membership.owner_id;
+    touchLogin(req, user.id);
     next();
   });
 
@@ -315,7 +391,7 @@ export function mountAuth(app) {
     if (str(req.body.next) === str(req.body.current)) return res.status(400).json({ error: 'Choose a password different from the current one.' });
     run('UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?', hashPassword(str(req.body.next)), req.user.id);
     // Sign out every other device, keep this one.
-    run('DELETE FROM sessions WHERE user_id=? AND token_hash<>?', req.user.id, sha256(readCookie(req, COOKIE)));
+    endSessions(req.user.id, sha256(readCookie(req, COOKIE)));
     res.json({ user: userOut(get('SELECT * FROM users WHERE id=?', req.user.id)) });
   });
 
@@ -342,7 +418,8 @@ export function mountAuth(app) {
     teams: get('SELECT COUNT(*) AS n FROM teams t JOIN memberships m ON m.owner_id=t.owner_id WHERE m.user_id=?', u.id).n,
   });
   const settingsOut = () => ({
-    registration_enabled: setting('registration_enabled') === '1',
+    registration_mode: registrationMode(),
+    registration_enabled: registrationMode() !== 'closed',
     registration_open: registrationOpen(),
     mailer: mailerStatus(),
     unsent_emails: get('SELECT COUNT(*) AS n FROM outbox WHERE sent_at IS NULL').n,
@@ -385,11 +462,11 @@ export function mountAuth(app) {
       if (typeof b.is_admin === 'boolean') run('UPDATE users SET is_admin=? WHERE id=?', b.is_admin ? 1 : 0, target.id);
       if ((b.status === 'active' || b.status === 'disabled') && target.status !== 'pending') {
         run('UPDATE users SET status=? WHERE id=?', b.status, target.id);
-        if (b.status === 'disabled') run('DELETE FROM sessions WHERE user_id=?', target.id);
+        if (b.status === 'disabled') endSessions(target.id);
       }
       if (b.password !== undefined) {
         run('UPDATE users SET password_hash=?, must_change_password=1 WHERE id=?', hashPassword(str(b.password)), target.id);
-        run('DELETE FROM sessions WHERE user_id=?', target.id);
+        endSessions(target.id);
       }
     });
     res.json(adminUserOut(get('SELECT * FROM users WHERE id=?', target.id)));
@@ -400,8 +477,10 @@ export function mountAuth(app) {
   const systemUserOut = (u) => {
     const owner = get("SELECT owner_id FROM memberships WHERE user_id=? ORDER BY role='owner' DESC, owner_id LIMIT 1", u.id);
     const used = owner ? usageOf(owner.owner_id) : { bytes: 0, files: 0 };
+    const seen = get('SELECT COUNT(*) AS n, COALESCE(SUM(active_seconds), 0) AS secs, MAX(last_seen_at) AS last FROM logins WHERE user_id=?', u.id);
     return {
       ...adminUserOut(u),
+      sign_ins: seen.n, active_seconds: seen.secs, last_seen_at: seen.last,
       used_bytes: used.bytes, files: used.files,
       /** This person's own cap, or null when the default applies. */
       upload_cap_mb: u.upload_cap_mb === null || u.upload_cap_mb === undefined ? null : Number(u.upload_cap_mb),
@@ -410,8 +489,52 @@ export function mountAuth(app) {
   };
   const systemOut = () => {
     const users = all('SELECT * FROM users ORDER BY created_at, id').map(systemUserOut);
-    return { default_cap_mb: defaultCapMb(), max_cap_mb: MAX_CAP_MB, total_bytes: get('SELECT COALESCE(SUM(bytes), 0) AS n FROM images').n, users };
+    const ago = (ms) => new Date(Date.now() - ms).toISOString();
+    return {
+      default_cap_mb: defaultCapMb(), max_cap_mb: MAX_CAP_MB, total_bytes: get('SELECT COALESCE(SUM(bytes), 0) AS n FROM images').n, users,
+      /** People who did something in the last few minutes. */
+      online_now: get('SELECT COUNT(DISTINCT user_id) AS n FROM logins WHERE ended_at IS NULL AND last_seen_at > ?', ago(IDLE_SECONDS * 1000)).n,
+      sign_ins_7d: get('SELECT COUNT(*) AS n FROM logins WHERE started_at > ?', ago(7 * 86400_000)).n,
+      active_people_7d: get('SELECT COUNT(DISTINCT user_id) AS n FROM logins WHERE last_seen_at > ?', ago(7 * 86400_000)).n,
+      new_accounts_30d: users.filter((u) => new Date(u.created_at.includes('T') ? u.created_at : u.created_at.replace(' ', 'T') + 'Z').getTime() > Date.now() - 30 * 86400_000).length,
+    };
   };
+  // One person in detail: every sign-in, how long each lasted, and what they have built.
+  app.get('/api/system/users/:id/activity', systemOnly, (req, res) => {
+    const u = get('SELECT * FROM users WHERE id=?', Number(req.params.id));
+    if (!u) return res.status(404).json({ error: 'Not found' });
+    const now = new Date().toISOString();
+    const logins = all(
+      `SELECT l.*, EXISTS (SELECT 1 FROM sessions s WHERE s.token_hash=l.token_hash AND s.expires_at > ?) AS live
+         FROM logins l WHERE l.user_id=? ORDER BY l.started_at DESC LIMIT 100`,
+      now, u.id,
+    ).map((l) => ({
+      id: l.id, started_at: l.started_at, last_seen_at: l.last_seen_at, ended_at: l.ended_at, active_seconds: l.active_seconds,
+      ip: l.ip, device: deviceOf(l.agent),
+      /** 'open' while the sign-in still works, 'signed_out' when it was ended, 'expired' when it ran out. */
+      state: l.ended_at ? 'signed_out' : l.live ? 'open' : 'expired',
+    }));
+    const owner = get("SELECT owner_id FROM memberships WHERE user_id=? ORDER BY role='owner' DESC, owner_id LIMIT 1", u.id)?.owner_id ?? 0;
+    const count = (sql, ...args) => get(sql, ...args).n;
+    const totals = get('SELECT COUNT(*) AS n, COALESCE(SUM(active_seconds), 0) AS secs, MAX(active_seconds) AS longest FROM logins WHERE user_id=?', u.id);
+    res.json({
+      user: systemUserOut(u),
+      logins,
+      sign_ins: totals.n, active_seconds: totals.secs, longest_seconds: totals.longest || 0,
+      sign_ins_30d: count('SELECT COUNT(*) AS n FROM logins WHERE user_id=? AND started_at > ?', u.id, new Date(Date.now() - 30 * 86400_000).toISOString()),
+      days_active_30d: count('SELECT COUNT(DISTINCT substr(last_seen_at, 1, 10)) AS n FROM logins WHERE user_id=? AND last_seen_at > ?', u.id, new Date(Date.now() - 30 * 86400_000).toISOString()),
+      built: {
+        teams: count('SELECT COUNT(*) AS n FROM teams WHERE owner_id=?', owner),
+        practices: count("SELECT COUNT(*) AS n FROM plans WHERE owner_id=? AND kind='practice' AND is_template=0", owner),
+        homework: count("SELECT COUNT(*) AS n FROM plans WHERE owner_id=? AND kind='homework' AND is_template=0", owner),
+        drills: count('SELECT COUNT(*) AS n FROM drills WHERE owner_id=?', owner),
+        plays: count('SELECT COUNT(*) AS n FROM plays WHERE owner_id=?', owner),
+        communities: count("SELECT COUNT(*) AS n FROM community_members WHERE user_id=? AND status='active'", u.id),
+        shared_teams: count('SELECT COUNT(*) AS n FROM team_staff WHERE user_id=?', u.id),
+        last_plan_edit: get('SELECT MAX(updated_at) AS t FROM plans WHERE owner_id=?', owner).t,
+      },
+    });
+  });
   app.get('/api/system', systemOnly, (_req, res) => res.json(systemOut()));
   app.put('/api/system/settings', systemOnly, (req, res) => {
     const cap = parseCapMb(req.body.default_cap_mb);
@@ -455,10 +578,12 @@ export function mountAuth(app) {
     res.json({ ok: true, to: req.user.email });
   });
   app.put('/api/admin/settings', admin, (req, res) => {
-    if (typeof req.body.registration_enabled === 'boolean') {
-      if (req.body.registration_enabled && !mailerStatus().configured)
-        return res.status(400).json({ error: 'Registration needs email, and no email service is connected yet.' });
-      setSetting('registration_enabled', req.body.registration_enabled ? '1' : '0');
+    const mode = typeof req.body.registration_enabled === 'boolean' ? (req.body.registration_enabled ? 'verify' : 'closed') : req.body.registration_mode;
+    if (mode !== undefined) {
+      if (!['closed', 'open', 'verify'].includes(mode)) return res.status(400).json({ error: 'Choose how people sign up.' });
+      if (mode === 'verify' && !mailerStatus().configured)
+        return res.status(400).json({ error: 'Email confirmation needs email, and no email service is connected yet.' });
+      setSetting('registration_mode', mode);
     }
     res.json(settingsOut());
   });

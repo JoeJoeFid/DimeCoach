@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEventHandler, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEventHandler, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useDraggable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
@@ -19,10 +19,6 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 // "new:custom", "new:break", or "new:drill:<id>".
 const NEW = 'new:';
 const isNew = (id: string | number) => String(id).startsWith(NEW);
-/** Where a dragged-in thing lands when the plan has nothing in it yet. */
-const EMPTY_PLAN = 'plan-empty';
-/** Something new has to be let go over the plan itself. Reordering snaps to the nearest item. */
-const collision: CollisionDetection = (args) => (isNew(args.active.id) ? pointerWithin(args) : closestCenter(args));
 
 export default function PlanEditor() {
   const { id } = useParams();
@@ -50,6 +46,7 @@ export default function PlanEditor() {
   /** What is being dragged in from the side list, and the place in the plan it would land. */
   const [incoming, setIncoming] = useState('');
   const [dropAt, setDropAt] = useState<number | null>(null);
+  const column = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [importing, setImporting] = useState(searchParams.has('import') && app.user.can_import);
 
@@ -172,15 +169,28 @@ export default function PlanEditor() {
     }
     setItems((latest.current ?? plan).items.filter((x) => x.key !== it.key));
   };
-  /** The place in the plan a dragged-in thing would take: before the item under it, or after when past its middle. */
+  /**
+   * The place in the plan a dragged-in thing would take. Anywhere over the plan's column counts,
+   * not just over an item: it lands after every item whose middle is above the pointer, so the
+   * gaps between items and all the space under the last one are good places to let go.
+   */
   const landing = (e: DragMoveEvent | DragEndEvent) => {
-    if (!e.over) return null;
-    if (e.over.id === EMPTY_PLAN) return 0;
-    const i = plan.items.findIndex((it) => it.key === e.over!.id);
-    if (i < 0) return null;
-    // Judged by where the pointer is, not by the tile it picked up: tiles come in different sizes.
-    const pointer = (e.activatorEvent as PointerEvent).clientY + e.delta.y;
-    return pointer > e.over.rect.top + e.over.rect.height / 2 ? i + 1 : i;
+    const el = column.current;
+    if (!el) return null;
+    const start = e.activatorEvent as PointerEvent;
+    const x = start.clientX + e.delta.x;
+    const y = start.clientY + e.delta.y;
+    const box = el.getBoundingClientRect();
+    if (x < box.left || x > box.right) return null;
+    // The "Drop here" space pushes the rows after it down. Judge by where they would be without
+    // it, or the space would chase the pointer and never settle.
+    const space = el.querySelector(':scope > .drop-slot:not(.idle)')?.getBoundingClientRect();
+    const pushed = space ? space.height + 12 : 0;
+    return [...el.querySelectorAll(':scope > .sheet-row')].filter((row) => {
+      const r = row.getBoundingClientRect();
+      const top = space && r.top > space.top ? r.top - pushed : r.top;
+      return y > top + r.height / 2;
+    }).length;
   };
   /** Adds what a side-list id stands for. With no place given it goes at the end. */
   const addNew = (id: string, index = (latest.current ?? plan).items.length) => {
@@ -313,6 +323,8 @@ export default function PlanEditor() {
     );
   };
 
+  /** The space that opens up where a dragged-in thing will land. */
+  const dropSlot = <div className="drop-slot">Drop here</div>;
   const inserter = (index: number) =>
     choosingAt === index ? (
       <div className="card item chooser" role="group" aria-label="New item">
@@ -369,9 +381,9 @@ export default function PlanEditor() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={collision}
+        collisionDetection={closestCenter}
         onDragStart={(e) => isNew(e.active.id) && setIncoming(String(e.active.id))}
-        onDragMove={(e) => isNew(e.active.id) && setDropAt(landing(e))}
+        onDragMove={(e) => isNew(e.active.id) && incoming && setDropAt(landing(e))}
         onDragCancel={() => {
           setIncoming('');
           setDropAt(null);
@@ -380,7 +392,7 @@ export default function PlanEditor() {
       >
         <div className="plan-layout">
           <Palette drills={libraryDrills} tags={tags} withBreak={!isHomework} sheet={sheet} onAdd={addNew} />
-          <div className="plan-column">
+          <div className="plan-column" ref={column}>
             <div className="card plan-head">
               <div className="fields">
                 <Field label={plan.is_template ? 'Template name' : 'Title'} grow>
@@ -495,38 +507,41 @@ export default function PlanEditor() {
             </div>
 
             {plan.items.length === 0 ? (
-              <EmptyPlan>
+              <div className={`empty ${incoming && dropAt !== null ? 'drop-here' : ''}`}>
                 <h2>Nothing scheduled yet</h2>
                 <p>Start from a {sheet} you have already built, drag a drill in from the left, or add your first item. Each item starts when the one before it ends.</p>
                 <button className="btn primary start-from" onClick={() => setStarting(true)}>
                   Start from a previous {sheet}
                 </button>
                 {inserter(0)}
-              </EmptyPlan>
+              </div>
             ) : (
               <SortableContext items={plan.items.map((i) => i.key)} strategy={verticalListSortingStrategy}>
                 {plan.items.map((it, i) => (
-                  <SortableRow
-                    key={it.key}
-                    still={incoming !== ''}
-              dropMark={dropAt === i ? 'before' : dropAt === plan.items.length && i === plan.items.length - 1 ? 'after' : ''}
-                    item={it}
-                    slot={slots[i]}
-                    isHomework={isHomework}
-                    isOpen={open.has(it.key)}
-                    autoFocusTitle={it.key === focusKey}
-                    tags={tags}
-                    players={players}
-                    plays={plays.filter((p) => p.sport_id === team?.sport_id)}
-                    onToggle={() => toggle(it.key)}
-                    onPatch={(patch) => patchItem(it.key, patch)}
-                    onDelete={() => removeItem(it)}
-                    onDuplicate={() => insertAt(i + 1, { ...structuredClone(it), key: newKey() }, false)}
-                    onSaveToLibrary={() => saveToLibrary(it)}
-                  >
-                    {inserter(i + 1)}
-                  </SortableRow>
+                  <Fragment key={it.key}>
+                    {incoming && dropAt === i && dropSlot}
+                    <SortableRow
+                      still={incoming !== ''}
+                      item={it}
+                      slot={slots[i]}
+                      isHomework={isHomework}
+                      isOpen={open.has(it.key)}
+                      autoFocusTitle={it.key === focusKey}
+                      tags={tags}
+                      players={players}
+                      plays={plays.filter((p) => p.sport_id === team?.sport_id)}
+                      onToggle={() => toggle(it.key)}
+                      onPatch={(patch) => patchItem(it.key, patch)}
+                      onDelete={() => removeItem(it)}
+                      onDuplicate={() => insertAt(i + 1, { ...structuredClone(it), key: newKey() }, false)}
+                      onSaveToLibrary={() => saveToLibrary(it)}
+                    >
+                      {inserter(i + 1)}
+                    </SortableRow>
+                  </Fragment>
                 ))}
+                {/* Under the last item: always there while dragging, so the end of the plan is an easy target. */}
+                {incoming && (dropAt === plan.items.length ? dropSlot : <div className="drop-slot idle">or drop here to add it at the end</div>)}
               </SortableContext>
             )}
 
@@ -690,16 +705,6 @@ function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; t
   );
 }
 
-/** The empty plan. It is also somewhere to let go of the first thing dragged in. */
-function EmptyPlan({ children }: { children: ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: EMPTY_PLAN });
-  return (
-    <div ref={setNodeRef} className={`empty ${isOver ? 'drop-here' : ''}`}>
-      {children}
-    </div>
-  );
-}
-
 function SortableRow(props: {
   item: Item;
   slot: Slot;
@@ -707,8 +712,6 @@ function SortableRow(props: {
   isOpen: boolean;
   /** True for a custom item that was just added, so typing goes straight into its title. */
   autoFocusTitle: boolean;
-  /** Set while something dragged in from the side list would land just before or after this row. */
-  dropMark: '' | 'before' | 'after';
   /** True while something is being dragged in: the rows stay put and only the line shows where it lands. */
   still: boolean;
   tags: Tag[];
@@ -742,7 +745,7 @@ function SortableRow(props: {
   ].filter(Boolean);
 
   return (
-    <div ref={setNodeRef} style={props.still ? undefined : { transform: CSS.Translate.toString(transform), transition }} className={`sheet-row ${isDragging ? 'dragging' : ''} ${props.dropMark ? `drop-${props.dropMark}` : ''}`}>
+    <div ref={setNodeRef} style={props.still ? undefined : { transform: CSS.Translate.toString(transform), transition }} className={`sheet-row ${isDragging ? 'dragging' : ''}`}>
       <div
         ref={card}
         className={`card item ${isBreak ? 'break' : ''} ${isOpen ? 'open' : ''}`}

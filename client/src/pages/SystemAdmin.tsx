@@ -1,13 +1,40 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { api, type SystemState, type SystemUser } from '../api';
+import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser, type UserActivity } from '../api';
 import { useApp } from '../App';
-import { Field } from '../components/bits';
+import { Field, Modal } from '../components/bits';
+import RegistrationCard from '../components/RegistrationCard';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { SpaceMeter, fmtSpace } from '../components/SpaceMeter';
 
 const fmtWhen = (iso: string | null) =>
   iso ? new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Never';
 const MB = 1024 * 1024;
+const asDate = (iso: string) => new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z');
+const fmtMoment = (iso: string | null) => (iso ? asDate(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Never');
+/** "3 h 20 min", "45 min", or "under a minute". */
+function fmtSpan(seconds: number) {
+  const mins = Math.round(seconds / 60);
+  if (mins < 1) return seconds > 0 ? 'under a minute' : '0 min';
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor((mins % 1440) / 60);
+  return [d > 0 && `${d} d`, h > 0 && `${h} h`, d === 0 && mins % 60 > 0 && `${mins % 60} min`].filter(Boolean).join(' ');
+}
+/** "just now", "12 min ago", "3 days ago". */
+function fmtAgo(iso: string | null) {
+  if (!iso) return 'Never';
+  const secs = Math.max(0, (Date.now() - asDate(iso).getTime()) / 1000);
+  if (secs < 300) return 'Now';
+  if (secs < 3600) return `${Math.round(secs / 60)} min ago`;
+  if (secs < 86400) return `${Math.round(secs / 3600)} h ago`;
+  const days = Math.round(secs / 86400);
+  return days < 60 ? `${days} day${days === 1 ? '' : 's'} ago` : fmtWhen(iso);
+}
+const SECTIONS = [
+  ['people', 'People'],
+  ['signup', 'Sign-up and email'],
+  ['storage', 'Upload space'],
+  ['backup', 'Backup'],
+];
 
 /**
  * For the system administrator only: every account, what each may do, and how much upload
@@ -16,6 +43,9 @@ const MB = 1024 * 1024;
 export default function SystemAdmin() {
   const { user: me } = useApp();
   const [state, setState] = useState<SystemState | null>(null);
+  const [settings, setSettings] = useState<AdminSettings | null>(null);
+  /** The person whose sign-ins and activity are open. */
+  const [viewing, setViewing] = useState<SystemUser | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   /** Cap boxes being typed in, by user id. Absent means the box shows the saved value. */
@@ -26,7 +56,9 @@ export default function SystemAdmin() {
 
   const load = useCallback(async () => {
     try {
-      setState(await api.system());
+      const [sys, set] = await Promise.all([api.system(), api.adminSettings()]);
+      setState(sys);
+      setSettings(set);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -121,9 +153,16 @@ export default function SystemAdmin() {
       <div className="page-head">
         <div>
           <h1>System admin</h1>
-          <p className="muted">Only your account can open this page. It covers every account on this system and how much each may upload.</p>
+          <p className="muted">Only your account can open this page. It covers every account on this system: who is using it, how people sign up, and how much each may upload.</p>
         </div>
       </div>
+      <nav className="sys-jump" aria-label="Sections of this page">
+        {SECTIONS.map(([id, label]) => (
+          <a key={id} href={`#${id}`}>
+            {label}
+          </a>
+        ))}
+      </nav>
       {error && <p className="error">{error}</p>}
       {notice && <p className="banner ok">{notice}</p>}
 
@@ -141,6 +180,22 @@ export default function SystemAdmin() {
               <div className="label">Active</div>
             </div>
             <div className="sys-tile">
+              <div className="value">{state.online_now}</div>
+              <div className="label">Using it right now</div>
+            </div>
+            <div className="sys-tile">
+              <div className="value">{state.active_people_7d}</div>
+              <div className="label">People active this week</div>
+            </div>
+            <div className="sys-tile">
+              <div className="value">{state.sign_ins_7d}</div>
+              <div className="label">Sign-ins this week</div>
+            </div>
+            <div className="sys-tile">
+              <div className="value">{state.new_accounts_30d}</div>
+              <div className="label">New accounts in 30 days</div>
+            </div>
+            <div className="sys-tile">
               <div className="value">{fmtSpace(state.total_bytes)}</div>
               <div className="label">Uploaded in total</div>
             </div>
@@ -150,126 +205,9 @@ export default function SystemAdmin() {
             </div>
           </div>
 
-          <div className="card">
-            <h2>Backup</h2>
-            <p className="muted small">
-              One file with every account, team, practice, drill, play and community. Keep a copy somewhere safe, or use it to move to another
-              site: a brand new Dime Coach site offers to restore it on its first visit. Uploaded pictures and videos are not included.
-            </p>
-            <a className="btn" href="/api/system/backup" download>
-              Download a backup
-            </a>
-          </div>
-
-          <div className="card">
-            <h2>Default upload space</h2>
-            <p className="muted small">
-              Applies to everyone who has no cap of their own. It counts uploaded pictures and videos. Links take no space. Set it to 0 to turn
-              uploads off by default.
-            </p>
-            <div className="sys-default">
-              <label className="cap-edit">
-                <input
-                  className="input"
-                  type="number"
-                  min={0}
-                  max={state.max_cap_mb}
-                  step={50}
-                  aria-label="Default upload space in MB"
-                  value={defaultCap ?? String(state.default_cap_mb)}
-                  onChange={(e) => setDefaultCap(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && saveDefault()}
-                />
-                <span className="muted small">MB per person</span>
-              </label>
-              <button className="btn" disabled={defaultCap === null || defaultCap.trim() === '' || Number(defaultCap) === state.default_cap_mb} onClick={saveDefault}>
-                Save default
-              </button>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-head">
-              <h2>
-                People and upload space <span className="muted">({users.length})</span>
-              </h2>
-            </div>
-            <div className="table-scroll">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Person</th>
-                    <th>Status</th>
-                    <th>Last sign-in</th>
-                    <th>Upload space used</th>
-                    <th>Cap (MB)</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id}>
-                      <td>
-                        <span className="sys-person">
-                          <strong>{u.name}</strong>
-                          <span className="muted small">{u.email}</span>
-                          <span className="badges">
-                            {u.is_system_admin ? <span className="kind system">System admin</span> : u.is_admin && <span className="kind game">Admin</span>}
-                            {u.id === me.id && <span className="kind">You</span>}
-                          </span>
-                        </span>
-                      </td>
-                      <td>{u.status === 'active' ? 'Active' : u.status === 'pending' ? 'Awaiting email confirmation' : 'Turned off'}</td>
-                      <td>{fmtWhen(u.last_login_at)}</td>
-                      <td>
-                        <SpaceMeter used={u.used_bytes} cap={u.cap_mb * MB} files={u.files} />
-                      </td>
-                      <td>
-                        <span className="cap-edit">
-                          <input
-                            className="input"
-                            type="number"
-                            min={0}
-                            max={state.max_cap_mb}
-                            step={50}
-                            placeholder={`${state.default_cap_mb}`}
-                            aria-label={`Upload space for ${u.name} in MB`}
-                            value={caps[u.id] ?? (u.upload_cap_mb === null ? '' : String(u.upload_cap_mb))}
-                            onChange={(e) => setCaps({ ...caps, [u.id]: e.target.value })}
-                            onBlur={() => saveCap(u)}
-                            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                          />
-                          <span className="muted small">{u.upload_cap_mb === null ? 'Default' : 'Own cap'}</span>
-                        </span>
-                      </td>
-                      <td className="num">
-                        <span className="row-actions">
-                          {!u.is_system_admin && (
-                            <button className="btn small" onClick={() => setRole(u, !u.is_admin)}>
-                              {u.is_admin ? 'Remove admin' : 'Make admin'}
-                            </button>
-                          )}
-                          <button className="btn small" onClick={() => resetPassword(u)}>
-                            Reset password
-                          </button>
-                          {!u.is_system_admin && u.status !== 'pending' && (
-                            <button className={`btn small ${u.status === 'active' ? 'danger' : ''}`} onClick={() => setStatus(u, u.status === 'active' ? 'disabled' : 'active')}>
-                              {u.status === 'active' ? 'Turn off' : 'Turn on'}
-                            </button>
-                          )}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="muted small">
-              Leave a cap empty to use the default. A cap below what someone has already uploaded removes nothing. It only stops new uploads
-              until they are back under it.
-            </p>
-          </div>
-
+          <h2 className="sys-section" id="people">
+            People
+          </h2>
           <div className="card">
             <h2>Add a person</h2>
             <p className="muted small">
@@ -309,8 +247,243 @@ export default function SystemAdmin() {
               <button className="btn primary">Create account</button>
             </form>
           </div>
+          <div className="card">
+            <div className="card-head">
+              <h2>
+                Everyone <span className="muted">({users.length})</span>
+              </h2>
+            </div>
+            <div className="table-scroll">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Person</th>
+                    <th>Status</th>
+                    <th>Last active</th>
+                    <th className="num">Sign-ins</th>
+                    <th className="num">Time in the app</th>
+                    <th>Upload space used</th>
+                    <th>Cap (MB)</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id}>
+                      <td>
+                        <span className="sys-person">
+                          <button type="button" className="link sys-name" onClick={() => setViewing(u)} title="Sign-ins and activity">
+                            {u.name}
+                          </button>
+                          <span className="muted small">{u.email}</span>
+                          <span className="badges">
+                            {u.is_system_admin ? <span className="kind system">System admin</span> : u.is_admin && <span className="kind game">Admin</span>}
+                            {u.id === me.id && <span className="kind">You</span>}
+                          </span>
+                        </span>
+                      </td>
+                      <td>{u.status === 'active' ? 'Active' : u.status === 'pending' ? 'Awaiting email confirmation' : 'Turned off'}</td>
+                      <td>
+                        {fmtAgo(u.last_seen_at ?? u.last_login_at)}
+                        {u.last_seen_at && Date.now() - asDate(u.last_seen_at).getTime() < 300_000 && <span className="online-dot" title="Using Dime Coach right now" />}
+                      </td>
+                      <td className="num">{u.sign_ins}</td>
+                      <td className="num">{fmtSpan(u.active_seconds)}</td>
+                      <td>
+                        <SpaceMeter used={u.used_bytes} cap={u.cap_mb * MB} files={u.files} />
+                      </td>
+                      <td>
+                        <span className="cap-edit">
+                          <input
+                            className="input"
+                            type="number"
+                            min={0}
+                            max={state.max_cap_mb}
+                            step={50}
+                            placeholder={`${state.default_cap_mb}`}
+                            aria-label={`Upload space for ${u.name} in MB`}
+                            value={caps[u.id] ?? (u.upload_cap_mb === null ? '' : String(u.upload_cap_mb))}
+                            onChange={(e) => setCaps({ ...caps, [u.id]: e.target.value })}
+                            onBlur={() => saveCap(u)}
+                            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                          />
+                          <span className="muted small">{u.upload_cap_mb === null ? 'Default' : 'Own cap'}</span>
+                        </span>
+                      </td>
+                      <td className="num">
+                        <span className="row-actions">
+                          <button className="btn small" onClick={() => setViewing(u)}>
+                            Details
+                          </button>
+                          {!u.is_system_admin && (
+                            <button className="btn small" onClick={() => setRole(u, !u.is_admin)}>
+                              {u.is_admin ? 'Remove admin' : 'Make admin'}
+                            </button>
+                          )}
+                          <button className="btn small" onClick={() => resetPassword(u)}>
+                            Reset password
+                          </button>
+                          {!u.is_system_admin && u.status !== 'pending' && (
+                            <button className={`btn small ${u.status === 'active' ? 'danger' : ''}`} onClick={() => setStatus(u, u.status === 'active' ? 'disabled' : 'active')}>
+                              {u.status === 'active' ? 'Turn off' : 'Turn on'}
+                            </button>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted small">
+              Leave a cap empty to use the default. A cap below what someone has already uploaded removes nothing. It only stops new uploads
+              until they are back under it.
+            </p>
+          </div>
+
+
+          <h2 className="sys-section" id="signup">
+            Sign-up and email
+          </h2>
+          {settings && <RegistrationCard settings={settings} run={run} />}
+
+          <h2 className="sys-section" id="storage">
+            Upload space
+          </h2>
+          <div className="card">
+            <h2>Default upload space</h2>
+            <p className="muted small">
+              Applies to everyone who has no cap of their own. It counts uploaded pictures and videos. Links take no space. Set it to 0 to turn
+              uploads off by default.
+            </p>
+            <div className="sys-default">
+              <label className="cap-edit">
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  max={state.max_cap_mb}
+                  step={50}
+                  aria-label="Default upload space in MB"
+                  value={defaultCap ?? String(state.default_cap_mb)}
+                  onChange={(e) => setDefaultCap(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && saveDefault()}
+                />
+                <span className="muted small">MB per person</span>
+              </label>
+              <button className="btn" disabled={defaultCap === null || defaultCap.trim() === '' || Number(defaultCap) === state.default_cap_mb} onClick={saveDefault}>
+                Save default
+              </button>
+            </div>
+          </div>
+
+
+          <h2 className="sys-section" id="backup">
+            Backup
+          </h2>
+          <div className="card">
+            <h2>Backup</h2>
+            <p className="muted small">
+              One file with every account, team, practice, drill, play and community. Keep a copy somewhere safe, or use it to move to another
+              site: a brand new Dime Coach site offers to restore it on its first visit. Uploaded pictures and videos are not included.
+            </p>
+            <a className="btn" href="/api/system/backup" download>
+              Download a backup
+            </a>
+          </div>
         </>
       )}
+      {viewing && <ActivityModal person={viewing} onClose={() => setViewing(null)} />}
     </div>
+  );
+}
+
+const STATES: Record<SignIn['state'], string> = { open: 'Still signed in', signed_out: 'Signed out', expired: 'Ran out' };
+
+/** One person in detail: every sign-in, how long each lasted, and what they have built. */
+function ActivityModal({ person, onClose }: { person: SystemUser; onClose: () => void }) {
+  const [data, setData] = useState<UserActivity | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api
+      .systemUserActivity(person.id)
+      .then(setData)
+      .catch((e) => setError((e as Error).message));
+  }, [person.id]);
+  const built = data?.built;
+  return (
+    <Modal title={`${person.name} · ${person.email}`} onClose={onClose} wide>
+      {error && <p className="error">{error}</p>}
+      {!data && !error && <p className="muted">Loading…</p>}
+      {data && built && (
+        <div className="activity">
+          <div className="activity-tiles">
+            {[
+              [String(data.sign_ins), 'Sign-ins'],
+              [fmtSpan(data.active_seconds), 'Time in the app'],
+              [data.sign_ins > 0 ? fmtSpan(data.active_seconds / data.sign_ins) : '0 min', 'Average per sign-in'],
+              [fmtSpan(data.longest_seconds), 'Longest sign-in'],
+              [String(data.sign_ins_30d), 'Sign-ins in 30 days'],
+              [String(data.days_active_30d), 'Days active in 30'],
+              [fmtAgo(data.user.last_seen_at ?? data.user.last_login_at), 'Last active'],
+              [fmtWhen(data.user.created_at), 'Account created'],
+            ].map(([value, label]) => (
+              <div className="sys-tile" key={label}>
+                <div className="value">{value}</div>
+                <div className="label">{label}</div>
+              </div>
+            ))}
+          </div>
+          <p className="activity-built">
+            <strong>What they have built:</strong> {built.teams} team{built.teams === 1 ? '' : 's'} · {built.practices} practice{built.practices === 1 ? '' : 's'} · {built.homework} homework ·{' '}
+            {built.drills} drill{built.drills === 1 ? '' : 's'} · {built.plays} play{built.plays === 1 ? '' : 's'} · {fmtSpace(data.user.used_bytes)} uploaded
+            <br />
+            <span className="muted small">
+              In {built.communities} communit{built.communities === 1 ? 'y' : 'ies'} · helping on {built.shared_teams} shared team{built.shared_teams === 1 ? '' : 's'} · last edited a plan{' '}
+              {built.last_plan_edit ? fmtAgo(built.last_plan_edit).toLowerCase() : 'never'}
+            </span>
+          </p>
+          <h3>Sign-ins</h3>
+          {data.logins.length === 0 ? (
+            <p className="muted">No sign-ins recorded yet. Recording started when this page was added.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Signed in</th>
+                    <th>Last active</th>
+                    <th className="num">Time in the app</th>
+                    <th>Now</th>
+                    <th>Device</th>
+                    <th>Address</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.logins.map((l) => (
+                    <tr key={l.id}>
+                      <td>{fmtMoment(l.started_at)}</td>
+                      <td>{fmtMoment(l.last_seen_at)}</td>
+                      <td className="num">{fmtSpan(l.active_seconds)}</td>
+                      <td>
+                        {STATES[l.state]}
+                        {l.state === 'open' && <span className="muted small"> · for {fmtSpan((Date.now() - asDate(l.started_at).getTime()) / 1000)}</span>}
+                        {l.state === 'signed_out' && l.ended_at && <span className="muted small"> · {fmtMoment(l.ended_at)}</span>}
+                      </td>
+                      <td>{l.device}</td>
+                      <td className="muted small">{l.ip}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="muted small">
+            "Time in the app" counts the stretches when they were actually doing something. A gap of more than five minutes is treated as time away.
+            {data.logins.length === 100 && ' Showing the latest 100 sign-ins.'}
+          </p>
+        </div>
+      )}
+    </Modal>
   );
 }

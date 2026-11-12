@@ -5750,26 +5750,24 @@ fieldset.plain {
   font-size: 0.74rem;
   font-weight: 500;
 }
-/* Where a dragged-in thing will land. */
-.sheet-row {
-  position: relative;
+/* Where a dragged-in thing will land: a roomy space opens up there. */
+.drop-slot {
+  display: grid;
+  place-items: center;
+  height: 52px;
+  margin: 2px 0 10px;
+  border: 2px dashed var(--series);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--series) 12%, transparent);
+  color: var(--series);
+  font-size: 0.86rem;
+  font-weight: 650;
 }
-.sheet-row.drop-before::before,
-.sheet-row.drop-after::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--series);
-  pointer-events: none;
-}
-.sheet-row.drop-before::before {
-  top: -4px;
-}
-.sheet-row.drop-after::after {
-  bottom: -2px;
+.drop-slot.idle {
+  border-color: var(--line-strong);
+  background: none;
+  color: var(--muted);
+  font-weight: 500;
 }
 .empty.drop-here {
   outline: 3px dashed var(--series);
@@ -6078,4 +6076,95 @@ fieldset.plain {
 .builder-bar .tool-group:nth-child(3) {
   padding-left: 0;
   border-left: none;
+}
+
+/* ---------- System admin: sections, sign-in detail, sign-up choice ---------- */
+.sys-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -8px 0 18px;
+}
+.sys-jump a {
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.sys-jump a:hover {
+  border-color: var(--ink);
+}
+.sys-section {
+  margin: 30px 0 12px;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  scroll-margin-top: 16px;
+}
+.sys-name {
+  font-weight: 650;
+  text-align: left;
+}
+.online-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--good);
+}
+.activity-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.activity-tiles .sys-tile {
+  background: var(--surface-2);
+  box-shadow: none;
+  padding: 12px 14px;
+}
+.activity-tiles .sys-tile .value {
+  font-size: 1.25rem;
+}
+.activity-built {
+  margin: 0 0 16px;
+  line-height: 1.6;
+}
+.activity h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+.reg-modes {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.reg-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.reg-mode.on {
+  border-color: var(--ink);
+  background: var(--surface-2);
+}
+.reg-mode.blocked {
+  opacity: 0.6;
+  cursor: default;
+}
+.reg-mode input {
+  margin-top: 3px;
+  accent-color: var(--ink);
+}
+.reg-mode > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }

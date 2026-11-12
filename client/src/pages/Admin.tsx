@@ -3,6 +3,7 @@ import { api, type AdminSettings, type AdminUser } from '../api';
 import { useApp } from '../App';
 import { Field } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
+import RegistrationCard from '../components/RegistrationCard';
 
 const fmtWhen = (iso: string | null) =>
   iso ? new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Never';
@@ -149,8 +150,8 @@ export default function Admin() {
       <div className="card">
         <h2>Add a person</h2>
         <p className="muted small">
-          Until email is connected, you create accounts here and pass the starting password along yourself. Plan import runs Claude on the
-          computer hosting Dime Coach, so grant it only to people you want using that.
+          You pick a starting password and pass it along yourself. Plan import runs Claude on the computer hosting Dime Coach, so grant it
+          only to people you want using that.
         </p>
         <form className="fields" onSubmit={create}>
           <Field label="Name" grow>
@@ -170,38 +171,7 @@ export default function Admin() {
         </form>
       </div>
 
-      {settings && (
-        <div className="card">
-          <h2>Self-service registration</h2>
-          <p className="muted small">
-            When this is on, anyone can create an account from the sign-in page and must confirm their email address before signing in. The
-            flow is built, but it needs an email service to send the confirmation link.
-          </p>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={settings.registration_enabled}
-              disabled={!settings.mailer.configured}
-              onChange={(e) => run(() => api.adminSetSettings({ registration_enabled: e.target.checked }))}
-            />
-            Let people register themselves
-          </label>
-          <p className="muted small reg-status">
-            {!settings.mailer.configured
-              ? 'Not available yet: no email service is connected.'
-              : settings.mailer.transport === 'log'
-                ? 'Email is in test mode: confirmation links are printed in the server console, not sent.'
-                : settings.registration_open
-                  ? 'Registration is open.'
-                  : 'Registration is closed.'}
-          </p>
-          {settings.mailer.configured && (
-            <button className="btn small" onClick={() => run(() => api.adminTestEmail(), 'Test email sent to your own address. Check your inbox.')}>
-              Send me a test email
-            </button>
-          )}
-        </div>
-      )}
+      {settings && <RegistrationCard settings={settings} run={run} />}
     </div>
   );
 }

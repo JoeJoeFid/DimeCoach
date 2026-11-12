@@ -64,6 +64,8 @@ export interface AuthStatus {
   /** True on a fresh install with no accounts yet. */
   setup_needed: boolean;
   registration_open: boolean;
+  /** 'open' lets people straight in. 'verify' sends a confirmation link first. */
+  registration_mode: 'closed' | 'open' | 'verify';
   user: User | null;
 }
 export interface AdminUser extends User {
@@ -80,12 +82,42 @@ export interface SystemUser extends AdminUser {
   upload_cap_mb: number | null;
   /** The cap in force for them, in MB. */
   cap_mb: number;
+  /** How many times they have signed in, and the seconds they have spent using the app. */
+  sign_ins: number;
+  active_seconds: number;
+  /** The last time they did anything, or null if never. */
+  last_seen_at: string | null;
+}
+/** One sign-in: when it began, when the person was last seen in it, and how it ended. */
+export interface SignIn {
+  id: number;
+  started_at: string;
+  last_seen_at: string;
+  ended_at: string | null;
+  active_seconds: number;
+  ip: string;
+  device: string;
+  state: 'open' | 'signed_out' | 'expired';
+}
+export interface UserActivity {
+  user: SystemUser;
+  logins: SignIn[];
+  sign_ins: number;
+  active_seconds: number;
+  longest_seconds: number;
+  sign_ins_30d: number;
+  days_active_30d: number;
+  built: { teams: number; practices: number; homework: number; drills: number; plays: number; communities: number; shared_teams: number; last_plan_edit: string | null };
 }
 export interface SystemState {
   default_cap_mb: number;
   max_cap_mb: number;
   total_bytes: number;
   users: SystemUser[];
+  online_now: number;
+  sign_ins_7d: number;
+  active_people_7d: number;
+  new_accounts_30d: number;
 }
 export interface StorageSpace {
   used_bytes: number;
@@ -178,6 +210,7 @@ export interface MyShareState {
   status: 'pending' | 'approved' | null;
 }
 export interface AdminSettings {
+  registration_mode: 'closed' | 'open' | 'verify';
   registration_enabled: boolean;
   registration_open: boolean;
   mailer: { configured: boolean; transport: string };
@@ -189,7 +222,7 @@ export const api = {
   setup: (b: { name: string; email: string; password: string; setup_token?: string }) => req<{ user: User }>('POST', '/auth/setup', b),
   login: (email: string, password: string) => req<{ user: User }>('POST', '/auth/login', { email, password }),
   logout: () => req('POST', '/auth/logout', {}),
-  register: (b: { name: string; email: string; password: string }) => req('POST', '/auth/register', b),
+  register: (b: { name: string; email: string; password: string }) => req<{ ok: true; user?: User }>('POST', '/auth/register', b),
   confirm: (token: string) => req('POST', '/auth/confirm', { token }),
   savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
   changePassword: (current: string, next: string) => req<{ user: User }>('POST', '/auth/password', { current, next }),
@@ -200,6 +233,7 @@ export const api = {
     req<AdminUser>('PUT', `/admin/users/${id}`, b),
   adminSettings: () => req<AdminSettings>('GET', '/admin/settings'),
   system: () => req<SystemState>('GET', '/system'),
+  systemUserActivity: (id: number) => req<UserActivity>('GET', `/system/users/${id}/activity`),
   systemSetDefaults: (b: { default_cap_mb: number }) => req<SystemState>('PUT', '/system/settings', b),
   systemUpdateUser: (id: number, b: { upload_cap_mb?: number | null; is_admin?: boolean }) => req<SystemState>('PUT', `/system/users/${id}`, b),
   storage: () => req<StorageSpace>('GET', '/storage'),
@@ -234,7 +268,7 @@ export const api = {
   communityLibrary: (kind: ShareKind, community: 'all' | number) => req<CommunityShare[]>('GET', `/community-library?kind=${kind}&community=${community}`),
   communityShare: (shareId: number) => req<CommunityShareDetail>('GET', `/community-library/${shareId}`),
   copyShare: (shareId: number, b: { sport_id?: number; team_id?: number; date?: string }) => req<{ kind: ShareKind; id: number }>('POST', `/community-library/${shareId}/copy`, b),
-  adminSetSettings: (b: { registration_enabled: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
+  adminSetSettings: (b: { registration_mode: AdminSettings['registration_mode'] }) => req<AdminSettings>('PUT', '/admin/settings', b),
   adminTestEmail: () => req<{ ok: true; to: string }>('POST', '/admin/test-email'),
 
   aiStatus: () => req<AiStatus>('GET', '/ai/status'),

@@ -140,6 +140,7 @@ export default function App() {
     view = (
       <SignedOut
         registrationOpen={auth.registration_open}
+        confirmEmail={auth.registration_mode === 'verify'}
         onSignedIn={() => {
           setJustSignedIn(true);
           refresh();
