@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, PlanKind, PlanSummary, ScheduleEvent } from '../types';
@@ -100,16 +100,18 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const entries = useMemo(() => buildSchedule(plans || [], events), [plans, events]);
   const next = useMemo(() => nextEntry(entries, today), [entries, today]);
 
-  // Open the page already scrolled to what is coming up, with the past just above it.
+  // Open the page with what is coming up in the middle of the screen: the past above it, the rest
+  // of the season below. Clicking the menu link again while here brings it back to the middle.
   const nextRow = useRef<HTMLLIElement>(null);
   const lastRow = useRef<HTMLLIElement>(null);
   const snapped = useRef('');
+  const visit = useLocation().key;
   useEffect(() => {
-    const where = `${teamId}:${kind}:${calendar}`;
+    const where = `${teamId}:${kind}:${calendar}:${visit}`;
     if (plans === null || calendar || snapped.current === where) return;
     snapped.current = where;
-    (nextRow.current ?? lastRow.current)?.scrollIntoView({ block: 'start' });
-  }, [plans, teamId, kind, entries, calendar]);
+    (nextRow.current ?? lastRow.current)?.scrollIntoView({ block: 'center' });
+  }, [plans, teamId, kind, entries, calendar, visit]);
 
   const create = (fromPlanId?: number, replace = false) =>
     act(async () => {
@@ -340,7 +342,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           {next && !calendar && (
             <>
               {' · '}
-              <button className="link" onClick={() => nextRow.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>
+              <button className="link" onClick={() => nextRow.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })}>
                 Jump to next up
               </button>
             </>

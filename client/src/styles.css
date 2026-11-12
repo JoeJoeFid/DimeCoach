@@ -2884,10 +2884,6 @@ text.play-mark.selected,
 .list-note {
   margin: -10px 0 14px;
 }
-.plan-row {
-  /* Leaves room above the row the page scrolls to, so the last finished practice stays in view. */
-  scroll-margin-top: 96px;
-}
 .plan-row.unplanned .plan-title {
   font-weight: 500;
 }
@@ -6309,4 +6305,18 @@ fieldset.plain {
 .print-panel .print-hint {
   max-width: none;
   margin: 0;
+}
+
+/* The side list is about twice as wide, with the drills in two columns. On a smaller screen it gives some of that back to the plan. */
+.plan-layout {
+  grid-template-columns: clamp(330px, 33%, 472px) minmax(0, 1fr);
+}
+.palette-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  gap: 6px;
+}
+.palette-list > p {
+  grid-column: 1 / -1;
 }
