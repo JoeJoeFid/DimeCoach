@@ -4,15 +4,36 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, PlanKind, PlanSummary, ScheduleEvent } from '../types';
 import { fmtClock, fmtDateShort, fmtDuration, fmtSynced, parseClock, planMinutes, todayISO } from '../util';
-import { KIND_LABEL, PLAN_STATE_LABEL, buildSchedule, withoutDuplicateBlanks, nextEntry, planStateOf, type ScheduleEntry } from '../schedule';
-import { TagChip } from '../components/bits';
+import { buildSchedule, withoutDuplicateBlanks, nextEntry, planStateOf, type ScheduleEntry } from '../schedule';
+import { MoreMenu, TagChip, type MenuItem } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, useCompletedDeletes, usePendingDeletes } from '../components/toasts';
-import SchedulePreview from '../components/SchedulePreview';
 import PlanCalendar from '../components/PlanCalendar';
 import { CommunityPicker } from '../components/community';
 
 type View = 'list' | 'calendar';
+type Filter = 'all' | ScheduleEntry['kind'];
+const FILTERS: [Filter, string][] = [
+  ['all', 'All'],
+  ['practice', 'Practices'],
+  ['game', 'Games'],
+  ['other', 'Events'],
+];
+// Small line drawings used in the rows.
+const icons = {
+  clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7.500V12l3 2',
+  pin: 'M12 21s6.500-5.600 6.500-11A6.500 6.500 0 0 0 5.500 10c0 5.400 6.500 11 6.500 11ZM12 12.500a2.500 2.500 0 1 0 0-5 2.500 2.500 0 0 0 0 5Z',
+  check: 'M5 12.500l4.500 4.500L19 7.500',
+  alert: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7.500v5.500M12 16.300v.200',
+  trophy: 'M8 4h8v5a4 4 0 0 1-8 0zM8 5.500H5.500v1.500A2.500 2.500 0 0 0 8 9.500M16 5.500h2.500v1.500a2.500 2.500 0 0 1-2.500 2.500M12 13v4M8.500 20h7M9.500 17h5',
+  flag: 'M6 3v18M6 4.500h12l-3 3.500 3 3.500H6',
+  chevron: 'M6 9.500l6 6 6-6',
+};
+const Icon = ({ d }: { d: string }) => (
+  <svg className="ps-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
 const VIEW_KEY = 'pp.practicesView';
 const savedView = (): View => {
   try {
@@ -36,6 +57,9 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const [syncing, setSyncing] = useState(false);
   const [fromCommunity, setFromCommunity] = useState(false);
   const [view, setView] = useState<View>(savedView);
+  /** The month on show, as "2026-11", and which kind of thing is listed. */
+  const [month, setMonth] = useState(() => todayISO().slice(0, 7));
+  const [only, setOnly] = useState<Filter>('all');
   // Homework sheets are not tied to dates the same way, so only practices get the calendar.
   const calendar = kind === 'practice' && view === 'calendar';
   const chooseView = (v: View) => {
@@ -118,7 +142,9 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     const where = `${teamId}:${kind}:${calendar}:${visit}`;
     if (plans === null || calendar || snapped.current === where) return;
     snapped.current = where;
-    (nextRow.current ?? lastRow.current)?.scrollIntoView({ block: 'center' });
+    // Open on the month that holds what is coming up, with that row in the middle of the screen.
+    if (next) setMonth(next.date.slice(0, 7));
+    requestAnimationFrame(() => requestAnimationFrame(() => (nextRow.current ?? lastRow.current)?.scrollIntoView({ block: 'center' })));
   }, [plans, teamId, kind, entries, calendar, visit]);
 
   const create = (fromPlanId?: number, replace = false) =>
@@ -202,131 +228,176 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           ? `${fmtClock(start)} - ${fmtClock(parseClock(e.event.end_time))}`
           : fmtClock(start);
 
-    const main = (
-      <>
-        <span className="plan-date">
-          {done && (
-            <span className="status good done-mark" title="Completed" role="img" aria-label="Completed">
-              ✓
-            </span>
-          )}
-          {fmtDateShort(e.date)}
-          {isNext && <span className="tl-flag">{e.date === today ? 'Today' : 'Next up'}</span>}
-        </span>
-        <span className="plan-title">
-          {p ? p.title || 'Untitled' : e.title}
-          {kind === 'practice' && e.kind !== 'practice' && <span className={`kind ${e.kind}`}>{KIND_LABEL[e.kind]}</span>}
-          {e.location && <span className="muted"> · {e.location}</span>}
-        </span>
-        <span className="plan-meta">
-          {[when, p && fmtDuration(total), p && `${p.items.filter((it) => it.kind === 'item').length} items`].filter(Boolean).join(' · ')}
-          {kind === 'practice' && (state !== 'ready' || !done) && (
-            <span className={`plan-state ${state === 'ready' ? 'ready' : 'missing'}`}>
-              <span aria-hidden="true">{state === 'ready' ? '✓' : '!'}</span>
-              {PLAN_STATE_LABEL[state]}
-            </span>
-          )}
-        </span>
-        {p && mins && (
-          <span className="chips">
-            {sportTags
-              .filter((t) => mins.byTag.has(t.id))
-              .map((t) => (
-                <TagChip key={t.id} tag={t} minutes={mins.byTag.get(t.id)} />
-              ))}
-          </span>
-        )}
-      </>
-    );
+    const d = new Date(`${e.date}T12:00:00`);
+    const focus = p && mins ? sportTags.filter((t) => mins.byTag.has(t.id)) : [];
+    const count = p ? p.items.filter((it) => it.kind === 'item').length : 0;
+    // What the pill on the right says: a game is a game; otherwise how far along the plan is.
+    const pill =
+      e.kind === 'game' ? { cls: 'game', icon: icons.trophy, text: 'Game' } : e.kind === 'other' && !p ? { cls: 'event', icon: icons.flag, text: 'Event' } : state === 'ready' ? { cls: 'planned', icon: icons.check, text: 'Planned' } : state === 'empty' ? { cls: 'todo', icon: icons.alert, text: 'Empty' } : { cls: 'todo', icon: icons.alert, text: 'No plan yet' };
+    const more: MenuItem[] = p
+      ? [
+          { label: 'Print / share', onSelect: () => navigate(`/plans/${p.id}/print`) },
+          ...(kind === 'practice' && user.can_import ? [{ label: 'Import an old plan into it', onSelect: () => navigate(`/plans/${p.id}?import=1`) }] : []),
+          { label: 'Duplicate', onSelect: () => duplicate(p) },
+          { label: 'Delete', onSelect: () => remove(p, noun), danger: true },
+        ]
+      : [];
 
     return (
       <li
         key={e.key}
         ref={isNext ? nextRow : i === entries.length - 1 ? lastRow : undefined}
-        className={`plan-row ${done ? 'done' : ''} ${isNext ? 'next' : ''} ${p ? '' : 'unplanned'}`}
+        className={`plan-row ps-row ${done ? 'done' : ''} ${isNext ? 'next' : ''} ${p ? '' : 'unplanned'}`}
         aria-current={isNext ? 'true' : undefined}
       >
-        {p ? (
-          <Link to={`/plans/${p.id}`} className="plan-main">
-            {main}
-          </Link>
-        ) : (
-          <div className="plan-main">{main}</div>
-        )}
-        <span className="row-actions">
+        <span className="ps-date">
+          <span className="ps-dow">{d.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+          <strong>{d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</strong>
+          {isNext && <span className="tl-flag">{e.date === today ? 'Today' : 'Next up'}</span>}
+        </span>
+        <span className="ps-main">
           {p ? (
-            <>
-              <SchedulePreview plan={p} />
-              <Link className="btn small" to={`/plans/${p.id}/print`}>
-                Print / share
-              </Link>
-              {kind === 'practice' && user.can_import && (
-                <Link className="btn small" to={`/plans/${p.id}?import=1`} title="Fill this practice from an old plan">
-                  Import
-                </Link>
-              )}
-              <button className="btn small" onClick={() => duplicate(p)}>
-                Duplicate
-              </button>
-              <button className="btn small danger" onClick={() => remove(p, noun)}>
-                Delete
-              </button>
-            </>
+            <Link to={`/plans/${p.id}`} className="ps-title plan-main">
+              {p.title || 'Untitled'}
+            </Link>
           ) : (
-            <button className={`btn small ${isNext ? 'primary' : ''}`} onClick={() => planEvent(e)}>
-              {e.kind === 'game' ? 'Plan game' : 'Plan practice'}
+            <span className="ps-title">{e.title}</span>
+          )}
+          <span className="ps-meta">
+            {when && (
+              <span>
+                <Icon d={icons.clock} />
+                {when}
+              </span>
+            )}
+            {p && kind === 'practice' && <span className="ps-dot">{fmtDuration(total)}</span>}
+            {e.location && (
+              <span className="ps-place">
+                <Icon d={icons.pin} />
+                {e.location.split('\n')[0]}
+              </span>
+            )}
+          </span>
+        </span>
+        <span className="ps-counts">
+          {p && (
+            <>
+              <span>
+                {count} item{count === 1 ? '' : 's'}
+              </span>
+              {focus.length > 0 && (
+                <details className="ps-focus">
+                  <summary>
+                    {focus.length} focus area{focus.length === 1 ? '' : 's'}
+                    <Icon d={icons.chevron} />
+                  </summary>
+                  <span className="ps-focus-list chips">
+                    {focus.map((t) => (
+                      <TagChip key={t.id} tag={t} minutes={mins!.byTag.get(t.id)} />
+                    ))}
+                  </span>
+                </details>
+              )}
+            </>
+          )}
+        </span>
+        <span className={`ps-pill ${pill.cls}`}>
+          <Icon d={pill.icon} />
+          {pill.text}
+        </span>
+        <span className="ps-actions">
+          {p ? (
+            <Link className="btn primary ps-view" to={`/plans/${p.id}`}>
+              View
+            </Link>
+          ) : (
+            <button className="btn primary ps-view" onClick={() => planEvent(e)}>
+              Plan
             </button>
           )}
+          <MoreMenu items={more} label={`More for ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`} />
         </span>
       </li>
     );
   };
 
+  // --- The month on show, the kind filter, and the weeks inside that month ---
+  const monthLabel = new Date(`${month}-15T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const stepMonth = (by: number) => {
+    const m = new Date(`${month}-15T12:00:00`);
+    m.setMonth(m.getMonth() + by);
+    setMonth(m.toLocaleDateString('en-CA').slice(0, 7));
+  };
+  const shown = entries.map((e, i) => ({ e, i })).filter(({ e }) => e.date.startsWith(month) && (only === 'all' || e.kind === only));
+  const weeks: { label: string; rows: typeof shown }[] = [];
+  for (const item of shown) {
+    const day = new Date(`${item.e.date}T12:00:00`);
+    const from = new Date(day);
+    from.setDate(day.getDate() - day.getDay());
+    const to = new Date(from);
+    to.setDate(from.getDate() + 6);
+    const short = (x: Date) => x.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const label = `Week of ${short(from)} – ${short(to)}`;
+    if (weeks[weeks.length - 1]?.label === label) weeks[weeks.length - 1].rows.push(item);
+    else weeks.push({ label, rows: [item] });
+  }
+  const addMenu: MenuItem[] = [
+    ...shownTemplates.map((t) => ({ label: `From template: ${t.title || 'Untitled'}`, onSelect: () => create(t.id) })),
+    ...(kind === 'practice' ? [{ label: 'From a community', onSelect: () => setFromCommunity(true) }] : []),
+    ...(kind === 'practice' && user.can_import ? [{ label: 'Import old plans', onSelect: () => navigate('/import') }] : []),
+  ];
+
   return (
     <div className={`page ${calendar ? '' : 'plans-page'}`}>
-      <div className="page-head">
+      <div className="page-head ps-head">
         <div>
-          <h1>{kind === 'practice' ? 'Practices' : 'Homework'}</h1>
+          <h1>{kind === 'practice' ? 'Practice schedule' : 'Homework'}</h1>
           <p className="muted">
             {team!.name}
             {team!.season ? ` · ${team!.season}` : ''}
           </p>
         </div>
         <div className="head-actions">
-          {kind === 'practice' && (
-            <div className="seg" role="group" aria-label="View">
-              <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => chooseView('list')}>
-                List
+          {!calendar && (
+            <div className="ps-month" role="group" aria-label="Month">
+              <button type="button" aria-label="Previous month" onClick={() => stepMonth(-1)}>
+                ‹
               </button>
-              <button className={view === 'calendar' ? 'on' : ''} aria-pressed={view === 'calendar'} onClick={() => chooseView('calendar')}>
-                Calendar
+              <span aria-live="polite">{monthLabel}</span>
+              <button type="button" aria-label="Next month" onClick={() => stepMonth(1)}>
+                ›
               </button>
             </div>
           )}
-          {shownTemplates.length > 0 && (
-            <select className="input" aria-label="Start from a template" value="" onChange={(e) => e.target.value && create(Number(e.target.value))}>
-              <option value="">New from template…</option>
-              {shownTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
-          )}
-          {kind === 'practice' && user.can_import && (
-            <Link className="btn" to="/import">
-              Import old plans
-            </Link>
-          )}
-          {kind === 'practice' && (
-            <button className="btn" onClick={() => setFromCommunity(true)}>
-              From a community
+          <div className="split-btn">
+            <button className="btn primary" onClick={() => create()}>
+              + Add {noun}
             </button>
-          )}
-          <button className="btn primary" onClick={() => create()}>
-            + New {noun}
-          </button>
+            <MoreMenu items={addMenu} label={`More ways to add a ${noun}`} caret />
+          </div>
         </div>
+      </div>
+      <div className="ps-tabs">
+        {kind === 'practice' && !calendar && (
+          <div className="ps-filter" role="group" aria-label="Show">
+            {FILTERS.map(([id, label]) => (
+              <button key={id} type="button" className={only === id ? 'on' : ''} aria-pressed={only === id} onClick={() => setOnly(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <span className="spacer" />
+        {kind === 'practice' && (
+          <div className="seg" role="group" aria-label="View">
+            <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => chooseView('list')}>
+              List
+            </button>
+            <button className={view === 'calendar' ? 'on' : ''} aria-pressed={view === 'calendar'} onClick={() => chooseView('calendar')}>
+              Calendar
+            </button>
+          </div>
+        )}
       </div>
       {error && <p className="error">{error}</p>}
       {fromCommunity && <CommunityPicker kind="plan" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plans/${id}`)} />}
@@ -354,7 +425,15 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           {next && !calendar && (
             <>
               {!hasCalendar && ' · '}
-              <button className="link" onClick={() => nextRow.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })}>
+              <button
+                className="link"
+                onClick={() => {
+                  // The next one may be in another month, or filtered out: show it, then bring it to the middle.
+                  setOnly('all');
+                  setMonth(next.date.slice(0, 7));
+                  requestAnimationFrame(() => requestAnimationFrame(() => nextRow.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })));
+                }}
+              >
                 Jump to next up
               </button>
             </>
@@ -378,8 +457,20 @@ export default function Plans({ kind }: { kind: PlanKind }) {
             + New {noun}
           </button>
         </div>
+      ) : weeks.length === 0 ? (
+        <div className="empty">
+          <h2>
+            Nothing {only === 'all' ? '' : `of that kind `}in {monthLabel}
+          </h2>
+          <p>Use the arrows at the top to look at another month, or add a {noun}.</p>
+        </div>
       ) : (
-        <ul className="plan-list">{entries.map(row)}</ul>
+        weeks.map((w) => (
+          <section key={w.label} className="ps-week">
+            <h2>{w.label}</h2>
+            <ul className="ps-list">{w.rows.map(({ e, i }) => row(e, i))}</ul>
+          </section>
+        ))
       )}
 
       {shownTemplates.length > 0 && (

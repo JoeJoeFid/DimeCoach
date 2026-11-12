@@ -7329,3 +7329,311 @@ fieldset.plain {
   border-radius: 50%;
   background: var(--series);
 }
+
+/* ---------- Practice schedule (the Practices page): a month at a time, grouped by week ---------- */
+.ps-head {
+  margin-bottom: 10px;
+}
+.ps-month {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.ps-month span {
+  min-width: 150px;
+  text-align: center;
+  font-weight: 600;
+}
+.ps-month button {
+  width: 38px;
+  height: 100%;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.ps-month button:hover {
+  background: var(--surface-3);
+}
+.ps-month button:first-child {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.ps-month button:last-child {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+/* A main button with a small menu of other ways to do the same thing attached to its right. */
+.split-btn {
+  display: inline-flex;
+}
+.split-btn > .btn.primary {
+  min-height: 40px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.split-btn .more-btn {
+  min-height: 40px;
+  padding: 0 9px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-color: var(--primary);
+  border-left-color: color-mix(in srgb, var(--primary-ink) 35%, var(--primary));
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+.split-btn .more-btn:hover {
+  background: var(--primary-hover);
+}
+.ps-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.ps-tabs .seg {
+  margin-bottom: 8px;
+}
+.ps-filter {
+  display: flex;
+  gap: 4px;
+}
+.ps-filter button {
+  padding: 8px 14px 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.ps-filter button:hover {
+  color: var(--ink);
+}
+.ps-filter button.on {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  font-weight: 700;
+}
+.ps-week {
+  margin-bottom: 22px;
+}
+.ps-week > h2 {
+  margin: 0 0 8px;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+.ps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.plan-row.ps-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) minmax(0, 230px) 124px auto;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.plan-row.ps-row + .plan-row.ps-row {
+  border-top: 1px solid var(--line);
+}
+.plan-row.ps-row.done {
+  box-shadow: var(--shadow-1);
+}
+.ps-date {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-right: 14px;
+  border-right: 1px solid var(--line);
+  line-height: 1.25;
+}
+.ps-dow {
+  font-size: 0.82rem;
+  color: var(--ink-2);
+}
+.ps-date strong {
+  font-size: 1rem;
+}
+.ps-date .tl-flag {
+  align-self: flex-start;
+  margin: 3px 0 0;
+}
+.ps-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ps-title,
+.ps-title.plan-main {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+a.ps-title:hover {
+  text-decoration: underline;
+}
+.ps-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+.ps-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ps-meta .ps-dot::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.ps-place {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ps-icon {
+  flex: none;
+}
+.ps-counts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+  min-height: 34px;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+.ps-counts:empty {
+  border-left-color: transparent;
+}
+.ps-focus {
+  position: relative;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+.ps-focus summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  cursor: pointer;
+}
+.ps-focus summary::-webkit-details-marker {
+  display: none;
+}
+.ps-focus[open] summary .ps-icon {
+  transform: rotate(180deg);
+}
+.ps-focus-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: 340px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  white-space: normal;
+}
+.ps-pill {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.ps-pill.planned {
+  background: color-mix(in srgb, var(--good) 16%, var(--surface));
+  color: color-mix(in srgb, var(--good) 72%, var(--ink));
+}
+.ps-pill.todo {
+  background: color-mix(in srgb, var(--warn) 22%, var(--surface));
+  color: color-mix(in srgb, var(--warn) 55%, var(--ink));
+}
+.ps-pill.game {
+  background: color-mix(in srgb, var(--game) 16%, var(--surface));
+  color: color-mix(in srgb, var(--game) 70%, var(--ink));
+}
+.ps-pill.event {
+  background: var(--surface-3);
+  color: var(--ink-2);
+}
+.ps-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ps-view {
+  min-width: 68px;
+  justify-content: center;
+}
+/* What is next keeps its bold lime, as before. */
+.plan-row.ps-row.next,
+.plan-row.ps-row.next:hover {
+  background: var(--accent);
+  padding: 14px 16px;
+  border-color: var(--accent-edge);
+  box-shadow: inset 5px 0 0 #151b00;
+}
+.plan-row.ps-row.next .ps-pill {
+  background: #151b00;
+  color: #d2f24b;
+}
+.plan-row.ps-row.next .ps-title {
+  font-size: 1.15rem;
+}
+@media (max-width: 1000px) {
+  .plan-row.ps-row {
+    grid-template-columns: 80px minmax(0, 1fr) auto;
+  }
+  .ps-counts {
+    display: none;
+  }
+  .ps-pill {
+    grid-column: 2;
+  }
+  .ps-actions {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+}
