@@ -5213,3 +5213,17 @@ fieldset.plain {
 .tour-spacer {
   flex: 1;
 }
+
+/* A faint rule above each group in the side menu. On narrow screens the menu is one row, so no rules there. */
+@media (min-width: 901px) {
+  .nav-group {
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+  .side-nav.admin-nav {
+    margin-bottom: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+}
