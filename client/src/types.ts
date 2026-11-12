@@ -191,6 +191,10 @@ export interface Plan {
   date: string;
   start_time: string;
   location: string;
+  /** The coach's own jottings for this plan: plain text. */
+  notes: string;
+  /** Whether the notes go on the printed sheet. On unless the coach turns it off. */
+  print_notes: boolean;
   intro_html: string;
   is_template: boolean;
   /** A game-day plan: built like a practice, left out of dashboard category totals. */

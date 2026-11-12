@@ -235,6 +235,7 @@ export const api = {
   communityShare: (shareId: number) => req<CommunityShareDetail>('GET', `/community-library/${shareId}`),
   copyShare: (shareId: number, b: { sport_id?: number; team_id?: number; date?: string }) => req<{ kind: ShareKind; id: number }>('POST', `/community-library/${shareId}/copy`, b),
   adminSetSettings: (b: { registration_enabled: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
+  adminTestEmail: () => req<{ ok: true; to: string }>('POST', '/admin/test-email'),
 
   aiStatus: () => req<AiStatus>('GET', '/ai/status'),
   aiPrompt: (team_id: number) => req<{ prompt: string }>('GET', `/ai/prompt?team_id=${team_id}`),

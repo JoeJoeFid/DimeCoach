@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEventHandler, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
@@ -14,6 +14,15 @@ import { confirmDialog, promptDialog } from '../components/dialogs';
 import { DraftReview, SourcePicker, defaultChoices, resolveDraft, useAiStatus, type DraftChoices } from '../components/planImport';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
+
+// Things dragged in from the side list are not in the plan yet. Their ids say what to make:
+// "new:custom", "new:break", or "new:drill:<id>".
+const NEW = 'new:';
+const isNew = (id: string | number) => String(id).startsWith(NEW);
+/** Where a dragged-in thing lands when the plan has nothing in it yet. */
+const EMPTY_PLAN = 'plan-empty';
+/** Something new has to be let go over the plan itself. Reordering snaps to the nearest item. */
+const collision: CollisionDetection = (args) => (isNew(args.active.id) ? pointerWithin(args) : closestCenter(args));
 
 export default function PlanEditor() {
   const { id } = useParams();
@@ -38,6 +47,9 @@ export default function PlanEditor() {
   const [sharing, setSharing] = useState(false);
   /** Where a drill taken from a community library will be inserted. */
   const [communityAt, setCommunityAt] = useState<number | null>(null);
+  /** What is being dragged in from the side list, and the place in the plan it would land. */
+  const [incoming, setIncoming] = useState('');
+  const [dropAt, setDropAt] = useState<number | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [importing, setImporting] = useState(searchParams.has('import') && app.user.can_import);
 
@@ -160,7 +172,32 @@ export default function PlanEditor() {
     }
     setItems((latest.current ?? plan).items.filter((x) => x.key !== it.key));
   };
+  /** The place in the plan a dragged-in thing would take: before the item under it, or after when past its middle. */
+  const landing = (e: DragMoveEvent | DragEndEvent) => {
+    if (!e.over) return null;
+    if (e.over.id === EMPTY_PLAN) return 0;
+    const i = plan.items.findIndex((it) => it.key === e.over!.id);
+    if (i < 0) return null;
+    // Judged by where the pointer is, not by the tile it picked up: tiles come in different sizes.
+    const pointer = (e.activatorEvent as PointerEvent).clientY + e.delta.y;
+    return pointer > e.over.rect.top + e.over.rect.height / 2 ? i + 1 : i;
+  };
+  /** Adds what a side-list id stands for. With no place given it goes at the end. */
+  const addNew = (id: string, index = (latest.current ?? plan).items.length) => {
+    const what = id.slice(NEW.length);
+    if (what === 'custom') return addCustom(index);
+    if (what === 'break') return insertAt(index, blankItem(newKey(), 'break'));
+    const drill = drills.find((d) => d.id === Number(what.split(':')[1]));
+    if (drill) addDrill(drill, index);
+  };
   const onDragEnd = (e: DragEndEvent) => {
+    if (isNew(e.active.id)) {
+      const at = landing(e);
+      setIncoming('');
+      setDropAt(null);
+      if (at !== null) addNew(String(e.active.id), at);
+      return;
+    }
     if (!e.over || e.active.id === e.over.id) return;
     const from = plan.items.findIndex((i) => i.key === e.active.id);
     const to = plan.items.findIndex((i) => i.key === e.over!.id);
@@ -311,7 +348,7 @@ export default function PlanEditor() {
     );
 
   return (
-    <div className="page editor">
+    <div className="page editor plan-editor">
       <div className="crumbs">
         <Link to={listPath}>← {isHomework ? 'Homework' : 'Practices'}</Link>
         <span className={`save-state ${saveState}`} role="status">
@@ -330,134 +367,173 @@ export default function PlanEditor() {
         </p>
       )}
 
-      <div className="card plan-head">
-        <div className="fields">
-          <Field label={plan.is_template ? 'Template name' : 'Title'} grow>
-            <input className="input" value={plan.title} onChange={(e) => update({ title: e.target.value })} />
-          </Field>
-          {!plan.is_template && (
-            <Field label={isHomework ? 'Date assigned' : 'Date'}>
-              <input className="input" type="date" value={plan.date} onChange={(e) => update({ date: e.target.value })} />
-            </Field>
-          )}
-          {!isHomework && (
-            <>
-              <Field label="Start time">
-                <input
-                  className="input"
-                  type="time"
-                  value={plan.start_time}
-                  onChange={(e) => update({ start_time: e.target.value || '17:30' })}
-                />
-              </Field>
-              <Field label="Location" grow>
-                <input className="input" value={plan.location} onChange={(e) => update({ location: e.target.value })} />
-              </Field>
-            </>
-          )}
-        </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collision}
+        onDragStart={(e) => isNew(e.active.id) && setIncoming(String(e.active.id))}
+        onDragMove={(e) => isNew(e.active.id) && setDropAt(landing(e))}
+        onDragCancel={() => {
+          setIncoming('');
+          setDropAt(null);
+        }}
+        onDragEnd={onDragEnd}
+      >
+        <div className="plan-layout">
+          <Palette drills={libraryDrills} tags={tags} withBreak={!isHomework} sheet={sheet} onAdd={addNew} />
+          <div className="plan-column">
+            <div className="card plan-head">
+              <div className="fields">
+                <Field label={plan.is_template ? 'Template name' : 'Title'} grow>
+                  <input className="input" value={plan.title} onChange={(e) => update({ title: e.target.value })} />
+                </Field>
+                {!plan.is_template && (
+                  <Field label={isHomework ? 'Date assigned' : 'Date'}>
+                    <input className="input" type="date" value={plan.date} onChange={(e) => update({ date: e.target.value })} />
+                  </Field>
+                )}
+                {!isHomework && (
+                  <>
+                    <Field label="Start time">
+                      <input
+                        className="input"
+                        type="time"
+                        value={plan.start_time}
+                        onChange={(e) => update({ start_time: e.target.value || '17:30' })}
+                      />
+                    </Field>
+                  </>
+                )}
+              </div>
 
-        {!isHomework && (
-          <label className="check game-check">
-            <input type="checkbox" checked={plan.is_game} onChange={(e) => update({ is_game: e.target.checked })} />
-            <span>
-              This is a game plan <span className="muted">(kept out of dashboard category totals and targets)</span>
-            </span>
-          </label>
-        )}
+              <div className={`plan-extra ${isHomework ? 'one' : ''}`}>
+                {!isHomework && (
+                  <Field label="Location">
+                    <input className="input" value={plan.location} onChange={(e) => update({ location: e.target.value })} />
+                  </Field>
+                )}
+                <div className="plan-notes">
+                  <Field label="Notes">
+                    <textarea
+                      className="input"
+                      rows={3}
+                      placeholder="Jot down anything for this day: the focus, who is out, what to bring"
+                      value={plan.notes}
+                      onChange={(e) => update({ notes: e.target.value })}
+                    />
+                  </Field>
+                  <label className="check small">
+                    <input type="checkbox" checked={plan.print_notes} onChange={(e) => update({ print_notes: e.target.checked })} />
+                    Show these notes on the printed {sheet}
+                  </label>
+                </div>
+              </div>
 
-        {isHomework && !plan.is_template && (
-          <div className="assigned">
-            <span className="field-label">For</span>
-            <div className="chips">
-              <button
-                type="button"
-                className={`chip toggle ${plan.assigned.length === 0 ? 'on' : ''}`}
-                aria-pressed={plan.assigned.length === 0}
-                onClick={() => update({ assigned: [] })}
-              >
-                Whole team
-              </button>
-              {players
-                .filter((p) => p.active)
-                .map((p) => {
-                  const on = plan.assigned.includes(p.id);
-                  return (
+              {!isHomework && (
+                <label className="check game-check">
+                  <input type="checkbox" checked={plan.is_game} onChange={(e) => update({ is_game: e.target.checked })} />
+                  <span>
+                    This is a game plan <span className="muted">(kept out of dashboard category totals and targets)</span>
+                  </span>
+                </label>
+              )}
+
+              {isHomework && !plan.is_template && (
+                <div className="assigned">
+                  <span className="field-label">For</span>
+                  <div className="chips">
                     <button
-                      key={p.id}
                       type="button"
-                      className={`chip toggle ${on ? 'on' : ''}`}
-                      aria-pressed={on}
-                      onClick={() => update({ assigned: on ? plan.assigned.filter((x) => x !== p.id) : [...plan.assigned, p.id] })}
+                      className={`chip toggle ${plan.assigned.length === 0 ? 'on' : ''}`}
+                      aria-pressed={plan.assigned.length === 0}
+                      onClick={() => update({ assigned: [] })}
                     >
-                      {p.name}
+                      Whole team
                     </button>
-                  );
-                })}
+                    {players
+                      .filter((p) => p.active)
+                      .map((p) => {
+                        const on = plan.assigned.includes(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className={`chip toggle ${on ? 'on' : ''}`}
+                            aria-pressed={on}
+                            onClick={() => update({ assigned: on ? plan.assigned.filter((x) => x !== p.id) : [...plan.assigned, p.id] })}
+                          >
+                            {p.name}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              <div className="plan-summary">
+                <div className="summary-nums">
+                  <strong>{fmtDuration(total)}</strong>
+                  {!isHomework && slots.length > 0 && <span> · ends {fmtClock(slots[slots.length - 1].end)}</span>}
+                  {mins.breaks > 0 && <span className="muted"> · {fmtDuration(mins.breaks)} of breaks</span>}
+                  {(mins.byTag.get(0) || 0) > 0 && <span className="muted"> · {Math.round(mins.byTag.get(0)!)} min untagged</span>}
+                </div>
+                <div className="chips">
+                  {tags
+                    .filter((t) => mins.byTag.has(t.id))
+                    .map((t) => (
+                      <TagChip key={t.id} tag={t} minutes={mins.byTag.get(t.id)} />
+                    ))}
+                </div>
+                <div className="head-actions">
+                  {!plan.is_template && (
+                    <button className="btn primary" onClick={openPrint}>
+                      Print / share
+                    </button>
+                  )}
+                  <MoreMenu items={moreItems} />
+                </div>
+              </div>
             </div>
-          </div>
-        )}
 
-        <div className="plan-summary">
-          <div className="summary-nums">
-            <strong>{fmtDuration(total)}</strong>
-            {!isHomework && slots.length > 0 && <span> · ends {fmtClock(slots[slots.length - 1].end)}</span>}
-            {mins.breaks > 0 && <span className="muted"> · {fmtDuration(mins.breaks)} of breaks</span>}
-            {(mins.byTag.get(0) || 0) > 0 && <span className="muted"> · {Math.round(mins.byTag.get(0)!)} min untagged</span>}
-          </div>
-          <div className="chips">
-            {tags
-              .filter((t) => mins.byTag.has(t.id))
-              .map((t) => (
-                <TagChip key={t.id} tag={t} minutes={mins.byTag.get(t.id)} />
-              ))}
-          </div>
-          <div className="head-actions">
-            {!plan.is_template && (
-              <button className="btn primary" onClick={openPrint}>
-                Print / share
-              </button>
+            {plan.items.length === 0 ? (
+              <EmptyPlan>
+                <h2>Nothing scheduled yet</h2>
+                <p>Start from a {sheet} you have already built, drag a drill in from the left, or add your first item. Each item starts when the one before it ends.</p>
+                <button className="btn primary start-from" onClick={() => setStarting(true)}>
+                  Start from a previous {sheet}
+                </button>
+                {inserter(0)}
+              </EmptyPlan>
+            ) : (
+              <SortableContext items={plan.items.map((i) => i.key)} strategy={verticalListSortingStrategy}>
+                {plan.items.map((it, i) => (
+                  <SortableRow
+                    key={it.key}
+                    still={incoming !== ''}
+              dropMark={dropAt === i ? 'before' : dropAt === plan.items.length && i === plan.items.length - 1 ? 'after' : ''}
+                    item={it}
+                    slot={slots[i]}
+                    isHomework={isHomework}
+                    isOpen={open.has(it.key)}
+                    autoFocusTitle={it.key === focusKey}
+                    tags={tags}
+                    players={players}
+                    plays={plays.filter((p) => p.sport_id === team?.sport_id)}
+                    onToggle={() => toggle(it.key)}
+                    onPatch={(patch) => patchItem(it.key, patch)}
+                    onDelete={() => removeItem(it)}
+                    onDuplicate={() => insertAt(i + 1, { ...structuredClone(it), key: newKey() }, false)}
+                    onSaveToLibrary={() => saveToLibrary(it)}
+                  >
+                    {inserter(i + 1)}
+                  </SortableRow>
+                ))}
+              </SortableContext>
             )}
-            <MoreMenu items={moreItems} />
+
           </div>
         </div>
-      </div>
-
-      {plan.items.length === 0 ? (
-        <div className="empty">
-          <h2>Nothing scheduled yet</h2>
-          <p>Start from a {sheet} you have already built, or add your first item. Each item starts when the one before it ends.</p>
-          <button className="btn primary start-from" onClick={() => setStarting(true)}>
-            Start from a previous {sheet}
-          </button>
-          {inserter(0)}
-        </div>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={plan.items.map((i) => i.key)} strategy={verticalListSortingStrategy}>
-            {plan.items.map((it, i) => (
-              <SortableRow
-                key={it.key}
-                item={it}
-                slot={slots[i]}
-                isHomework={isHomework}
-                isOpen={open.has(it.key)}
-                autoFocusTitle={it.key === focusKey}
-                tags={tags}
-                players={players}
-                plays={plays.filter((p) => p.sport_id === team?.sport_id)}
-                onToggle={() => toggle(it.key)}
-                onPatch={(patch) => patchItem(it.key, patch)}
-                onDelete={() => removeItem(it)}
-                onDuplicate={() => insertAt(i + 1, { ...structuredClone(it), key: newKey() }, false)}
-                onSaveToLibrary={() => saveToLibrary(it)}
-              >
-                {inserter(i + 1)}
-              </SortableRow>
-            ))}
-          </SortableContext>
-        </DndContext>
-      )}
+        <DragOverlay dropAnimation={null}>{incoming && <div className="palette-tile lifted">{paletteLabel(incoming, drills)}</div>}</DragOverlay>
+      </DndContext>
 
       {importing && team && (
         <ImportModal
@@ -520,6 +596,110 @@ export default function PlanEditor() {
   );
 }
 
+/** The name shown on a tile in the side list, and on the copy that follows the pointer. */
+function paletteLabel(id: string, drills: Drill[]) {
+  const what = id.slice(NEW.length);
+  if (what === 'custom') return 'Custom item';
+  if (what === 'break') return 'Break';
+  return drills.find((d) => d.id === Number(what.split(':')[1]))?.name ?? 'Drill';
+}
+
+/** One thing in the side list. Drag it onto the plan, or click it to add it at the end. */
+function PaletteTile({ id, kind, onAdd, children }: { id: string; kind: string; onAdd: (id: string) => void; children: ReactNode }) {
+  const { setNodeRef, listeners, isDragging } = useDraggable({ id });
+  // Only the pointer starts a drag here, so Enter and Space still press the button.
+  return (
+    <button type="button" ref={setNodeRef} className={`palette-tile ${kind} ${isDragging ? 'dragging-out' : ''}`} onPointerDown={listeners?.onPointerDown as PointerEventHandler | undefined} onClick={() => onAdd(id)}>
+      {children}
+    </button>
+  );
+}
+
+/** The list down the left side: a custom item, a break, and every drill in the library for this sport. */
+function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; tags: Tag[]; withBreak: boolean; sheet: string; onAdd: (id: string) => void }) {
+  const [q, setQ] = useState('');
+  const [tagId, setTagId] = useState(0);
+  const text = q.trim().toLowerCase();
+  const shown = drills
+    .filter((d) => (!text || `${d.name} ${htmlPreview(d.notes_html)}`.toLowerCase().includes(text)) && (tagId === 0 || d.tag_ids.includes(tagId)))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  // Only offer categories that some drill actually has.
+  const usedTags = tags.filter((t) => drills.some((d) => d.tag_ids.includes(t.id)));
+  return (
+    <aside className="plan-palette" aria-label={`Add to this ${sheet}`}>
+      <h2>Add to this {sheet}</h2>
+      <p className="muted small">Drag onto the plan where you want it, or click to add it at the end.</p>
+      <div className="palette-blocks">
+        <PaletteTile id={`${NEW}custom`} kind="block" onAdd={onAdd}>
+          <span className="palette-grip" aria-hidden="true">
+            ⠿
+          </span>
+          Custom item
+        </PaletteTile>
+        {withBreak && (
+          <PaletteTile id={`${NEW}break`} kind="block" onAdd={onAdd}>
+            <span className="palette-grip" aria-hidden="true">
+              ⠿
+            </span>
+            Break
+          </PaletteTile>
+        )}
+      </div>
+      <h3 className="side-label">
+        Drills <span className="chip-num">{drills.length}</span>
+      </h3>
+      {drills.length === 0 ? (
+        <p className="muted small">
+          No drills yet. Add them on the <Link to="/library">Drills</Link> page, or use "Save to drill library" on an item.
+        </p>
+      ) : (
+        <>
+          <input className="input" aria-label="Search drills" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
+          {usedTags.length > 0 && (
+            <select className="input" aria-label="Filter drills by category" value={tagId} onChange={(e) => setTagId(Number(e.target.value))}>
+              <option value={0}>All categories</option>
+              {usedTags.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="palette-list">
+            {shown.length === 0 && <p className="muted small">No drills match.</p>}
+            {shown.map((d) => (
+              <PaletteTile key={d.id} id={`${NEW}drill:${d.id}`} kind="drill" onAdd={onAdd}>
+                <span className="palette-grip" aria-hidden="true">
+                  ⠿
+                </span>
+                <span className="palette-name">{d.name}</span>
+                <span className="palette-meta">
+                  {tags
+                    .filter((t) => d.tag_ids.includes(t.id))
+                    .map((t) => (
+                      <span key={t.id} className="dot" style={{ background: t.color }} title={t.name} />
+                    ))}
+                  {d.duration_min} min
+                </span>
+              </PaletteTile>
+            ))}
+          </div>
+        </>
+      )}
+    </aside>
+  );
+}
+
+/** The empty plan. It is also somewhere to let go of the first thing dragged in. */
+function EmptyPlan({ children }: { children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: EMPTY_PLAN });
+  return (
+    <div ref={setNodeRef} className={`empty ${isOver ? 'drop-here' : ''}`}>
+      {children}
+    </div>
+  );
+}
+
 function SortableRow(props: {
   item: Item;
   slot: Slot;
@@ -527,6 +707,10 @@ function SortableRow(props: {
   isOpen: boolean;
   /** True for a custom item that was just added, so typing goes straight into its title. */
   autoFocusTitle: boolean;
+  /** Set while something dragged in from the side list would land just before or after this row. */
+  dropMark: '' | 'before' | 'after';
+  /** True while something is being dragged in: the rows stay put and only the line shows where it lands. */
+  still: boolean;
   tags: Tag[];
   players: Player[];
   plays: Play[];
@@ -558,7 +742,7 @@ function SortableRow(props: {
   ].filter(Boolean);
 
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }} className={isDragging ? 'dragging' : ''}>
+    <div ref={setNodeRef} style={props.still ? undefined : { transform: CSS.Translate.toString(transform), transition }} className={`sheet-row ${isDragging ? 'dragging' : ''} ${props.dropMark ? `drop-${props.dropMark}` : ''}`}>
       <div
         ref={card}
         className={`card item ${isBreak ? 'break' : ''} ${isOpen ? 'open' : ''}`}

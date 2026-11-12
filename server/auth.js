@@ -444,6 +444,16 @@ export function mountAuth(app) {
   });
 
   app.get('/api/admin/settings', admin, (_req, res) => res.json(settingsOut()));
+  // Sends a message to the administrator's own address, to prove the email service is connected.
+  app.post('/api/admin/test-email', admin, async (req, res) => {
+    const r = await sendMail({
+      to: req.user.email,
+      subject: 'Dime Coach test email',
+      text: `Hi ${req.user.name},\n\nThis is a test from Dime Coach. If you are reading it, email is connected and working.`,
+    });
+    if (!r.ok) return res.status(502).json({ error: `The test email was not sent. ${r.error}` });
+    res.json({ ok: true, to: req.user.email });
+  });
   app.put('/api/admin/settings', admin, (req, res) => {
     if (typeof req.body.registration_enabled === 'boolean') {
       if (req.body.registration_enabled && !mailerStatus().configured)

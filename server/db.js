@@ -217,6 +217,9 @@ addColumn('teams', 'calendar_url', "TEXT DEFAULT ''");
 addColumn('teams', 'calendar_synced_at', "TEXT DEFAULT ''");
 // A game-day plan. It is built like a practice but kept out of the dashboard's category totals.
 addColumn('plans', 'is_game', 'INTEGER DEFAULT 0');
+// The coach's own jottings for a plan, and whether they go on the printed sheet.
+addColumn('plans', 'notes', "TEXT DEFAULT ''");
+addColumn('plans', 'print_notes', 'INTEGER DEFAULT 1');
 // Personal display preferences, such as the base color of the category history.
 addColumn('users', 'prefs_json', "TEXT DEFAULT '{}'");
 // Upload space in megabytes. NULL means the system default applies.

@@ -195,6 +195,11 @@ export default function Admin() {
                   ? 'Registration is open.'
                   : 'Registration is closed.'}
           </p>
+          {settings.mailer.configured && (
+            <button className="btn small" onClick={() => run(() => api.adminTestEmail(), 'Test email sent to your own address. Check your inbox.')}>
+              Send me a test email
+            </button>
+          )}
         </div>
       )}
     </div>

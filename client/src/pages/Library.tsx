@@ -6,6 +6,7 @@ import type { Drill, ItemContent, Play } from '../types';
 import ItemBody from '../components/ItemBody';
 import { Field, Modal, TagChip } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
+import { htmlPreview } from '../util';
 
 type Draft = ItemContent & { id?: number };
 const resourceLabel = (n: number) => (n > 0 ? `${n} resource${n === 1 ? '' : 's'}` : '');
@@ -102,37 +103,45 @@ export default function Library() {
           <p>Create a drill here, or use "Save to drill library" on any practice item.</p>
         </div>
       ) : (
-        <ul className="plan-list">
-          {shown.map((d) => (
-            <li key={d.id} className="plan-row">
-              <button className="plan-main" onClick={() => setDraft(toDraft(d))}>
-                <span className="plan-title">{d.name}</span>
-                <span className="plan-meta">
-                  {[`${d.duration_min} min`, resourceLabel((d.images || []).length + (d.videos || []).length + (d.links || []).length)]
-                    .filter(Boolean)
-                    .join(' · ')}
+        <ul className="drill-cards">
+          {shown.map((d) => {
+            const preview = htmlPreview(d.notes_html);
+            const plays = (d.play_ids || []).length;
+            return (
+              <li key={d.id} className="drill-card">
+                <button className="drill-card-main" onClick={() => setDraft(toDraft(d))}>
+                  <span className="drill-card-top">
+                    <span className="drill-card-name">{d.name}</span>
+                    <span className="drill-card-time">{d.duration_min} min</span>
+                  </span>
+                  <span className="chips">
+                    {sportTags
+                      .filter((t) => d.tag_ids.includes(t.id))
+                      .map((t) => (
+                        <TagChip key={t.id} tag={t} />
+                      ))}
+                  </span>
+                  {preview && <span className="drill-card-notes">{preview}</span>}
+                  <span className="plan-meta">
+                    {[resourceLabel((d.images || []).length + (d.videos || []).length + (d.links || []).length), plays > 0 && `${plays} play${plays === 1 ? '' : 's'}`]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </button>
+                <span className="row-actions">
+                  <button className="btn small" onClick={() => setSharing(d)}>
+                    Share
+                  </button>
+                  <button className="btn small" onClick={() => setDraft(toDraft(d))}>
+                    Edit
+                  </button>
+                  <button className="btn small danger" onClick={() => remove(d)}>
+                    Delete
+                  </button>
                 </span>
-                <span className="chips">
-                  {sportTags
-                    .filter((t) => d.tag_ids.includes(t.id))
-                    .map((t) => (
-                      <TagChip key={t.id} tag={t} />
-                    ))}
-                </span>
-              </button>
-              <span className="row-actions">
-                <button className="btn small" onClick={() => setSharing(d)}>
-                  Share
-                </button>
-                <button className="btn small" onClick={() => setDraft(toDraft(d))}>
-                  Edit
-                </button>
-                <button className="btn small danger" onClick={() => remove(d)}>
-                  Delete
-                </button>
-              </span>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 

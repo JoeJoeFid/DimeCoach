@@ -332,6 +332,7 @@ const itemOut = (it) => ({
 const planOut = (p, withItems = true) => ({
   id: p.id, team_id: p.team_id, kind: p.kind, title: p.title, date: p.date, start_time: p.start_time,
   location: p.location, intro_html: p.intro_html, is_template: !!p.is_template, is_game: !!p.is_game,
+  notes: p.notes ?? '', print_notes: p.print_notes !== 0,
   assigned: parse(p.assigned_json, []), updated_at: p.updated_at,
   ...(withItems
     ? { items: all('SELECT * FROM plan_items WHERE plan_id=? ORDER BY position, id', p.id).map(itemOut) }
@@ -402,11 +403,12 @@ app.post('/api/plans', (req, res) => {
   }
   const newId = tx(() => {
     const r = run(
-      `INSERT INTO plans (owner_id, team_id, kind, title, date, start_time, location, intro_html, is_template, assigned_json, is_game)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO plans (owner_id, team_id, kind, title, date, start_time, location, intro_html, is_template, assigned_json, is_game, notes, print_notes)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       req.ownerId, id(b.team_id), b.kind ?? src?.kind ?? 'practice', str(b.title ?? src?.title),
       str(b.date ?? ''), str(b.start_time ?? src?.start_time ?? '17:30'), str(b.location ?? src?.location),
       str(src?.intro_html), b.is_template ? 1 : 0, '[]', (b.is_game ?? src?.is_game) ? 1 : 0,
+      str(src?.notes), src?.print_notes === 0 ? 0 : 1,
     );
     const planId = Number(r.lastInsertRowid);
     if (src) {
@@ -427,9 +429,10 @@ app.put('/api/plans/:id', (req, res) => {
   const b = req.body;
   tx(() => {
     run(
-      `UPDATE plans SET title=?, date=?, start_time=?, location=?, intro_html=?, assigned_json=?, is_game=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE plans SET title=?, date=?, start_time=?, location=?, intro_html=?, assigned_json=?, is_game=?, notes=?, print_notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
       str(b.title), str(b.date), str(b.start_time, '17:30'), str(b.location), str(b.intro_html),
-      JSON.stringify((Array.isArray(b.assigned) ? b.assigned : []).map(Number)), b.is_game ? 1 : 0, p.id,
+      JSON.stringify((Array.isArray(b.assigned) ? b.assigned : []).map(Number)), b.is_game ? 1 : 0,
+      str(b.notes).slice(0, 20000), b.print_notes === false ? 0 : 1, p.id,
     );
     writeItems(p.id, b.items, req.ownerId);
   });

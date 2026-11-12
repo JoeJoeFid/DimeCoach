@@ -5637,3 +5637,247 @@ fieldset.plain {
   flex-direction: column;
   min-width: 0;
 }
+
+/* ---------- Practice editor: drills to drag in on the left, the plan on the right ---------- */
+.page.plan-editor {
+  max-width: 1760px;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+.plan-layout {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.plan-palette {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 32px);
+  padding: 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.plan-palette h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.plan-palette p {
+  margin: 0;
+}
+.plan-palette h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.palette-blocks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 80px;
+  overflow-y: auto;
+  margin: 0 -6px -6px;
+  padding: 2px 6px 6px;
+}
+.palette-tile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 7px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: grab;
+  user-select: none;
+}
+.palette-tile:hover,
+.palette-tile:focus-visible {
+  border-color: var(--ink);
+  background: var(--surface-2);
+}
+.palette-tile.block {
+  border-style: dashed;
+}
+.palette-tile.dragging-out {
+  opacity: 0.4;
+}
+.palette-tile.lifted {
+  display: block;
+  width: 208px;
+  border-color: var(--ink);
+  box-shadow: var(--shadow-2);
+  cursor: grabbing;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.palette-grip {
+  grid-row: span 2;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.palette-tile.block .palette-grip {
+  grid-row: auto;
+}
+.palette-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+/* Where a dragged-in thing will land. */
+.sheet-row {
+  position: relative;
+}
+.sheet-row.drop-before::before,
+.sheet-row.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--series);
+  pointer-events: none;
+}
+.sheet-row.drop-before::before {
+  top: -4px;
+}
+.sheet-row.drop-after::after {
+  bottom: -2px;
+}
+.empty.drop-here {
+  outline: 3px dashed var(--series);
+  outline-offset: -3px;
+}
+/* On a narrow screen there is no room for the side list: the "+ Item" and "+ Break" buttons do the job. */
+@media (max-width: 1100px) {
+  .plan-layout {
+    display: block;
+  }
+  .plan-palette {
+    display: none;
+  }
+}
+
+/* Under the title row: where it is, and the coach's own notes beside it. */
+.plan-extra {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+  align-items: start;
+  margin-top: 14px;
+}
+.plan-extra.one {
+  grid-template-columns: 1fr;
+}
+.plan-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plan-notes textarea {
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.45;
+}
+@media (max-width: 700px) {
+  .plan-extra {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Drills page: one card per drill ---------- */
+.drill-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.drill-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  transition: border-color 0.12s;
+}
+.drill-card:hover {
+  border-color: var(--line-strong);
+}
+.drill-card-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+  padding: 16px 16px 10px;
+  border: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.drill-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.drill-card-name {
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.drill-card-time {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+.drill-card-notes {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+.drill-card .plan-meta:empty {
+  display: none;
+}
+.drill-card .row-actions {
+  justify-content: flex-end;
+  padding: 8px 12px 12px;
+}

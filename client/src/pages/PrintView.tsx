@@ -129,6 +129,12 @@ export default function PrintView() {
           </p>
         )}
 
+        {plan.print_notes && plan.notes.trim() && (
+          <p className="plan-jottings" style={{ margin: '0 0 14px', whiteSpace: 'pre-wrap' }}>
+            <strong>Notes:</strong> {plan.notes.trim()}
+          </p>
+        )}
+
         {plan.items.map((it, i) => {
           if (it.kind === 'break') {
             if (!showBreaks || isHomework) return null;
