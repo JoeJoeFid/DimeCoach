@@ -1,3 +1,4 @@
+import PageTitle from '../components/PageTitle';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type StorageSpace } from '../api';
@@ -130,7 +131,7 @@ export default function Resources() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Resources</h1>
+          <PageTitle>Resources</PageTitle>
           <p className="muted">
             Every link, picture and video in one place: the ones you save here, and the ones already on your drills, plays and practices. Anything
             here can be attached to a drill, play or practice item.

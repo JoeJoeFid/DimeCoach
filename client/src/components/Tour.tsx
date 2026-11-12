@@ -224,11 +224,11 @@ const PATHS: Record<Path, { label: string; blurb: string; other: string; steps: 
       {
         id: 'gamechanger',
         target: '[data-tour="calendar"]',
-        route: '/teams',
+        route: '/teams?tab=schedule',
         toTop: true,
         needsTeam: true,
         title: 'Bring in your schedule from GameChanger',
-        text: 'Paste your team calendar link here and every scheduled practice shows up on its date as an empty shell. Open one and fill it with drills.',
+        text: 'On the Schedule integration tab, paste your team calendar link and every scheduled practice shows up on its date as an empty shell. Open one and fill it with drills.',
         points: ['Games come across too, so you can see what you are preparing for.', 'TeamSnap, SportsEngine and Google Calendar links work the same way.'],
         art: () => <ShellsArt />,
       },

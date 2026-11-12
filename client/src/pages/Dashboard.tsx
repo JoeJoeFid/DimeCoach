@@ -1,3 +1,4 @@
+import PageTitle from '../components/PageTitle';
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
@@ -161,11 +162,7 @@ export default function Dashboard() {
     <div className="page heat-scope" style={rampVars}>
       <div className="page-head">
         <div>
-          <h1>Dashboard</h1>
-          <p className="muted">
-            {team!.name}
-            {team!.season ? ` · ${team!.season}` : ''}
-          </p>
+          <PageTitle>Dashboard</PageTitle>
         </div>
         <div className="head-actions">
           <label className="period">

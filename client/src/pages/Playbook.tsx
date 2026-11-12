@@ -1,3 +1,4 @@
+import PageTitle from '../components/PageTitle';
 import { CommunityPicker } from '../components/community';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -64,7 +65,7 @@ export default function Playbook() {
   if (!playBuilderSupports(sport?.name))
     return (
       <div className="page">
-        <h1>Playbook</h1>
+        <PageTitle>Playbook</PageTitle>
         <div className="empty">
           <h2>The play builder draws basketball, baseball and football for now</h2>
           <p>This team plays {sport?.name?.toLowerCase() || 'another sport'}. Courts and fields for other sports are not drawn yet.</p>
@@ -76,7 +77,7 @@ export default function Playbook() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Playbook</h1>
+          <PageTitle>Playbook</PageTitle>
           <p className="muted">Diagram your {sport!.name.toLowerCase()} plays step by step. Attach them to practice items, or print them on their own.</p>
         </div>
         <div className="head-actions">

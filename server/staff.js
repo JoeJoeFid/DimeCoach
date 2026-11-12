@@ -142,7 +142,7 @@ export function staffBootstrap(req) {
          FROM team_staff s JOIN teams t ON t.id=s.team_id WHERE s.user_id=? ORDER BY t.name COLLATE NOCASE`,
       req.user.id,
     ).map((r) => ({ id: r.id, name: r.name, season: r.season, sport: r.sport, title: r.title, owner_name: r.owner_name || 'The owner', perms: permsOf(r) })),
-    access: req.staff ? { team_id: req.staff.teamId, owner_name: req.staff.ownerName, title: req.staff.title, perms: req.staff.perms } : null,
+    access: req.staff ? { team_id: req.staff.teamId, owner_name: req.staff.ownerName, title: req.staff.title, perms: req.staff.perms, system: !!req.staff.system } : null,
   };
 }
 
@@ -159,6 +159,14 @@ export function mountStaff(app) {
         req.homeOwnerId = req.ownerId;
         req.ownerId = row.owner_id;
         req.staff = { teamId, perms: permsOf(row), title: row.title, ownerName: row.owner_name || 'the owner' };
+      } else if (isSystemAdmin(req.user)) {
+        // The system administrator can open any team to help with it, with nothing held back.
+        const team = get(`SELECT t.id, t.owner_id, ${OWNER_NAME} AS owner_name FROM teams t WHERE t.id=?`, teamId);
+        if (team && team.owner_id !== req.ownerId) {
+          req.homeOwnerId = req.ownerId;
+          req.ownerId = team.owner_id;
+          req.staff = { teamId, perms: cleanPerms(Object.fromEntries(PERMS.map((p) => [p, true]))), title: 'System administrator', ownerName: team.owner_name || 'the owner', system: true };
+        }
       }
     }
     if (!req.staff) return next();
@@ -170,8 +178,8 @@ export function mountStaff(app) {
   // --- For the person a team was shared with ---
   app.post('/api/workspace', (req, res) => {
     const teamId = Number(req.body.team_id) || 0;
-    if (teamId && !get('SELECT 1 AS ok FROM team_staff WHERE team_id=? AND user_id=?', teamId, req.user.id))
-      return res.status(404).json({ error: 'That team is not shared with you any more.' });
+    const allowed = get('SELECT 1 AS ok FROM team_staff WHERE team_id=? AND user_id=?', teamId, req.user.id) || (isSystemAdmin(req.user) && get('SELECT 1 AS ok FROM teams WHERE id=?', teamId));
+    if (teamId && !allowed) return res.status(404).json({ error: 'That team is not shared with you any more.' });
     setTeamCookie(req, res, teamId);
     res.json({ ok: true });
   });

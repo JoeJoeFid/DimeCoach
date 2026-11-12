@@ -1,16 +1,35 @@
+import PageTitle from '../components/PageTitle';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, type Community } from '../api';
+import { api, type Community, type CommunityNews, type CommunityNewsItem } from '../api';
 import { useApp } from '../App';
 import { Field, Modal } from '../components/bits';
 
 const ROLE = { creator: 'Creator', admin: 'Admin', member: 'Member' } as const;
+const SHARE_WORD = { drill: 'Drill', play: 'Play', plan: 'Practice plan' } as const;
+const newsVerb = (n: CommunityNewsItem) => (n.kind === 'invite' ? 'invited you to join' : n.kind === 'share' ? 'shared something in' : 'wrote in');
+/** "just now", "12 min ago", "3 days ago", from a time the database wrote in UTC. */
+function ago(at: string) {
+  const secs = Math.max(0, (Date.now() - new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`).getTime()) / 1000);
+  if (secs < 90) return 'just now';
+  if (secs < 3600) return `${Math.round(secs / 60)} min ago`;
+  if (secs < 86400) return `${Math.round(secs / 3600)} h ago`;
+  const days = Math.round(secs / 86400);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
 
 /** The communities you belong to, invitations waiting for you, and the ways to start or join one. */
 export default function Communities() {
-  const { user } = useApp();
+  const app = useApp();
+  const { user } = app;
   const navigate = useNavigate();
   const [list, setList] = useState<Community[] | null>(null);
+  const [news, setNews] = useState<CommunityNews | null>(null);
+  /** Takes a fresh answer about what is new, and passes the count on to the menu. */
+  const gotNews = (n: CommunityNews) => {
+    setNews(n);
+    app.setCommunityUnread(n.unread);
+  };
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState({ name: '', description: '', share_drills: true, share_plays: true, share_plans: false });
@@ -18,10 +37,13 @@ export default function Communities() {
 
   const load = useCallback(
     () =>
-      api
-        .communities()
-        .then(setList)
+      Promise.all([api.communities(), api.communityNews()])
+        .then(([c, n]) => {
+          setList(c);
+          gotNews(n);
+        })
         .catch((e) => setError((e as Error).message)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
   useEffect(() => {
@@ -53,6 +75,8 @@ export default function Communities() {
     });
   };
 
+  const [shownNews, setShownNews] = useState(8);
+  const unreadIn = (communityId: number) => (news?.items || []).filter((n) => n.unread && n.community_id === communityId).length;
   const invited = (list || []).filter((c) => c.status === 'invited');
   const mine = (list || []).filter((c) => c.status === 'active');
 
@@ -60,7 +84,7 @@ export default function Communities() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Communities</h1>
+          <PageTitle>Communities</PageTitle>
           <p className="muted">Groups of coaches who talk to each other and, if the group allows it, share drills, plays and practice plans.</p>
         </div>
         <div className="head-actions">
@@ -71,8 +95,49 @@ export default function Communities() {
       </div>
       {error && <p className="error">{error}</p>}
 
+      <div className="card news" id="messages">
+        <div className="card-head">
+          <h2>
+            Messages {news && news.unread > 0 && <span className="nav-badge still">{news.unread} new</span>}
+          </h2>
+          {news && news.unread > 0 && news.items.some((i) => i.unread && i.kind !== 'invite') && (
+            <button className="btn small" onClick={() => api.markCommunitySeen().then(gotNews, (e) => setError((e as Error).message))}>
+              Mark all as read
+            </button>
+          )}
+        </div>
+        {news === null ? (
+          <p className="muted small">Loading…</p>
+        ) : news.items.length === 0 ? (
+          <p className="muted small">Nothing yet. Invitations, messages from other coaches and things they share will show up here.</p>
+        ) : (
+          <ul className="news-list">
+            {news.items.slice(0, shownNews).map((n) => (
+              <li key={n.key} className={n.unread ? 'unread' : ''}>
+                <button type="button" className="news-item" onClick={() => (n.kind === 'invite' ? document.getElementById('invitations')?.scrollIntoView({ block: 'center', behavior: 'smooth' }) : navigate(`/communities/${n.community_id}`))}>
+                  <span className={`news-dot ${n.unread ? 'on' : ''}`} aria-hidden="true" />
+                  <span className="news-main">
+                    <span className="news-line">
+                      <strong>{n.by}</strong> {newsVerb(n)} <strong>{n.community}</strong>
+                      {n.unread && <span className="sr-only"> (new)</span>}
+                    </span>
+                    {n.text && <span className={`news-text ${n.kind}`}>{n.kind === 'share' ? `${SHARE_WORD[n.share_kind!]}: ${n.text}` : n.text}</span>}
+                  </span>
+                  <span className="muted small news-when">{ago(n.at)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {news && news.items.length > shownNews && (
+          <button className="link small" onClick={() => setShownNews(news.items.length)}>
+            Show {news.items.length - shownNews} older
+          </button>
+        )}
+      </div>
+
       {invited.length > 0 && (
-        <div className="card invites">
+        <div className="card invites" id="invitations">
           <h2>Invitations</h2>
           <ul className="plan-list">
             {invited.map((c) => (
@@ -115,6 +180,7 @@ export default function Communities() {
               <Link to={`/communities/${c.id}`} className="community-card">
                 <span className="community-name">
                   {c.name}
+                  {unreadIn(c.id) > 0 && <span className="nav-badge still">{unreadIn(c.id)} new</span>}
                   <span className={`kind ${c.role === 'member' ? '' : 'game'}`}>{ROLE[c.role]}</span>
                 </span>
                 {c.description && <span className="muted small community-about">{c.description}</span>}

@@ -1,3 +1,4 @@
+import PageTitle from '../components/PageTitle';
 import { useState } from 'react';
 import { api } from '../api';
 import { useApp } from '../App';
@@ -33,7 +34,7 @@ export default function Tags() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Categories</h1>
+          <PageTitle>Categories</PageTitle>
           <p className="muted">
             The learning objectives you tag {sport?.name.toLowerCase()} items with. A target is the share of practice time you want spent
             working on a category. An item counts in full toward every category it is tagged with, so targets do not need to add up to 100%.

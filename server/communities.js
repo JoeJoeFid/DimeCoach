@@ -199,6 +199,51 @@ export function mountCommunities(app) {
     else run("INSERT INTO community_members (community_id, user_id, role, status) VALUES (?,?,'member','active')", c.id, req.user.id);
     res.json(communityOut(c, membership(c.id, req.user.id)));
   });
+  // --- What is new: invitations, messages and shared things since the caller last looked ---
+  /** Everything recent in the caller's communities from other people, newest first, each marked read or not. */
+  const newsFor = (userId) => {
+    const items = [];
+    const mine = all(
+      `SELECT c.*, cm.status AS my_status, cm.created_at AS joined, COALESCE(cm.seen_at, cm.created_at) AS seen,
+              (SELECT name FROM users WHERE id=cm.invited_by) AS inviter
+         FROM community_members cm JOIN communities c ON c.id=cm.community_id WHERE cm.user_id=?`,
+      userId,
+    );
+    for (const c of mine) {
+      const base = { community_id: c.id, community: c.name };
+      if (c.my_status === 'invited') {
+        // An invitation stays new until it is accepted or declined.
+        items.push({ ...base, key: `invite-${c.id}`, kind: 'invite', at: c.joined, by: c.inviter || c.name, text: '', unread: true });
+        continue;
+      }
+      for (const p of all(
+        `SELECT p.id, p.body, p.created_at, u.name FROM community_posts p JOIN users u ON u.id=p.user_id
+          WHERE p.community_id=? AND p.user_id<>? ORDER BY p.id DESC LIMIT 25`,
+        c.id, userId,
+      ))
+        items.push({ ...base, key: `post-${p.id}`, kind: 'post', at: p.created_at, by: p.name, text: p.body.length > 180 ? `${p.body.slice(0, 180)}…` : p.body, unread: p.created_at > c.seen });
+      for (const sh of all(`${SHARE_SELECT} WHERE s.community_id=? AND s.status='approved' AND s.user_id<>? ORDER BY s.id DESC LIMIT 25`, c.id, userId)) {
+        if (!c[KIND_FLAG[sh.kind]]) continue;
+        const row = source(sh);
+        if (row) items.push({ ...base, key: `share-${sh.id}`, kind: 'share', share_kind: sh.kind, at: sh.created_at, by: sh.by_name, text: titleOf(sh.kind, row), unread: sh.created_at > c.seen });
+      }
+    }
+    items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+    return { unread: items.filter((i) => i.unread).length, items: items.slice(0, 60) };
+  };
+  app.get('/api/communities/news', (req, res) => res.json(newsFor(req.user.id)));
+  // Opening a community, or "mark all as read", moves the line: nothing older counts as new any more.
+  app.post('/api/communities/seen', (req, res) => {
+    run("UPDATE community_members SET seen_at=datetime('now') WHERE user_id=? AND status='active'", req.user.id);
+    res.json(newsFor(req.user.id));
+  });
+  app.post('/api/communities/:id/seen', (req, res) => {
+    const at = enter(req, res);
+    if (!at) return;
+    run("UPDATE community_members SET seen_at=datetime('now') WHERE community_id=? AND user_id=?", at.c.id, req.user.id);
+    res.json(newsFor(req.user.id));
+  });
+
   app.get('/api/communities/:id', (req, res) => {
     const at = enter(req, res);
     if (at) res.json(detailOut(at.c, at.m));

@@ -7795,3 +7795,321 @@ fieldset.perm-list:disabled .check.perm {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Coaches and helpers: one compact block per person, with what they can do as switches ---------- */
+.staff-list.compact {
+  margin: 10px 0 8px;
+}
+.staff-list.compact .staff-row {
+  display: block;
+  padding: 10px 0;
+}
+.staff-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.staff-list.compact .staff-who {
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.staff-list.compact .staff-title {
+  flex: 0 1 190px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 0.86rem;
+}
+.staff-perms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.staff-perms .perm-head {
+  margin-right: 3px;
+  font-size: 0.68rem;
+}
+.perm-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--line-strong);
+}
+.chip.perm-chip {
+  gap: 5px;
+  padding: 2px 9px;
+  font-size: 0.8rem;
+}
+/* Off: plainly off, struck through. On: filled. */
+.chip.perm-chip:not(.on) {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+.chip.perm-chip span {
+  text-decoration: none;
+  display: inline-block;
+  font-weight: 700;
+}
+.chip.perm-chip.manage.on {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+.chip.perm-chip:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.staff-key {
+  margin: 0;
+}
+/* Tight enough that a helper's settings sit on one line at ordinary widths. */
+.staff-perms {
+  gap: 4px;
+}
+.staff-perms .perm-sep {
+  margin: 0 3px;
+}
+.chip.perm-chip {
+  padding: 1px 8px;
+  font-size: 0.78rem;
+}
+
+/* ---------- Communities: what is new, and the pulsing count in the menu ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.nav-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  animation: nav-pulse 1.8s ease-out infinite;
+}
+.nav-badge.still {
+  margin-left: 8px;
+  vertical-align: 2px;
+  animation: none;
+}
+.nav-folded .side-nav a {
+  position: relative;
+}
+.nav-folded .nav-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 0.62rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-badge {
+    animation: none;
+  }
+}
+.news-list {
+  list-style: none;
+  margin: 0 -8px;
+  padding: 0;
+}
+.news-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.news-item:hover {
+  background: var(--surface-2);
+}
+.news-list li + li {
+  border-top: 1px solid var(--line);
+}
+.news-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-top: 6px;
+  border-radius: 50%;
+}
+.news-dot.on {
+  background: var(--accent-edge);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.news-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.news-list li:not(.unread) .news-line strong {
+  font-weight: 600;
+}
+.news-list li:not(.unread) .news-item {
+  color: var(--ink-2);
+}
+.news-text {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.news-text.post::before {
+  content: '“';
+}
+.news-text.post::after {
+  content: '”';
+}
+.news-when {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* ---------- Page headings: the team's name on top with its sport, the section under it ---------- */
+.main[data-sport] .page-head h1::before {
+  content: none;
+}
+.team-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 4px;
+  max-width: none;
+  font-size: 2.25rem;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.page-head p.team-title {
+  max-width: none;
+}
+.team-title-season {
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.page-head h1.section-name {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--ink-2);
+}
+
+/* ---------- The team being worked on, at the top of the menu ---------- */
+.team-now {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px;
+}
+.team-now strong {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+.team-now .btn {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+@media (min-width: 901px) {
+  .nav-folded .team-now {
+    display: none;
+  }
+}
+/* The choosing screen: adding a team, leaving a shared one, and going back. */
+.team-pick-card.current {
+  border-color: var(--ink);
+}
+.team-pick-shared {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.team-pick-shared .team-pick-card {
+  flex: 1;
+}
+.team-pick-new {
+  margin-top: 16px;
+  width: 100%;
+  justify-content: center;
+}
+.team-pick-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* System admin, one person: the teams they own or help with. */
+.activity-teams {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.activity-teams li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.activity-team {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Team & roster: tabs across the top of the team. */
+.team-tabs {
+  align-self: flex-start;
+  margin-bottom: 14px;
+}
+.team-tabs button {
+  padding: 0 14px;
+}
+
+/* Menus that open from the lime "next up" row: solid, not see-through like the row's own surfaces. */
+.plan-row.next .more-list,
+.plan-row.next .ps-focus-list,
+.tl-card.tl-next .more-list {
+  --surface: #f3f9d4;
+  --surface-2: #e6f0b4;
+  --surface-3: #dcea9c;
+  --danger: #b3261e;
+  background: #f3f9d4;
+  border-color: rgba(21, 27, 0, 0.32);
+}

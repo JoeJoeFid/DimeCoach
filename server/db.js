@@ -282,3 +282,6 @@ export function tx(fn) {
     throw e;
   }
 }
+
+// When each member last looked at a community, so what has arrived since can be pointed out.
+addColumn('community_members', 'seen_at', 'TEXT');

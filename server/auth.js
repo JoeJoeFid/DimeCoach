@@ -521,6 +521,15 @@ export function mountAuth(app) {
     const totals = get('SELECT COUNT(*) AS n, COALESCE(SUM(active_seconds), 0) AS secs, MAX(active_seconds) AS longest FROM logins WHERE user_id=?', u.id);
     res.json({
       user: systemUserOut(u),
+      // Every team this person owns or helps with, so the system administrator can open one.
+      teams: [
+        ...all('SELECT t.id, t.name, t.season, (SELECT name FROM sports WHERE id=t.sport_id) AS sport FROM teams t WHERE t.owner_id=? ORDER BY t.name COLLATE NOCASE', owner).map((t) => ({ ...t, role: 'Owner' })),
+        ...all(
+          `SELECT t.id, t.name, t.season, (SELECT name FROM sports WHERE id=t.sport_id) AS sport, s.title FROM team_staff s JOIN teams t ON t.id=s.team_id
+            WHERE s.user_id=? ORDER BY t.name COLLATE NOCASE`,
+          u.id,
+        ).map((t) => ({ id: t.id, name: t.name, season: t.season, sport: t.sport, role: t.title || 'Helper' })),
+      ],
       logins,
       sign_ins: totals.n, active_seconds: totals.secs, longest_seconds: totals.longest || 0,
       sign_ins_30d: count('SELECT COUNT(*) AS n FROM logins WHERE user_id=? AND started_at > ?', u.id, new Date(Date.now() - 30 * 86400_000).toISOString()),

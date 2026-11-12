@@ -3,6 +3,7 @@ import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser
 import { useApp } from '../App';
 import { Field, Modal, MoreMenu } from '../components/bits';
 import RegistrationCard from '../components/RegistrationCard';
+import SportIcon from '../components/SportIcon';
 import AccessibilityCard from '../components/AccessibilityCard';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
@@ -190,7 +191,6 @@ export default function SystemAdmin() {
       <div className="page-head">
         <div>
           <h1>System admin</h1>
-          <p className="muted">Only your account can open this page. It covers every account on this system: who is using it, how people sign up, and how much each may upload.</p>
         </div>
       </div>
       <nav className="sys-jump" aria-label="Sections of this page">
@@ -497,6 +497,20 @@ function ActivityModal({ person, onClose }: { person: SystemUser; onClose: () =>
       .catch((e) => setError((e as Error).message));
   }, [person.id]);
   const built = data?.built;
+  const app = useApp();
+  /** Steps into a team as the system administrator. One of your own simply becomes the team being worked on. */
+  const openTeam = async (teamId: number) => {
+    if (app.own_teams.some((t) => t.id === teamId)) {
+      app.openTeam(false, teamId);
+      return window.location.assign('/');
+    }
+    try {
+      await api.setWorkspace(teamId);
+      window.location.assign('/');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
   return (
     <Modal title={`${person.name} · ${person.email}`} onClose={onClose} wide>
       {error && <p className="error">{error}</p>}
@@ -529,6 +543,25 @@ function ActivityModal({ person, onClose }: { person: SystemUser; onClose: () =>
               {built.last_plan_edit ? fmtAgo(built.last_plan_edit).toLowerCase() : 'never'}
             </span>
           </p>
+          <h3>Teams</h3>
+          {data.teams.length === 0 ? (
+            <p className="muted">No teams yet.</p>
+          ) : (
+            <ul className="activity-teams">
+              {data.teams.map((t) => (
+                <li key={`${t.id}-${t.role}`}>
+                  <SportIcon sport={t.sport} size={22} />
+                  <span className="activity-team">
+                    <strong>{t.name}</strong>
+                    <span className="muted small">{[t.sport, t.season, t.role].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  <button className="btn small" onClick={() => openTeam(t.id)} title="Opens the team with full access, as the system administrator">
+                    Open team
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <h3>Sign-ins</h3>
           {data.logins.length === 0 ? (
             <p className="muted">No sign-ins recorded yet. Recording started when this page was added.</p>

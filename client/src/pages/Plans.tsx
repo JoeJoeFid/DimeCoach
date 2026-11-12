@@ -1,3 +1,4 @@
+import PageTitle from '../components/PageTitle';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
@@ -351,11 +352,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     <div className={`page ${calendar ? '' : 'plans-page'}`}>
       <div className="page-head ps-head">
         <div>
-          <h1>{kind === 'practice' ? 'Practice schedule' : 'Homework'}</h1>
-          <p className="muted">
-            {team!.name}
-            {team!.season ? ` · ${team!.season}` : ''}
-          </p>
+          <PageTitle>{kind === 'practice' ? 'Practice schedule' : 'Homework'}</PageTitle>
         </div>
         <div className="head-actions">
           {!calendar && (
@@ -418,7 +415,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
         <p className="muted small list-note">
           {!hasCalendar && (
             <>
-              Use GameChanger, TeamSnap or another team app? <Link to="/teams">Link the team's calendar</Link> to see upcoming games and
+              Use GameChanger, TeamSnap or another team app? <Link to="/teams?tab=schedule">Link the team's calendar</Link> to see upcoming games and
               practices in this list.
             </>
           )}

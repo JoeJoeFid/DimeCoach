@@ -1,3 +1,4 @@
+import PageTitle from '../components/PageTitle';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, type CommunityDetail, type CommunityPost, type CommunityShare, type ShareKind } from '../api';
@@ -38,6 +39,14 @@ export default function CommunityPage() {
   useEffect(() => {
     load();
   }, [load]);
+  // Coming in here is what "reading" a community means: nothing in it counts as new after this.
+  useEffect(() => {
+    api
+      .markCommunitySeen(communityId)
+      .then((n) => app.setCommunityUnread(n.unread))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [communityId]);
   const run = async (fn: () => Promise<unknown>, done = '') => {
     try {
       await fn();
@@ -69,7 +78,7 @@ export default function CommunityPage() {
       </Link>
       <div className="page-head">
         <div>
-          <h1>{c.name}</h1>
+          <PageTitle>{c.name}</PageTitle>
           <p className="muted">
             {c.description || 'A place to talk and share.'} · {c.members} member{c.members === 1 ? '' : 's'}
           </p>

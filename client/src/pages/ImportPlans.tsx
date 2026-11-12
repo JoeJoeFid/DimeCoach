@@ -1,3 +1,4 @@
+import PageTitle from '../components/PageTitle';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, newKey, type ImportSource } from '../api';
@@ -101,7 +102,7 @@ export default function ImportPlans() {
       </div>
       <div className="page-head">
         <div>
-          <h1>Import old practice plans</h1>
+          <PageTitle>Import old practice plans</PageTitle>
           <p className="muted">
             Each plan becomes a new practice for {team.name}, with items, times, notes, groups and categories. You review every draft before it
             is saved. To fill in a practice you already created, open it and use Import plan there.

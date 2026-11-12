@@ -259,6 +259,8 @@ export interface SharedTeam {
 }
 /** Set while working inside a shared team. */
 export interface TeamAccess {
+  /** True when this is the system administrator looking in, not someone the team was shared with. */
+  system?: boolean;
   team_id: number;
   owner_name: string;
   title: string;

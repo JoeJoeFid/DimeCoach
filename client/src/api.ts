@@ -105,6 +105,8 @@ export interface SignIn {
 }
 export interface UserActivity {
   user: SystemUser;
+  /** Teams they own or help with. `role` is "Owner" or their title on the team. */
+  teams: { id: number; name: string; season: string; sport: string; role: string }[];
   logins: SignIn[];
   sign_ins: number;
   active_seconds: number;
@@ -141,6 +143,24 @@ export interface StorageSpace {
   left_bytes: number;
 }
 export type ShareKind = 'drill' | 'play' | 'plan';
+/** Something recent in one of the caller's communities: an invitation, a message, or a thing someone shared. */
+export interface CommunityNewsItem {
+  key: string;
+  kind: 'invite' | 'post' | 'share';
+  share_kind?: ShareKind;
+  community_id: number;
+  community: string;
+  /** When it happened, as the database writes it: "2026-11-12 19:04:11", in UTC. */
+  at: string;
+  by: string;
+  /** The message itself, or the name of what was shared. */
+  text: string;
+  unread: boolean;
+}
+export interface CommunityNews {
+  unread: number;
+  items: CommunityNewsItem[];
+}
 export interface Community {
   id: number;
   name: string;
@@ -263,6 +283,9 @@ export const api = {
     return body as { ok: true; accounts: number };
   },
   communities: () => req<Community[]>('GET', '/communities'),
+  communityNews: () => req<CommunityNews>('GET', '/communities/news'),
+  /** Marks one community, or with no id all of them, as read up to now. */
+  markCommunitySeen: (id?: number) => req<CommunityNews>('POST', id ? `/communities/${id}/seen` : '/communities/seen', {}),
   createCommunity: (b: { name: string; description: string }) => req<CommunityDetail>('POST', '/communities', b),
   joinCommunity: (code: string) => req<Community>('POST', '/communities/join', { code }),
   community: (id: number) => req<CommunityDetail>('GET', `/communities/${id}`),

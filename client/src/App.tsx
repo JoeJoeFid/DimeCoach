@@ -25,6 +25,9 @@ import Resources from './pages/Resources';
 import PlayEditor from './pages/PlayEditor';
 import PlayPrint from './pages/PlayPrint';
 
+/** Set while the team-choosing screen should come up after a reload. */
+const PICK_KEY = 'practiceplan.pickTeam';
+
 interface AppState extends Bootstrap {
   user: User;
   team: Team | null;
@@ -34,10 +37,16 @@ interface AppState extends Bootstrap {
   setTeamId: (id: number) => void;
   /** Switches to one of your own teams, or to a team shared with you. */
   openTeam: (shared: boolean, id: number) => void;
+  /** Goes back to the screen where a team is chosen. The only way to change which team is being worked on. */
+  pickTeam: () => void;
   /** True while the welcome tour is on screen, so pages hold back their own pop-ups until it is over. */
   touring: boolean;
   /** Whether you may change this part of the team. Always true for your own teams. */
   can: (perm: TeamPerm) => boolean;
+  /** How many invitations, messages and shared things in your communities you have not looked at yet. */
+  communityUnread: number;
+  /** Sets that count from a fresh answer, or asks the server for it again. */
+  setCommunityUnread: (count?: number) => void;
   reload: () => Promise<void>;
   /** Re-reads the signed-in user, after something about them (such as a preference) changed. */
   refreshUser: () => void;
@@ -87,7 +96,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     // Occasional setup: who is on the team, and what gets tracked.
     title: 'Team',
     items: [
-      { to: '/teams', label: 'Teams & rosters', icon: icons.teams },
+      { to: '/teams', label: 'Team & roster', icon: icons.teams },
       { to: '/tags', label: 'Categories', icon: icons.tags },
     ],
   },
@@ -167,6 +176,15 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
   const navigate = useNavigate();
   // Someone new gets the tour once. Finishing or skipping it is remembered with their account.
   const [touring, setTouring] = useState(!user.prefs.tour_done);
+  // Whether the "which team?" screen is up. It is the first thing after signing in, and the way
+  // to change teams later. The flag in the browser carries the choice across the reload that
+  // leaving someone else's shared team needs.
+  const [picking, setPicking] = useState(() => choosingTeam || sessionStorage.getItem(PICK_KEY) === '1');
+  const donePicking = () => {
+    sessionStorage.removeItem(PICK_KEY);
+    setPicking(false);
+    onTeamChosen();
+  };
   // Whether the side menu is folded down to its icons. Everywhere but the editors it is the
   // person's own choice, remembered on this computer. Opening an editor folds it; leaving puts it back.
   const navKey = `practiceplan.navFolded.${user.id}`;
@@ -187,6 +205,21 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
         .then(onChanged)
         .catch(() => {});
   }, [user.prefs.tour_done, onChanged]);
+
+  // What is waiting in communities: checked when the page changes and once a minute, to light up the menu.
+  const [communityUnread, setUnread] = useState(0);
+  const setCommunityUnread = useCallback((count?: number) => {
+    if (count !== undefined) return setUnread(count);
+    api
+      .communityNews()
+      .then((n) => setUnread(n.unread))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    setCommunityUnread();
+    const timer = window.setInterval(() => setCommunityUnread(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [setCommunityUnread, location.pathname]);
 
   const reload = useCallback(async () => {
     try {
@@ -224,9 +257,22 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     [data, setTeamId, teamKey, reload],
   );
 
+  const pickTeam = useCallback(() => setPicking(true), []);
+  // The choosing screen always runs from your own workspace: step out of a shared team first.
+  const leaving = picking && !!data?.access;
+  useEffect(() => {
+    if (!leaving) return;
+    sessionStorage.setItem(PICK_KEY, '1');
+    api
+      .setWorkspace(null)
+      .then(() => window.location.assign('/'))
+      .catch((e) => setError((e as Error).message));
+  }, [leaving]);
+
   const state = useMemo<AppState | null>(() => {
     if (!data) return null;
-    const team = data.teams.find((t) => t.id === teamId) || data.teams[0] || null;
+    // Inside a shared team that team is the only one. Otherwise it is the one that was chosen: never a silent fallback.
+    const team = data.access ? data.teams[0] || null : data.teams.find((t) => t.id === teamId) || null;
     const sport = data.sports.find((s) => s.id === team?.sport_id) || null;
     return {
       ...data,
@@ -236,12 +282,15 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
       sportTags: data.tags.filter((t) => t.sport_id === team?.sport_id),
       setTeamId,
       openTeam,
+      pickTeam,
       touring,
       can: (perm) => !data.access || data.access.perms[perm],
+      communityUnread,
+      setCommunityUnread,
       reload,
       refreshUser: onChanged,
     };
-  }, [data, user, teamId, setTeamId, openTeam, touring, reload, onChanged]);
+  }, [data, user, teamId, setTeamId, openTeam, pickTeam, touring, reload, onChanged, communityUnread, setCommunityUnread]);
 
   if (error && !state)
     return (
@@ -268,17 +317,34 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     onChanged();
   };
 
-  // Straight after signing in, with more than one team to work on, the first thing is to say which.
-  if (choosingTeam && !printing && state.own_teams.length + state.shared_teams.length > 1) {
+  if (leaving) return <div className="page muted">Loading…</div>;
+  // Choosing a team comes first: after signing in, when asked for from the menu, and whenever no team is chosen.
+  if (!printing && (picking || !state.team)) {
     const pick = (shared: boolean, id: number) => {
-      const here = state.access ? shared && state.access.team_id === id : !shared;
-      // Staying in the same workspace only changes the team. Anything else reloads into the other workspace.
-      if (!here) return openTeam(shared, id);
-      if (!shared) setTeamId(id);
-      onTeamChosen();
+      if (shared) {
+        sessionStorage.removeItem(PICK_KEY);
+        return openTeam(true, id);
+      }
+      setTeamId(id);
+      donePicking();
       navigate('/');
     };
-    return <TeamPicker name={user.name} ownTeams={state.own_teams} sharedTeams={state.shared_teams} onPick={pick} onSignOut={signOut} />;
+    return (
+      <Ctx.Provider value={state}>
+        <TeamPicker
+          name={user.name}
+          current={picking ? state.team?.id : undefined}
+          onPick={pick}
+          onCreated={(t) => {
+            setTeamId(t.id);
+            donePicking();
+            navigate('/teams');
+          }}
+          onBack={picking && state.team ? donePicking : undefined}
+          onSignOut={signOut}
+        />
+      </Ctx.Provider>
+    );
   }
 
   const routes = (
@@ -317,6 +383,12 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
         <path d={n.icon} />
       </svg>
       {n.label}
+      {n.to === '/communities' && communityUnread > 0 && (
+        <span className="nav-badge" title={`${communityUnread} new in your communities`}>
+          {communityUnread > 9 ? '9+' : communityUnread}
+          <span className="sr-only"> new</span>
+        </span>
+      )}
     </NavLink>
   );
 
@@ -336,32 +408,15 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
                 {navFolded ? '»' : '«'}
               </button>
             </div>
-            {(state.team || state.shared_teams.length > 0) && (
-              <label className="team-select">
-                <span className="side-label">Team</span>
-                <select
-                  value={state.access ? `s${state.access.team_id}` : state.team ? `o${state.team.id}` : ''}
-                  onChange={(e) => e.target.value && openTeam(e.target.value[0] === 's', Number(e.target.value.slice(1)))}
-                >
-                  {!state.team && <option value="">Choose a team</option>}
-                  {state.own_teams.map((t) => (
-                    <option key={t.id} value={`o${t.id}`}>
-                      {t.name}
-                      {t.season ? ` · ${t.season}` : ''}
-                    </option>
-                  ))}
-                  {state.shared_teams.length > 0 && (
-                    <optgroup label="Shared with you">
-                      {state.shared_teams.map((t) => (
-                        <option key={t.id} value={`s${t.id}`}>
-                          {t.name} · {t.owner_name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
-              </label>
-            )}
+            {/* The team being worked on. Changing it means going back to the choosing screen. */}
+            <div className="team-now">
+              <span className="side-label">Team</span>
+              <strong>{state.team!.name}</strong>
+              <span className="muted small">{[state.sport?.name, state.team!.season].filter(Boolean).join(' · ')}</span>
+              <button type="button" className="btn small" onClick={pickTeam}>
+                Switch team
+              </button>
+            </div>
             <nav className="side-nav" aria-label="Main">
               {navLink(HOME)}
               {NAV_GROUPS.map((g) => (
@@ -417,8 +472,16 @@ function SharedBar() {
   return (
     <div className={`shared-bar ${viewOnly ? 'view-only' : ''}`} role="status">
       <span>
-        <strong>{app.team?.name}</strong> is shared with you by {access.owner_name}
-        {access.title ? ` · ${access.title}` : ''}
+        {access.system ? (
+          <>
+            You are looking at <strong>{app.team?.name}</strong>, {access.owner_name}'s team, as the system administrator
+          </>
+        ) : (
+          <>
+            <strong>{app.team?.name}</strong> is shared with you by {access.owner_name}
+            {access.title ? ` · ${access.title}` : ''}
+          </>
+        )}
         {viewOnly && (
           <>
             {' '}
@@ -426,8 +489,8 @@ function SharedBar() {
           </>
         )}
       </span>
-      <button className="btn small" onClick={() => app.openTeam(false, app.own_teams[0]?.id || 0)}>
-        Back to my teams
+      <button className="btn small" onClick={app.pickTeam}>
+        Switch team
       </button>
     </div>
   );

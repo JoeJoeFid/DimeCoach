@@ -235,7 +235,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
         )}
         {!team.calendar_url && (
           <span className="muted small">
-            Use GameChanger? <Link to="/teams">Link the team calendar</Link> to see games and scheduled practices here.
+            Use GameChanger? <Link to="/teams?tab=schedule">Link the team calendar</Link> to see games and scheduled practices here.
           </span>
         )}
       </div>

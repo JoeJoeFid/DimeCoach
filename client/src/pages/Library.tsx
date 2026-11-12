@@ -1,3 +1,4 @@
+import PageTitle from '../components/PageTitle';
 import { CommunityPicker, ShareDialog } from '../components/community';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
@@ -67,7 +68,7 @@ export default function Library() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1>Drills</h1>
+          <PageTitle>Drills</PageTitle>
           <p className="muted">
             Reusable {sport?.name.toLowerCase()} items. Adding one to a practice makes a copy, so editing a drill here never changes past
             practices.
