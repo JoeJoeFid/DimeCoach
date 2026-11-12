@@ -130,10 +130,29 @@ async function syncCalendar(team) {
         'INSERT INTO events (owner_id, team_id, uid, kind, title, date, start_time, end_time, location, notes) VALUES (?,?,?,?,?,?,?,?,?,?)',
         team.owner_id, team.id, ev.uid, ev.kind, ev.title, ev.date, ev.start_time, ev.end_time, ev.location, ev.notes,
       );
+    // Where the coach has said what an event really is, that wins over the guess made from its title.
+    run(
+      `UPDATE events SET kind=(SELECT k.kind FROM event_kinds k WHERE k.team_id=events.team_id AND k.uid=events.uid)
+        WHERE team_id=? AND EXISTS (SELECT 1 FROM event_kinds k WHERE k.team_id=events.team_id AND k.uid=events.uid)`,
+      team.id,
+    );
     run('UPDATE teams SET calendar_synced_at=? WHERE id=?', new Date().toISOString(), team.id);
   });
   return events.length;
 }
+// Changes what a calendar event counts as. Its date, time and place still come from the calendar.
+app.put('/api/teams/:id/events/:eventId', (req, res) => {
+  if (!ownTeam(req, req.params.id)) return notFound(res);
+  const ev = get('SELECT * FROM events WHERE id=? AND team_id=?', id(req.params.eventId), id(req.params.id));
+  if (!ev) return notFound(res);
+  const kind = str(req.body.kind);
+  if (!['practice', 'game', 'other'].includes(kind)) return res.status(400).json({ error: 'Choose practice, game or other event.' });
+  tx(() => {
+    run('UPDATE events SET kind=? WHERE id=?', kind, ev.id);
+    run('INSERT INTO event_kinds (team_id, uid, kind) VALUES (?,?,?) ON CONFLICT(team_id, uid) DO UPDATE SET kind=excluded.kind', ev.team_id, ev.uid, kind);
+  });
+  res.json(get('SELECT id, kind, title, date, start_time, end_time, location, notes FROM events WHERE id=?', ev.id));
+});
 // Saves (or clears) the calendar link, then syncs it.
 app.put('/api/teams/:id/calendar', async (req, res) => {
   const team = ownTeam(req, req.params.id);

@@ -309,6 +309,7 @@ export const api = {
 
   setCalendar: (teamId: number, url: string) => req<{ count: number; team: Team }>('PUT', `/teams/${teamId}/calendar`, { url }),
   syncCalendar: (teamId: number) => req<{ count: number; team: Team }>('POST', `/teams/${teamId}/calendar/sync`),
+  setEventKind: (teamId: number, eventId: number, kind: ScheduleEvent['kind']) => req<ScheduleEvent>('PUT', `/teams/${teamId}/events/${eventId}`, { kind }),
   events: (teamId: number, from: string) => req<ScheduleEvent[]>('GET', `/teams/${teamId}/events?from=${from}`),
 
   players: (teamId: number) => req<Player[]>('GET', `/teams/${teamId}/players`),

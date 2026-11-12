@@ -75,7 +75,7 @@ function gate(req) {
       if (!sameTeam(seg[1])) return NOT_FOUND;
       if (seg[2] === 'staff') return ownerOnly('manage who the team is shared with');
       if (!write) return null;
-      if (seg[2] === 'calendar') return need('schedule');
+      if (seg[2] === 'calendar' || seg[2] === 'events') return need('schedule');
       if (seg[2] === 'players') return need('roster');
       return ownerOnly('rename or delete the team');
     case 'players': {

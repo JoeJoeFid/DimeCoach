@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, Tag } from '../types';
 import PracticeTimeline from '../components/PracticeTimeline';
-import { HEAT_BASE, HEAT_PRESETS, PERIODS, SCOPES, UNTAGGED, heatRamp, fmtDateShort, periodBounds, scopeOf, targetFor, type Period, type TargetScope, fmtDateTiny, fmtDuration, planMinutes, todayISO } from '../util';
+import { HEAT_BASE, HEAT_PRESETS, PERIODS, SCOPES, UNTAGGED, heatRamp, fmtDateShort, periodBounds, scopeOf, targetFor, type Period, type TargetScope, fmtDateTiny, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
 
 const PERIOD_KEY = 'practiceplan.dashboardPeriod';
 /** A category counts as neglected after this many practices in a row without it. */
@@ -19,6 +19,11 @@ interface Tip {
   y: number;
   content: ReactNode;
 }
+
+const nowMinutes = () => {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+};
 
 export default function Dashboard() {
   const { team, sportTags } = useApp();
@@ -71,6 +76,12 @@ export default function Dashboard() {
   }, [teamId]);
 
   const today = todayISO();
+  // Minutes since midnight, checked once a minute, so today's practice joins the numbers when it ends.
+  const [clock, setClock] = useState(nowMinutes);
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(nowMinutes()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const stats = useMemo(() => {
     if (!plans) return null;
     const tagIds = new Set(sportTags.map((t) => t.id));
@@ -78,12 +89,18 @@ export default function Dashboard() {
     // Plans with nothing in them are left out too: a blank plan is not a practice that happened.
     const dated = plans.filter((p) => p.date && !p.is_game && p.items.some((i) => i.kind === 'item')).sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
     const bounds = periodBounds(period, today);
-    const past = dated.filter((p) => p.date <= today);
+    // Today's practice only counts once it is over: after its last item ends.
+    const over = (p: Plan) => {
+      if (p.date !== today) return p.date < today;
+      const mins = planMinutes(p);
+      return clock >= parseClock(p.start_time) + mins.work + mins.breaks;
+    };
+    const past = dated.filter(over);
     const done = period === 'last' ? past.slice(-1) : past.filter((p) => p.date >= bounds.from && p.date <= bounds.to);
 
     const perPlan = done.map((p) => ({ plan: p, mins: planMinutes(p, tagIds) }));
     // Practices that are planned but have not happened yet. They are shown in the history, never counted in the numbers.
-    const upcoming = dated.filter((p) => p.date > today).slice(0, 6).map((p) => ({ plan: p, mins: planMinutes(p, tagIds) }));
+    const upcoming = dated.filter((p) => !over(p)).slice(0, 6).map((p) => ({ plan: p, mins: planMinutes(p, tagIds) }));
     const totals = new Map<number, number>();
     let work = 0;
     let breaks = 0;
@@ -126,7 +143,7 @@ export default function Dashboard() {
     const topDrills = [...drills.entries()].sort((a, b) => b[1].minutes - a[1].minutes).slice(0, 5);
 
     return { perPlan, upcoming, rows, neglected, work, breaks, untagged, topDrills };
-  }, [plans, sportTags, period, scope, today]);
+  }, [plans, sportTags, period, scope, today, clock]);
 
   const showTip = (content: ReactNode) => ({
     onMouseEnter: (e: MouseEvent) => setTip({ x: e.clientX, y: e.clientY, content }),
@@ -168,7 +185,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <PracticeTimeline plans={plans || []} tags={sportTags} />
+      <PracticeTimeline plans={plans || []} tags={sportTags} onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))} />
 
       {n === 0 ? (
         <div className="empty">

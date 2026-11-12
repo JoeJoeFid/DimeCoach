@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, ScheduleEvent, Tag } from '../types';
 import { daysBetween, fmtClock, fmtDateShort, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
-import { TagChip } from './bits';
+import { Field, Modal, TagChip } from './bits';
 import SchedulePreview from './SchedulePreview';
 import { KIND_LABEL, buildSchedule, isStrayBlank, withoutDuplicateBlanks, type ScheduleEntry } from '../schedule';
 
@@ -25,13 +25,15 @@ const relative = (date: string, today: string) => {
  * A strip of the team's practices and calendar events in date order. The next one coming up
  * sits large in the middle, with earlier ones to its left and later ones to its right.
  */
-export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags: Tag[] }) {
+export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Plan[]; tags: Tag[]; /** Called after a plan was changed here, so the page reads its plans again. */ onChanged: () => void }) {
   const app = useApp();
   const team = app.team!;
   const { reload } = app;
   const navigate = useNavigate();
   const today = todayISO();
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  /** The card being edited: its type, and for a plan its title, date, time and place. */
+  const [editing, setEditing] = useState<Entry | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -154,7 +156,7 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
     // The card itself is a button, so the preview button sits beside it in the same slot, not inside it.
     return (
       <div key={e.key} className="tl-slot" data-key={e.key}>
-        <button type="button" className={`tl-card tl-small ${past} ${next}`} title="Bring this to the middle" onClick={() => setFocusKey(e.key)}>
+        <button type="button" className={`tl-card tl-small ${e.kind} ${past} ${next}`} title="Bring this to the middle" onClick={() => setFocusKey(e.key)}>
           {body}
         </button>
         {e.plan && <SchedulePreview plan={e.plan} label="" />}
@@ -220,9 +222,12 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
                 </>
               ) : (
                 <button className="btn primary" onClick={() => planEvent(focus)}>
-                  {focus.kind === 'game' ? 'Plan this game' : 'Plan this practice'}
+                  {focus.kind === 'game' ? 'Plan this game' : focus.kind === 'practice' ? 'Plan this practice' : 'Plan this event'}
                 </button>
               )}
+              <button className="btn" onClick={() => setEditing(focus)} title="Change what this is: a practice, a game or something else">
+                Edit
+              </button>
             </div>
           </div>
 
@@ -244,6 +249,105 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
           </span>
         )}
       </div>
+      {editing && (
+        <EditEntry
+          entry={editing}
+          teamId={team.id}
+          onClose={() => setEditing(null)}
+          onSaved={(event) => {
+            setEditing(null);
+            // A calendar event changes here. A plan belongs to the page, which reads its plans again.
+            if (event) setEvents((all) => all.map((ev) => (ev.id === event.id ? event : ev)));
+            else onChanged();
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+const KINDS: ScheduleEvent['kind'][] = ['practice', 'game', 'other'];
+/**
+ * Edits one card. A practice or game that has a plan can change its type, title, date, start time
+ * and place. Something that is only on the team calendar can change its type: the rest still
+ * comes from the calendar.
+ */
+function EditEntry({ entry, teamId, onClose, onSaved }: { entry: Entry; teamId: number; onClose: () => void; onSaved: (event?: ScheduleEvent) => void }) {
+  const plan = entry.plan;
+  const [kind, setKind] = useState<ScheduleEvent['kind']>(entry.kind);
+  const [title, setTitle] = useState(plan?.title ?? '');
+  const [date, setDate] = useState(plan?.date ?? '');
+  const [start, setStart] = useState(plan?.start_time ?? '');
+  const [place, setPlace] = useState(plan?.location ?? '');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  // A plan is a practice or a game. Only something left on the calendar can be "another event".
+  const kinds = plan ? KINDS.filter((k) => k !== 'other') : KINDS;
+  const save = async () => {
+    setBusy(true);
+    try {
+      if (plan) {
+        await api.savePlan({ ...plan, is_game: kind === 'game', title, date, start_time: start || plan.start_time, location: place });
+        onSaved();
+      } else if (entry.event) onSaved(await api.setEventKind(teamId, entry.event.id, kind));
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={plan ? 'Edit this practice or game' : 'Edit this event'} onClose={onClose}>
+      <form
+        className="fields stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        {error && <p className="error">{error}</p>}
+        <div className="field">
+          <span className="field-label">This is a</span>
+          <div className="seg" role="group" aria-label="Type of event">
+            {kinds.map((k) => (
+              <button key={k} type="button" className={kind === k ? 'on' : ''} aria-pressed={kind === k} onClick={() => setKind(k)}>
+                {k === 'other' ? 'Other event' : KIND_LABEL[k]}
+              </button>
+            ))}
+          </div>
+        </div>
+        {plan ? (
+          <>
+            <Field label="Title">
+              <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+            </Field>
+            <div className="fields">
+              <Field label="Date">
+                <input className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+              </Field>
+              <Field label="Start time">
+                <input className="input" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Location">
+              <input className="input" value={place} onChange={(e) => setPlace(e.target.value)} />
+            </Field>
+            <p className="muted small">A game is left out of the dashboard's practice totals and category targets.</p>
+          </>
+        ) : (
+          <p className="muted small">
+            "{entry.title}" on {fmtDateShort(entry.date)} comes from the team calendar, so its date, time and place are changed there. Your choice of type is kept
+            each time the calendar is read again.
+          </p>
+        )}
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn primary" disabled={busy}>
+            Save
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

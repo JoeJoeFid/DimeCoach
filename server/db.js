@@ -97,6 +97,13 @@ db.exec(`
     location TEXT DEFAULT '', notes TEXT DEFAULT ''
   );
   CREATE INDEX IF NOT EXISTS idx_events_team ON events(team_id, date);
+  -- A coach's own choice of what a calendar event is (practice, game or something else). The
+  -- calendar is read again and again, so the choice is kept here, by the event's own id in the feed.
+  CREATE TABLE IF NOT EXISTS event_kinds (
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    uid TEXT NOT NULL, kind TEXT NOT NULL,
+    PRIMARY KEY (team_id, uid)
+  );
 `);
 
 // Accounts. A user reaches a workspace (the owners table) through memberships.

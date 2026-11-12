@@ -7154,3 +7154,29 @@ fieldset.plain {
   stroke-linecap: round;
   fill: none;
 }
+
+/* ---------- Dashboard cards: games carry a soft violet tint, so they stand apart from practices ---------- */
+:root {
+  --game: #6250d6;
+}
+.tl-card.game,
+.tl-small.game.past:not(.tl-next),
+.tl-card.tl-small.game.done,
+.tl-focus.game.done {
+  border-color: color-mix(in srgb, var(--game) 50%, var(--line));
+  background: color-mix(in srgb, var(--game) 11%, var(--surface));
+}
+.tl-small.game.past:not(.tl-next) {
+  background: color-mix(in srgb, var(--game) 6%, transparent);
+}
+.tl-card.game .kind.game {
+  background: var(--game);
+  border-color: var(--game);
+  color: #fff;
+}
+/* The next thing up keeps its lime, with a violet edge when it is a game. */
+.tl-card.game.tl-next {
+  background: var(--accent);
+  border-color: var(--accent-edge);
+  box-shadow: inset 5px 0 0 var(--game), var(--shadow-1);
+}
