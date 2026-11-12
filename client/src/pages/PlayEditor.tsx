@@ -6,25 +6,26 @@ import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
 import type { Play, PlayFrame, PlayLine, PlayMark, PlayObject, PlayShape } from '../types';
 import {
-  COURT,
-  Court,
-  LineShape,
-  MarkShape,
-  PlayDiagram,
-  ShapeView,
-  VIEW_PAD,
   baskets,
+  Court,
+  COURT,
   courtHeight,
   isLine,
   isMark,
   isPlayer,
   isShape,
+  LineShape,
   lineTrims,
+  MarkShape,
   ovalCorners,
+  PlayDiagram,
+  sampleLine,
+  ShapeView,
   TEXT_FONTS,
   TEXT_SIZE,
-  sampleLine,
+  textBox,
   type Pt,
+  VIEW_PAD,
 } from '../components/PlayDiagram';
 import PlayAnimation from '../components/PlayAnimation';
 import { ShareDialog } from '../components/community';
@@ -55,6 +56,8 @@ const TEXT_FONT_CHOICES: { id: '' | NonNullable<PlayMark['font']>; label: string
   { id: 'hand', label: 'Marker' },
 ];
 const NEW_CATEGORY = '\u0000new';
+/** The most steps a play can hold. */
+const MAX_STEPS = 20;
 type ShapeKind = PlayShape['shape'];
 type Tool = 'select' | 'o' | 'x' | 'cone' | 'text' | 'cut' | 'pass' | 'dribble' | 'screen' | ShapeKind;
 const TOOLS: { id: Tool; label: string; hint: string; group: 'pointer' | 'mark' | 'line' | 'shape' }[] = [
@@ -148,6 +151,7 @@ type Drag =
   | { kind: 'move'; id: string; last: Pt; moved: boolean }
   | { kind: 'handle'; id: string; index: number; moved: boolean }
   | { kind: 'corner'; id: string; index: number; moved: boolean }
+  | { kind: 'textw'; id: string; moved: boolean }
   | { kind: 'draw'; id: string }
   | { kind: 'group'; last: Pt; moved: boolean }
   | { kind: 'area'; start: Pt };
@@ -538,6 +542,13 @@ export default function PlayEditor() {
     capture(e);
   };
 
+  /** Starts dragging one side of a label's box, to make it narrower or wider. */
+  const onTextEdgeDown = (e: RPointerEvent, markId: string) => {
+    e.stopPropagation();
+    drag.current = { kind: 'textw', id: markId, moved: false };
+    capture(e);
+  };
+
   const onMove = (e: RPointerEvent<SVGSVGElement>) => {
     const d = drag.current;
     if (!d && aim) {
@@ -594,6 +605,11 @@ export default function PlayEditor() {
       const first = !d.moved;
       d.moved = true;
       setObjects((os) => os.map((o) => (o.id === d.id && isShape(o) ? withCorner(o, d.index, p) : o)), first);
+    } else if (d.kind === 'textw') {
+      // The box stays centered on the label: its width is twice the distance from the middle to the pointer.
+      const first = !d.moved;
+      d.moved = true;
+      setObjects((os) => os.map((o) => (o.id === d.id && isMark(o) ? { ...o, w: Math.round(Math.min(60, Math.max(2, Math.abs(p[0] - o.x) * 2)) * 10) / 10 } : o)), first);
     } else {
       const dx = p[0] - d.last[0];
       const dy = p[1] - d.last[1];
@@ -690,6 +706,8 @@ export default function PlayEditor() {
     setSelected(null);
   };
   const addStep = () => setFrames([...play.frames.slice(0, index + 1), carryForward(frame, play), ...play.frames.slice(index + 1)], index + 1);
+  /** An exact copy of the open step, placed straight after it and opened. */
+  const duplicateStep = () => setFrames([...play.frames.slice(0, index + 1), structuredClone(frame), ...play.frames.slice(index + 1)], index + 1);
   /** Drops a step in a new place in the running order. The step that was open stays open. */
   const moveStep = (e: DragEndEvent) => {
     if (!e.over || e.active.id === e.over.id) return;
@@ -1036,7 +1054,7 @@ export default function PlayEditor() {
             )}
             {selMark && (isPlayer(selMark) || selMark.type === 'text') && (
               <Field label={selMark.type === 'text' ? 'Label text' : 'Player label'}>
-                <input className="input" value={selMark.label} maxLength={40} onChange={(e) => patchSelected({ label: e.target.value })} />
+                <input className="input" value={selMark.label} maxLength={selMark.type === 'text' ? 120 : 40} onChange={(e) => patchSelected({ label: e.target.value })} />
               </Field>
             )}
             {selMark && selMark.type === 'text' && (
@@ -1067,6 +1085,11 @@ export default function PlayEditor() {
                 </div>
                 <span className="field-label">Text color</span>
                 {swatches(PLAYER_COLORS, selMark.color || '', (c) => patchSelected({ color: c || undefined }), 'Text')}
+                {selMark.w && (
+                  <button className="btn small" onClick={() => patchSelected({ w: undefined })} title="Back to one line, as wide as the words">
+                    Fit box to text
+                  </button>
+                )}
               </>
             )}
             {selMark && isPlayer(selMark) && (
@@ -1168,6 +1191,9 @@ export default function PlayEditor() {
             <button className="btn small" onClick={addStep} title="Players and the ball start where their lines end in this step">
               + Next step
             </button>
+            <button className="btn small" onClick={duplicateStep} disabled={play.frames.length >= MAX_STEPS} title="An exact copy of this step, placed right after it">
+              Duplicate step {index + 1}
+            </button>
             {play.frames.length > 1 && (
               <button className="btn small danger" onClick={removeStep}>
                 Delete step {index + 1}
@@ -1251,6 +1277,24 @@ export default function PlayEditor() {
                   onPointerDown={(e) => onHandleDown(e, selLine.id, i)}
                 />
               ))}
+            {/* A selected label has a handle on each side: drag one to narrow or widen its box, and the words wrap to fit. */}
+            {selMark?.type === 'text' &&
+              tool === 'select' &&
+              [-1, 1].map((side) => {
+                const box = textBox(selMark);
+                return (
+                  <rect
+                    key={side}
+                    className="corner-dot text-edge"
+                    x={selMark.x + side * (box.width / 2 + 0.5) - 0.55}
+                    y={selMark.y - 0.9}
+                    width={1.1}
+                    height={1.8}
+                    rx={0.3}
+                    onPointerDown={(e) => onTextEdgeDown(e, selMark.id)}
+                  />
+                );
+              })}
             {selShape &&
               tool === 'select' &&
               shapeHandles(selShape).map((q, i) => <rect key={i} className="corner-dot" x={q[0] - 0.7} y={q[1] - 0.7} width={1.4} height={1.4} onPointerDown={(e) => onCornerDown(e, selShape.id, i)} />)}

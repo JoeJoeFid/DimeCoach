@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, ScheduleEvent, Tag } from '../types';
 import { daysBetween, fmtClock, fmtDateShort, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
-import { Field, Modal, TagChip } from './bits';
+import { Field, Modal } from './bits';
 import SchedulePreview from './SchedulePreview';
 import { KIND_LABEL, buildSchedule, isStrayBlank, withoutDuplicateBlanks, type ScheduleEntry } from '../schedule';
 
@@ -196,13 +196,6 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
                   {focus.plan.items.length === 0
                     ? 'Nothing scheduled in this plan yet.'
                     : `${focus.plan.items.filter((i) => i.kind === 'item').length} items · ${fmtDuration(mins.work + mins.breaks)}`}
-                </div>
-                <div className="chips">
-                  {tags
-                    .filter((t) => mins.byTag.has(t.id))
-                    .map((t) => (
-                      <TagChip key={t.id} tag={t} minutes={mins.byTag.get(t.id)} />
-                    ))}
                 </div>
               </>
             )}

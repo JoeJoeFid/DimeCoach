@@ -7637,3 +7637,78 @@ a.ps-title:hover {
     grid-row: 1 / span 2;
   }
 }
+
+/* ---------- Play builder: a label sits in a box that can be made narrower or wider ---------- */
+.play-mark.text text {
+  font-size: 1.7px;
+  font-weight: 600;
+}
+.play-mark.text .text-box {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+.play-svg.editing .play-mark.text .text-box {
+  cursor: move;
+}
+.play-mark.text.selected .text-box {
+  stroke: var(--series);
+  stroke-width: 0.18;
+  stroke-dasharray: 0.7 0.6;
+}
+.corner-dot.text-edge {
+  cursor: ew-resize;
+}
+
+/* ---------- Practice preview: activities on the left, the category breakdown on the right ---------- */
+.preview-pop {
+  padding: 16px 18px;
+  font-size: 0.9rem;
+}
+.preview-head strong {
+  font-size: 1.1rem;
+}
+.preview-head span {
+  font-size: 0.84rem;
+}
+.preview-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 22px;
+  padding-top: 6px;
+}
+.preview-cols h4 {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.preview-rows li {
+  padding: 3px 0;
+}
+.preview-cats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 22px;
+  border-left: 1px solid var(--line);
+}
+.preview-cats h4 {
+  margin-bottom: 0;
+}
+.preview-cats p {
+  margin: 0;
+}
+@media (max-width: 620px) {
+  .preview-cols {
+    grid-template-columns: 1fr;
+  }
+  .preview-cats {
+    padding: 10px 0 0;
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+}

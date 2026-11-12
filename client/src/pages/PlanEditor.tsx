@@ -12,6 +12,7 @@ import { Field, Modal, MoreMenu, TagChip, type MenuItem } from '../components/bi
 import { CommunityPicker, ShareDialog } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, showUndo } from '../components/toasts';
+import CategoryRows from '../components/CategoryRows';
 import { DraftReview, SourcePicker, defaultChoices, resolveDraft, useAiStatus, type DraftChoices } from '../components/planImport';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
@@ -731,54 +732,6 @@ export default function PlanEditor() {
 }
 
 type Minutes = ReturnType<typeof planMinutes>;
-/** Each category a plan works on with its minutes and share of the working time, most first, then time with no category and breaks. */
-function CategoryRows({ mins, tags, empty }: { mins: Minutes; tags: Tag[]; empty: string }) {
-  const rows = tags
-    .filter((t) => (mins.byTag.get(t.id) || 0) > 0)
-    .map((t) => ({ tag: t, minutes: mins.byTag.get(t.id)! }))
-    .sort((a, b) => b.minutes - a.minutes);
-  const untagged = mins.byTag.get(0) || 0;
-  const share = (m: number) => `${Math.min(100, mins.work > 0 ? Math.round((m / mins.work) * 100) : 0)}%`;
-  return (
-    <>
-      {rows.length === 0 ? (
-        <p className="muted small">{empty}</p>
-      ) : (
-        <ul className="glance-list">
-          {rows.map(({ tag, minutes }) => (
-            <li key={tag.id}>
-              <span className="glance-name">
-                <span className="dot" style={{ background: tag.color }} />
-                {tag.name}
-              </span>
-              <span className="glance-min">{Math.round(minutes)} min</span>
-              <span className="glance-bar" title={`${share(minutes)} of the working time`}>
-                <i style={{ width: share(minutes), background: tag.color }} />
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {(untagged > 0 || mins.breaks > 0) && (
-        <ul className="glance-list plain">
-          {untagged > 0 && (
-            <li>
-              <span className="glance-name muted">No category</span>
-              <span className="glance-min">{Math.round(untagged)} min</span>
-            </li>
-          )}
-          {mins.breaks > 0 && (
-            <li>
-              <span className="glance-name muted">Breaks</span>
-              <span className="glance-min">{Math.round(mins.breaks)} min</span>
-            </li>
-          )}
-        </ul>
-      )}
-    </>
-  );
-}
-
 const PREVIOUS_SHOWN = 8;
 const SUMMARY_WIDTH = 360;
 /** The most activities listed in the summary of an earlier practice, so it stays a glance. */

@@ -80,6 +80,8 @@ export interface PlayMark {
   bold?: boolean;
   /** Text labels only. */
   italic?: boolean;
+  /** Text labels only: the width of the label's box in feet. The words wrap to fit it. Absent means one line, as wide as the words. */
+  w?: number;
 }
 /** A movement line: start, a point it bends through, and end. */
 export interface PlayLine {

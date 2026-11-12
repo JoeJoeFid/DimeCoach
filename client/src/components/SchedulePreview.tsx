@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Plan } from '../types';
-import { fmtClock, fmtDateShort, fmtDuration, schedule } from '../util';
+import { fmtClock, fmtDateShort, fmtDuration, planMinutes, schedule } from '../util';
+import { useApp } from '../App';
+import CategoryRows from './CategoryRows';
 
 const MAX_ROWS = 18;
-const WIDTH = 330;
+const WIDTH = 640;
 
 /**
  * A small "Preview" button. Hovering or focusing it shows the practice's schedule in a
@@ -16,6 +18,17 @@ export default function SchedulePreview({ plan, label = 'Preview' }: { plan: Pla
   const [pinned, setPinned] = useState(false);
   const [place, setPlace] = useState<{ left: number; top?: number; bottom?: number }>({ left: 0, top: 0 });
   const button = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const { sportTags } = useApp();
+  const mins = planMinutes(plan, new Set(sportTags.map((t) => t.id)));
+  // Once it is on screen its real height is known: move it up if it would run off the bottom.
+  useLayoutEffect(() => {
+    const el = pop.current;
+    if (!open || !el) return;
+    const r = el.getBoundingClientRect();
+    if (r.bottom > window.innerHeight - 8) setPlace((p) => ({ left: p.left, top: Math.max(8, window.innerHeight - r.height - 8) }));
+    else if (r.top < 8) setPlace((p) => ({ left: p.left, top: 8 }));
+  }, [open]);
 
   const rows = plan.items.slice(0, MAX_ROWS);
   const slots = schedule(plan.start_time, plan.items);
@@ -85,7 +98,7 @@ export default function SchedulePreview({ plan, label = 'Preview' }: { plan: Pla
       </button>
       {open &&
         createPortal(
-          <div className="preview-pop" role="tooltip" style={{ ...place, width: WIDTH }}>
+          <div ref={pop} className="preview-pop" role="tooltip" style={{ ...place, width: Math.min(WIDTH, window.innerWidth - 16) }}>
             <div className="preview-head">
               <strong>{plan.title || 'Practice'}</strong>
               <span>
@@ -98,16 +111,25 @@ export default function SchedulePreview({ plan, label = 'Preview' }: { plan: Pla
                   .join(' · ')}
               </span>
             </div>
-            <ol className="preview-rows">
-              {rows.map((it, i) => (
-                <li key={i} className={it.kind}>
-                  {timed && <span className="preview-time">{fmtClock(slots[i].start)}</span>}
-                  <span className="preview-title">{it.title || (it.kind === 'break' ? 'Break' : 'Untitled')}</span>
-                  <span className="preview-dur">{timed || !it.reps ? `${it.duration_min}m` : it.reps}</span>
-                </li>
-              ))}
-            </ol>
-            {plan.items.length > MAX_ROWS && <div className="preview-more">and {plan.items.length - MAX_ROWS} more</div>}
+            <div className="preview-cols">
+              <div>
+                <h4>Activities</h4>
+                <ol className="preview-rows">
+                  {rows.map((it, i) => (
+                    <li key={i} className={it.kind}>
+                      {timed && <span className="preview-time">{fmtClock(slots[i].start)}</span>}
+                      <span className="preview-title">{it.title || (it.kind === 'break' ? 'Break' : 'Untitled')}</span>
+                      <span className="preview-dur">{timed || !it.reps ? `${it.duration_min}m` : it.reps}</span>
+                    </li>
+                  ))}
+                </ol>
+                {plan.items.length > MAX_ROWS && <div className="preview-more">and {plan.items.length - MAX_ROWS} more</div>}
+              </div>
+              <div className="preview-cats">
+                <h4>Categories</h4>
+                <CategoryRows mins={mins} tags={sportTags} empty="No categories are set on this one." />
+              </div>
+            </div>
           </div>,
           document.body,
         )}

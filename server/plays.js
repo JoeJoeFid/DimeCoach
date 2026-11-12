@@ -34,7 +34,8 @@ function cleanFrames(input) {
       .map((o) => {
         const id = str(o?.id, 24);
         if (MARKS.includes(o?.type)) {
-          const mark = { id, type: o.type, x: num(o.x), y: num(o.y), label: str(o.label, 40) };
+          // A text label can run to a sentence, since it wraps inside its box. Player labels stay short.
+          const mark = { id, type: o.type, x: num(o.x), y: num(o.y), label: str(o.label, o.type === 'text' ? 120 : 40) };
           if (HEX.test(String(o.color))) mark.color = String(o.color).toLowerCase();
           if (o.hasBall === true && (o.type === 'o' || o.type === 'x')) mark.hasBall = true;
           if (o.type === 'text') {
@@ -44,6 +45,9 @@ function cleanFrames(input) {
             if (['serif', 'mono', 'hand'].includes(o.font)) mark.font = o.font;
             if (o.bold === false) mark.bold = false;
             if (o.italic === true) mark.italic = true;
+            // A width for the label's box: its words wrap inside it.
+            const w = Number(o.w);
+            if (Number.isFinite(w) && w > 0) mark.w = Math.round(Math.min(60, Math.max(1.5, w)) * 100) / 100;
           }
           return mark;
         }

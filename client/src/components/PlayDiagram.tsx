@@ -322,16 +322,62 @@ function textStyle(mark: PlayMark): CSSProperties | undefined {
   return Object.keys(style).length ? style : undefined;
 }
 
+let measurer: CanvasRenderingContext2D | null | undefined;
+/** How wide some words are when lettered the way a label is, in feet on the court. */
+function textWidth(text: string, mark: PlayMark, size: number) {
+  if (measurer === undefined) measurer = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+  // With nothing to measure with, a fair guess for this weight of lettering.
+  if (!measurer) return text.length * size * 0.56;
+  const root = getComputedStyle(document.documentElement);
+  const family = (mark.font ? TEXT_FONTS[mark.font] : 'var(--sans)').replace(/var\((--[a-z-]+)\)/g, (_m, name) => root.getPropertyValue(name).trim() || 'sans-serif');
+  measurer.font = `${mark.italic ? 'italic ' : ''}${mark.bold === false ? 400 : 600} 100px ${family}`;
+  return (measurer.measureText(text).width / 100) * size;
+}
+/**
+ * A label laid out in its box: the lines its words break into, and the box's size. A label with
+ * no width of its own is one line, as wide as its words. A word longer than the box keeps its line.
+ */
+export function textBox(mark: PlayMark) {
+  const size = mark.size ?? TEXT_SIZE;
+  const text = mark.label || 'Text';
+  const lineHeight = size * 1.22;
+  const lines: string[] = [];
+  if (!mark.w) lines.push(text);
+  else {
+    let line = '';
+    for (const word of text.split(/\s+/).filter(Boolean)) {
+      const longer = line ? `${line} ${word}` : word;
+      if (line && textWidth(longer, mark, size) > mark.w) {
+        lines.push(line);
+        line = word;
+      } else line = longer;
+    }
+    lines.push(line);
+  }
+  const width = mark.w ?? Math.max(...lines.map((l) => textWidth(l, mark, size)));
+  return { lines, width, height: lines.length * lineHeight, lineHeight };
+}
+
 export function MarkShape({ mark, selected }: { mark: PlayMark; selected?: boolean }) {
   const cls = `play-mark ${mark.type} ${mark.hasBall ? 'has-ball' : ''} ${selected ? 'selected' : ''}`;
   if (mark.type === 'ball') return <circle className={cls} cx={mark.x} cy={mark.y} r={0.8} />;
   if (mark.type === 'cone') return <path className={cls} d={`M ${mark.x} ${mark.y - 1} L ${mark.x + 0.9} ${mark.y + 0.8} L ${mark.x - 0.9} ${mark.y + 0.8} Z`} />;
-  if (mark.type === 'text')
+  if (mark.type === 'text') {
+    const box = textBox(mark);
     return (
-      <text className={cls} x={mark.x} y={mark.y} textAnchor="middle" dominantBaseline="central" style={textStyle(mark)}>
-        {mark.label || 'Text'}
-      </text>
+      <g className={cls}>
+        {/* The label's box: what is grabbed to move it, and outlined while it is selected. */}
+        <rect className="text-box" x={mark.x - box.width / 2 - 0.5} y={mark.y - box.height / 2 - 0.25} width={box.width + 1} height={box.height + 0.5} rx={0.4} />
+        <text x={mark.x} y={mark.y - box.height / 2 + box.lineHeight / 2} textAnchor="middle" dominantBaseline="central" style={textStyle(mark)}>
+          {box.lines.map((line, i) => (
+            <tspan key={i} x={mark.x} dy={i === 0 ? 0 : box.lineHeight}>
+              {line}
+            </tspan>
+          ))}
+        </text>
+      </g>
     );
+  }
   // A player's own color, if one was chosen, replaces the default ink.
   const style = mark.color ? ({ '--mark-color': mark.color } as CSSProperties) : undefined;
   return (
