@@ -4,6 +4,7 @@ import { useApp } from '../App';
 import { Field, Modal } from '../components/bits';
 import RegistrationCard from '../components/RegistrationCard';
 import { confirmDialog, promptDialog } from '../components/dialogs';
+import { deleteLater, usePendingDeletes } from '../components/toasts';
 import { SpaceMeter, fmtSpace } from '../components/SpaceMeter';
 
 const fmtWhen = (iso: string | null) =>
@@ -46,6 +47,8 @@ export default function SystemAdmin() {
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   /** The person whose sign-ins and activity are open. */
   const [viewing, setViewing] = useState<SystemUser | null>(null);
+  /** The person being given a new password. */
+  const [passwordFor, setPasswordFor] = useState<SystemUser | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   /** Cap boxes being typed in, by user id. Absent means the box shows the saved value. */
@@ -136,16 +139,60 @@ export default function SystemAdmin() {
     }
     run(() => api.adminUpdateUser(u.id, { status }), status === 'disabled' ? `${u.name}'s account is turned off.` : `${u.name}'s account is back on.`);
   };
-  const resetPassword = async (u: SystemUser) => {
-    const password = await promptDialog({
-      title: `New starting password for ${u.name}`,
-      body: 'At least 10 characters. They are signed out everywhere and must replace it at next sign-in.',
-      confirmLabel: 'Set password',
+  /** Deletes an account and everything in it. Three separate confirmations, the last one typed. */
+  const deleteAccount = async (u: SystemUser) => {
+    let what;
+    try {
+      what = await api.systemDeletion(u.id);
+    } catch (e) {
+      setNotice('');
+      return setError((e as Error).message);
+    }
+    const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+    const goes = [count(what.teams, 'team'), count(what.plans, 'practice and homework plan', 'practice and homework plans'), count(what.drills, 'drill'), count(what.plays, 'play'), count(what.files, 'uploaded file')].join(', ');
+    const also = [
+      what.helpers > 0 && `${count(what.helpers, 'person', 'people')} helping on their teams will lose that access.`,
+      what.communities_deleted.length > 0 && `Deleted with it: the communit${what.communities_deleted.length === 1 ? 'y' : 'ies'} ${what.communities_deleted.join(', ')}, which ${what.communities_deleted.length === 1 ? 'has' : 'have'} no other members.`,
+      what.communities_passed_on.length > 0 && `Handed to another member: ${what.communities_passed_on.join(', ')}.`,
+    ].filter(Boolean);
+    const first = await confirmDialog({
+      title: `Delete ${u.name}'s account?`,
+      body: `This removes ${u.email} and everything in their workspace: ${goes}. ${also.join(' ')} To keep their work and only stop them signing in, use "Turn off" instead.`,
+      confirmLabel: 'Continue',
+      danger: true,
     });
-    if (password) run(() => api.adminUpdateUser(u.id, { password }), `Password reset for ${u.email}. Pass the new one to them yourself.`);
+    if (!first) return;
+    const second = await confirmDialog({
+      title: 'This cannot be undone',
+      body: `Once deleted, ${u.name}'s teams, practices, drills, plays and uploads cannot be brought back from inside Dime Coach. If there is any chance you will want them, cancel now and download a backup first.`,
+      confirmLabel: 'I understand, go on',
+      danger: true,
+    });
+    if (!second) return;
+    const typed = await promptDialog({
+      title: `Type ${u.email} to delete the account`,
+      body: 'This is the last step. The account is deleted as soon as you confirm.',
+      confirmLabel: 'Delete account for good',
+    });
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== u.email.toLowerCase()) {
+      setNotice('');
+      return setError('That did not match the email address, so nothing was deleted.');
+    }
+    setError('');
+    setNotice('');
+    // One last way back: the account only really goes when the ten seconds are up.
+    deleteLater({
+      key: `user:${u.id}`,
+      message: `Deleted ${u.name}'s account.`,
+      run: () => api.systemDeleteUser(u.id, typed.trim()),
+      done: load,
+      failed: setError,
+    });
   };
 
-  const users = state?.users ?? [];
+  const gone = usePendingDeletes();
+  const users = (state?.users ?? []).filter((u) => !gone.has(`user:${u.id}`));
   const over = users.filter((u) => u.used_bytes >= u.cap_mb * MB && u.used_bytes > 0).length;
 
   return (
@@ -320,12 +367,19 @@ export default function SystemAdmin() {
                               {u.is_admin ? 'Remove admin' : 'Make admin'}
                             </button>
                           )}
-                          <button className="btn small" onClick={() => resetPassword(u)}>
-                            Reset password
-                          </button>
+                          {u.id !== me.id && (
+                            <button className="btn small" onClick={() => setPasswordFor(u)}>
+                              Set password
+                            </button>
+                          )}
                           {!u.is_system_admin && u.status !== 'pending' && (
                             <button className={`btn small ${u.status === 'active' ? 'danger' : ''}`} onClick={() => setStatus(u, u.status === 'active' ? 'disabled' : 'active')}>
                               {u.status === 'active' ? 'Turn off' : 'Turn on'}
+                            </button>
+                          )}
+                          {!u.is_system_admin && u.id !== me.id && (
+                            <button className="btn small danger" onClick={() => deleteAccount(u)}>
+                              Delete account
                             </button>
                           )}
                         </span>
@@ -394,7 +448,57 @@ export default function SystemAdmin() {
         </>
       )}
       {viewing && <ActivityModal person={viewing} onClose={() => setViewing(null)} />}
+      {passwordFor && (
+        <PasswordModal
+          person={passwordFor}
+          onClose={() => setPasswordFor(null)}
+          onSave={(password, mustChange) => {
+            const u = passwordFor;
+            setPasswordFor(null);
+            run(
+              () => api.systemUpdateUser(u.id, { password, must_change: mustChange }),
+              `${u.name} has a new password and has been signed out everywhere. Pass it to them yourself.${mustChange ? ' They will be asked to choose their own when they sign in.' : ''}`,
+            );
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Gives someone a new password, with the choice of making them replace it themselves. */
+function PasswordModal({ person, onClose, onSave }: { person: SystemUser; onClose: () => void; onSave: (password: string, mustChange: boolean) => void }) {
+  const [password, setPassword] = useState('');
+  const [mustChange, setMustChange] = useState(true);
+  return (
+    <Modal title={`Set a password for ${person.name}`} onClose={onClose}>
+      <form
+        className="fields stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave(password, mustChange);
+        }}
+      >
+        <p className="muted small">
+          {person.email} is signed out everywhere and signs in with this password from now on. Nobody is emailed: pass it to them yourself.
+        </p>
+        <Field label="New password (at least 10 characters)">
+          <input className="input" autoFocus required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
+        </Field>
+        <label className="check">
+          <input type="checkbox" checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} />
+          Ask them to choose their own password when they next sign in
+        </label>
+        <div className="modal-foot">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn primary" disabled={password.length < 10}>
+            Set password
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

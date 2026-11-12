@@ -4,6 +4,7 @@ import { useApp } from '../App';
 import type { Tag } from '../types';
 import { SCOPES, TAG_COLORS } from '../util';
 import { confirmDialog } from '../components/dialogs';
+import { deleteLater, usePendingDeletes } from '../components/toasts';
 
 const toNumber = (v: string) => (v.trim() === '' ? null : Math.min(100, Math.max(0, Number(v) || 0)));
 
@@ -12,6 +13,7 @@ export default function Tags() {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
 
+  const gone = usePendingDeletes();
   const run = async (fn: () => Promise<unknown>) => {
     try {
       await fn();
@@ -59,7 +61,7 @@ export default function Tags() {
               </tr>
             </thead>
             <tbody>
-              {sportTags.map((t) => (
+              {sportTags.filter((t) => !gone.has(`tag:${t.id}`)).map((t) => (
                 <TagRow
                   key={t.id}
                   tag={t}
@@ -71,7 +73,7 @@ export default function Tags() {
                       confirmLabel: 'Delete category',
                       danger: true,
                     });
-                    if (ok) run(() => api.deleteTag(t.id));
+                    if (ok) deleteLater({ key: `tag:${t.id}`, message: `Deleted the category "${t.name}".`, run: () => api.deleteTag(t.id), done: reload, failed: setError });
                   }}
                 />
               ))}

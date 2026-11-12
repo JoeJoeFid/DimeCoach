@@ -555,6 +555,95 @@ export function mountAuth(app) {
       if (target.email.toLowerCase() === SYSTEM_ADMIN_EMAIL && !b.is_admin) return res.status(400).json({ error: 'The system administrator account cannot be demoted.' });
       run('UPDATE users SET is_admin=? WHERE id=?', b.is_admin ? 1 : 0, target.id);
     }
+    // A new password for someone. They are signed out everywhere. Unless told otherwise they must
+    // replace it with one of their own at their next sign-in.
+    if (b.password !== undefined) {
+      const problem = passwordProblem(b.password);
+      if (problem) return res.status(400).json({ error: problem });
+      if (target.id === req.user.id) return res.status(400).json({ error: 'Change your own password under your account.' });
+      run('UPDATE users SET password_hash=?, must_change_password=? WHERE id=?', hashPassword(str(b.password)), b.must_change === false ? 0 : 1, target.id);
+      endSessions(target.id);
+    }
+    res.json(systemOut());
+  });
+
+  // --- Deleting an account for good ---
+  /** The workspaces that belong to this person alone. Their contents go when the account goes. */
+  const ownWorkspaces = (userId) =>
+    all(
+      `SELECT m.owner_id AS id FROM memberships m WHERE m.user_id=? AND m.role='owner'
+         AND NOT EXISTS (SELECT 1 FROM memberships o WHERE o.owner_id=m.owner_id AND o.user_id<>m.user_id)`,
+      userId,
+    ).map((r) => r.id);
+  /** What deleting an account would remove, counted, so it can be shown before anything happens. */
+  const deletionOf = (u) => {
+    const owners = ownWorkspaces(u.id);
+    const inOwners = owners.length ? `owner_id IN (${owners.join(',')})` : '0';
+    const n = (sql, ...args) => get(sql, ...args).n;
+    const made = all('SELECT id, name FROM communities WHERE created_by=?', u.id).map((c) => ({
+      ...c,
+      others: n("SELECT COUNT(*) AS n FROM community_members WHERE community_id=? AND user_id<>? AND status='active'", c.id, u.id),
+    }));
+    return {
+      teams: n(`SELECT COUNT(*) AS n FROM teams WHERE ${inOwners}`),
+      plans: n(`SELECT COUNT(*) AS n FROM plans WHERE ${inOwners}`),
+      drills: n(`SELECT COUNT(*) AS n FROM drills WHERE ${inOwners}`),
+      plays: n(`SELECT COUNT(*) AS n FROM plays WHERE ${inOwners}`),
+      files: n(`SELECT COUNT(*) AS n FROM images WHERE ${inOwners}`),
+      /** People helping on this person's teams, who lose that access. */
+      helpers: n(`SELECT COUNT(DISTINCT s.user_id) AS n FROM team_staff s JOIN teams t ON t.id=s.team_id WHERE t.${inOwners}`),
+      /** Communities they started that have other members: these are handed to another member. */
+      communities_passed_on: made.filter((c) => c.others > 0).map((c) => c.name),
+      /** Communities they started with nobody else in them: these are deleted. */
+      communities_deleted: made.filter((c) => c.others === 0).map((c) => c.name),
+    };
+  };
+  const deletable = (req, res) => {
+    const target = get('SELECT * FROM users WHERE id=?', Number(req.params.id));
+    if (!target) return void res.status(404).json({ error: 'Not found' });
+    if (target.id === req.user.id) return void res.status(400).json({ error: 'You cannot delete your own account.' });
+    if (target.email.toLowerCase() === SYSTEM_ADMIN_EMAIL) return void res.status(400).json({ error: 'The system administrator account cannot be deleted.' });
+    return target;
+  };
+  app.get('/api/system/users/:id/deletion', systemOnly, (req, res) => {
+    const target = deletable(req, res);
+    if (target) res.json(deletionOf(target));
+  });
+  // The request must repeat the person's email address, so a stray or replayed call cannot delete anyone.
+  app.delete('/api/system/users/:id', systemOnly, (req, res) => {
+    const target = deletable(req, res);
+    if (!target) return;
+    if (normEmail(req.body?.confirm_email) !== target.email.toLowerCase()) return res.status(400).json({ error: 'Type the email address of the account exactly to confirm.' });
+    const owners = ownWorkspaces(target.id);
+    const files = owners.length ? all(`SELECT filename FROM images WHERE owner_id IN (${owners.join(',')})`).map((f) => f.filename) : [];
+    const ownerTables = all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+      .map((t) => t.name)
+      .filter((t) => t !== 'owners' && all(`PRAGMA table_info("${t}")`).some((c) => c.name === 'owner_id'));
+    tx(() => {
+      // Communities they started: pass each on to the longest-standing other member, admins first. Empty ones go.
+      for (const c of all('SELECT id FROM communities WHERE created_by=?', target.id)) {
+        const heir = get(
+          "SELECT user_id FROM community_members WHERE community_id=? AND user_id<>? AND status='active' ORDER BY role='admin' DESC, created_at, user_id LIMIT 1",
+          c.id, target.id,
+        );
+        if (!heir) run('DELETE FROM communities WHERE id=?', c.id);
+        else {
+          run('UPDATE communities SET created_by=? WHERE id=?', heir.user_id, c.id);
+          run("UPDATE community_members SET role='creator' WHERE community_id=? AND user_id=?", c.id, heir.user_id);
+        }
+      }
+      for (const owner of owners) {
+        // Children before the things they point at. Rows hanging off these (plan items, rosters, helpers) go with them.
+        for (const t of ['community_shares', 'resources', 'plans', 'events', 'players', 'teams', 'drills', 'plays', 'tags', 'images', 'settings', 'sports'])
+          if (ownerTables.includes(t)) run(`DELETE FROM "${t}" WHERE owner_id=?`, owner);
+        // Anything added since that also belongs to a workspace.
+        for (const t of ownerTables) run(`DELETE FROM "${t}" WHERE owner_id=?`, owner);
+        run('DELETE FROM owners WHERE id=?', owner);
+      }
+      // Sign-ins, community memberships and posts, and help given on other people's teams go with the account.
+      run('DELETE FROM users WHERE id=?', target.id);
+    });
+    for (const f of files) fs.rm(path.join(path.dirname(dbPath), 'uploads', path.basename(f)), { force: true }, () => {});
     res.json(systemOut());
   });
 

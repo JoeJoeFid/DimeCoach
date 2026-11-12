@@ -4,6 +4,7 @@ import { SIGNED_OUT_EVENT, api, type AuthStatus, type Bootstrap, type User } fro
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { sportKind } from './sports';
 import { DialogHost } from './components/dialogs';
+import { ToastHost, flushDeletes } from './components/toasts';
 import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
 import TeamPicker from './components/TeamPicker';
@@ -154,6 +155,7 @@ export default function App() {
     <>
       {view}
       <DialogHost />
+      <ToastHost />
     </>
   );
 }
@@ -262,6 +264,8 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
 
   const needsTeam = !state.team;
   const signOut = async () => {
+    // Anything deleted in the last few seconds goes through before the session ends.
+    flushDeletes();
     await api.logout().catch(() => {});
     onChanged();
   };

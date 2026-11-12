@@ -7,6 +7,7 @@ import { fmtClock, fmtDateShort, fmtDuration, fmtSynced, parseClock, planMinutes
 import { KIND_LABEL, PLAN_STATE_LABEL, buildSchedule, nextEntry, planStateOf, type ScheduleEntry } from '../schedule';
 import { TagChip } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
+import { deleteLater, useCompletedDeletes, usePendingDeletes } from '../components/toasts';
 import SchedulePreview from '../components/SchedulePreview';
 import PlanCalendar from '../components/PlanCalendar';
 import { CommunityPicker } from '../components/community';
@@ -97,8 +98,17 @@ export default function Plans({ kind }: { kind: PlanKind }) {
 
   const today = todayISO();
   const tagIds = useMemo(() => new Set(sportTags.map((t) => t.id)), [sportTags]);
-  const entries = useMemo(() => buildSchedule(plans || [], events), [plans, events]);
+  // Something just deleted is left out straight away, though it can still be undone for a few seconds.
+  const gone = usePendingDeletes();
+  // A practice deleted from its own page is gone for real once the time to undo runs out: read the list again then.
+  const deletes = useCompletedDeletes();
+  useEffect(() => {
+    if (deletes > 0) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deletes]);
+  const entries = useMemo(() => buildSchedule((plans || []).filter((p) => !gone.has(`plan:${p.id}`)), events), [plans, events, gone]);
   const next = useMemo(() => nextEntry(entries, today), [entries, today]);
+  const shownTemplates = templates.filter((t) => !gone.has(`plan:${t.id}`));
 
   // Open the page with what is coming up in the middle of the screen: the past above it, the rest
   // of the season below. Clicking the menu link again while here brings it back to the middle.
@@ -173,8 +183,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const remove = (p: PlanSummary, what: string) =>
     act(async () => {
       if (!(await confirmDialog({ title: `Delete this ${what}?`, body: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return;
-      await api.deletePlan(p.id);
-      await load();
+      deleteLater({ key: `plan:${p.id}`, message: `Deleted the ${what}.`, run: () => api.deletePlan(p.id), done: load, failed: setError });
     });
 
   const row = (e: ScheduleEntry, i: number) => {
@@ -296,10 +305,10 @@ export default function Plans({ kind }: { kind: PlanKind }) {
               </button>
             </div>
           )}
-          {templates.length > 0 && (
+          {shownTemplates.length > 0 && (
             <select className="input" aria-label="Start from a template" value="" onChange={(e) => e.target.value && create(Number(e.target.value))}>
               <option value="">New from template…</option>
-              {templates.map((t) => (
+              {shownTemplates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.title}
                 </option>
@@ -370,11 +379,11 @@ export default function Plans({ kind }: { kind: PlanKind }) {
         <ul className="plan-list">{entries.map(row)}</ul>
       )}
 
-      {templates.length > 0 && (
+      {shownTemplates.length > 0 && (
         <>
           <h2 className="section-title">Templates</h2>
           <ul className="plan-list">
-            {templates.map((t) => (
+            {shownTemplates.map((t) => (
               <li key={t.id} className="plan-row">
                 <Link to={`/plans/${t.id}`} className="plan-main">
                   <span className="plan-title">{t.title || 'Untitled template'}</span>

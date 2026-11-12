@@ -8,6 +8,7 @@ import { normalizeUrl } from '../components/ItemMedia';
 import { ResourceThumb, fileUrl, searchText } from '../components/ResourcePicker';
 import { Modal } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
+import { deleteLater, usePendingDeletes } from '../components/toasts';
 
 type Filter = 'all' | Resource['kind'];
 const FILTERS: { id: Filter; label: string }[] = [
@@ -105,7 +106,13 @@ export default function Resources() {
       confirmLabel: 'Remove',
       danger: true,
     });
-    if (ok) run(() => api.deleteResource(r.resource_id!));
+    if (ok)
+      deleteLater({
+        key: `resource:${r.resource_id}`,
+        message: `Removed "${r.title}".`,
+        run: async () => setResources(await api.deleteResource(r.resource_id!)),
+        failed: setError,
+      });
   };
 
   const counts = useMemo(() => {
@@ -116,7 +123,8 @@ export default function Resources() {
     }
     return c;
   }, [resources]);
-  const shown = (resources || []).filter((r) => (filter === 'all' || r.kind === filter) && (!q.trim() || searchText(r).includes(q.trim().toLowerCase())));
+  const gone = usePendingDeletes();
+  const shown = (resources || []).filter((r) => !(r.resource_id && gone.has(`resource:${r.resource_id}`)) && (filter === 'all' || r.kind === filter) && (!q.trim() || searchText(r).includes(q.trim().toLowerCase())));
 
   return (
     <div className="page">

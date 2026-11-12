@@ -33,6 +33,7 @@ import { HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, source
 import Attachments from '../components/Attachments';
 import { Field, Modal } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
+import { deleteLater } from '../components/toasts';
 import { TAG_COLORS } from '../util';
 import { useApp } from '../App';
 import { LINE_WORDS, PLAY_CATEGORIES_BY_SPORT, SURFACES, lineups, moveBetween, sportKind, type Lineup, type SportKind } from '../sports';
@@ -712,9 +713,10 @@ export default function PlayEditor() {
   };
   const remove = async () => {
     if (!(await confirmDialog({ title: `Delete "${play.name}"?`, body: 'It is also removed from any practice items it is attached to.', confirmLabel: 'Delete play', danger: true }))) return;
-    window.clearTimeout(timer.current);
+    // Saved as it stands, so undoing the delete brings back exactly what was here.
+    await flush();
     latest.current = null;
-    await api.deletePlay(play.id);
+    deleteLater({ key: `play:${play.id}`, message: `Deleted the play "${play.name || 'Untitled play'}".`, run: () => api.deletePlay(play.id) });
     navigate('/playbook');
   };
   const duplicate = async () => {

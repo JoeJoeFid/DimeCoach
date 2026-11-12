@@ -8,6 +8,7 @@ import SportIcon from '../components/SportIcon';
 import { fmtSynced } from '../util';
 import { SPORT_CHOICES, sportKind, surfaceWord } from '../sports';
 import { confirmDialog } from '../components/dialogs';
+import { deleteLater, usePendingDeletes } from '../components/toasts';
 
 type Cell = string | number | boolean | Date | null | undefined;
 type NewPlayer = Partial<Player> & { name: string };
@@ -77,7 +78,10 @@ export default function Teams() {
   const [selectedId, setSelectedId] = useState<number>(app.team?.id || 0);
   const [adding, setAdding] = useState(app.teams.length === 0);
   const [error, setError] = useState('');
-  const selected = app.teams.find((t) => t.id === selectedId) || app.teams[0] || null;
+  // A team deleted a moment ago is left out of this page, though the delete can still be undone.
+  const gone = usePendingDeletes();
+  const teams = app.teams.filter((t) => !gone.has(`team:${t.id}`));
+  const selected = teams.find((t) => t.id === selectedId) || teams[0] || null;
 
   return (
     <div className="page">
@@ -97,7 +101,7 @@ export default function Teams() {
       {error && <p className="error">{error}</p>}
       {!app.access && app.shared_teams.length > 0 && <SharedTeams onError={setError} />}
 
-      {app.teams.length === 0 ? (
+      {teams.length === 0 ? (
         <div className="empty">
           <h2>Create your first team</h2>
           <p>Everything in Dime Coach belongs to a team, so start here.</p>
@@ -108,7 +112,7 @@ export default function Teams() {
       ) : (
         <div className="teams-layout">
           <ul className="team-list">
-            {app.teams.map((t) => (
+            {teams.map((t) => (
               <li key={t.id}>
                 <button className={selected?.id === t.id ? 'on' : ''} onClick={() => setSelectedId(t.id)}>
                   <strong>{t.name}</strong>
@@ -396,6 +400,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
   const [pending, setPending] = useState<NewPlayer[] | null>(null);
   const [notice, setNotice] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
+  const gone = usePendingDeletes();
 
   const load = useCallback(async () => {
     try {
@@ -433,10 +438,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
       danger: true,
     });
     if (!ok) return;
-    guard(async () => {
-      await api.deleteTeam(team.id);
-      await app.reload();
-    });
+    deleteLater({ key: `team:${team.id}`, message: `Deleted the team "${team.name}".`, run: () => api.deleteTeam(team.id), done: app.reload, failed: onError });
   };
   const savePlayer = (p: Player) =>
     guard(async () => {
@@ -541,7 +543,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
                 </tr>
               </thead>
               <tbody>
-                {players.map((p) => (
+                {players.filter((p) => !gone.has(`player:${p.id}`)).map((p) => (
                   <PlayerRow
                     key={p.id}
                     player={p}
@@ -553,11 +555,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
                         confirmLabel: 'Remove player',
                         danger: true,
                       });
-                      if (ok)
-                        guard(async () => {
-                          await api.deletePlayer(p.id);
-                          await load();
-                        });
+                      if (ok) deleteLater({ key: `player:${p.id}`, message: `Removed ${p.name} from the roster.`, run: () => api.deletePlayer(p.id), done: load, failed: onError });
                     }}
                   />
                 ))}

@@ -6,6 +6,8 @@ export const SIGNED_OUT_EVENT = 'practiceplan:signed-out';
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch('/api' + url, {
     method,
+    // A delete still on its way when the tab closes is allowed to finish.
+    keepalive: method === 'DELETE',
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -108,6 +110,17 @@ export interface UserActivity {
   sign_ins_30d: number;
   days_active_30d: number;
   built: { teams: number; practices: number; homework: number; drills: number; plays: number; communities: number; shared_teams: number; last_plan_edit: string | null };
+}
+/** What deleting an account would remove. */
+export interface AccountDeletion {
+  teams: number;
+  plans: number;
+  drills: number;
+  plays: number;
+  files: number;
+  helpers: number;
+  communities_passed_on: string[];
+  communities_deleted: string[];
 }
 export interface SystemState {
   default_cap_mb: number;
@@ -233,9 +246,11 @@ export const api = {
     req<AdminUser>('PUT', `/admin/users/${id}`, b),
   adminSettings: () => req<AdminSettings>('GET', '/admin/settings'),
   system: () => req<SystemState>('GET', '/system'),
+  systemDeletion: (id: number) => req<AccountDeletion>('GET', `/system/users/${id}/deletion`),
+  systemDeleteUser: (id: number, confirmEmail: string) => req<SystemState>('DELETE', `/system/users/${id}`, { confirm_email: confirmEmail }),
   systemUserActivity: (id: number) => req<UserActivity>('GET', `/system/users/${id}/activity`),
   systemSetDefaults: (b: { default_cap_mb: number }) => req<SystemState>('PUT', '/system/settings', b),
-  systemUpdateUser: (id: number, b: { upload_cap_mb?: number | null; is_admin?: boolean }) => req<SystemState>('PUT', `/system/users/${id}`, b),
+  systemUpdateUser: (id: number, b: { upload_cap_mb?: number | null; is_admin?: boolean; password?: string; must_change?: boolean }) => req<SystemState>('PUT', `/system/users/${id}`, b),
   storage: () => req<StorageSpace>('GET', '/storage'),
   /** First visit only: fills an empty site from a backup file made by another copy of Dime Coach. */
   restore: async (file: File, setupToken: string) => {

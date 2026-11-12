@@ -6577,3 +6577,209 @@ fieldset.plain {
   flex: 1;
   justify-content: center;
 }
+
+/* ---------- Practice editor: the schedule in its own tinted box; summary and earlier practices on the right ---------- */
+.plan-column {
+  padding: 14px 14px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-edge) 55%, var(--line));
+  border-radius: calc(var(--radius) + 4px);
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg));
+}
+.plan-column-title {
+  margin: 0 0 12px 4px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.plan-column > .empty {
+  background: var(--surface);
+}
+.plan-side {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.plan-side .plan-glance {
+  position: static;
+}
+.plan-previous {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 14px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.plan-previous h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.plan-previous p {
+  margin: 0;
+}
+.previous-list {
+  list-style: none;
+  margin: 0 -6px;
+  padding: 0;
+}
+.previous-list a {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 0.88rem;
+  text-decoration: none;
+}
+.previous-list a:hover,
+.previous-list a:focus-visible,
+.previous-list a.on {
+  background: var(--surface-3);
+}
+.previous-list a span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.previous-summary {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  pointer-events: none;
+}
+.previous-summary h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.previous-items {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 3px;
+  font-size: 0.86rem;
+}
+.previous-items li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.previous-items li > span:nth-of-type(1) {
+  flex: 1;
+  min-width: 0;
+  font-weight: 550;
+}
+.previous-items li.break > span:nth-of-type(1) {
+  font-weight: 400;
+  color: var(--muted);
+}
+.previous-items time {
+  flex: none;
+  width: 38px;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--ink-2);
+}
+@media (max-width: 1100px) {
+  .plan-side {
+    position: static;
+    margin-top: 16px;
+  }
+  .plan-side .plan-glance {
+    margin-top: 0;
+  }
+}
+
+/* ---------- Confirmations in the lower right corner, with a ten-second Undo ---------- */
+.toast-stack {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(380px, calc(100vw - 40px));
+}
+.toast {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px 14px 16px;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: var(--shadow-3);
+  animation: toast-in 0.18s ease-out;
+}
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 550;
+  line-height: 1.35;
+}
+.toast .toast-undo {
+  flex: none;
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.toast .toast-close {
+  flex: none;
+  color: inherit;
+  opacity: 0.7;
+}
+.toast .toast-close:hover {
+  opacity: 1;
+  background: none;
+}
+/* The time left: a bar along the bottom that runs down to nothing. */
+.toast-timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  animation: toast-countdown linear forwards;
+}
+@keyframes toast-countdown {
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media print {
+  .toast-stack {
+    display: none;
+  }
+}

@@ -2,6 +2,7 @@ import { CommunityPicker } from '../components/community';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { useCompletedDeletes, usePendingDeletes } from '../components/toasts';
 import { useApp } from '../App';
 import type { Play } from '../types';
 import { PlayDiagram } from '../components/PlayDiagram';
@@ -28,9 +29,22 @@ export default function Playbook() {
       .catch((e) => setError((e as Error).message));
   }, [sport?.id]);
 
+  // A play deleted from its own page a few seconds ago is gone for real once the time to undo runs out.
+  const deletes = useCompletedDeletes();
+  useEffect(() => {
+    if (deletes === 0) return;
+    api
+      .plays()
+      .then((all) => setPlays(all.filter((p) => p.sport_id === sport?.id)))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deletes]);
+
   const categories = useMemo(() => [...new Set((plays || []).map((p) => p.category).filter(Boolean))].sort(), [plays]);
   const labels = useMemo(() => [...new Set((plays || []).flatMap((p) => p.labels))].sort(), [plays]);
-  const shown = (plays || []).filter(
+  // A play deleted a moment ago is left out, though the delete can still be undone.
+  const gone = usePendingDeletes();
+  const shown = (plays || []).filter((p) => !gone.has(`play:${p.id}`)).filter(
     (p) =>
       (!category || p.category === category) &&
       (!label || p.labels.includes(label)) &&

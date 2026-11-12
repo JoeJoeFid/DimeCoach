@@ -6,6 +6,7 @@ import type { Drill, ItemContent, Play } from '../types';
 import ItemBody from '../components/ItemBody';
 import { Field, Modal, TagChip } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
+import { deleteLater, usePendingDeletes } from '../components/toasts';
 import { htmlPreview } from '../util';
 
 type Draft = ItemContent & { id?: number };
@@ -54,12 +55,12 @@ export default function Library() {
   };
   const remove = async (d: Drill) => {
     if (!(await confirmDialog({ title: `Delete "${d.name}" from the library?`, body: 'Practices that already use it keep their copy.', confirmLabel: 'Delete drill', danger: true }))) return;
-    await api.deleteDrill(d.id);
-    await load();
+    deleteLater({ key: `drill:${d.id}`, message: `Deleted the drill "${d.name}".`, run: () => api.deleteDrill(d.id), done: load, failed: setError });
   };
 
+  const gone = usePendingDeletes();
   const shown = (drills || []).filter(
-    (d) => d.name.toLowerCase().includes(q.toLowerCase()) && (tagId === 0 || d.tag_ids.includes(tagId)),
+    (d) => !gone.has(`drill:${d.id}`) && d.name.toLowerCase().includes(q.toLowerCase()) && (tagId === 0 || d.tag_ids.includes(tagId)),
   );
 
   return (

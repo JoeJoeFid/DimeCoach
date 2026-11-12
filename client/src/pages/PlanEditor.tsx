@@ -11,6 +11,7 @@ import ItemBody from '../components/ItemBody';
 import { Field, Modal, MoreMenu, TagChip, type MenuItem } from '../components/bits';
 import { CommunityPicker, ShareDialog } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
+import { deleteLater, showUndo } from '../components/toasts';
 import { DraftReview, SourcePicker, defaultChoices, resolveDraft, useAiStatus, type DraftChoices } from '../components/planImport';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
@@ -174,6 +175,21 @@ export default function PlanEditor() {
     const at = items.findIndex((x) => x.key === it.key);
     // If it led a shared time slot, the next one takes over the slot and does not join whatever is above.
     setItems(items.filter((x) => x.key !== it.key).map((x, i) => (i === at && !it.beside && x.beside ? { ...x, beside: false } : x)));
+    // Only an item with something in it is worth a way back.
+    if (hasContent)
+      showUndo({
+        message: `Removed "${it.title.trim() || 'Untitled item'}".`,
+        // Back where it was, as it was, among whatever the plan holds by then.
+        onUndo: () => {
+          // Only while this same plan is still the one open.
+          const now = latest.current?.id === plan.id ? latest.current.items : null;
+          if (!now || now.some((x) => x.key === it.key)) return;
+          const next = [...now];
+          next.splice(Math.min(at, next.length), 0, it);
+          setItems(next);
+        },
+        onExpire: () => {},
+      });
   };
   /** Puts an item in the time slot of the one above it, or gives it back a slot of its own. */
   const setBeside = (key: string, beside: boolean) => patchItem(key, { beside });
@@ -307,9 +323,11 @@ export default function PlanEditor() {
   };
   const remove = async () => {
     if (!(await confirmDialog({ title: `Delete this ${plan.is_template ? 'template' : isHomework ? 'homework sheet' : 'practice'}?`, body: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return;
-    window.clearTimeout(timer.current);
+    // Saved as it stands, so undoing the delete brings back exactly what was here.
+    await flush();
     latest.current = null;
-    await api.deletePlan(plan.id);
+    const what = plan.is_template ? 'template' : isHomework ? 'homework sheet' : 'practice';
+    deleteLater({ key: `plan:${plan.id}`, message: `Deleted the ${what}${plan.title ? ` "${plan.title}"` : ''}.`, run: () => api.deletePlan(plan.id) });
     navigate(listPath);
   };
   const openPrint = async () => {
@@ -512,6 +530,7 @@ export default function PlanEditor() {
         <div className="plan-layout">
           <Palette drills={libraryDrills} tags={tags} withBreak={!isHomework} sheet={sheet} onAdd={addNew} />
           <div className="plan-column" ref={column}>
+            <h2 className="plan-column-title">{isHomework ? 'Homework' : 'Practice schedule'}</h2>
             {plan.items.length === 0 ? (
               <div className={`empty ${incoming && dropAt !== null ? 'drop-here' : ''}`}>
                 <h2>Nothing scheduled yet</h2>
@@ -584,14 +603,17 @@ export default function PlanEditor() {
             )}
 
           </div>
-          <Glance mins={mins} tags={tags} total={total} ends={!isHomework && slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : ''}>
-            {!plan.is_template && (
-              <button className="btn primary" onClick={openPrint}>
-                Print / share
-              </button>
-            )}
-            <MoreMenu items={moreItems} />
-          </Glance>
+          <div className="plan-side">
+            <Glance mins={mins} tags={tags} total={total} ends={!isHomework && slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : ''}>
+              {!plan.is_template && (
+                <button className="btn primary" onClick={openPrint}>
+                  Print / share
+                </button>
+              )}
+              <MoreMenu items={moreItems} />
+            </Glance>
+            <PreviousPractices current={plan} tags={tags} />
+          </div>
         </div>
         <DragOverlay dropAnimation={null}>{incoming && <div className="palette-tile lifted">{paletteLabel(incoming, drills)}</div>}</DragOverlay>
       </DndContext>
@@ -657,8 +679,9 @@ export default function PlanEditor() {
   );
 }
 
-/** The practice at a glance: which categories it works on, and for how long. */
-function Glance({ mins, tags, total, ends, children }: { mins: ReturnType<typeof planMinutes>; tags: Tag[]; total: number; ends: string; /** Print and the other things to do with the whole plan. */ children: ReactNode }) {
+type Minutes = ReturnType<typeof planMinutes>;
+/** Each category a plan works on with its minutes and share of the working time, most first, then time with no category and breaks. */
+function CategoryRows({ mins, tags, empty }: { mins: Minutes; tags: Tag[]; empty: string }) {
   const rows = tags
     .filter((t) => (mins.byTag.get(t.id) || 0) > 0)
     .map((t) => ({ tag: t, minutes: mins.byTag.get(t.id)! }))
@@ -666,15 +689,9 @@ function Glance({ mins, tags, total, ends, children }: { mins: ReturnType<typeof
   const untagged = mins.byTag.get(0) || 0;
   const share = (m: number) => `${Math.min(100, mins.work > 0 ? Math.round((m / mins.work) * 100) : 0)}%`;
   return (
-    <aside className="plan-glance" aria-label="At a glance">
-      <div className="glance-actions">{children}</div>
-      <h2>At a glance</h2>
-      <p className="glance-total">
-        <strong>{fmtDuration(total)}</strong>
-        {ends && <span className="muted"> · ends {ends}</span>}
-      </p>
+    <>
       {rows.length === 0 ? (
-        <p className="muted small">Add drills that have categories, and this shows where the time goes.</p>
+        <p className="muted small">{empty}</p>
       ) : (
         <ul className="glance-list">
           {rows.map(({ tag, minutes }) => (
@@ -707,7 +724,103 @@ function Glance({ mins, tags, total, ends, children }: { mins: ReturnType<typeof
           )}
         </ul>
       )}
-      {rows.length > 0 && <p className="muted small">A drill with two categories counts toward both.</p>}
+    </>
+  );
+}
+
+const PREVIOUS_SHOWN = 8;
+const SUMMARY_WIDTH = 360;
+/**
+ * The practices before this one. Pointing at one (or tabbing to it) opens a summary beside the
+ * list: what was done and when, and the same category breakdown as "At a glance". Clicking opens it.
+ */
+function PreviousPractices({ current, tags }: { current: Plan; tags: Tag[] }) {
+  const [plans, setPlans] = useState<Plan[] | null>(null);
+  const [shown, setShown] = useState<{ plan: Plan; top: number; right: number } | null>(null);
+  const noun = current.kind === 'homework' ? 'homework' : 'practices';
+  useEffect(() => {
+    let alive = true;
+    api
+      .plansFull(current.team_id, current.kind)
+      .then((all) => alive && setPlans(all))
+      .catch(() => alive && setPlans([]));
+    return () => {
+      alive = false;
+    };
+  }, [current.team_id, current.kind]);
+  // Earlier than this plan's own date, or than today when it has none. Newest first.
+  const before = current.date || new Date().toLocaleDateString('en-CA');
+  const earlier = (plans || [])
+    .filter((p) => p.id !== current.id && !p.is_template && p.items.length > 0 && p.date && p.date <= before)
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, PREVIOUS_SHOWN);
+  const tagIds = new Set(tags.map((t) => t.id));
+  const point = (plan: Plan, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    const box = el.closest('.plan-previous')!.getBoundingClientRect();
+    setShown({ plan, top: r.top, right: window.innerWidth - box.left + 10 });
+  };
+  const summary = shown && { mins: planMinutes(shown.plan, tagIds), slots: schedule(shown.plan.start_time, shown.plan.items) };
+  return (
+    <aside className="plan-previous" aria-label={`Previous ${noun}`} onMouseLeave={() => setShown(null)}>
+      <h2>Previous {noun}</h2>
+      {plans === null ? (
+        <p className="muted small">Loading…</p>
+      ) : earlier.length === 0 ? (
+        <p className="muted small">Nothing earlier than this one yet.</p>
+      ) : (
+        <ul className="previous-list">
+          {earlier.map((p) => {
+            const mins = planMinutes(p, tagIds);
+            return (
+              <li key={p.id}>
+                <Link to={`/plans/${p.id}`} className={shown?.plan.id === p.id ? 'on' : ''} onMouseEnter={(e) => point(p, e.currentTarget)} onFocus={(e) => point(p, e.currentTarget)} onBlur={() => setShown(null)}>
+                  <strong>{fmtDateShort(p.date)}</strong>
+                  <span className="muted small">
+                    {[p.is_game ? 'Game' : p.title, fmtDuration(mins.work + mins.breaks)].filter(Boolean).join(' · ')}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {shown && summary && (
+        <div className="previous-summary" role="status" style={{ right: shown.right, top: Math.max(12, Math.min(shown.top - 16, window.innerHeight - 520)), width: SUMMARY_WIDTH }}>
+          <h3>
+            {fmtDateShort(shown.plan.date)}
+            <span className="muted"> · {fmtDuration(summary.mins.work + summary.mins.breaks)}</span>
+          </h3>
+          {(shown.plan.title || shown.plan.location) && <p className="muted small">{[shown.plan.title, shown.plan.location].filter(Boolean).join(' · ')}</p>}
+          <ol className="previous-items">
+            {shown.plan.items.map((it, i) => (
+              <li key={it.key} className={it.kind === 'break' ? 'break' : ''}>
+                {shown.plan.kind === 'practice' && <time>{fmtClock(summary.slots[i].start)}</time>}
+                <span>{it.title || (it.kind === 'break' ? 'Break' : 'Untitled item')}</span>
+                <span className="glance-min">{it.duration_min} min</span>
+              </li>
+            ))}
+          </ol>
+          <CategoryRows mins={summary.mins} tags={tags} empty="No categories were set on this one." />
+        </div>
+      )}
+    </aside>
+  );
+}
+
+/** The practice at a glance: which categories it works on, and for how long. */
+function Glance({ mins, tags, total, ends, children }: { mins: Minutes; tags: Tag[]; total: number; ends: string; /** Print and the other things to do with the whole plan. */ children: ReactNode }) {
+  const any = tags.some((t) => (mins.byTag.get(t.id) || 0) > 0);
+  return (
+    <aside className="plan-glance" aria-label="At a glance">
+      <div className="glance-actions">{children}</div>
+      <h2>At a glance</h2>
+      <p className="glance-total">
+        <strong>{fmtDuration(total)}</strong>
+        {ends && <span className="muted"> · ends {ends}</span>}
+      </p>
+      <CategoryRows mins={mins} tags={tags} empty="Add drills that have categories, and this shows where the time goes." />
+      {any && <p className="muted small">A drill with two categories counts toward both.</p>}
     </aside>
   );
 }
