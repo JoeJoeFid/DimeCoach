@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Papa from 'papaparse';
 import { api } from '../api';
 import { useApp } from '../App';
-import type { Player, Team } from '../types';
+import type { Player, StaffMember, Team, TeamPerm } from '../types';
 import { Field, Modal } from '../components/bits';
 import { fmtSynced } from '../util';
+import { SPORT_CHOICES, sportKind, surfaceWord } from '../sports';
 import { confirmDialog } from '../components/dialogs';
 
 type Cell = string | number | boolean | Date | null | undefined;
@@ -84,13 +85,16 @@ export default function Teams() {
           <h1>Teams &amp; rosters</h1>
           <p className="muted">One team per sport and season. Each team has its own roster, practices and homework.</p>
         </div>
-        <div className="head-actions">
-          <button className="btn primary" onClick={() => setAdding(true)}>
-            + New team
-          </button>
-        </div>
+        {!app.access && (
+          <div className="head-actions">
+            <button className="btn primary" onClick={() => setAdding(true)}>
+              + New team
+            </button>
+          </div>
+        )}
       </div>
       {error && <p className="error">{error}</p>}
+      {!app.access && app.shared_teams.length > 0 && <SharedTeams onError={setError} />}
 
       {app.teams.length === 0 ? (
         <div className="empty">
@@ -133,21 +137,177 @@ export default function Teams() {
   );
 }
 
+/** Teams other coaches have shared with you. */
+function SharedTeams({ onError }: { onError: (msg: string) => void }) {
+  const app = useApp();
+  const leave = async (id: number, name: string) => {
+    const ok = await confirmDialog({ title: `Leave "${name}"?`, body: 'You will no longer see this team. Its owner can share it with you again.', confirmLabel: 'Leave team', danger: true });
+    if (!ok) return;
+    try {
+      await api.leaveSharedTeam(id);
+      await app.reload();
+    } catch (e) {
+      onError((e as Error).message);
+    }
+  };
+  return (
+    <div className="card shared-teams">
+      <h2>Shared with you</h2>
+      <ul className="staff-list">
+        {app.shared_teams.map((t) => (
+          <li key={t.id} className="staff-row">
+            <div className="staff-who">
+              <strong>
+                {t.name}
+                {t.season ? ` · ${t.season}` : ''}
+              </strong>
+              <span className="muted small">
+                From {t.owner_name}
+                {t.title ? ` · you are ${t.title}` : ''}
+              </span>
+            </div>
+            <div className="head-actions">
+              <button className="btn primary small" onClick={() => app.openTeam(true, t.id)}>
+                Open
+              </button>
+              <button className="btn small" onClick={() => leave(t.id, t.name)}>
+                Leave
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const PERM_LABELS: [TeamPerm, string][] = [
+  ['plans', 'Practices & homework'],
+  ['drills', 'Drills & categories'],
+  ['plays', 'Playbook'],
+  ['resources', 'Resources & uploads'],
+  ['roster', 'Roster'],
+  ['schedule', 'Schedule link'],
+];
+
+/** The owner's list of people the team is shared with, and what each one may change. */
+function StaffCard({ team }: { team: Team }) {
+  const [staff, setStaff] = useState<StaffMember[] | null>(null);
+  const [email, setEmail] = useState('');
+  const [title, setTitle] = useState('Assistant coach');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const run = useCallback(async (fn: () => Promise<StaffMember[]>, after?: () => void) => {
+    setBusy(true);
+    try {
+      setStaff(await fn());
+      setError('');
+      after?.();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+  useEffect(() => {
+    run(() => api.staff(team.id));
+  }, [run, team.id]);
+
+  const setPerm = (m: StaffMember, perm: TeamPerm, on: boolean) => {
+    const perms = { ...m.perms, [perm]: on };
+    // Changing the roster means seeing all of it.
+    if (perm === 'roster' && on) perms.contacts = true;
+    if (perm === 'contacts' && !on) perms.roster = false;
+    setStaff((list) => (list || []).map((x) => (x.user_id === m.user_id ? { ...x, perms } : x)));
+    run(() => api.updateStaff(team.id, m.user_id, { perms }));
+  };
+  const remove = async (m: StaffMember) => {
+    const ok = await confirmDialog({ title: `Stop sharing with ${m.name}?`, body: `${m.name} will no longer see ${team.name}. What they added stays.`, confirmLabel: 'Stop sharing', danger: true });
+    if (ok) run(() => api.removeStaff(team.id, m.user_id));
+  };
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Coaches and helpers {staff && staff.length > 0 && <span className="muted">({staff.length})</span>}</h2>
+      </div>
+      <p className="muted small">
+        Share this team with an assistant coach or anyone else who helps. They see this team only, not your other teams, along with your drills,
+        playbook and resources. They can look at everything and change only what you tick.
+      </p>
+      {error && <p className="error">{error}</p>}
+      {staff && staff.length > 0 && (
+        <ul className="staff-list">
+          {staff.map((m) => (
+            <li key={m.user_id} className="staff-row">
+              <div className="staff-who">
+                <strong>{m.name}</strong>
+                <span className="muted small">{m.email}</span>
+              </div>
+              <input
+                className="input staff-title"
+                aria-label={`Role for ${m.name}`}
+                defaultValue={m.title}
+                maxLength={60}
+                onBlur={(e) => e.target.value.trim() !== m.title && run(() => api.updateStaff(team.id, m.user_id, { title: e.target.value }))}
+              />
+              <button className="btn small danger" onClick={() => remove(m)}>
+                Remove
+              </button>
+              <div className="perm-list" role="group" aria-label={`What ${m.name} can do`}>
+                <span className="perm-head">Can change</span>
+                {PERM_LABELS.map(([perm, label]) => (
+                  <label key={perm} className="check">
+                    <input type="checkbox" checked={m.perms[perm]} onChange={(e) => setPerm(m, perm, e.target.checked)} />
+                    {label}
+                  </label>
+                ))}
+                <span className="perm-head">Can see</span>
+                <label className="check">
+                  <input type="checkbox" checked={m.perms.contacts} onChange={(e) => setPerm(m, 'contacts', e.target.checked)} />
+                  Parent contacts &amp; player notes
+                </label>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form
+        className="add-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (email.trim()) run(() => api.addStaff(team.id, { email: email.trim(), title }), () => setEmail(''));
+        }}
+      >
+        <input className="input grow" type="email" aria-label="Email of the person to add" placeholder="Their Dime Coach email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="input" aria-label="Their role" placeholder="Role" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} />
+        <button className="btn primary" disabled={busy || !email.trim()}>
+          Share team
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function NewTeam({ onClose, onCreated }: { onClose: () => void; onCreated: (t: Team) => void }) {
   const app = useApp();
   const [name, setName] = useState('');
   const [season, setSeason] = useState('');
-  const [sportId, setSportId] = useState<number>(app.sports[0]?.id || 0);
+  // Basketball, baseball and football first, then any other sport this workspace already has. '' means a new one.
+  const choices = [...SPORT_CHOICES, ...app.sports.map((s) => s.name).filter((n) => !SPORT_CHOICES.some((c) => c.toLowerCase() === n.toLowerCase()))];
+  const [sportName, setSportName] = useState(SPORT_CHOICES[0]);
   const [newSport, setNewSport] = useState('');
+  const chosen = (sportName || newSport).trim();
+  const have = app.sports.find((s) => s.name.toLowerCase() === chosen.toLowerCase());
+  const kind = sportKind(chosen);
   const [error, setError] = useState('');
 
   const save = async () => {
     try {
-      let sid = sportId;
-      if (sid === 0) {
-        if (!newSport.trim()) return setError('Name the sport.');
-        sid = (await api.createSport(newSport.trim())).id;
-      }
+      if (!chosen) return setError('Name the sport.');
+      // A sport new to this account is added on the way, with its starter categories and drills.
+      const sid = have?.id ?? (await api.createSport(chosen)).id;
       const t = await api.createTeam({ name, season, sport_id: sid });
       await app.reload();
       onCreated(t);
@@ -166,22 +326,27 @@ function NewTeam({ onClose, onCreated }: { onClose: () => void; onCreated: (t: T
           <input className="input" placeholder="2026-27" value={season} onChange={(e) => setSeason(e.target.value)} />
         </Field>
         <Field label="Sport">
-          <select className="input" value={sportId} onChange={(e) => setSportId(Number(e.target.value))}>
-            {app.sports.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
+          <select className="input" value={sportName} onChange={(e) => setSportName(e.target.value)}>
+            {choices.map((c) => (
+              <option key={c} value={c}>
+                {c}
               </option>
             ))}
-            <option value={0}>Add another sport…</option>
+            <option value="">Another sport…</option>
           </select>
         </Field>
-        {sportId === 0 && (
+        {sportName === '' && (
           <Field label="New sport name">
             <input className="input" placeholder="Soccer" value={newSport} onChange={(e) => setNewSport(e.target.value)} />
           </Field>
         )}
       </div>
-      {sportId === 0 && <p className="muted small">A new sport starts with no categories or drills. Add them on the Categories page.</p>}
+      {!have && kind && (
+        <p className="muted small">
+          {chosen} comes with its own starter categories and drills, and a playbook that draws plays on a {kind} {surfaceWord(kind)}.
+        </p>
+      )}
+      {!have && !kind && chosen && <p className="muted small">This sport starts with no categories or drills, and has no playbook yet. Add categories on the Categories page.</p>}
       <div className="modal-foot">
         <button className="btn" onClick={onClose}>
           Cancel
@@ -282,10 +447,10 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
       <div className="card">
         <div className="fields">
           <Field label="Team name" grow>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} onBlur={saveTeam} />
+            <input className="input" disabled={!!app.access} value={name} onChange={(e) => setName(e.target.value)} onBlur={saveTeam} />
           </Field>
           <Field label="Season or year">
-            <input className="input" value={season} onChange={(e) => setSeason(e.target.value)} onBlur={saveTeam} />
+            <input className="input" disabled={!!app.access} value={season} onChange={(e) => setSeason(e.target.value)} onBlur={saveTeam} />
           </Field>
           <Field label="Sport">
             <input className="input" disabled value={app.sports.find((s) => s.id === team.sport_id)?.name || ''} />
@@ -296,16 +461,23 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
                 Switch to this team
               </button>
             )}
-            <button className="btn danger" onClick={deleteTeam}>
-              Delete team
-            </button>
+            {!app.access && (
+              <button className="btn danger" onClick={deleteTeam}>
+                Delete team
+              </button>
+            )}
           </div>
         </div>
         {team.notes && <p className="muted small">{team.notes}</p>}
       </div>
 
-      <CalendarCard team={team} />
+      {!app.access && <StaffCard team={team} />}
 
+      <fieldset className="plain" disabled={!app.can('schedule')}>
+        <CalendarCard team={team} />
+      </fieldset>
+
+      <fieldset className="plain" disabled={!app.can('roster')}>
       <div className="card">
         <div className="card-head">
           <h2>Roster {players && <span className="muted">({players.length})</span>}</h2>
@@ -320,6 +492,12 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
           </div>
         </div>
         {notice && <p className="banner ok">{notice}</p>}
+        {!app.can('roster') && (
+          <p className="banner">
+            View only. {app.access?.owner_name} has not given you permission to change the roster
+            {app.can('contacts') ? '.' : ', and parent contacts and player notes are hidden.'}
+          </p>
+        )}
 
         {players === null ? (
           <p className="muted">Loading…</p>
@@ -379,6 +557,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
           </button>
         </form>
       </div>
+      </fieldset>
 
       {pending && (
         <Modal title={`Import ${pending.length} players?`} onClose={() => setPending(null)} wide>

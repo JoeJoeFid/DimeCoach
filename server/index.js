@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { all, get, run, tx } from './db.js';
-import { seedIfEmpty } from './seed.js';
+import { seedIfEmpty, seedSport } from './seed.js';
 import { ImportError, analyzePlan, claudeStatus, manualPrompt, parseDraft } from './ai.js';
 import { CalendarError, fetchCalendar, normalizeCalendarUrl } from './calendar.js';
 import { mountAuth, requireImport } from './auth.js';
@@ -11,6 +11,7 @@ import { mountCommunities } from './communities.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
 import { cleanPlayIds, mountPlays } from './plays.js';
 import { mountResources } from './resources.js';
+import { mountStaff, staffBootstrap } from './staff.js';
 
 seedIfEmpty();
 
@@ -31,8 +32,10 @@ app.disable('x-powered-by');
 
 // --- Identity -------------------------------------------------------------
 // Sign-in routes come first. After mountAuth, every /api request has req.user and
-// req.ownerId (that user's workspace), and every query below scopes by req.ownerId.
+// req.ownerId (that user's workspace), and every query below scopes by req.ownerId. mountStaff
+// swaps in the owner's workspace when someone is working in a team shared with them.
 mountAuth(app);
+mountStaff(app);
 mountImages(app);
 mountCommunities(app);
 mountPlays(app);
@@ -69,8 +72,9 @@ const TEAM_COLS = 'id, sport_id, name, season, notes, calendar_url, calendar_syn
 app.get('/api/bootstrap', (req, res) => {
   res.json({
     sports: all('SELECT id, name FROM sports WHERE owner_id=? ORDER BY name', req.ownerId),
-    teams: all(`SELECT ${TEAM_COLS} FROM teams WHERE owner_id=? ORDER BY id DESC`, req.ownerId),
+    teams: all(`SELECT ${TEAM_COLS} FROM teams WHERE owner_id=? ORDER BY id DESC`, req.ownerId).filter((t) => !req.staff || t.id === req.staff.teamId),
     tags: all('SELECT * FROM tags WHERE owner_id=? ORDER BY name', req.ownerId).map(tagOut),
+    ...staffBootstrap(req),
   });
 });
 
@@ -78,8 +82,11 @@ app.get('/api/bootstrap', (req, res) => {
 app.post('/api/sports', (req, res) => {
   const name = str(req.body.name).trim();
   if (!name) return res.status(400).json({ error: 'Name is required' });
-  const r = run('INSERT INTO sports (owner_id, name) VALUES (?,?)', req.ownerId, name);
-  res.json({ id: Number(r.lastInsertRowid), name });
+  const existing = get('SELECT id, name FROM sports WHERE owner_id=? AND lower(name)=lower(?)', req.ownerId, name);
+  if (existing) return res.json(existing);
+  // Baseball and football arrive with starter categories and drills. Other sports start empty.
+  const sportId = tx(() => seedSport(req.ownerId, name.slice(0, 40)).sport);
+  res.json(get('SELECT id, name FROM sports WHERE id=?', sportId));
 });
 
 // --- Teams ----------------------------------------------------------------
@@ -180,7 +187,10 @@ const insertPlayer = (ownerId, teamId, p) =>
 
 app.get('/api/teams/:id/players', (req, res) => {
   if (!ownTeam(req, req.params.id)) return notFound(res);
-  res.json(all('SELECT * FROM players WHERE team_id=? ORDER BY name COLLATE NOCASE', id(req.params.id)));
+  const players = all('SELECT * FROM players WHERE team_id=? ORDER BY name COLLATE NOCASE', id(req.params.id));
+  // A helper who was not given the contact details gets names, numbers and positions only.
+  if (req.staff && !req.staff.perms.contacts) for (const p of players) p.parent_name = p.parent_email = p.parent_phone = p.notes = '';
+  res.json(players);
 });
 app.post('/api/teams/:id/players', (req, res) => {
   if (!ownTeam(req, req.params.id)) return notFound(res);

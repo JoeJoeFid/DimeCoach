@@ -79,7 +79,10 @@ function prefsOf(u) {
   } catch {
     /* treat as no preferences */
   }
-  return HEX.test(String(stored.heat_color)) ? { heat_color: String(stored.heat_color).toLowerCase() } : {};
+  const prefs = HEX.test(String(stored.heat_color)) ? { heat_color: String(stored.heat_color).toLowerCase() } : {};
+  // Set once the welcome tour has been finished or skipped, so it is not shown again.
+  if (stored.tour_done === true) prefs.tour_done = true;
+  return prefs;
 }
 /**
  * The one account that runs the whole system. It is named by email address, not by a setting
@@ -323,6 +326,10 @@ export function mountAuth(app) {
       if (req.body.heat_color === null) delete prefs.heat_color;
       else if (HEX.test(String(req.body.heat_color))) prefs.heat_color = String(req.body.heat_color).toLowerCase();
       else return res.status(400).json({ error: 'That is not a color.' });
+    }
+    if ('tour_done' in req.body) {
+      if (req.body.tour_done === true) prefs.tour_done = true;
+      else delete prefs.tour_done;
     }
     run('UPDATE users SET prefs_json=? WHERE id=?', JSON.stringify(prefs), req.user.id);
     res.json({ user: userOut(get('SELECT * FROM users WHERE id=?', req.user.id)) });

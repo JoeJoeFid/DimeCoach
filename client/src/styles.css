@@ -5012,3 +5012,204 @@ text.play-mark.text.selected {
 .auth-empty {
   margin: 16px 0;
 }
+
+/* ---------- Shared teams ---------- */
+.shared-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 20px;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.shared-bar.view-only {
+  background: var(--warn-soft);
+}
+fieldset.plain {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.staff-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.staff-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.staff-row:first-child {
+  border-top: none;
+}
+.staff-who {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.staff-title {
+  flex: 0 1 180px;
+}
+.perm-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  flex-basis: 100%;
+}
+.perm-head {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
+}
+
+/* ---------- Baseball and football fields ---------- */
+.field-dirt {
+  fill: color-mix(in srgb, #c98a4b 24%, var(--court-floor));
+  stroke: none;
+}
+.field-zone {
+  fill: color-mix(in srgb, var(--primary) 12%, var(--court-floor));
+  stroke: none;
+}
+.field-base {
+  fill: var(--court-floor);
+  stroke: var(--court-line);
+  stroke-width: 0.2;
+}
+.field-los {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 0.28;
+  stroke-dasharray: 1 0.8;
+  opacity: 0.75;
+}
+
+/* ---------- Landing page: one play per sport ---------- */
+.hero-dime {
+  margin: 26px 0 0;
+  max-width: 44ch;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: rgba(245, 245, 240, 0.55);
+}
+.hero-dime strong {
+  color: rgba(245, 245, 240, 0.85);
+  font-weight: 650;
+}
+.hero-sports {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+.hero-sports button {
+  padding: 5px 13px;
+  border: 1px solid rgba(245, 245, 240, 0.2);
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(245, 245, 240, 0.65);
+  cursor: pointer;
+}
+.hero-sports button:hover {
+  color: #f5f5f0;
+  border-color: rgba(245, 245, 240, 0.45);
+}
+.hero-sports button.on {
+  background: #d2f24b;
+  border-color: #d2f24b;
+  color: #151b00;
+}
+
+/* ---------- Welcome tour ---------- */
+.tour-back {
+  align-items: center;
+  z-index: 70;
+}
+.modal.tour {
+  max-width: 480px;
+}
+.tour-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px 0 22px;
+}
+.tour-body {
+  padding: 6px 26px 4px;
+  min-height: 250px;
+}
+.tour-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: var(--surface-3);
+  color: var(--ink);
+}
+.tour-body h2 {
+  margin: 0 0 4px;
+  font-size: 1.45rem;
+  letter-spacing: -0.02em;
+}
+.tour-where {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.tour-body p {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.tour-body ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.tour-body li + li {
+  margin-top: 4px;
+}
+.tour-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 0 4px;
+}
+.tour-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.tour-dots span.on {
+  width: 18px;
+  border-radius: 3px;
+  background: var(--ink);
+}
+.tour-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px 20px;
+}
+.tour-spacer {
+  flex: 1;
+}

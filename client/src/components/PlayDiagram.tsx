@@ -2,12 +2,14 @@
 // same drawing scales to a thumbnail, the editor or a printed sheet.
 import type { CSSProperties, ReactNode } from 'react';
 import type { Play, PlayFrame, PlayLine, PlayMark, PlayObject, PlayShape } from '../types';
+import { DIAMONDS, GRIDIRONS, YARD, isDiamond, isGridiron } from '../sports';
 
 export type Pt = [number, number];
 
 /** High school dimensions, in feet. */
 export const COURT = { width: 50, half: 42, basketY: 5.25, threeR: 19.75, laneW: 12, ftY: 19, ftR: 6, centerR: 6 };
-export const courtHeight = (court: Play['court']) => (court === 'full' ? COURT.half * 2 : COURT.half);
+export const courtHeight = (court: Play['court']) =>
+  isDiamond(court) ? DIAMONDS[court].height : isGridiron(court) ? GRIDIRONS[court].height : court === 'full' ? COURT.half * 2 : COURT.half;
 const PAD = 1.2;
 export const VIEW_PAD = PAD;
 export const MARK_R = 1.5;
@@ -20,6 +22,7 @@ export const isPlayer = (o: PlayObject): o is PlayMark & { type: 'o' | 'x' } => 
 /** Where the baskets are. A line can attach to one, just as it can to a player. */
 export function baskets(play: Pick<Play, 'court' | 'flipped'>): { id: string; x: number; y: number }[] {
   const { width: W, half: H, basketY } = COURT;
+  if (play.court !== 'half' && play.court !== 'full') return [];
   if (play.court === 'full') return [{ id: 'basket', x: W / 2, y: basketY }, { id: 'basket2', x: W / 2, y: H * 2 - basketY }];
   return [{ id: 'basket', x: W / 2, y: play.flipped ? H - basketY : basketY }];
 }
@@ -47,9 +50,81 @@ function HalfCourt() {
   );
 }
 
+/** A baseball field seen from above, home plate at the bottom. */
+function BaseballField({ court }: { court: 'infield' | 'diamond' }) {
+  const W = COURT.width;
+  const { home, base: d, height: h, fence } = DIAMONDS[court];
+  const [hx, hy] = home;
+  const k = d / Math.SQRT2;
+  // The pitching rubber is 60 feet 6 inches out, and the infield dirt is an arc 95 feet from it.
+  const m = 0.672 * d;
+  const R = 1.055 * d;
+  /** How far across (and up) the dirt arc meets each foul line. */
+  const s = (Math.SQRT2 * m + Math.sqrt(4 * R * R - 2 * m * m)) / 2 / Math.SQRT2;
+  /** How far across (and up) each foul line runs: to the fence, or off the edge of the view. */
+  const pole = fence ? 2.546 * d : Math.min(hx, hy);
+  const sag = 4.3 * d - pole;
+  const fenceR = (pole * pole + sag * sag) / (2 * sag);
+  const q = k - 0.2 * d;
+  const bases: Pt[] = [[hx + k, hy - k], [hx, hy - 2 * k], [hx - k, hy - k], [hx, hy]];
+  return (
+    <g>
+      <rect className="court-floor" x={0} y={0} width={W} height={h} />
+      <path className="field-dirt" d={`M ${hx} ${hy} L ${hx - s} ${hy - s} A ${R} ${R} 0 0 1 ${hx + s} ${hy - s} Z`} />
+      <circle className="field-dirt" cx={hx} cy={hy} r={0.16 * d} />
+      <path className="court-floor" d={`M ${hx} ${hy - k - q} L ${hx + q} ${hy - k} L ${hx} ${hy - k + q} L ${hx - q} ${hy - k} Z`} />
+      <circle className="field-dirt" cx={hx} cy={hy - m} r={0.1 * d} />
+      <g className="court-lines">
+        <rect x={0} y={0} width={W} height={h} />
+        <path d={`M ${hx - pole} ${hy - pole} L ${hx} ${hy} L ${hx + pole} ${hy - pole}`} />
+        <path d={`M ${hx + k} ${hy - k} L ${hx} ${hy - 2 * k} L ${hx - k} ${hy - k}`} />
+        <path d={`M ${hx - s} ${hy - s} A ${R} ${R} 0 0 1 ${hx + s} ${hy - s}`} />
+        {fence && <path d={`M ${hx - pole} ${hy - pole} A ${fenceR} ${fenceR} 0 0 1 ${hx + pole} ${hy - pole}`} />}
+        <line x1={hx - 0.04 * d} y1={hy - m} x2={hx + 0.04 * d} y2={hy - m} className="court-board" />
+      </g>
+      {bases.map(([x, y], i) => (
+        <rect key={i} className="field-base" x={x - 0.035 * d} y={y - 0.035 * d} width={0.07 * d} height={0.07 * d} transform={`rotate(45 ${x} ${y})`} />
+      ))}
+    </g>
+  );
+}
+
+/** A stretch of football field, offense at the bottom driving up. */
+function FootballField({ court }: { court: 'gridiron' | 'redzone' }) {
+  const W = COURT.width;
+  const { los, goal, height: h } = GRIDIRONS[court];
+  const anchor = goal ?? los;
+  const from = goal ?? 0;
+  const every = (step: number) => {
+    const out: number[] = [];
+    for (let y = anchor - Math.floor((anchor - from) / step) * step; y < h - 0.01; y += step) out.push(y);
+    return out;
+  };
+  // Hash marks at each yard: along both sidelines, and a third of the way in from each.
+  const ticks = every(YARD)
+    .map((y) => [0, W - 0.9, W / 3 - 0.45, (2 * W) / 3 - 0.45].map((x) => `M ${x.toFixed(2)} ${y.toFixed(2)} h 0.9`).join(' '))
+    .join(' ');
+  return (
+    <g>
+      <rect className="court-floor" x={0} y={0} width={W} height={h} />
+      {goal !== null && <rect className="field-zone" x={0} y={0} width={W} height={goal} />}
+      <g className="court-lines">
+        <rect x={0} y={0} width={W} height={h} />
+        <path d={ticks} />
+        {every(5 * YARD).map((y) => (
+          <line key={y} x1={0} y1={y} x2={W} y2={y} className={y === goal ? 'court-board' : undefined} />
+        ))}
+      </g>
+      <line className="field-los" x1={0} y1={los} x2={W} y2={los} />
+    </g>
+  );
+}
+
 export function Court({ court, flipped }: { court: Play['court']; flipped: boolean }) {
   const { width: W, half: H } = COURT;
   const h = courtHeight(court);
+  if (isDiamond(court)) return <BaseballField court={court} />;
+  if (isGridiron(court)) return <FootballField court={court} />;
   return (
     <g>
       <rect className="court-floor" x={0} y={0} width={W} height={h} />

@@ -52,7 +52,7 @@ export default function Playbook() {
       <div className="page">
         <h1>Playbook</h1>
         <div className="empty">
-          <h2>The play builder supports basketball for now</h2>
+          <h2>The play builder draws basketball, baseball and football for now</h2>
           <p>This team plays {sport?.name?.toLowerCase() || 'another sport'}. Courts and fields for other sports are not drawn yet.</p>
         </div>
       </div>

@@ -29,7 +29,10 @@ export const usageOf = (ownerId) => get('SELECT COALESCE(SUM(bytes), 0) AS bytes
 /** Where the signed-in person stands: bytes used, the cap in bytes, and what is left. */
 export function spaceFor(req) {
   const used = usageOf(req.ownerId);
-  const cap = capMbFor(req.user) * MB;
+  // In a team shared with them, a helper's uploads land in the owner's space and count against the owner's cap.
+  const holder =
+    (req.staff && get("SELECT u.* FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.owner_id=? AND m.role='owner' ORDER BY u.id LIMIT 1", req.ownerId)) || req.user;
+  const cap = capMbFor(holder) * MB;
   return { used_bytes: used.bytes, files: used.files, cap_bytes: cap, left_bytes: Math.max(0, cap - used.bytes) };
 }
 

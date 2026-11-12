@@ -1,6 +1,7 @@
 // How a play moves. Within a step every line has a place in the order of movement: lines that
 // share a place move together, and each place waits for the one before it to finish. The same
 // rules drive the order list in the editor and the animated playback.
+import { LINE_WORDS, type SportKind } from './sports';
 import { MARK_R, isLine, isMark, isPlayer, sampleLine, type Pt } from './components/PlayDiagram';
 import { travelPath } from './playLogic';
 import type { Play, PlayFrame, PlayLine, PlayMark, PlayObject } from './types';
@@ -30,9 +31,9 @@ export function withOrder(objects: PlayObject[], changes: Map<string, number>): 
 
 export const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
 
-const VERB = { cut: 'cuts', pass: 'passes', dribble: 'dribbles', screen: 'screens' } as const;
 /** A line in plain words: "1 passes to 2", "3 screens for 2", "1 cuts to the basket". */
-export function describeLine(line: PlayLine, frame: PlayFrame): string {
+export function describeLine(line: PlayLine, frame: PlayFrame, sport: SportKind = 'basketball'): string {
+  const words = LINE_WORDS[sport][line.kind];
   const name = (id: string | undefined) => {
     if (!id) return '';
     if (id.startsWith('basket')) return 'the basket';
@@ -41,8 +42,10 @@ export function describeLine(line: PlayLine, frame: PlayFrame): string {
   };
   const who = name(line.from);
   const where = name(line.to);
-  if (!who) return `${line.kind[0].toUpperCase()}${line.kind.slice(1)}${where ? ` to ${where}` : ''} (not attached to a player)`;
-  return `${who} ${VERB[line.kind]}${where ? ` ${line.kind === 'screen' && where !== 'the basket' ? 'for' : 'to'} ${where}` : ''}`;
+  if (!who) return `${words.label}${where ? ` to ${where}` : ''} (not attached to a player)`;
+  // "3 screens for 2", but "T blocks E" and "CF backs up LF".
+  const link = line.kind !== 'screen' || where === 'the basket' ? 'to ' : sport === 'basketball' ? 'for ' : '';
+  return `${who} ${words.verb}${where ? ` ${link}${where}` : ''}`;
 }
 
 // --- Playback ---------------------------------------------------------------

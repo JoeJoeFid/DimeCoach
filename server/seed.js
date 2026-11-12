@@ -1,4 +1,5 @@
-// Starter data. Every new workspace gets Basketball with starter categories and drills.
+// Starter data. Every new workspace gets Basketball with starter categories and drills, and
+// adding a baseball or football team brings that sport's starter categories and drills with it.
 // A brand new install also gets a demo team so the dashboard has something to show.
 import { get, run, tx } from './db.js';
 
@@ -91,17 +92,70 @@ const DRILL_DEFS = [
   { name: 'Box out battle', dur: 8, tags: ['Rebounding'], notes: ul('Hit, turn, pursue', 'Loser does 5 push ups') },
 ];
 
-/** Basketball with starter categories and drills for one workspace. Call inside a transaction. */
-export function seedStarter(ownerId) {
-  const sport = lastId(run("INSERT INTO sports (owner_id, name) VALUES (?, 'Basketball')", ownerId));
+const BASEBALL = {
+  tags: [
+    ['Hitting', '#eb6834', 25],
+    ['Throwing & catching', '#2a78d6', 15],
+    ['Infield', '#1baf7a', 15],
+    ['Outfield', '#008300', 10],
+    ['Pitching & catching', '#6250d6', 10],
+    ['Baserunning', '#eda100', 10],
+    ['Team defense', '#e87ba4', 10],
+    ['Culture & mindset', '#e34948', 5],
+  ],
+  drills: [
+    { name: 'Dynamic warm-up & throwing progression', dur: 12, tags: ['Throwing & catching'], notes: ul('Jog, high knees, arm circles', 'Wrist flicks, one knee, then standing throws', 'Back up one step every five throws') },
+    { name: 'Tee work', dur: 10, tags: ['Hitting'], notes: ul('Inside, middle and outside pitch locations', 'Balanced finish on every swing', '10 swings, then rotate') },
+    { name: 'Soft toss', dur: 10, tags: ['Hitting'], notes: ul('Toss from the side, into a net', 'Load early, short path to the ball') },
+    { name: 'Live batting practice', dur: 20, tags: ['Hitting'], groups: [{ name: 'Hitting' }, { name: 'On deck: tee' }, { name: 'Shagging' }], notes: ul('6 swings and a bunt, then rotate', 'Fielders play every ball live') },
+    { name: 'Ground ball triangles', dur: 10, tags: ['Infield'], notes: ul('Feet wide, glove out front', 'Field, funnel, set the feet, throw', 'Forehand and backhand each round') },
+    { name: 'Fly ball communication', dur: 10, tags: ['Outfield'], notes: ul('First step back, then find the ball', 'Call it three times, loudly', 'Crow hop into the throw') },
+    { name: 'Cutoffs and relays', dur: 12, tags: ['Team defense'], notes: ul('Cutoff lines up with the base, hands up', 'Catch on the glove side and turn', 'Listen for "cut" or the base number') },
+    { name: 'Bullpens', dur: 12, tags: ['Pitching & catching'], notes: ul('Fastball to both sides first', 'Catchers work on framing and blocking', 'Count the pitches') },
+    { name: 'Baserunning circuit', dur: 10, tags: ['Baserunning'], notes: ul('Home to first: run through the bag', 'Leads and returns at first', 'Read the ball off the bat at second') },
+    { name: 'Situations scrimmage', dur: 20, tags: ['Team defense'], notes: ul('Coach calls runners and outs before each pitch', 'Everyone says where the play is going') },
+  ],
+};
+const FOOTBALL = {
+  tags: [
+    ['Individual positions', '#2a78d6', 20],
+    ['Tackling', '#e34948', 10],
+    ['Blocking', '#6250d6', 10],
+    ['Team offense', '#eb6834', 20],
+    ['Team defense', '#008300', 20],
+    ['Special teams', '#eda100', 10],
+    ['Conditioning', '#1baf7a', 5],
+    ['Culture & mindset', '#e87ba4', 5],
+  ],
+  drills: [
+    { name: 'Dynamic warm-up', dur: 10, tags: ['Conditioning'], notes: ul('High knees, butt kicks, carioca, backpedal', 'Form runs at half, then three quarter speed') },
+    { name: 'Stance and starts', dur: 8, tags: ['Individual positions'], notes: ul('Check feet, hips and eyes in the stance', 'First step on the snap count, stay low') },
+    { name: 'Form tackling', dur: 10, tags: ['Tackling'], notes: ul('Near foot, near shoulder, head across and up', 'Wrap, squeeze and run the feet', 'Start at walking speed') },
+    { name: 'Angle tackling', dur: 10, tags: ['Tackling'], notes: ul('Take away the cutback', 'Track the near hip') },
+    { name: 'Drive blocking', dur: 10, tags: ['Blocking'], notes: ul('Low pads, hands inside', 'Short, quick steps through the whistle') },
+    { name: 'Position groups', dur: 15, tags: ['Individual positions'], groups: [{ name: 'Linemen' }, { name: 'Backs' }, { name: 'Receivers' }], notes: ul('Linemen: pass sets and pulls', 'Backs: handoffs and ball security', 'Receivers: releases and routes') },
+    { name: 'Routes on air', dur: 10, tags: ['Team offense'], notes: ul('Full speed out of every break', 'Quarterbacks throw on rhythm') },
+    { name: 'Team offense: script', dur: 15, tags: ['Team offense'], notes: ul('Huddle, break, line up, snap', 'Run the first ten plays of the script') },
+    { name: 'Pursuit drill', dur: 8, tags: ['Team defense'], notes: ul('Everyone takes an angle to the ball', 'Nobody follows the same colored jersey') },
+    { name: 'Team defense: recognition', dur: 15, tags: ['Team defense'], notes: ul('Call the strength and the coverage', 'Align to each formation before the snap') },
+    { name: 'Special teams period', dur: 10, tags: ['Special teams'], notes: ul('Kickoff lanes', 'Punt protection and coverage') },
+  ],
+};
+/** Sports that come with starter material. Anything else starts empty. */
+const STARTERS = { basketball: { tags: TAG_DEFS, drills: DRILL_DEFS }, baseball: BASEBALL, softball: BASEBALL, football: FOOTBALL };
+
+/** Adds a sport to a workspace, with its starter categories and drills when it has them. Call inside a transaction. */
+export function seedSport(ownerId, name) {
+  const starter = STARTERS[String(name).trim().toLowerCase()] || { tags: [], drills: [] };
+  const sport = lastId(run('INSERT INTO sports (owner_id, name) VALUES (?, ?)', ownerId, String(name).trim()));
   const tag = {};
-  for (const [name, color, target] of TAG_DEFS) {
+  for (const [name, color, target] of starter.tags) {
     tag[name] = lastId(
       run('INSERT INTO tags (owner_id, sport_id, name, color, target_pct) VALUES (?,?,?,?,?)', ownerId, sport, name, color, target),
     );
   }
   const drill = {};
-  for (const d of DRILL_DEFS) {
+  for (const d of starter.drills) {
     const id = lastId(
       run(
         'INSERT INTO drills (owner_id, sport_id, name, duration_min, notes_html, callout, groups_json) VALUES (?,?,?,?,?,?,?)',
@@ -113,6 +167,9 @@ export function seedStarter(ownerId) {
   }
   return { sport, tag, drill };
 }
+
+/** Basketball, the sport every workspace starts with. */
+export const seedStarter = (ownerId) => seedSport(ownerId, 'Basketball');
 
 /** A new, empty workspace with the starter data. Call inside a transaction. Returns its id. */
 export function createWorkspace(name) {

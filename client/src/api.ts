@@ -1,4 +1,4 @@
-import type { Drill, ImportDraft, Item, Plan, PlanKind, PlanSummary, Play, Player, Resource, ScheduleEvent, Sport, Tag, Team } from './types';
+import type { Drill, ImportDraft, Item, Plan, PlanKind, PlanSummary, Play, Player, Resource, ScheduleEvent, SharedTeam, Sport, StaffMember, Tag, Team, TeamAccess, TeamPerms } from './types';
 
 /** Fired when the server says the session is gone, so the app can show the sign-in screen. */
 export const SIGNED_OUT_EVENT = 'practiceplan:signed-out';
@@ -28,8 +28,14 @@ const withKeys = (p: Plan): Plan => ({ ...p, items: (p.items || []).map((it) => 
 
 export interface Bootstrap {
   sports: Sport[];
+  /** Teams in the workspace being worked in. Inside a shared team, just that team. */
   teams: Team[];
   tags: Tag[];
+  /** The signed-in person's own teams, wherever they are working right now. */
+  own_teams: Pick<Team, 'id' | 'name' | 'season'>[];
+  shared_teams: SharedTeam[];
+  /** Null in your own workspace. */
+  access: TeamAccess | null;
 }
 
 /** Whether the Claude Code program is installed on this computer for automatic plan import. */
@@ -52,7 +58,7 @@ export interface User {
   is_system_admin: boolean;
   must_change_password: boolean;
   /** Personal display preferences, saved with the account. */
-  prefs: { heat_color?: string };
+  prefs: { heat_color?: string; /** True once the welcome tour has been finished or skipped. */ tour_done?: boolean };
 }
 export interface AuthStatus {
   /** True on a fresh install with no accounts yet. */
@@ -185,7 +191,7 @@ export const api = {
   logout: () => req('POST', '/auth/logout', {}),
   register: (b: { name: string; email: string; password: string }) => req('POST', '/auth/register', b),
   confirm: (token: string) => req('POST', '/auth/confirm', { token }),
-  savePrefs: (prefs: { heat_color: string | null }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
+  savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
   changePassword: (current: string, next: string) => req<{ user: User }>('POST', '/auth/password', { current, next }),
 
   adminUsers: () => req<AdminUser[]>('GET', '/admin/users'),
@@ -236,6 +242,14 @@ export const api = {
   importPlan: (team_id: number, source: ImportSource) => req<ImportDraft>('POST', '/ai/import-plan', { team_id, source }),
 
   bootstrap: () => req<Bootstrap>('GET', '/bootstrap'),
+
+  /** Opens a team shared with you, or goes back to your own teams with null. */
+  setWorkspace: (teamId: number | null) => req<{ ok: true }>('POST', '/workspace', { team_id: teamId }),
+  leaveSharedTeam: (teamId: number) => req<{ ok: true }>('DELETE', `/shared-teams/${teamId}`),
+  staff: (teamId: number) => req<StaffMember[]>('GET', `/teams/${teamId}/staff`),
+  addStaff: (teamId: number, b: { email: string; title: string; perms?: Partial<TeamPerms> }) => req<StaffMember[]>('POST', `/teams/${teamId}/staff`, b),
+  updateStaff: (teamId: number, userId: number, b: { title?: string; perms?: Partial<TeamPerms> }) => req<StaffMember[]>('PUT', `/teams/${teamId}/staff/${userId}`, b),
+  removeStaff: (teamId: number, userId: number) => req<StaffMember[]>('DELETE', `/teams/${teamId}/staff/${userId}`),
 
   createSport: (name: string) => req<Sport>('POST', '/sports', { name }),
 

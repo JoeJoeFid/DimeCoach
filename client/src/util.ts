@@ -1,3 +1,4 @@
+import { sportKind } from './sports';
 import DOMPurify from 'dompurify';
 import type { Item, Plan } from './types';
 
@@ -152,13 +153,8 @@ export function planMinutes(plan: Pick<Plan, 'items'>, validTagIds?: Set<number>
   return { byTag, work, breaks };
 }
 
-/** Starter kinds of play per sport. Coaches can type any category; these are suggestions. */
-export const PLAY_CATEGORIES_BY_SPORT: Record<string, string[]> = {
-  basketball: ['Man offense', 'Zone offense', 'Quick hitter', 'Baseline out of bounds', 'Sideline out of bounds', 'Press break', 'Transition', 'Man defense', 'Zone defense', 'Press', 'End of game'],
-};
-export const PLAY_CATEGORIES = PLAY_CATEGORIES_BY_SPORT.basketball;
-/** Sports the play builder can draw a court for. */
-export const playBuilderSupports = (sportName: string | undefined) => (sportName || '').trim().toLowerCase() in PLAY_CATEGORIES_BY_SPORT;
+/** Sports the play builder can draw a court or field for. */
+export const playBuilderSupports = (sportName: string | undefined) => sportKind(sportName) !== null;
 
 /** The default base color of the category history. */
 export const HEAT_BASE = '#2a78d6';

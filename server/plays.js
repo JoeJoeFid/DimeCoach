@@ -90,6 +90,11 @@ const playOut = (p) => ({
 });
 
 /** Keeps only play ids this workspace owns. Used when saving items and drills. */
+/** The surfaces a play can be drawn on: basketball courts, baseball fields and football fields. */
+const COURTS = ['half', 'full', 'infield', 'diamond', 'gridiron', 'redzone'];
+const cleanCourt = (v, fallback) => (COURTS.includes(v) ? v : fallback);
+const defaultCourt = (sportName) => (/base|soft/i.test(sportName) ? 'infield' : /football/i.test(sportName) ? 'gridiron' : 'half');
+
 export function cleanPlayIds(list, ownerId) {
   const out = [];
   for (const v of Array.isArray(list) ? list : []) {
@@ -112,8 +117,8 @@ export function mountPlays(app) {
   });
   app.post('/api/plays', (req, res) => {
     const b = req.body;
-    if (!get('SELECT id FROM sports WHERE id=? AND owner_id=?', Number(b.sport_id), req.ownerId))
-      return res.status(400).json({ error: 'Unknown sport' });
+    const sport = get('SELECT id, name FROM sports WHERE id=? AND owner_id=?', Number(b.sport_id), req.ownerId);
+    if (!sport) return res.status(400).json({ error: 'Unknown sport' });
     // A copy of an existing play starts from that play's drawing.
     const src = b.from_play_id ? get('SELECT * FROM plays WHERE id=? AND owner_id=?', Number(b.from_play_id), req.ownerId) : null;
     if (b.from_play_id && !src) return res.status(400).json({ error: 'Unknown play to copy' });
@@ -121,7 +126,7 @@ export function mountPlays(app) {
       'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, notes, frames_json, attachments_json) VALUES (?,?,?,?,?,?,?,?,?,?)',
       req.ownerId, Number(b.sport_id), str(b.name ?? (src ? `${src.name} (copy)` : 'New play'), 120).trim() || 'New play',
       str(b.category ?? src?.category, 60).trim(), src ? src.labels_json : JSON.stringify(cleanLabels(b.labels)),
-      (b.court ?? src?.court) === 'full' ? 'full' : 'half', src?.flipped ? 1 : 0, str(src?.notes, 2000),
+      cleanCourt(b.court ?? src?.court, defaultCourt(sport.name)), src?.flipped ? 1 : 0, str(src?.notes, 2000),
       src ? src.frames_json : JSON.stringify(cleanFrames(b.frames)),
       src ? src.attachments_json : '{}',
     );
@@ -137,7 +142,7 @@ export function mountPlays(app) {
       run(
         `UPDATE plays SET name=?, category=?, labels_json=?, court=?, flipped=?, notes=?, frames_json=?, attachments_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         str(b.name, 120).trim() || 'Untitled play', str(b.category, 60).trim(), JSON.stringify(cleanLabels(b.labels)),
-        b.court === 'full' ? 'full' : 'half', b.flipped ? 1 : 0, str(b.notes, 2000), frames, attachmentsJson(b, req.ownerId), p.id,
+        cleanCourt(b.court, p.court), b.flipped ? 1 : 0, str(b.notes, 2000), frames, attachmentsJson(b, req.ownerId), p.id,
       ),
     );
     res.json(playOut(get('SELECT * FROM plays WHERE id=?', p.id)));

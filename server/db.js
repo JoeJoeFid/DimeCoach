@@ -198,6 +198,15 @@ CREATE TABLE IF NOT EXISTS community_shares (
 );
 CREATE INDEX IF NOT EXISTS idx_posts_community ON community_posts(community_id, id);
 CREATE INDEX IF NOT EXISTS idx_shares_community ON community_shares(community_id, kind, status);
+-- People a team is shared with (assistant coaches and other helpers), and what each may change.
+CREATE TABLE IF NOT EXISTS team_staff (
+  team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '', perms_json TEXT NOT NULL DEFAULT '{}',
+  added_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (team_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_team_staff_user ON team_staff(user_id);
 `);
 
 function addColumn(table, column, ddl) {

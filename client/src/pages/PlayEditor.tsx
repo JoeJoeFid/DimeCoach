@@ -30,7 +30,9 @@ import { HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, source
 import Attachments from '../components/Attachments';
 import { Field, Modal } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
-import { PLAY_CATEGORIES, TAG_COLORS } from '../util';
+import { TAG_COLORS } from '../util';
+import { useApp } from '../App';
+import { LINE_WORDS, PLAY_CATEGORIES_BY_SPORT, SURFACES, lineups, moveBetween, sportKind, type Lineup, type SportKind } from '../sports';
 
 /** Stands for "these do not all share one value", so no swatch shows as chosen. */
 const MIXED = '\u0000mixed';
@@ -69,6 +71,19 @@ const LINE_KINDS: PlayLine['kind'][] = ['cut', 'pass', 'dribble', 'screen'];
 const SHAPE_KINDS: ShapeKind[] = ['rect', 'ellipse', 'triangle'];
 const isLineTool = (t: Tool): t is PlayLine['kind'] => (LINE_KINDS as string[]).includes(t);
 const isShapeTool = (t: Tool): t is ShapeKind => (SHAPE_KINDS as string[]).includes(t);
+const NOTE_EXAMPLES: Record<SportKind, string> = {
+  basketball: '1 passes to 2 and cuts through',
+  baseball: '1B and 3B charge, 2B covers first',
+  football: 'X runs a slant, Z clears out deep',
+};
+/** The palette in a sport's own words: a cut in basketball is a route in football and a run in baseball. */
+function toolsFor(sport: SportKind) {
+  return TOOLS.map((t) => {
+    const words = isLineTool(t.id) ? LINE_WORDS[sport][t.id] : null;
+    const hint = words?.hint ?? t.hint;
+    return { ...t, label: words?.label ?? t.label, hint: sport === 'basketball' ? hint : hint.replaceAll('the court', 'the field') };
+  });
+}
 /** Colors offered for shapes and players. The first entry of the player list means "the default ink". */
 const SHAPE_COLORS = [...TAG_COLORS, '#52514e'];
 const PLAYER_COLORS = ['', ...TAG_COLORS];
@@ -167,7 +182,9 @@ export default function PlayEditor() {
   /** The player, ball or basket a line end is about to attach to, shown with a ring while dragging. */
   const [snap, setSnap] = useState<string | null>(null);
   const [labelsText, setLabelsText] = useState('');
-  const [categories, setCategories] = useState<string[]>(PLAY_CATEGORIES);
+  const [categories, setCategories] = useState<string[]>([]);
+  const app = useApp();
+  const sportOf = (sportId: number | undefined) => sportKind(app.sports.find((x) => x.id === sportId)?.name) ?? 'basketball';
 
   const svg = useRef<SVGSVGElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -215,7 +232,7 @@ export default function PlayEditor() {
         latest.current = p;
         setPlay(p);
         setLabelsText(p.labels.join(', '));
-        setCategories([...new Set([...PLAY_CATEGORIES, ...all.map((x) => x.category).filter(Boolean)])]);
+        setCategories([...new Set([...PLAY_CATEGORIES_BY_SPORT[sportOf(p.sport_id)], ...all.filter((x) => x.sport_id === p.sport_id).map((x) => x.category).filter(Boolean)])]);
         past.current = [];
         future.current = [];
       })
@@ -699,7 +716,38 @@ export default function PlayEditor() {
     update({ frames: play.frames.map((f) => ({ ...f, objects: f.objects.map((o) => (o.type === type ? { ...o, color: color || undefined } : o)) })) });
   };
 
-  const toolHint = TOOLS.find((t) => t.id === tool)!.hint;
+  const sport = sportOf(play.sport_id);
+  const tools = toolsFor(sport);
+  /** Drops a ready-made starting lineup onto this step, selected so it can be nudged as a group. */
+  const addLineup = (lineup: Lineup) => {
+    const ballTaken = current().objects.some((o) => isMark(o) && (o.hasBall || o.type === 'ball'));
+    const made: PlayMark[] = lineup.spots.map((spot) => ({ ...spot, id: newKey(), hasBall: spot.hasBall && !ballTaken ? true : undefined }));
+    setObjects((os) => [...os, ...made]);
+    selectMany(made.map((m) => m.id));
+  };
+  /** Switches the court or field. Between two views of the same field, everything drawn moves with it. */
+  const changeSurface = (court: Play['court']) => {
+    const move = moveBetween(play.court, court);
+    if (!move) return update({ court });
+    const top = courtHeight(court);
+    const fit = (p: number[]) => {
+      const [x, y] = move(p);
+      return [Math.min(COURT.width - 1, Math.max(1, x)), Math.min(top - 1, Math.max(1, y))];
+    };
+    remember();
+    update({
+      court,
+      frames: play.frames.map((f) => ({
+        ...f,
+        objects: f.objects.map((o) => {
+          if (!isMark(o)) return { ...o, points: o.points.map(fit) };
+          const [x, y] = fit([o.x, o.y]);
+          return { ...o, x, y };
+        }),
+      })),
+    });
+  };
+  const toolHint = tools.find((t) => t.id === tool)!.hint;
   const selLine = selectedObject && isLine(selectedObject) ? selectedObject : null;
   const selShape = selectedObject && isShape(selectedObject) ? selectedObject : null;
   const selMark = selectedObject && isMark(selectedObject) ? selectedObject : null;
@@ -799,10 +847,13 @@ export default function PlayEditor() {
               }}
             />
           </Field>
-          <Field label="Court">
-            <select className="input" value={play.court} onChange={(e) => update({ court: e.target.value as Play['court'] })}>
-              <option value="half">Half court</option>
-              <option value="full">Full court</option>
+          <Field label={sport === 'basketball' ? 'Court' : 'Field'}>
+            <select className="input" value={play.court} onChange={(e) => changeSurface(e.target.value as Play['court'])}>
+              {SURFACES[sport].map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
             </select>
           </Field>
         </div>
@@ -825,6 +876,11 @@ export default function PlayEditor() {
                 Flip court
               </button>
             )}
+            {lineups(play.court).map((l) => (
+              <button key={l.id} className="btn" onClick={() => addLineup(l)} title="Places everyone in their usual starting spots on this step. Drag them where you want them.">
+                {l.label}
+              </button>
+            ))}
             <button className="btn danger" onClick={remove}>
               Delete
             </button>
@@ -837,7 +893,7 @@ export default function PlayEditor() {
           <div className="toolbar" role="toolbar" aria-label="Drawing tools">
             {(['pointer', 'mark', 'line', 'shape'] as const).map((g) => (
               <div className="tool-group" key={g}>
-                {TOOLS.filter((t) => t.group === g).map((t) => (
+                {tools.filter((t) => t.group === g).map((t) => (
                   <button key={t.id} type="button" className={`tool ${tool === t.id ? 'on' : ''} ${t.id === 'select' ? '' : 'draggable'}`}
                     aria-pressed={tool === t.id}
                     title={t.hint}
@@ -1037,7 +1093,7 @@ export default function PlayEditor() {
         {carry && (
           <div className="tool-ghost" style={{ left: carry.x, top: carry.y }} aria-hidden="true">
             <ToolIcon tool={carry.tool} />
-            {TOOLS.find((t) => t.id === carry.tool)!.label}
+            {tools.find((t) => t.id === carry.tool)!.label}
           </div>
         )}
         <div className="card builder-stage">
@@ -1148,7 +1204,9 @@ export default function PlayEditor() {
               Order of movement <span className="hint">Step {index + 1}</span>
             </h4>
             {lineCount === 0 ? (
-              <p className="muted small">Draw a cut, pass, dribble or screen and it appears here. This is where you set what happens first.</p>
+              <p className="muted small">
+                Draw a {LINE_KINDS.map((k) => LINE_WORDS[sport][k].label.toLowerCase()).join(', ')} line and it appears here. This is where you set what happens first.
+              </p>
             ) : (
               <>
                 {lineCount > 1 && (
@@ -1172,13 +1230,13 @@ export default function PlayEditor() {
                         <div key={l.id} className={`order-row ${isSelected(l.id) ? 'on' : ''}`}>
                           <button type="button" className="order-name" onClick={() => setSelected(l.id)} title="Show this line on the court">
                             <span className={`order-dot ${l.kind}`} aria-hidden="true" />
-                            {describeLine(l, frame)}
+                            {describeLine(l, frame, sport)}
                           </button>
                           <span className="order-move">
-                            <button type="button" className="btn small" aria-label={`Move "${describeLine(l, frame)}" earlier`} title="Earlier" disabled={b === 0 && lines.length === 1} onClick={() => shiftOrder(l, -1)}>
+                            <button type="button" className="btn small" aria-label={`Move "${describeLine(l, frame, sport)}" earlier`} title="Earlier" disabled={b === 0 && lines.length === 1} onClick={() => shiftOrder(l, -1)}>
                               ↑
                             </button>
-                            <button type="button" className="btn small" aria-label={`Move "${describeLine(l, frame)}" later`} title="Later" disabled={b === beats.length - 1 && lines.length === 1} onClick={() => shiftOrder(l, 1)}>
+                            <button type="button" className="btn small" aria-label={`Move "${describeLine(l, frame, sport)}" later`} title="Later" disabled={b === beats.length - 1 && lines.length === 1} onClick={() => shiftOrder(l, 1)}>
                               ↓
                             </button>
                           </span>
@@ -1197,7 +1255,7 @@ export default function PlayEditor() {
             <textarea
               className="input"
               rows={3}
-              placeholder="1 passes to 2 and cuts through"
+              placeholder={NOTE_EXAMPLES[sport]}
               value={frame.note}
               onChange={(e) => update({ frames: play.frames.map((f, i) => (i === index ? { ...f, note: e.target.value } : f)) })}
             />

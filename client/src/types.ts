@@ -118,7 +118,8 @@ export interface Play {
   category: string;
   /** Free-form tags, such as "vs 2-3 zone". */
   labels: string[];
-  court: 'half' | 'full';
+  /** What the play is drawn on: a basketball court, a baseball field or a football field. See sports.ts. */
+  court: 'half' | 'full' | 'infield' | 'diamond' | 'gridiron' | 'redzone';
   /** Half court only: true when the basket is drawn at the bottom. */
   flipped: boolean;
   notes: string;
@@ -231,4 +232,34 @@ export interface Drill {
   links: ItemLink[];
   videos: ItemVideo[];
   tag_ids: number[];
+}
+
+/** What a team's owner can let a helper do. All but `contacts` are about changing things; `contacts` is about seeing them. */
+export type TeamPerm = 'plans' | 'drills' | 'plays' | 'resources' | 'roster' | 'schedule' | 'contacts';
+export type TeamPerms = Record<TeamPerm, boolean>;
+/** A team someone else owns and has shared with the signed-in person. */
+export interface SharedTeam {
+  id: number;
+  name: string;
+  season: string;
+  /** What the owner calls this person on the team, such as "Assistant coach". */
+  title: string;
+  owner_name: string;
+  perms: TeamPerms;
+}
+/** Set while working inside a shared team. */
+export interface TeamAccess {
+  team_id: number;
+  owner_name: string;
+  title: string;
+  perms: TeamPerms;
+}
+/** Someone a team is shared with, as its owner sees them. */
+export interface StaffMember {
+  user_id: number;
+  name: string;
+  email: string;
+  title: string;
+  added_at: string;
+  perms: TeamPerms;
 }

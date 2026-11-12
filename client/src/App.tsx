@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { SIGNED_OUT_EVENT, api, type AuthStatus, type Bootstrap, type User } from './api';
-import type { Sport, Tag, Team } from './types';
+import type { Sport, Tag, Team, TeamPerm } from './types';
 import { DialogHost } from './components/dialogs';
 import { ThemeToggle } from './theme';
+import Tour from './components/Tour';
 import { PasswordForm, Setup, SignedOut } from './pages/Auth';
 import Admin from './pages/Admin';
 import SystemAdmin from './pages/SystemAdmin';
@@ -29,6 +30,10 @@ interface AppState extends Bootstrap {
   /** Tags of the current team's sport. */
   sportTags: Tag[];
   setTeamId: (id: number) => void;
+  /** Switches to one of your own teams, or to a team shared with you. */
+  openTeam: (shared: boolean, id: number) => void;
+  /** Whether you may change this part of the team. Always true for your own teams. */
+  can: (perm: TeamPerm) => boolean;
   reload: () => Promise<void>;
   /** Re-reads the signed-in user, after something about them (such as a preference) changed. */
   refreshUser: () => void;
@@ -143,6 +148,16 @@ function SignedIn({ user, onChanged }: { user: User; onChanged: () => void }) {
   const [error, setError] = useState('');
   const [teamId, setTeamIdState] = useState<number>(() => Number(localStorage.getItem(teamKey)) || 0);
   const location = useLocation();
+  // Someone new gets the tour once. Finishing or skipping it is remembered with their account.
+  const [touring, setTouring] = useState(!user.prefs.tour_done);
+  const endTour = useCallback(() => {
+    setTouring(false);
+    if (!user.prefs.tour_done)
+      api
+        .savePrefs({ tour_done: true })
+        .then(onChanged)
+        .catch(() => {});
+  }, [user.prefs.tour_done, onChanged]);
 
   const reload = useCallback(async () => {
     try {
@@ -164,6 +179,22 @@ function SignedIn({ user, onChanged }: { user: User; onChanged: () => void }) {
     [teamKey],
   );
 
+  const openTeam = useCallback(
+    async (shared: boolean, id: number) => {
+      if (!shared && !data?.access) return setTeamId(id);
+      try {
+        await api.setWorkspace(shared ? id : null);
+        if (!shared && id) localStorage.setItem(teamKey, String(id));
+        // A different workspace has different drills, plays and plans: start clean.
+        window.location.assign('/');
+      } catch (e) {
+        setError((e as Error).message);
+        reload();
+      }
+    },
+    [data, setTeamId, teamKey, reload],
+  );
+
   const state = useMemo<AppState | null>(() => {
     if (!data) return null;
     const team = data.teams.find((t) => t.id === teamId) || data.teams[0] || null;
@@ -175,10 +206,12 @@ function SignedIn({ user, onChanged }: { user: User; onChanged: () => void }) {
       sport,
       sportTags: data.tags.filter((t) => t.sport_id === team?.sport_id),
       setTeamId,
+      openTeam,
+      can: (perm) => !data.access || data.access.perms[perm],
       reload,
       refreshUser: onChanged,
     };
-  }, [data, user, teamId, setTeamId, reload, onChanged]);
+  }, [data, user, teamId, setTeamId, openTeam, reload, onChanged]);
 
   if (error && !state)
     return (
@@ -250,16 +283,29 @@ function SignedIn({ user, onChanged }: { user: User; onChanged: () => void }) {
               <span className="brand-mark" aria-hidden="true" />
               Dime Coach
             </NavLink>
-            {state.team && (
+            {(state.team || state.shared_teams.length > 0) && (
               <label className="team-select">
                 <span className="side-label">Team</span>
-                <select value={state.team.id} onChange={(e) => setTeamId(Number(e.target.value))}>
-                  {state.teams.map((t) => (
-                    <option key={t.id} value={t.id}>
+                <select
+                  value={state.access ? `s${state.access.team_id}` : state.team ? `o${state.team.id}` : ''}
+                  onChange={(e) => e.target.value && openTeam(e.target.value[0] === 's', Number(e.target.value.slice(1)))}
+                >
+                  {!state.team && <option value="">Choose a team</option>}
+                  {state.own_teams.map((t) => (
+                    <option key={t.id} value={`o${t.id}`}>
                       {t.name}
                       {t.season ? ` · ${t.season}` : ''}
                     </option>
                   ))}
+                  {state.shared_teams.length > 0 && (
+                    <optgroup label="Shared with you">
+                      {state.shared_teams.map((t) => (
+                        <option key={t.id} value={`s${t.id}`}>
+                          {t.name} · {t.owner_name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </label>
             )}
@@ -286,14 +332,55 @@ function SignedIn({ user, onChanged }: { user: User; onChanged: () => void }) {
                 <button className="link small" onClick={signOut}>
                   Sign out
                 </button>
+                <button className="link small" onClick={() => setTouring(true)}>
+                  Take the tour
+                </button>
               </div>
               <ThemeToggle />
             </div>
           </aside>
-          <main className="main">{routes}</main>
+          <main className="main">
+            {state.access && <SharedBar />}
+            {routes}
+          </main>
+          {touring && <Tour icons={icons} onClose={endTour} />}
         </div>
       )}
     </Ctx.Provider>
+  );
+}
+
+/** Which permission each part of the app needs before anything on it can be changed. */
+const PAGE_PERMS: [RegExp, TeamPerm, string][] = [
+  [/^\/(practices|homework|plans|import)\b/, 'plans', 'practices and homework'],
+  [/^\/(library|tags)\b/, 'drills', 'drills and categories'],
+  [/^\/(playbook|plays)\b/, 'plays', 'the playbook'],
+  [/^\/resources\b/, 'resources', 'resources'],
+];
+
+/** Shown across the top while working in a team someone else owns. */
+function SharedBar() {
+  const app = useApp();
+  const { pathname } = useLocation();
+  const access = app.access!;
+  const page = PAGE_PERMS.find(([re]) => re.test(pathname));
+  const viewOnly = page && !app.can(page[1]);
+  return (
+    <div className={`shared-bar ${viewOnly ? 'view-only' : ''}`} role="status">
+      <span>
+        <strong>{app.team?.name}</strong> is shared with you by {access.owner_name}
+        {access.title ? ` · ${access.title}` : ''}
+        {viewOnly && (
+          <>
+            {' '}
+            · <strong>View only:</strong> you can look at {page[2]} here, but changes will not be saved.
+          </>
+        )}
+      </span>
+      <button className="btn small" onClick={() => app.openTeam(false, app.own_teams[0]?.id || 0)}>
+        Back to my teams
+      </button>
+    </div>
   );
 }
 
