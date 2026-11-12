@@ -32,6 +32,8 @@ interface AppState extends Bootstrap {
   setTeamId: (id: number) => void;
   /** Switches to one of your own teams, or to a team shared with you. */
   openTeam: (shared: boolean, id: number) => void;
+  /** True while the welcome tour is on screen, so pages hold back their own pop-ups until it is over. */
+  touring: boolean;
   /** Whether you may change this part of the team. Always true for your own teams. */
   can: (perm: TeamPerm) => boolean;
   reload: () => Promise<void>;
@@ -207,11 +209,12 @@ function SignedIn({ user, onChanged }: { user: User; onChanged: () => void }) {
       sportTags: data.tags.filter((t) => t.sport_id === team?.sport_id),
       setTeamId,
       openTeam,
+      touring,
       can: (perm) => !data.access || data.access.perms[perm],
       reload,
       refreshUser: onChanged,
     };
-  }, [data, user, teamId, setTeamId, openTeam, reload, onChanged]);
+  }, [data, user, teamId, setTeamId, openTeam, touring, reload, onChanged]);
 
   if (error && !state)
     return (

@@ -123,7 +123,8 @@ export default function Teams() {
         </div>
       )}
 
-      {adding && (
+      {/* With no team yet this form opens by itself, but not on top of the welcome tour: it waits until the tour is over. */}
+      {adding && !app.touring && (
         <NewTeam
           onClose={() => setAdding(false)}
           onCreated={(t) => {
