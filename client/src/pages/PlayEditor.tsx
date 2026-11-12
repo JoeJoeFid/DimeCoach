@@ -25,7 +25,7 @@ import {
 } from '../components/PlayDiagram';
 import PlayAnimation from '../components/PlayAnimation';
 import { ShareDialog } from '../components/community';
-import { beatsOf, describeLine, ordinal, orderOf, withOrder } from '../playAnimation';
+import { beatsOf, describeLine, ordinal, sequenceOf, withOrder, withSequence, type SequenceItem } from '../playAnimation';
 import { HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, sources, targets, withEnd } from '../playLogic';
 import Attachments from '../components/Attachments';
 import { Field, Modal } from '../components/bits';
@@ -774,11 +774,23 @@ export default function PlayEditor() {
   // --- Order of movement in this step ---
   const beats = beatsOf(frame);
   const lineCount = beats.reduce((n, b) => n + b.length, 0);
-  /** Moves a line a half place: out of its group to just before or after it, or into the neighbouring group if it is alone. */
-  const shiftOrder = (line: PlayLine, by: 1 | -1) => {
-    const alone = beats[orderOf(line) - 1]?.length === 1;
-    setObjects((os) => withOrder(os, new Map([[line.id, orderOf(line) + (alone ? by : by / 2)]])));
+  /** The same lines as one running list: each either waits for the line before it, or starts with it. */
+  const sequence = sequenceOf(frame);
+  const resequence = (next: SequenceItem[]) => setObjects((os) => withSequence(os, next.map((s) => ({ id: s.line.id, withPrevious: s.withPrevious }))));
+  /**
+   * Moves a line one place up or down the running list. It keeps its own "with previous" setting,
+   * except when it trades places with a line it already moves with: then the two simply swap and stay together.
+   */
+  const moveInOrder = (i: number, by: 1 | -1) => {
+    const upper = Math.min(i, i + by);
+    const next = [...sequence];
+    if (sequence[upper + 1].withPrevious) {
+      next[upper] = { line: sequence[upper + 1].line, withPrevious: sequence[upper].withPrevious };
+      next[upper + 1] = { line: sequence[upper].line, withPrevious: true };
+    } else [next[upper], next[upper + 1]] = [next[upper + 1], next[upper]];
+    resequence(next);
   };
+  const setWithPrevious = (i: number, on: boolean) => resequence(sequence.map((s, j) => (j === i ? { ...s, withPrevious: on } : s)));
   const allTogether = () => setObjects((os) => withOrder(os, new Map(os.filter(isLine).map((l) => [l.id, 1]))));
   const oneAtATime = () => setObjects((os) => withOrder(os, new Map(beats.flat().map((l, i) => [l.id, i + 1]))));
   const swatches = (colors: string[], value: string, onPick: (c: string) => void, what: string) => (
@@ -1219,29 +1231,46 @@ export default function PlayEditor() {
                     </button>
                   </div>
                 )}
+                {lineCount > 1 && (
+                  <p className="muted small order-help">Lines run from top to bottom. Set a line to "With previous" to start it at the same time as the one above.</p>
+                )}
                 <ol className="order-list">
                   {beats.map((lines, b) => (
-                    <li key={b} className="order-beat">
+                    <li key={b} className={`order-beat ${lines.length > 1 ? 'group' : ''}`}>
                       <span className="order-place">
                         {ordinal(b + 1)}
-                        {lines.length > 1 && <span className="muted"> · together</span>}
+                        {lines.length > 1 && <span className="muted"> · {lines.length} together</span>}
                       </span>
-                      {lines.map((l) => (
-                        <div key={l.id} className={`order-row ${isSelected(l.id) ? 'on' : ''}`}>
-                          <button type="button" className="order-name" onClick={() => setSelected(l.id)} title="Show this line on the court">
-                            <span className={`order-dot ${l.kind}`} aria-hidden="true" />
-                            {describeLine(l, frame, sport)}
-                          </button>
-                          <span className="order-move">
-                            <button type="button" className="btn small" aria-label={`Move "${describeLine(l, frame, sport)}" earlier`} title="Earlier" disabled={b === 0 && lines.length === 1} onClick={() => shiftOrder(l, -1)}>
-                              ↑
+                      {lines.map((l) => {
+                        const i = sequence.findIndex((s) => s.line.id === l.id);
+                        const name = describeLine(l, frame, sport);
+                        return (
+                          <div key={l.id} className={`order-row ${isSelected(l.id) ? 'on' : ''}`}>
+                            <button type="button" className="order-name" onClick={() => setSelected(l.id)} title="Show this line in the drawing">
+                              <span className={`order-dot ${l.kind}`} aria-hidden="true" />
+                              {name}
                             </button>
-                            <button type="button" className="btn small" aria-label={`Move "${describeLine(l, frame, sport)}" later`} title="Later" disabled={b === beats.length - 1 && lines.length === 1} onClick={() => shiftOrder(l, 1)}>
-                              ↓
-                            </button>
-                          </span>
-                        </div>
-                      ))}
+                            <span className="order-controls">
+                              {i === 0 ? (
+                                <span className="order-first">Starts the step</span>
+                              ) : (
+                                <select className="order-when" aria-label={`When "${name}" starts`} value={sequence[i].withPrevious ? 'with' : 'after'} onChange={(e) => setWithPrevious(i, e.target.value === 'with')}>
+                                  <option value="after">After previous</option>
+                                  <option value="with">With previous</option>
+                                </select>
+                              )}
+                              <span className="order-move">
+                                <button type="button" className="btn small" aria-label={`Move "${name}" earlier`} title="Earlier" disabled={i === 0} onClick={() => moveInOrder(i, -1)}>
+                                  ↑
+                                </button>
+                                <button type="button" className="btn small" aria-label={`Move "${name}" later`} title="Later" disabled={i === sequence.length - 1} onClick={() => moveInOrder(i, 1)}>
+                                  ↓
+                                </button>
+                              </span>
+                            </span>
+                          </div>
+                        );
+                      })}
                     </li>
                   ))}
                 </ol>

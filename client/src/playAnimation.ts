@@ -29,6 +29,41 @@ export function withOrder(objects: PlayObject[], changes: Map<string, number>): 
   });
 }
 
+/** One line in a step's running order, and whether it starts at the same moment as the line before it. */
+export interface SequenceItem {
+  line: PlayLine;
+  withPrevious: boolean;
+}
+/**
+ * The step's lines as one list, first to last. A line either waits for the one before it to
+ * finish, or starts with it. Any number of lines in a row can start together, and a step can
+ * hold any number of such groups.
+ */
+export const sequenceOf = (frame: PlayFrame): SequenceItem[] => beatsOf(frame).flatMap((beat) => beat.map((line, i) => ({ line, withPrevious: i > 0 })));
+
+/**
+ * Writes a running order back onto the step. Places count up each time a line waits for the one
+ * before it. The lines are also stored in that order, so the list reads the same way next time.
+ */
+export function withSequence(objects: PlayObject[], sequence: { id: string; withPrevious: boolean }[]): PlayObject[] {
+  const byId = new Map(objects.filter(isLine).map((l) => [l.id, l]));
+  let place = 0;
+  const ordered: PlayLine[] = [];
+  sequence.forEach((item, i) => {
+    const line = byId.get(item.id);
+    if (!line) return;
+    if (i === 0 || !item.withPrevious) place++;
+    const { order: _old, ...rest } = line;
+    // The first place is the default, so it is not stored.
+    ordered.push(place > 1 ? { ...rest, order: place } : rest);
+    byId.delete(item.id);
+  });
+  // A line the list did not mention keeps moving, after everything else.
+  for (const line of byId.values()) ordered.push({ ...line, order: ++place });
+  let next = 0;
+  return objects.map((o) => (isLine(o) ? ordered[next++] : o));
+}
+
 export const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
 
 /** A line in plain words: "1 passes to 2", "3 screens for 2", "1 cuts to the basket". */

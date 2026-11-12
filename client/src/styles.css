@@ -5461,3 +5461,61 @@ fieldset.plain {
     border-top: 1px solid var(--line);
   }
 }
+
+/* ---------- Order of movement: after previous, or with previous ---------- */
+.order-help {
+  margin: 0;
+}
+.order-row {
+  flex-wrap: wrap;
+  gap: 0;
+}
+.order-row .order-name {
+  flex: 1 1 100%;
+}
+.order-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0 2px 5px 6px;
+}
+.order-list,
+.order-beat {
+  grid-template-columns: minmax(0, 1fr);
+}
+.order-controls .order-when {
+  flex: 1 1 0;
+}
+.order-when {
+  min-width: 0;
+  padding: 3px 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.78rem;
+}
+.order-first {
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+.order-beat.group {
+  border-left-color: var(--series, var(--ink));
+}
+.order-controls {
+  gap: 4px;
+  padding-left: 2px;
+}
+.order-controls .order-when {
+  padding: 3px 2px;
+  font-size: 0.74rem;
+}
+.order-controls .order-move .btn {
+  min-width: 24px;
+  padding: 0 4px;
+}
