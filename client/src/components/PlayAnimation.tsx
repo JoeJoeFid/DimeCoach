@@ -58,8 +58,8 @@ export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Pla
           <ShapeView key={o.id} shape={o} />
         ))}
         {frame.objects.filter(isLine).map((o) => (
-          // A line is faint until its turn, full while it moves, and settles back once it is done.
-          <g key={o.id} className={`anim-line ${shot.active.has(o.id) ? 'now' : shot.done.has(o.id) ? 'done' : 'later'}`}>
+          // A line is faint until its turn, then fades away as the movement along it plays out: gone by the time it is finished.
+          <g key={o.id} className={`anim-line ${shot.active.has(o.id) ? 'now' : shot.done.has(o.id) ? 'done' : 'later'}`} style={shot.active.has(o.id) ? { opacity: 1 - t } : undefined}>
             <LineShape line={o} objects={frame.objects} />
           </g>
         ))}

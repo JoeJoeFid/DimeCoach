@@ -4381,7 +4381,11 @@ text.play-mark.text.selected {
   opacity: 0.22;
 }
 .anim-line.done {
-  opacity: 0.4;
+  opacity: 0;
+}
+/* While a line is in use its opacity follows the movement exactly, frame by frame. */
+.anim-line.now {
+  transition: none;
 }
 .anim-bar {
   display: flex;
@@ -6167,4 +6171,59 @@ fieldset.plain {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* Play header: name, category, surface and tags on the left; notes about the play on the right. */
+.play-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.play-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.play-head > .field textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+}
+@media (max-width: 900px) {
+  .play-head {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Side menu: a soft green-gray, a step away from the page behind the main area ---------- */
+:root {
+  --side-bg: #e7ebdb;
+  --side-line: #d5dbc3;
+  --side-hover: #dbe0cb;
+  --side-active: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --side-bg: #12150c;
+    --side-line: #252a19;
+    --side-hover: #1c2013;
+    --side-active: #272c1a;
+  }
+}
+:root[data-theme='dark'] {
+  --side-bg: #12150c;
+  --side-line: #252a19;
+  --side-hover: #1c2013;
+  --side-active: #272c1a;
+}
+.sidebar {
+  background: var(--side-bg);
+  border-right-color: var(--side-line);
+  /* Rules and hover states inside the menu follow its tint. */
+  --line: var(--side-line);
+  --surface-3: var(--side-hover);
+}
+.sidebar .side-nav a.active {
+  background: var(--side-active);
 }

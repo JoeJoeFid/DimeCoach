@@ -761,7 +761,6 @@ export default function PlayEditor() {
       })),
     });
   };
-  const toolHint = tools.find((t) => t.id === tool)!.hint;
   const selLine = selectedObject && isLine(selectedObject) ? selectedObject : null;
   const selShape = selectedObject && isShape(selectedObject) ? selectedObject : null;
   const selMark = selectedObject && isMark(selectedObject) ? selectedObject : null;
@@ -834,53 +833,60 @@ export default function PlayEditor() {
       {error && <p className="error">{error}</p>}
 
       <div className="card">
-        <div className="fields">
-          <Field label="Play name" grow>
-            <input className="input" value={play.name} onChange={(e) => update({ name: e.target.value })} />
-          </Field>
-          <Field label="Category">
-            {/* A plain list, so every category is always offered. A text box with suggestions only
-                offers the ones matching what is already typed, which hides the rest once one is chosen. */}
-            <select
-              className="input"
-              aria-label="Category"
-              value={play.category}
-              onChange={async (e) => {
-                if (e.target.value !== NEW_CATEGORY) return update({ category: e.target.value });
-                const name = (await promptDialog({ title: 'New category', confirmLabel: 'Use category' }))?.trim().slice(0, 60);
-                if (!name) return;
-                setCategories((cs) => (cs.includes(name) ? cs : [...cs, name]));
-                update({ category: name });
-              }}
-            >
-              <option value="">No category</option>
-              {[...new Set([...categories, ...(play.category ? [play.category] : [])])].map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-              <option value={NEW_CATEGORY}>+ New category…</option>
-            </select>
-          </Field>
-          <Field label="Tags, separated by commas" grow>
-            <input
-              className="input"
-              placeholder="vs 2-3 zone, late clock"
-              value={labelsText}
-              onChange={(e) => {
-                setLabelsText(e.target.value);
-                update({ labels: [...new Set(e.target.value.split(',').map((l) => l.trim()).filter(Boolean))] });
-              }}
-            />
-          </Field>
-          <Field label={sport === 'basketball' ? 'Court' : 'Field'}>
-            <select className="input" value={play.court} onChange={(e) => changeSurface(e.target.value as Play['court'])}>
-              {SURFACES[sport].map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
+        <div className="play-head">
+          <div className="play-head-main">
+            <div className="fields">
+              <Field label="Play name" grow>
+                <input className="input" value={play.name} onChange={(e) => update({ name: e.target.value })} />
+              </Field>
+              <Field label="Category">
+                {/* A plain list, so every category is always offered. A text box with suggestions only
+                    offers the ones matching what is already typed, which hides the rest once one is chosen. */}
+                <select
+                  className="input"
+                  aria-label="Category"
+                  value={play.category}
+                  onChange={async (e) => {
+                    if (e.target.value !== NEW_CATEGORY) return update({ category: e.target.value });
+                    const name = (await promptDialog({ title: 'New category', confirmLabel: 'Use category' }))?.trim().slice(0, 60);
+                    if (!name) return;
+                    setCategories((cs) => (cs.includes(name) ? cs : [...cs, name]));
+                    update({ category: name });
+                  }}
+                >
+                  <option value="">No category</option>
+                  {[...new Set([...categories, ...(play.category ? [play.category] : [])])].map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                  <option value={NEW_CATEGORY}>+ New category…</option>
+                </select>
+              </Field>
+              <Field label={sport === 'basketball' ? 'Court' : 'Field'}>
+                <select className="input" value={play.court} onChange={(e) => changeSurface(e.target.value as Play['court'])}>
+                  {SURFACES[sport].map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <Field label="Tags, separated by commas">
+              <input
+                className="input"
+                placeholder="vs 2-3 zone, late clock"
+                value={labelsText}
+                onChange={(e) => {
+                  setLabelsText(e.target.value);
+                  update({ labels: [...new Set(e.target.value.split(',').map((l) => l.trim()).filter(Boolean))] });
+                }}
+              />
+            </Field>
+          </div>
+          <Field label="About this play">
+            <textarea className="input" placeholder="When to call it, what to look for" value={play.notes} onChange={(e) => update({ notes: e.target.value })} />
           </Field>
         </div>
         <div className="plan-summary">
@@ -945,9 +951,9 @@ export default function PlayEditor() {
               </button>
             </div>
           </div>
-          {(aim || tool !== 'select') && (
+          {aim && (
             <p className="muted small tool-hint" role="status">
-              {aim ? 'Now click where it ends. Click a player or the basket to attach it there. Press Escape to cancel.' : toolHint}
+              Now click where it ends. Click a player or the basket to attach it there. Press Escape to cancel.
             </p>
           )}
         </div>
@@ -1320,12 +1326,6 @@ export default function PlayEditor() {
             />
           </Field>
         </div>
-      </div>
-
-      <div className="card play-about">
-        <Field label="About this play">
-          <textarea className="input" rows={4} placeholder="When to call it, what to look for" value={play.notes} onChange={(e) => update({ notes: e.target.value })} />
-        </Field>
       </div>
 
       {sharing && <ShareDialog kind="play" itemId={play.id} title={play.name || 'Play'} onClose={() => setSharing(false)} />}
