@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEventHandler, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEventHandler, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useDraggable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -15,6 +15,7 @@ import { deleteLater, showUndo } from '../components/toasts';
 import { DraftReview, SourcePicker, defaultChoices, resolveDraft, useAiStatus, type DraftChoices } from '../components/planImport';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
+const COMPACT_KEY = 'practiceplan.planCompact';
 
 // Things dragged in from the side list are not in the plan yet. Their ids say what to make:
 // "new:custom", "new:break", or "new:drill:<id>".
@@ -50,6 +51,12 @@ export default function PlanEditor() {
   /** True while the place it would land is beside an item already there, sharing its time. */
   const [dropBeside, setDropBeside] = useState(false);
   const column = useRef<HTMLDivElement>(null);
+  // Compact rows show only the time, title and minutes, to see more of the practice at once. Remembered on this computer.
+  const [compact, setCompact] = useState(() => localStorage.getItem(COMPACT_KEY) === '1');
+  const chooseCompact = (on: boolean) => {
+    setCompact(on);
+    localStorage.setItem(COMPACT_KEY, on ? '1' : '0');
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const [importing, setImporting] = useState(searchParams.has('import') && app.user.can_import);
 
@@ -529,8 +536,18 @@ export default function PlanEditor() {
 
         <div className="plan-layout">
           <Palette drills={libraryDrills} tags={tags} withBreak={!isHomework} sheet={sheet} onAdd={addNew} />
-          <div className="plan-column" ref={column}>
-            <h2 className="plan-column-title">{isHomework ? 'Homework' : 'Practice schedule'}</h2>
+          <div className={`plan-column ${compact ? 'compact' : ''}`} ref={column}>
+            <div className="plan-column-head">
+              <h2 className="plan-column-title">{isHomework ? 'Homework' : 'Practice schedule'}</h2>
+              <div className="seg" role="group" aria-label="How much each item shows">
+                <button type="button" className={compact ? '' : 'on'} aria-pressed={!compact} onClick={() => chooseCompact(false)}>
+                  Detailed
+                </button>
+                <button type="button" className={compact ? 'on' : ''} aria-pressed={compact} onClick={() => chooseCompact(true)}>
+                  Compact
+                </button>
+              </div>
+            </div>
             {plan.items.length === 0 ? (
               <div className={`empty ${incoming && dropAt !== null ? 'drop-here' : ''}`}>
                 <h2>Nothing scheduled yet</h2>
@@ -730,6 +747,8 @@ function CategoryRows({ mins, tags, empty }: { mins: Minutes; tags: Tag[]; empty
 
 const PREVIOUS_SHOWN = 8;
 const SUMMARY_WIDTH = 360;
+/** The most activities listed in the summary of an earlier practice, so it stays a glance. */
+const PREVIOUS_ROWS = 12;
 /**
  * The practices before this one. Pointing at one (or tabbing to it) opens a summary beside the
  * list: what was done and when, and the same category breakdown as "At a glance". Clicking opens it.
@@ -761,6 +780,14 @@ function PreviousPractices({ current, tags }: { current: Plan; tags: Tag[] }) {
     setShown({ plan, top: r.top, right: window.innerWidth - box.left + 10 });
   };
   const summary = shown && { mins: planMinutes(shown.plan, tagIds), slots: schedule(shown.plan.start_time, shown.plan.items) };
+  // The summary opens level with the practice pointed at, then moves up as far as it must to fit on the screen.
+  const popup = useRef<HTMLDivElement>(null);
+  const [popupTop, setPopupTop] = useState(12);
+  useLayoutEffect(() => {
+    if (!shown || !popup.current) return;
+    const room = window.innerHeight - popup.current.offsetHeight - 12;
+    setPopupTop(Math.max(12, Math.min(shown.top - 16, room)));
+  }, [shown]);
   return (
     <aside className="plan-previous" aria-label={`Previous ${noun}`} onMouseLeave={() => setShown(null)}>
       <h2>Previous {noun}</h2>
@@ -786,20 +813,21 @@ function PreviousPractices({ current, tags }: { current: Plan; tags: Tag[] }) {
         </ul>
       )}
       {shown && summary && (
-        <div className="previous-summary" role="status" style={{ right: shown.right, top: Math.max(12, Math.min(shown.top - 16, window.innerHeight - 520)), width: SUMMARY_WIDTH }}>
+        <div ref={popup} className="previous-summary" role="status" style={{ right: shown.right, top: popupTop, width: SUMMARY_WIDTH }}>
           <h3>
             {fmtDateShort(shown.plan.date)}
             <span className="muted"> · {fmtDuration(summary.mins.work + summary.mins.breaks)}</span>
           </h3>
           {(shown.plan.title || shown.plan.location) && <p className="muted small">{[shown.plan.title, shown.plan.location].filter(Boolean).join(' · ')}</p>}
           <ol className="previous-items">
-            {shown.plan.items.map((it, i) => (
+            {shown.plan.items.slice(0, PREVIOUS_ROWS).map((it, i) => (
               <li key={it.key} className={it.kind === 'break' ? 'break' : ''}>
                 {shown.plan.kind === 'practice' && <time>{fmtClock(summary.slots[i].start)}</time>}
                 <span>{it.title || (it.kind === 'break' ? 'Break' : 'Untitled item')}</span>
                 <span className="glance-min">{it.duration_min} min</span>
               </li>
             ))}
+            {shown.plan.items.length > PREVIOUS_ROWS && <li className="break">and {shown.plan.items.length - PREVIOUS_ROWS} more</li>}
           </ol>
           <CategoryRows mins={summary.mins} tags={tags} empty="No categories were set on this one." />
         </div>

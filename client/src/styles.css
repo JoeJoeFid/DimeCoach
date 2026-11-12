@@ -6783,3 +6783,46 @@ fieldset.plain {
     display: none;
   }
 }
+
+/* ---------- Practice schedule: detailed or compact rows ---------- */
+.plan-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.plan-column-head .plan-column-title {
+  margin-bottom: 0;
+}
+.plan-column-head .seg button {
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+/* Compact: just the time, the title and the minutes. Categories and the notes line are left out. */
+.plan-column.compact .item-preview,
+.plan-column.compact .untagged {
+  display: none;
+}
+.plan-column.compact .card.item {
+  padding: 6px 10px;
+}
+.plan-column.compact .item-head .time {
+  min-width: 132px;
+  padding: 5px 9px;
+  font-size: 1.05rem;
+}
+.plan-column.compact .item-head .input.title,
+.plan-column.compact .slot-group.paired .item-head .input.title {
+  height: 36px;
+  font-size: 1.15rem;
+}
+.plan-column.compact .inserter {
+  padding: 1px 0;
+}
+.plan-column.compact .slot-group.paired {
+  padding: 6px 8px 0;
+}
+.plan-column.compact .slot-shared {
+  margin-bottom: 6px;
+}
