@@ -4315,8 +4315,9 @@ text.play-mark.text.selected {
 .anim-line {
   transition: opacity 0.25s;
 }
+/* A line waiting for its turn is drawn in full. It only fades as the movement along it plays out. */
 .anim-line.later {
-  opacity: 0.22;
+  opacity: 1;
 }
 .anim-line.done {
   opacity: 0;
