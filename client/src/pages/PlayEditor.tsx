@@ -173,6 +173,8 @@ export default function PlayEditor() {
   const [sharing, setSharing] = useState(false);
   /** Whether the animated playback is open. */
   const [watching, setWatching] = useState(false);
+  // On a phone the details are one line until asked for, so the court comes first.
+  const [headOpen, setHeadOpen] = useState(false);
   /** A tool being dragged from the palette: which one, and where the pointer is on the page. */
   const [carry, setCarry] = useState<{ tool: Tool; x: number; y: number } | null>(null);
   const carrying = useRef<{ tool: Tool; x: number; y: number; active: boolean } | null>(null);
@@ -864,7 +866,14 @@ export default function PlayEditor() {
       </div>
       {error && <p className="error">{error}</p>}
 
-      <div className="card">
+      <div className={`card play-card ${headOpen ? 'open' : ''}`}>
+        <button type="button" className="head-brief" onClick={() => setHeadOpen(!headOpen)} aria-expanded={headOpen}>
+          <span className="head-brief-text">
+            <strong>{play.name || 'Untitled play'}</strong>
+            <span className="muted">{[play.category, SURFACES[sport].find((v) => v.id === play.court)?.label].filter(Boolean).join(' · ')}</span>
+          </span>
+          <span className="head-brief-action">{headOpen ? 'Done' : 'Edit details'}</span>
+        </button>
         <div className="play-head">
           <div className="play-head-main">
             <div className="fields">

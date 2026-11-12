@@ -2056,39 +2056,6 @@ a.heat-cell:hover {
   .shell {
     display: block;
   }
-  .sidebar {
-    position: sticky;
-    z-index: 30;
-    height: auto;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 12px;
-    padding: 10px 14px 8px;
-    background: var(--bg);
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-  }
-  .side-label {
-    display: none;
-  }
-  .team-select {
-    flex: 1;
-    min-width: 0;
-  }
-  .side-nav {
-    order: 5;
-    flex: 1 0 100%;
-    flex-direction: row;
-    overflow-x: auto;
-    gap: 4px;
-  }
-  .side-nav a {
-    padding: 6px 10px;
-  }
-  .side-nav a svg {
-    display: none;
-  }
   .page {
     padding: 24px 16px 80px;
   }
@@ -2255,17 +2222,6 @@ a.heat-cell:hover {
 }
 .reg-status {
   margin: 8px 0 0;
-}
-@media (max-width: 900px) {
-  .side-foot {
-    flex-direction: row;
-    align-items: center;
-  }
-  .side-user {
-    flex-direction: row;
-    gap: 10px;
-    align-items: baseline;
-  }
 }
 
 .side-foot .theme-toggle {
@@ -3677,20 +3633,6 @@ video.res-full {
 .side-nav.admin-nav {
   flex: none;
   margin: 0 -4px;
-}
-@media (max-width: 900px) {
-  /* The narrow layout shows the pages as one scrolling row, so the group labels are dropped. */
-  .nav-group {
-    display: contents;
-  }
-  .nav-group .side-label {
-    display: none;
-  }
-  .side-nav.admin-nav {
-    margin: 0;
-    flex: none;
-    order: 0;
-  }
 }
 
 /* ---------- Wider main content (about 15% more than before) ---------- */
@@ -6491,7 +6433,7 @@ fieldset.plain {
   color: var(--ink);
 }
 @media (max-width: 900px) {
-  /* On a narrow screen the menu is a row along the top, with nothing to fold. */
+  /* On a narrow screen the menu slides in over the page, with nothing to fold. */
   .nav-fold {
     display: none;
   }
@@ -8112,4 +8054,322 @@ fieldset.perm-list:disabled .check.perm {
   --danger: #b3261e;
   background: #f3f9d4;
   border-color: rgba(21, 27, 0, 0.32);
+}
+
+/* ---------- Narrow screens: a slim bar, and the menu as a panel that slides in ---------- */
+.mobile-bar,
+.menu-close,
+.menu-scrim {
+  display: none;
+}
+@media (max-width: 900px) {
+  .mobile-bar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 52px;
+    padding: 0 12px 0 6px;
+    background: var(--side-bg);
+    border-bottom: 1px solid var(--side-line);
+  }
+  .menu-btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 10px;
+    background: none;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .menu-dot {
+    position: absolute;
+    top: 8px;
+    right: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--side-bg);
+    animation: nav-pulse 1.6s ease-in-out infinite;
+  }
+  .mobile-team {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+  }
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 60;
+    width: min(300px, 86vw);
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateX(-102%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0.2s;
+    box-shadow: 12px 0 40px rgb(0 0 0 / 0.35);
+  }
+  .menu-open .sidebar {
+    transform: none;
+    visibility: visible;
+  }
+  .menu-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgb(0 0 0 / 0.5);
+  }
+  .menu-close {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin: -6px -4px -6px 0;
+    border: none;
+    border-radius: 10px;
+    background: none;
+    color: var(--ink-2);
+    font-size: 1.05rem;
+    cursor: pointer;
+  }
+  .sidebar .side-nav {
+    flex: none;
+  }
+  .sidebar .side-nav a {
+    min-height: 44px;
+    font-size: 1rem;
+  }
+  .sidebar .side-foot {
+    margin-top: auto;
+  }
+  /* The folded look belongs to wide screens only. */
+  .nav-folded .nav-badge {
+    position: static;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    font-size: 0.72rem;
+  }
+}
+@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+  .menu-dot {
+    animation: none;
+  }
+}
+
+/* ---------- Phones: an editor's details fold down to one line ---------- */
+.head-brief {
+  display: none;
+}
+@media (max-width: 700px) {
+  .head-brief {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .head-brief-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .head-brief-text strong {
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+  }
+  .head-brief-text > * {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .head-brief-text .muted {
+    font-size: 0.88rem;
+  }
+  .head-brief-action {
+    flex: none;
+    padding: 7px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .plan-head:not(.open) .plan-head-grid,
+  .play-card:not(.open) .play-head {
+    display: none;
+  }
+  .plan-head.open .plan-head-grid,
+  .play-card.open .play-head {
+    margin-top: 12px;
+  }
+  .plan-head.open .head-brief-text,
+  .play-card.open .head-brief-text {
+    visibility: hidden;
+  }
+}
+
+/* ---------- Touch screens: controls big enough for a finger ---------- */
+@media (pointer: coarse), (max-width: 700px) {
+  .btn,
+  .seg button,
+  .more-btn,
+  select.input {
+    min-height: 40px;
+  }
+  .btn.small,
+  .chip,
+  .perm-chip {
+    min-height: 36px;
+  }
+  .btn.ghost {
+    min-width: 40px;
+  }
+  .theme-toggle button {
+    width: 44px;
+    height: 38px;
+  }
+  button.link,
+  .side-user .link,
+  .side-user-name {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  .side-user {
+    gap: 0;
+  }
+  input[type='checkbox'] {
+    min-width: 22px;
+    min-height: 22px;
+  }
+}
+
+/* ---------- Phones: nothing wider than the screen ---------- */
+@media (max-width: 560px) {
+  /* Dashboard category table: the target column goes (the status says how far off), names may wrap. */
+  .bars thead th:nth-child(4),
+  .bars tbody td:nth-child(4),
+  .bars tfoot td:nth-child(4) {
+    display: none;
+  }
+  .bars tbody th {
+    white-space: normal;
+    padding-right: 8px;
+  }
+  .bars td {
+    padding-right: 6px;
+  }
+  .bar-cell {
+    min-width: 48px;
+  }
+  .card:has(> .bars) {
+    overflow-x: auto;
+  }
+  /* Practices: the kind tabs and the view switch take a line each when they cannot share one. */
+  .ps-tabs {
+    flex-wrap: wrap;
+    gap: 6px 12px;
+  }
+}
+@media (pointer: coarse), (max-width: 700px) {
+  /* There is no hover on a touch screen, so the add buttons between items are always readable. */
+  .inserter {
+    opacity: 0.85;
+  }
+  .inserter button {
+    min-height: 36px;
+    padding: 1px 14px;
+    font-size: 0.85rem;
+  }
+  .sheet-row .handle {
+    min-width: 32px;
+    min-height: 40px;
+  }
+  .crumbs a,
+  .sys-jump a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+}
+@media screen and (max-width: 700px) {
+  /* Print preview: a side-by-side block scrolls inside its item, not the whole page. */
+  .sheet-item:has(.sheet-squads) {
+    overflow-x: auto;
+  }
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .item-head .btn.ghost {
+    min-height: 40px;
+    height: auto;
+  }
+}
+@media (max-width: 700px) {
+  /* Practice items on a phone: handle, title and delete on one line; time, minutes and Details under it. */
+  .sheet-row .item-head {
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+  .sheet-row .item-head .handle {
+    order: 0;
+  }
+  .sheet-row .item-head .input.title {
+    order: 1;
+    flex: 1 0 calc(100% - 100px);
+    min-width: 0;
+    height: 44px;
+    font-size: 1.15rem;
+    letter-spacing: -0.02em;
+  }
+  .sheet-row .item-head .btn.ghost {
+    order: 2;
+  }
+  .sheet-row .item-head .time {
+    order: 3;
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 1.05rem;
+  }
+  .sheet-row .item-head .input.reps {
+    order: 3;
+    flex: 1;
+    min-width: 0;
+  }
+  .sheet-row .item-head .dur {
+    order: 4;
+    margin-left: auto;
+  }
+  .sheet-row .item-head .btn.small {
+    order: 5;
+  }
+  .plan-column-head {
+    flex-wrap: wrap;
+  }
+  .plan-column-head .plan-column-title {
+    white-space: normal;
+    font-size: 1.5rem;
+  }
 }

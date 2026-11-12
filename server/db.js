@@ -285,3 +285,14 @@ export function tx(fn) {
 
 // When each member last looked at a community, so what has arrived since can be pointed out.
 addColumn('community_members', 'seen_at', 'TEXT');
+
+// Messages the app itself sends a person: added to a team, removed from a community, and so on.
+// `ref` names what a message is about, so a newer one of the same kind replaces an unread older one.
+db.exec(`CREATE TABLE IF NOT EXISTS notices (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL, ref TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL, body TEXT NOT NULL DEFAULT '', link TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP, read_at TEXT
+);
+CREATE INDEX IF NOT EXISTS notices_user ON notices (user_id, id);`);

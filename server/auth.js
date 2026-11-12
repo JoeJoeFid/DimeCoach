@@ -10,6 +10,7 @@ import path from 'node:path';
 import { all, db, dbPath, get, run, tx } from './db.js';
 import { createWorkspace } from './seed.js';
 import { mailerStatus, sendMail } from './mailer.js';
+import { notify } from './notices.js';
 import { MAX_CAP_MB, capMbFor, defaultCapMb, parseCapMb, usageOf } from './quota.js';
 
 const COOKIE = 'pp_session';
@@ -460,7 +461,16 @@ export function mountAuth(app) {
       if (problem) return res.status(400).json({ error: problem });
     }
     tx(() => {
-      if (typeof b.can_import === 'boolean') run('UPDATE users SET can_import=? WHERE id=?', b.can_import ? 1 : 0, target.id);
+      if (typeof b.can_import === 'boolean') {
+        run('UPDATE users SET can_import=? WHERE id=?', b.can_import ? 1 : 0, target.id);
+        if (b.can_import !== !!target.can_import && target.id !== req.user.id)
+          notify(target.id, {
+            kind: 'account', ref: 'import',
+            title: b.can_import ? 'Plan import is turned on for you' : 'Plan import was turned off for you',
+            body: b.can_import ? 'You can now bring in practice plans you already have written. Look for "Import" on the Practices page.' : 'Ask the administrator if you need it back.',
+            link: b.can_import ? '/practices' : '',
+          });
+      }
       if (typeof b.is_admin === 'boolean') run('UPDATE users SET is_admin=? WHERE id=?', b.is_admin ? 1 : 0, target.id);
       if ((b.status === 'active' || b.status === 'disabled') && target.status !== 'pending') {
         run('UPDATE users SET status=? WHERE id=?', b.status, target.id);
@@ -574,6 +584,7 @@ export function mountAuth(app) {
       if (target.id === req.user.id) return res.status(400).json({ error: 'Change your own password under your account.' });
       run('UPDATE users SET password_hash=?, must_change_password=? WHERE id=?', hashPassword(str(b.password)), b.must_change === false ? 0 : 1, target.id);
       endSessions(target.id);
+      notify(target.id, { kind: 'account', ref: 'password', title: 'The administrator set a new password for you', body: 'If you did not ask for this, change it under your account and tell the administrator.', link: '/account' });
     }
     res.json(systemOut());
   });

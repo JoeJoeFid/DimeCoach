@@ -4,6 +4,7 @@
 // a share points at the original, and "add to mine" makes a separate copy for the taker.
 import crypto from 'node:crypto';
 import { all, get, run, tx } from './db.js';
+import { noticesFor, notify, readNotices } from './notices.js';
 
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 const parse = (s, d) => {
@@ -146,6 +147,8 @@ function copyPlan(p, ownerId, team, date) {
   return planId;
 }
 
+const SHARE_NOUN = { drill: 'drill', play: 'play', plan: 'practice plan' };
+
 export function mountCommunities(app) {
   const communityOut = (c, m) => ({
     id: c.id, name: c.name, description: c.description,
@@ -228,10 +231,22 @@ export function mountCommunities(app) {
         if (row) items.push({ ...base, key: `share-${sh.id}`, kind: 'share', share_kind: sh.kind, at: sh.created_at, by: sh.by_name, text: titleOf(sh.kind, row), unread: sh.created_at > c.seen });
       }
     }
+    items.push(...noticesFor(userId));
     items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
-    return { unread: items.filter((i) => i.unread).length, items: items.slice(0, 60) };
+    return { unread: items.filter((i) => i.unread).length, items: items.slice(0, 80) };
   };
   app.get('/api/communities/news', (req, res) => res.json(newsFor(req.user.id)));
+  // The Messages page: the same list, and reading one message from the app or everything at once.
+  app.get('/api/messages', (req, res) => res.json(newsFor(req.user.id)));
+  app.post('/api/messages/read', (req, res) => {
+    readNotices(req.user.id);
+    run("UPDATE community_members SET seen_at=datetime('now') WHERE user_id=? AND status='active'", req.user.id);
+    res.json(newsFor(req.user.id));
+  });
+  app.post('/api/messages/:id/read', (req, res) => {
+    readNotices(req.user.id, Number(req.params.id));
+    res.json(newsFor(req.user.id));
+  });
   // Opening a community, or "mark all as read", moves the line: nothing older counts as new any more.
   app.post('/api/communities/seen', (req, res) => {
     run("UPDATE community_members SET seen_at=datetime('now') WHERE user_id=? AND status='active'", req.user.id);
@@ -267,6 +282,8 @@ export function mountCommunities(app) {
   app.delete('/api/communities/:id', (req, res) => {
     const at = enter(req, res, { creator: true });
     if (!at) return;
+    for (const m of all("SELECT user_id FROM community_members WHERE community_id=? AND status='active' AND user_id<>?", at.c.id, req.user.id))
+      notify(m.user_id, { kind: 'community', title: `${req.user.name} deleted the community ${at.c.name}`, body: 'Anything you added to your own drills, plays or practices from it is still yours.' });
     run('DELETE FROM communities WHERE id=?', at.c.id);
     res.json({ ok: true });
   });
@@ -294,6 +311,10 @@ export function mountCommunities(app) {
     const m = membership(Number(req.params.id), req.user.id);
     if (!m) return res.status(404).json({ error: 'Not found' });
     run("UPDATE community_members SET status='active' WHERE community_id=? AND user_id=?", m.community_id, req.user.id);
+    if (m.status === 'invited' && m.invited_by) {
+      const c = get('SELECT name FROM communities WHERE id=?', m.community_id);
+      notify(m.invited_by, { kind: 'community', title: `${req.user.name} joined ${c.name}`, body: 'They accepted your invitation.', link: `/communities/${m.community_id}` });
+    }
     res.json({ ok: true });
   });
   app.put('/api/communities/:id/members/:userId', (req, res) => {
@@ -304,6 +325,12 @@ export function mountCommunities(app) {
     if (target.role === 'creator') return res.status(400).json({ error: 'The creator stays the creator.' });
     if (req.body.role !== 'admin' && req.body.role !== 'member') return res.status(400).json({ error: 'Choose admin or member.' });
     run('UPDATE community_members SET role=? WHERE community_id=? AND user_id=?', req.body.role, at.c.id, target.user_id);
+    if (req.body.role !== target.role)
+      notify(target.user_id, {
+        kind: 'community-role', ref: `community-${at.c.id}`, link: `/communities/${at.c.id}`,
+        title: req.body.role === 'admin' ? `${req.user.name} made you an admin of ${at.c.name}` : `You are no longer an admin of ${at.c.name}`,
+        body: req.body.role === 'admin' ? 'You can now invite people, approve what is shared and remove messages.' : 'You are still a member.',
+      });
     res.json(detailOut(at.c, at.m));
   });
   app.delete('/api/communities/:id/members/:userId', (req, res) => {
@@ -322,6 +349,7 @@ export function mountCommunities(app) {
       run('DELETE FROM community_shares WHERE community_id=? AND user_id=?', c.id, target.user_id);
       run('DELETE FROM community_members WHERE community_id=? AND user_id=?', c.id, target.user_id);
     });
+    if (!self && target.status === 'active') notify(target.user_id, { kind: 'community', title: `${req.user.name} removed you from ${c.name}`, body: 'What you shared there was taken down. Your own drills, plays and practices are untouched.' });
     res.json({ ok: true });
   });
 
@@ -396,6 +424,8 @@ export function mountCommunities(app) {
     if (!at) return;
     if (!isAdminRole(at.m)) return res.status(403).json({ error: 'Only a community admin can approve.' });
     run("UPDATE community_shares SET status='approved' WHERE id=?", at.s.id);
+    if (at.s.status !== 'approved' && at.s.user_id !== req.user.id)
+      notify(at.s.user_id, { kind: 'community', title: `Your ${SHARE_NOUN[at.s.kind] || 'item'} was approved in ${at.c.name}`, body: `${req.user.name} approved it. Everyone in the community can see it now.`, link: `/communities/${at.c.id}` });
     res.json(sharesOut(at.c, at.m));
   });
   app.delete('/api/community-shares/:shareId', (req, res) => {
@@ -403,6 +433,12 @@ export function mountCommunities(app) {
     if (!at) return;
     if (at.s.user_id !== req.user.id && !isAdminRole(at.m)) return res.status(403).json({ error: 'Only the person who shared it or a community admin can remove it.' });
     run('DELETE FROM community_shares WHERE id=?', at.s.id);
+    if (at.s.user_id !== req.user.id)
+      notify(at.s.user_id, {
+        kind: 'community', link: `/communities/${at.c.id}`,
+        title: at.s.status === 'approved' ? `${req.user.name} took down your ${SHARE_NOUN[at.s.kind] || 'item'} in ${at.c.name}` : `Your ${SHARE_NOUN[at.s.kind] || 'item'} was not approved in ${at.c.name}`,
+        body: 'Your own copy is untouched.',
+      });
     res.json(sharesOut(at.c, at.m));
   });
   /** For one of the caller's own things: each of their communities, and whether it is shared there. */

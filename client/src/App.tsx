@@ -11,6 +11,7 @@ import TeamPicker from './components/TeamPicker';
 import { PasswordForm, Setup, SignedOut } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
+import Messages from './pages/Messages';
 import CommunityPage from './pages/Community';
 import Dashboard from './pages/Dashboard';
 import Plans from './pages/Plans';
@@ -43,7 +44,7 @@ interface AppState extends Bootstrap {
   touring: boolean;
   /** Whether you may change this part of the team. Always true for your own teams. */
   can: (perm: TeamPerm) => boolean;
-  /** How many invitations, messages and shared things in your communities you have not looked at yet. */
+  /** How many messages you have not read yet: from the app itself, and what is new in your communities. */
   communityUnread: number;
   /** Sets that count from a fresh answer, or asks the server for it again. */
   setCommunityUnread: (count?: number) => void;
@@ -65,6 +66,7 @@ const icons = {
   teams: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.900c1.900.700 3.100 2.400 3.500 5.100',
   system: 'M4 6h16v5H4zM4 13h16v5H4zM7 8.500h.01M7 15.500h.01M11 8.500h6M11 15.500h6',
   community: 'M4 5h11v8H9l-3 3v-3H4zM15 9h5v8h-2v3l-3-3h-4v-2',
+  messages: 'M4 6h16v12H4zM4 7.500l8 6 8-6',
 };
 interface NavItem {
   to: string;
@@ -103,7 +105,10 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     // Other coaches: talking, and trading drills, plays and plans.
     title: 'Community',
-    items: [{ to: '/communities', label: 'Communities', icon: icons.community }],
+    items: [
+      { to: '/messages', label: 'Messages', icon: icons.messages },
+      { to: '/communities', label: 'Communities', icon: icons.community },
+    ],
   },
 ];
 
@@ -193,6 +198,15 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
   useEffect(() => {
     setNavFolded(inEditor || localStorage.getItem(navKey) === '1');
   }, [inEditor, navKey]);
+  // On a narrow screen the menu is a panel that slides in from the left. Going anywhere closes it.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [location.pathname, location.search]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
   const foldNav = (folded: boolean) => {
     setNavFolded(folded);
     if (!inEditor) localStorage.setItem(navKey, folded ? '1' : '0');
@@ -206,7 +220,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
         .catch(() => {});
   }, [user.prefs.tour_done, onChanged]);
 
-  // What is waiting in communities: checked when the page changes and once a minute, to light up the menu.
+  // Unread messages: checked when the page changes and once a minute, to light up Messages in the menu.
   const [communityUnread, setUnread] = useState(0);
   const setCommunityUnread = useCallback((count?: number) => {
     if (count !== undefined) return setUnread(count);
@@ -370,6 +384,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           <Route path="/plays/:id" element={<PlayEditor />} />
           <Route path="/plays/:id/print" element={<PlayPrint />} />
           <Route path="/tags" element={<Tags />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/communities" element={<Communities />} />
           <Route path="/communities/:id" element={<CommunityPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -383,8 +398,8 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
         <path d={n.icon} />
       </svg>
       {n.label}
-      {n.to === '/communities' && communityUnread > 0 && (
-        <span className="nav-badge" title={`${communityUnread} new in your communities`}>
+      {n.to === '/messages' && communityUnread > 0 && (
+        <span className="nav-badge" title={`${communityUnread} unread message${communityUnread === 1 ? '' : 's'}`}>
           {communityUnread > 9 ? '9+' : communityUnread}
           <span className="sr-only"> new</span>
         </span>
@@ -397,7 +412,19 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
       {printing ? (
         routes
       ) : (
-        <div className={`shell ${navFolded ? 'nav-folded' : ''}`}>
+        <div className={`shell ${navFolded ? 'nav-folded' : ''} ${menuOpen ? 'menu-open' : ''}`}>
+          {/* Narrow screens only: the team, and the button that opens the menu. */}
+          <header className="mobile-bar">
+            <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label={communityUnread > 0 ? `Menu, ${communityUnread} unread` : 'Menu'}>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+              {communityUnread > 0 && <span className="menu-dot" aria-hidden="true" />}
+            </button>
+            <span className="brand-mark" aria-hidden="true" />
+            <span className="mobile-team">{state.team!.name}</span>
+          </header>
+          {menuOpen && <div className="menu-scrim" onClick={() => setMenuOpen(false)} />}
           <aside className="sidebar">
             <div className="side-top">
               <NavLink to="/" className="brand">
@@ -407,13 +434,23 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
               <button type="button" className={`nav-fold ${navFolded ? 'open-it' : ''}`} onClick={() => foldNav(!navFolded)} aria-expanded={!navFolded} aria-label={navFolded ? 'Show the menu' : 'Hide the menu'} title={navFolded ? 'Show the menu' : 'Hide the menu'}>
                 {navFolded ? '»' : '«'}
               </button>
+              <button type="button" className="menu-close" onClick={() => setMenuOpen(false)} aria-label="Close the menu">
+                ✕
+              </button>
             </div>
             {/* The team being worked on. Changing it means going back to the choosing screen. */}
             <div className="team-now">
               <span className="side-label">Team</span>
               <strong>{state.team!.name}</strong>
               <span className="muted small">{[state.sport?.name, state.team!.season].filter(Boolean).join(' · ')}</span>
-              <button type="button" className="btn small" onClick={pickTeam}>
+              <button
+                type="button"
+                className="btn small"
+                onClick={() => {
+                  setMenuOpen(false);
+                  pickTeam();
+                }}
+              >
                 Switch team
               </button>
             </div>
@@ -435,7 +472,13 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
                 <button className="link small" onClick={signOut}>
                   Sign out
                 </button>
-                <button className="link small" onClick={() => setTouring(true)}>
+                <button
+                  className="link small"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setTouring(true);
+                  }}
+                >
                   Take the tour
                 </button>
               </div>

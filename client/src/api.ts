@@ -143,10 +143,17 @@ export interface StorageSpace {
   left_bytes: number;
 }
 export type ShareKind = 'drill' | 'play' | 'plan';
-/** Something recent in one of the caller's communities: an invitation, a message, or a thing someone shared. */
+/**
+ * One line on the Messages page: an invitation, a message or a shared thing in one of the caller's
+ * communities, or a "notice", which is a message from the app itself (added to a team, and so on).
+ */
 export interface CommunityNewsItem {
   key: string;
-  kind: 'invite' | 'post' | 'share';
+  kind: 'invite' | 'post' | 'share' | 'notice';
+  /** Notices only: its id, its headline, and where clicking it goes ('' for nowhere). */
+  id?: number;
+  title?: string;
+  link?: string;
   share_kind?: ShareKind;
   community_id: number;
   community: string;
@@ -284,6 +291,9 @@ export const api = {
   },
   communities: () => req<Community[]>('GET', '/communities'),
   communityNews: () => req<CommunityNews>('GET', '/communities/news'),
+  messages: () => req<CommunityNews>('GET', '/messages'),
+  /** Marks one message from the app, or with no id everything, as read. */
+  markMessagesRead: (id?: number) => req<CommunityNews>('POST', id ? `/messages/${id}/read` : '/messages/read', {}),
   /** Marks one community, or with no id all of them, as read up to now. */
   markCommunitySeen: (id?: number) => req<CommunityNews>('POST', id ? `/communities/${id}/seen` : '/communities/seen', {}),
   createCommunity: (b: { name: string; description: string }) => req<CommunityDetail>('POST', '/communities', b),

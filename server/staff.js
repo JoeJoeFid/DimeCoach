@@ -7,6 +7,7 @@
 // the ordinary routes stay unaware of sharing.
 import { all, get, run } from './db.js';
 import { isSystemAdmin } from './auth.js';
+import { notify } from './notices.js';
 
 const COOKIE = 'pp_team';
 const str = (v) => (v == null ? '' : String(v));
@@ -73,6 +74,7 @@ function gate(req) {
     case 'workspace':
     case 'shared-teams':
     case 'community-shares':
+    case 'messages':
       return null;
     case 'teams':
       if (!seg[1]) return write ? ownerOnly('add teams') : null;
@@ -184,6 +186,12 @@ export function mountStaff(app) {
     res.json({ ok: true });
   });
   app.delete('/api/shared-teams/:teamId', (req, res) => {
+    const left = get(
+      `SELECT t.name, (SELECT m.user_id FROM memberships m WHERE m.owner_id=t.owner_id AND m.role='owner' LIMIT 1) AS owner_user
+         FROM team_staff s JOIN teams t ON t.id=s.team_id WHERE s.team_id=? AND s.user_id=?`,
+      Number(req.params.teamId), req.user.id,
+    );
+    if (left) notify(left.owner_user, { kind: 'team', title: `${req.user.name} left ${left.name}`, body: 'They no longer have access to the team.', link: '/teams?tab=people' });
     run('DELETE FROM team_staff WHERE team_id=? AND user_id=?', Number(req.params.teamId), req.user.id);
     if (req.staff?.teamId === Number(req.params.teamId)) setTeamCookie(req, res, 0);
     res.json({ ok: true });
@@ -220,10 +228,13 @@ export function mountStaff(app) {
       });
     if (get('SELECT 1 AS ok FROM team_staff WHERE team_id=? AND user_id=?', team.id, person.id))
       return res.status(409).json({ error: 'This team is already shared with them.' });
-    run(
-      'INSERT INTO team_staff (team_id, user_id, title, perms_json, added_by) VALUES (?,?,?,?,?)',
-      team.id, person.id, str(req.body.title).trim().slice(0, 60) || 'Assistant coach', JSON.stringify(cleanPerms(req.body.perms)), req.user.id,
-    );
+    const title = str(req.body.title).trim().slice(0, 60) || 'Assistant coach';
+    run('INSERT INTO team_staff (team_id, user_id, title, perms_json, added_by) VALUES (?,?,?,?,?)', team.id, person.id, title, JSON.stringify(cleanPerms(req.body.perms)), req.user.id);
+    notify(person.id, {
+      kind: 'team',
+      title: `${req.user.name} added you to ${team.name}`,
+      body: `You are on the team as ${title}. To open it, use "Switch team" and choose ${team.name}.`,
+    });
     res.json(staffOf(team.id));
   });
   app.put('/api/teams/:id/staff/:userId', (req, res) => {
@@ -233,14 +244,19 @@ export function mountStaff(app) {
     // Someone managing a team that is not theirs changes other people, never their own access.
     if (req.staff && row.user_id === req.user.id) return res.status(403).json({ error: 'You cannot change your own access to this team.' });
     const title = req.body.title === undefined ? row.title : str(req.body.title).trim().slice(0, 60) || 'Assistant coach';
-    run('UPDATE team_staff SET title=?, perms_json=? WHERE team_id=? AND user_id=?', title, JSON.stringify(cleanPerms(req.body.perms, permsOf(row))), team.id, row.user_id);
+    const perms = JSON.stringify(cleanPerms(req.body.perms, permsOf(row)));
+    run('UPDATE team_staff SET title=?, perms_json=? WHERE team_id=? AND user_id=?', title, perms, team.id, row.user_id);
+    // One message however many switches are flipped: an unread one about this team is simply refreshed.
+    if (perms !== row.perms_json || title !== row.title)
+      notify(row.user_id, { kind: 'team-access', ref: `team-${team.id}`, title: `${req.user.name} changed what you can do on ${team.name}`, body: `You are on the team as ${title}. Open the team to see what you can change.` });
     res.json(staffOf(team.id));
   });
   app.delete('/api/teams/:id/staff/:userId', (req, res) => {
     const team = ownTeam(req);
     if (!team) return res.status(404).json({ error: 'Not found' });
     if (req.staff && Number(req.params.userId) === req.user.id) return res.status(403).json({ error: 'To leave this team, use "Leave" on your own Teams page.' });
-    run('DELETE FROM team_staff WHERE team_id=? AND user_id=?', team.id, Number(req.params.userId));
+    const gone = run('DELETE FROM team_staff WHERE team_id=? AND user_id=?', team.id, Number(req.params.userId));
+    if (gone.changes) notify(Number(req.params.userId), { kind: 'team', title: `${req.user.name} removed you from ${team.name}`, body: 'The team is no longer shared with you.' });
     res.json(staffOf(team.id));
   });
 }

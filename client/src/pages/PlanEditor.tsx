@@ -6,7 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
 import { useApp } from '../App';
 import type { Drill, ImportDraft, Item, Plan, Play, Player, Tag, Team } from '../types';
-import { blankItem, fmtClock, fmtDateShort, fmtDuration, htmlPreview, isBlankHtml, planMinutes, schedule, slotGroups, slotLabel, type Slot } from '../util';
+import { blankItem, fmtClock, fmtDateShort, parseClock, fmtDuration, htmlPreview, isBlankHtml, planMinutes, schedule, slotGroups, slotLabel, type Slot } from '../util';
 import ItemBody from '../components/ItemBody';
 import { Field, Modal, MoreMenu, TagChip, type MenuItem } from '../components/bits';
 import { CommunityPicker, ShareDialog } from '../components/community';
@@ -44,6 +44,8 @@ export default function PlanEditor() {
 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  // On a phone the details are one line until asked for, so the schedule comes first.
+  const [headOpen, setHeadOpen] = useState(false);
   const [drills, setDrills] = useState<Drill[]>([]);
   const [plays, setPlays] = useState<Play[]>([]);
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -486,7 +488,16 @@ export default function PlanEditor() {
         }}
         onDragEnd={onDragEnd}
       >
-        <div className="card plan-head">
+        <div className={`card plan-head ${headOpen ? 'open' : ''}`}>
+          <button type="button" className="head-brief" onClick={() => setHeadOpen(!headOpen)} aria-expanded={headOpen}>
+            <span className="head-brief-text">
+              <strong>{plan.title || 'Untitled'}</strong>
+              <span className="muted">
+                {[!plan.is_template && fmtDateShort(plan.date), !isHomework && fmtClock(parseClock(plan.start_time)), !isHomework && plan.location].filter(Boolean).join(' · ')}
+              </span>
+            </span>
+            <span className="head-brief-action">{headOpen ? 'Done' : 'Edit details'}</span>
+          </button>
           {/* Left: what and when and where, one row each. Right: the coach's notes for the day. */}
           <div className="plan-head-grid">
             <div className="plan-head-left">
