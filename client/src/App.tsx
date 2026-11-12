@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { SIGNED_OUT_EVENT, api, type AuthStatus, type Bootstrap, type User } from './api';
 import type { Sport, Tag, Team, TeamPerm } from './types';
+import { sportKind } from './sports';
 import { DialogHost } from './components/dialogs';
 import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
@@ -369,7 +370,8 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
               <ThemeToggle />
             </div>
           </aside>
-          <main className="main">
+          {/* The sport of the team being worked on: page titles show its ball beside them. */}
+          <main className="main" data-sport={state.team ? (sportKind(state.sport?.name) ?? 'other') : undefined}>
             {state.access && <SharedBar />}
             {routes}
           </main>
