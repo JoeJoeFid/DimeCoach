@@ -6,7 +6,7 @@ import type { Group, Item, Plan, Play, Player } from '../types';
 import { PlaySteps } from '../components/PlayDiagram';
 import { SheetLinks } from '../components/ItemMedia';
 import { imageUrl } from '../components/ItemImages';
-import { clean, fmtDateSheet, isBlankHtml, schedule, slotLabel } from '../util';
+import { clean, fmtDateSheet, isBlankHtml, schedule, slotGroups, slotLabel } from '../util';
 
 /** Who the sheet is for. Coach-only content appears in 'coach' and nowhere else. */
 type Audience = 'simple' | 'notes' | 'coach';
@@ -105,6 +105,45 @@ export default function PrintView() {
     }
   };
 
+  /** Everything printed under an item's title: its details for this version of the sheet. `narrow` is one column of a shared time slot. */
+  const itemBody = (it: Item, narrow = false) => (
+    <>
+      {isHomework && (it.reps || it.duration_min > 0) && (
+        <p style={{ margin: '0 0 6px', fontWeight: 700 }}>
+          {[it.reps, it.duration_min > 0 && `about ${it.duration_min} min`].filter(Boolean).join(' · ')}
+        </p>
+      )}
+      {showTags && it.tag_ids.length > 0 && (
+        <p style={{ margin: '0 0 6px', color: '#666', fontSize: '9.5pt' }}>
+          Focus: {it.tag_ids.map(tagName).filter(Boolean).join(', ')}
+        </p>
+      )}
+      {audience !== 'simple' && (
+        <>
+          {!isBlankHtml(it.notes_html) && <div className="sheet-notes" dangerouslySetInnerHTML={clean(it.notes_html)} />}
+          {(it.images || []).map((im, k) => (
+            <figure key={k} className="sheet-figure" style={{ margin: '8px 0', width: `${im.width_pct}%` }}>
+              <img src={imageUrl(im.id)} alt={im.caption || 'Diagram'} style={{ width: '100%', display: 'block' }} />
+              {im.caption && <figcaption style={{ fontSize: '9pt', color: '#444', marginTop: 3 }}>{im.caption}</figcaption>}
+            </figure>
+          ))}
+          {(playMode === 'hide' ? [] : it.play_ids || [])
+            .map((pid) => plays.find((p) => p.id === pid))
+            .filter((p): p is Play => !!p && (!only || p.frames.some((_, n) => only.has(n + 1))))
+            .map((p) => (
+              <div key={p.id} className="sheet-play" style={{ margin: '10px 0' }}>
+                <p style={{ fontWeight: 700, margin: '0 0 4px' }}>{p.name}</p>
+                <PlaySteps play={p} columns={narrow ? 2 : Math.max(3, Math.min(4, p.frames.length))} only={only} />
+              </div>
+            ))}
+          <SheetLinks links={it.links || []} videos={(it.videos || []).length} />
+          <Groups groups={it.groups} nameOf={nameOf} />
+        </>
+      )}
+      {audience === 'coach' && <CoachBlock item={it} nameOf={nameOf} />}
+    </>
+  );
+
   return (
     <div className="print-page">
       <div className="print-panel no-print">
@@ -198,7 +237,9 @@ export default function PrintView() {
           </p>
         )}
 
-        {plan.items.map((it, i) => {
+        {slotGroups(plan.items).map((group) => {
+          const i = group[0];
+          const it = plan.items[i];
           if (it.kind === 'break') {
             if (!showBreaks || isHomework) return null;
             return (
@@ -207,45 +248,45 @@ export default function PrintView() {
               </p>
             );
           }
+          if (group.length > 1) {
+            // Drills run at the same time: one heading with the shared time, then a column for each.
+            const longest = Math.max(...group.map((n) => plan.items[n].duration_min || 0));
+            return (
+              <section key={it.key} className="sheet-item sheet-split">
+                <h2 style={{ fontSize: '19pt', margin: '18px 0 2px', lineHeight: 1.2 }}>
+                  {isHomework ? '☐ ' : `(${slotLabel(slots[i])}) `}
+                  {group.length} groups at the same time
+                </h2>
+                <p style={{ margin: '0 0 6px', color: '#666', fontSize: '9.5pt' }}>The team splits up. Each group does one of these.</p>
+                <table className="sheet-split-table" style={{ ...table, width: '100%', tableLayout: 'fixed' }}>
+                  <tbody>
+                    <tr>
+                      {group.map((n, k) => {
+                        const each = plan.items[n];
+                        return (
+                          <td key={each.key} style={{ ...cell, width: `${100 / group.length}%`, padding: '8px 12px 10px' }}>
+                            <p style={{ margin: '0 0 2px', color: '#666', fontSize: '8.5pt', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Group {k + 1}</p>
+                            <h3 style={{ fontSize: '14pt', margin: '0 0 6px', lineHeight: 1.2 }}>
+                              {each.title || 'Untitled'}
+                              {!isHomework && (each.duration_min || 0) < longest && <span style={{ color: '#666', fontSize: '9.5pt', fontWeight: 400 }}> · {each.duration_min} min</span>}
+                            </h3>
+                            {itemBody(each, true)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
+            );
+          }
           return (
             <section key={it.key} className="sheet-item">
               <h2 style={{ fontSize: '19pt', margin: '18px 0 8px', lineHeight: 1.2 }}>
                 {isHomework ? '☐ ' : `(${slotLabel(slots[i])}) `}
                 {it.title || 'Untitled'}
               </h2>
-              {isHomework && (it.reps || it.duration_min > 0) && (
-                <p style={{ margin: '0 0 6px', fontWeight: 700 }}>
-                  {[it.reps, it.duration_min > 0 && `about ${it.duration_min} min`].filter(Boolean).join(' · ')}
-                </p>
-              )}
-              {showTags && it.tag_ids.length > 0 && (
-                <p style={{ margin: '0 0 6px', color: '#666', fontSize: '9.5pt' }}>
-                  Focus: {it.tag_ids.map(tagName).filter(Boolean).join(', ')}
-                </p>
-              )}
-              {audience !== 'simple' && (
-                <>
-                  {!isBlankHtml(it.notes_html) && <div className="sheet-notes" dangerouslySetInnerHTML={clean(it.notes_html)} />}
-                  {(it.images || []).map((im, k) => (
-                    <figure key={k} className="sheet-figure" style={{ margin: '8px 0', width: `${im.width_pct}%` }}>
-                      <img src={imageUrl(im.id)} alt={im.caption || 'Diagram'} style={{ width: '100%', display: 'block' }} />
-                      {im.caption && <figcaption style={{ fontSize: '9pt', color: '#444', marginTop: 3 }}>{im.caption}</figcaption>}
-                    </figure>
-                  ))}
-                  {(playMode === 'hide' ? [] : it.play_ids || [])
-                    .map((pid) => plays.find((p) => p.id === pid))
-                    .filter((p): p is Play => !!p && (!only || p.frames.some((_, n) => only.has(n + 1))))
-                    .map((p) => (
-                      <div key={p.id} className="sheet-play" style={{ margin: '10px 0' }}>
-                        <p style={{ fontWeight: 700, margin: '0 0 4px' }}>{p.name}</p>
-                        <PlaySteps play={p} columns={Math.max(3, Math.min(4, p.frames.length))} only={only} />
-                      </div>
-                    ))}
-                  <SheetLinks links={it.links || []} videos={(it.videos || []).length} />
-                  <Groups groups={it.groups} nameOf={nameOf} />
-                </>
-              )}
-              {audience === 'coach' && <CoachBlock item={it} nameOf={nameOf} />}
+              {itemBody(it)}
             </section>
           );
         })}
