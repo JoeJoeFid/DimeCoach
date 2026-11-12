@@ -1,7 +1,7 @@
 import { api, type AdminSettings } from '../api';
 
 const MODES: { id: AdminSettings['registration_mode']; label: string; text: string }[] = [
-  { id: 'closed', label: 'Closed', text: 'Only an administrator creates accounts, under "Add a person".' },
+  { id: 'closed', label: 'Closed', text: 'Only you create accounts, under "Add a person".' },
   {
     id: 'open',
     label: 'Open sign-up',

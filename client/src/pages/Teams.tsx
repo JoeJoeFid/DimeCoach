@@ -187,17 +187,19 @@ function SharedTeams({ onError }: { onError: (msg: string) => void }) {
   );
 }
 
-const PERM_LABELS: [TeamPerm, string][] = [
-  ['plans', 'Practices & homework'],
-  ['drills', 'Drills & categories'],
-  ['plays', 'Playbook'],
-  ['resources', 'Resources & uploads'],
-  ['roster', 'Roster'],
-  ['schedule', 'Schedule link'],
+/** What can be allowed, with what each one covers spelled out. */
+const PERM_LABELS: [TeamPerm, string, string][] = [
+  ['plans', 'Practices & homework', 'Add, edit, print and delete practices, game plans and homework for this team.'],
+  ['drills', 'Drills & categories', 'Add, edit and delete drills and categories. These are the same ones you use, so a change shows for you too.'],
+  ['plays', 'Playbook', 'Draw, edit and delete plays in your playbook.'],
+  ['resources', 'Resources & uploads', 'Add and remove film, pictures and links. Their uploads count against your upload space.'],
+  ['roster', 'Roster', 'Add, edit and remove players. This always includes seeing parent contacts.'],
+  ['schedule', 'Schedule link', 'Change the team calendar link, re-sync it, and say whether an event is a practice or a game.'],
 ];
 
 /** The owner's list of people the team is shared with, and what each one may change. */
 function StaffCard({ team }: { team: Team }) {
+  const { user: me } = useApp();
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
   const [email, setEmail] = useState('');
   const [title, setTitle] = useState('Assistant coach');
@@ -228,70 +230,134 @@ function StaffCard({ team }: { team: Team }) {
     setStaff((list) => (list || []).map((x) => (x.user_id === m.user_id ? { ...x, perms } : x)));
     run(() => api.updateStaff(team.id, m.user_id, { perms }));
   };
+  /** Handing over the team itself is asked about first: it includes deleting it. */
+  const setManage = async (m: StaffMember, on: boolean) => {
+    if (on) {
+      const ok = await confirmDialog({
+        title: `Let ${m.name} manage ${team.name}?`,
+        body: `${m.name} will be able to rename the team, delete it with its practices and roster, and add, remove or change the other coaches and helpers.`,
+        confirmLabel: 'Allow',
+      });
+      if (!ok) return;
+    }
+    setPerm(m, 'manage', on);
+  };
   const remove = async (m: StaffMember) => {
     const ok = await confirmDialog({ title: `Stop sharing with ${m.name}?`, body: `${m.name} will no longer see ${team.name}. What they added stays.`, confirmLabel: 'Stop sharing', danger: true });
     if (ok) run(() => api.removeStaff(team.id, m.user_id));
   };
+
+  const add = (
+    <form
+      className="add-row staff-add"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (email.trim()) run(() => api.addStaff(team.id, { email: email.trim(), title }), () => setEmail(''));
+      }}
+    >
+      <input className="input grow" type="email" aria-label="Email of the person to add" placeholder="Their Dime Coach email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input className="input" aria-label="Their title" placeholder="Title, such as Assistant coach" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} />
+      <button className="btn primary" disabled={busy || !email.trim()}>
+        Share team
+      </button>
+    </form>
+  );
 
   return (
     <div className="card">
       <div className="card-head">
         <h2>Coaches and helpers {staff && staff.length > 0 && <span className="muted">({staff.length})</span>}</h2>
       </div>
-      <p className="muted small">
-        Share this team with an assistant coach or anyone else who helps. They see this team only, not your other teams, along with your drills,
-        playbook and resources. They can look at everything and change only what you tick.
-      </p>
+      {add}
+      <p className="muted small">They need a Dime Coach account already. A new helper starts able to change practices, drills, plays and resources, and to see parent contacts. Adjust that below.</p>
       {error && <p className="error">{error}</p>}
+
+      <div className="staff-rules">
+        <div>
+          <h3>Everyone you add can see</h3>
+          <ul>
+            <li>This team: its practices, homework, schedule and roster names.</li>
+            <li>Your drills, categories, playbook and resources for this team's sport.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Nobody you add can</h3>
+          <ul>
+            <li>See your other teams, or anything in them.</li>
+            <li>Share your drills, plays or practices with a community.</li>
+            <li>Change anything you have not ticked for them.</li>
+          </ul>
+        </div>
+      </div>
+
       {staff && staff.length > 0 && (
         <ul className="staff-list">
-          {staff.map((m) => (
-            <li key={m.user_id} className="staff-row">
-              <div className="staff-who">
-                <strong>{m.name}</strong>
-                <span className="muted small">{m.email}</span>
-              </div>
-              <input
-                className="input staff-title"
-                aria-label={`Role for ${m.name}`}
-                defaultValue={m.title}
-                maxLength={60}
-                onBlur={(e) => e.target.value.trim() !== m.title && run(() => api.updateStaff(team.id, m.user_id, { title: e.target.value }))}
-              />
-              <button className="btn small danger" onClick={() => remove(m)}>
-                Remove
-              </button>
-              <div className="perm-list" role="group" aria-label={`What ${m.name} can do`}>
-                <span className="perm-head">Can change</span>
-                {PERM_LABELS.map(([perm, label]) => (
-                  <label key={perm} className="check">
-                    <input type="checkbox" checked={m.perms[perm]} onChange={(e) => setPerm(m, perm, e.target.checked)} />
-                    {label}
-                  </label>
-                ))}
-                <span className="perm-head">Can see</span>
-                <label className="check">
-                  <input type="checkbox" checked={m.perms.contacts} onChange={(e) => setPerm(m, 'contacts', e.target.checked)} />
-                  Parent contacts &amp; player notes
-                </label>
-              </div>
-            </li>
-          ))}
+          {staff.map((m) => {
+            // Someone managing a team that is not theirs can change other people, not themselves.
+            const self = m.user_id === me.id;
+            return (
+              <li key={m.user_id} className="staff-row">
+                <div className="staff-who">
+                  <strong>
+                    {m.name} {self && <span className="kind">You</span>}
+                  </strong>
+                  <span className="muted small">{m.email}</span>
+                </div>
+                <input
+                  className="input staff-title"
+                  aria-label={`Title for ${m.name}`}
+                  defaultValue={m.title}
+                  maxLength={60}
+                  disabled={self}
+                  onBlur={(e) => e.target.value.trim() !== m.title && run(() => api.updateStaff(team.id, m.user_id, { title: e.target.value }))}
+                />
+                {!self && (
+                  <button className="btn small danger" onClick={() => remove(m)}>
+                    Remove
+                  </button>
+                )}
+                <fieldset className="plain perm-list" disabled={self} aria-label={`What ${m.name} can do`}>
+                  <span className="perm-head">Can change</span>
+                  <div className="perm-grid">
+                    {PERM_LABELS.map(([perm, label, text]) => (
+                      <label key={perm} className="check perm">
+                        <input type="checkbox" checked={m.perms[perm]} onChange={(e) => setPerm(m, perm, e.target.checked)} />
+                        <span>
+                          <strong>{label}</strong>
+                          <span className="muted small">{text}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <span className="perm-head">Can see</span>
+                  <div className="perm-grid">
+                    <label className="check perm">
+                      <input type="checkbox" checked={m.perms.contacts} onChange={(e) => setPerm(m, 'contacts', e.target.checked)} />
+                      <span>
+                        <strong>Parent contacts &amp; player notes</strong>
+                        <span className="muted small">Parent names, emails and phone numbers, and the private notes on each player. Without this they see names and numbers only.</span>
+                      </span>
+                    </label>
+                  </div>
+                  <span className="perm-head">Team management</span>
+                  <div className="perm-grid">
+                    <label className={`check perm manage ${m.perms.manage ? 'on' : ''}`}>
+                      <input type="checkbox" checked={m.perms.manage} onChange={(e) => setManage(m, e.target.checked)} />
+                      <span>
+                        <strong>Manage this team</strong>
+                        <span className="muted small">
+                          Rename the team, delete it along with its practices and roster, and add, remove or change the other coaches and helpers. Give this
+                          only to someone you would trust to run the team without you.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </fieldset>
+              </li>
+            );
+          })}
         </ul>
       )}
-      <form
-        className="add-row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (email.trim()) run(() => api.addStaff(team.id, { email: email.trim(), title }), () => setEmail(''));
-        }}
-      >
-        <input className="input grow" type="email" aria-label="Email of the person to add" placeholder="Their Dime Coach email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className="input" aria-label="Their role" placeholder="Role" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} />
-        <button className="btn primary" disabled={busy || !email.trim()}>
-          Share team
-        </button>
-      </form>
     </div>
   );
 }
@@ -438,7 +504,8 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
       danger: true,
     });
     if (!ok) return;
-    deleteLater({ key: `team:${team.id}`, message: `Deleted the team "${team.name}".`, run: () => api.deleteTeam(team.id), done: app.reload, failed: onError });
+    // Deleting a team someone else shared leaves nothing to stand in: go back to your own teams.
+    deleteLater({ key: `team:${team.id}`, message: `Deleted the team "${team.name}".`, run: () => api.deleteTeam(team.id), done: app.access ? () => app.openTeam(false, app.own_teams[0]?.id || 0) : app.reload, failed: onError });
   };
   const savePlayer = (p: Player) =>
     guard(async () => {
@@ -477,10 +544,10 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
       <div className="card">
         <div className="fields">
           <Field label="Team name" grow>
-            <input className="input" disabled={!!app.access} value={name} onChange={(e) => setName(e.target.value)} onBlur={saveTeam} />
+            <input className="input" disabled={!app.can('manage')} value={name} onChange={(e) => setName(e.target.value)} onBlur={saveTeam} />
           </Field>
           <Field label="Season or year">
-            <input className="input" disabled={!!app.access} value={season} onChange={(e) => setSeason(e.target.value)} onBlur={saveTeam} />
+            <input className="input" disabled={!app.can('manage')} value={season} onChange={(e) => setSeason(e.target.value)} onBlur={saveTeam} />
           </Field>
           <Field label="Sport">
             <input className="input" disabled value={app.sports.find((s) => s.id === team.sport_id)?.name || ''} />
@@ -491,7 +558,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
                 Switch to this team
               </button>
             )}
-            {!app.access && (
+            {app.can('manage') && (
               <button className="btn danger" onClick={deleteTeam}>
                 Delete team
               </button>
@@ -501,7 +568,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
         {team.notes && <p className="muted small">{team.notes}</p>}
       </div>
 
-      {!app.access && <StaffCard team={team} />}
+      {app.can('manage') && <StaffCard team={team} />}
 
       <fieldset className="plain" disabled={!app.can('schedule')}>
         <CalendarCard team={team} />

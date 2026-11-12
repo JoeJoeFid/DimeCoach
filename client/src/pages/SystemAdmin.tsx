@@ -56,7 +56,7 @@ export default function SystemAdmin() {
   /** Cap boxes being typed in, by user id. Absent means the box shows the saved value. */
   const [caps, setCaps] = useState<Record<number, string>>({});
   const [defaultCap, setDefaultCap] = useState<string | null>(null);
-  const blank = { name: '', email: '', password: '', can_import: false, is_admin: false, cap: '' };
+  const blank = { name: '', email: '', password: '', can_import: false, cap: '' };
   const [draft, setDraft] = useState(blank);
 
   const load = useCallback(async () => {
@@ -92,10 +92,7 @@ export default function SystemAdmin() {
         const made = await api.adminCreateUser({ name: d.name, email: d.email, password: d.password, can_import: d.can_import });
         // The account exists from here on, so clear the form even if a follow-up setting fails.
         setDraft(blank);
-        const extra: { upload_cap_mb?: number; is_admin?: boolean } = {};
-        if (d.cap.trim() !== '') extra.upload_cap_mb = Number(d.cap);
-        if (d.is_admin) extra.is_admin = true;
-        if (Object.keys(extra).length > 0) await api.systemUpdateUser(made.id, extra);
+        if (d.cap.trim() !== '') await api.systemUpdateUser(made.id, { upload_cap_mb: Number(d.cap) });
       },
       `Account created for ${d.email}. Give them the starting password yourself. They will be asked to replace it when they first sign in.`,
     );
@@ -118,17 +115,8 @@ export default function SystemAdmin() {
     if (defaultCap.trim() === '' || value === state.default_cap_mb) return;
     run(() => api.systemSetDefaults({ default_cap_mb: value }), `The default upload space is now ${fmtSpace(value * MB)}.`);
   };
-  const setRole = async (u: SystemUser, admin: boolean) => {
-    if (admin) {
-      const ok = await confirmDialog({
-        title: `Make ${u.name} an administrator?`,
-        body: 'Administrators can create accounts, reset passwords, turn accounts off and grant plan import. They cannot open this page, change upload space or change your account.',
-        confirmLabel: 'Make administrator',
-      });
-      if (!ok) return;
-    }
-    run(() => api.systemUpdateUser(u.id, { is_admin: admin }), admin ? `${u.name} is now an administrator.` : `${u.name} is no longer an administrator.`);
-  };
+  /** Plan import runs Claude on the computer hosting Dime Coach, so it is granted person by person. */
+  const setImport = (u: SystemUser, on: boolean) => run(() => api.adminUpdateUser(u.id, { can_import: on }), on ? `${u.name} can now import plans.` : `${u.name} can no longer import plans.`);
   const setStatus = async (u: SystemUser, status: 'active' | 'disabled') => {
     if (status === 'disabled') {
       const ok = await confirmDialog({
@@ -261,7 +249,7 @@ export default function SystemAdmin() {
             <h2>Add a person</h2>
             <p className="muted small">
               You pick a starting password and pass it along yourself. They must replace it when they first sign in. Each person gets a
-              workspace of their own.
+              workspace of their own. Plan import runs Claude on the computer hosting Dime Coach, so allow it only for people you want using that.
             </p>
             <form className="fields" onSubmit={create}>
               <Field label="Name" grow>
@@ -288,10 +276,6 @@ export default function SystemAdmin() {
               <label className="check field-check">
                 <input type="checkbox" checked={draft.can_import} onChange={(e) => setDraft({ ...draft, can_import: e.target.checked })} />
                 Allow plan import
-              </label>
-              <label className="check field-check">
-                <input type="checkbox" checked={draft.is_admin} onChange={(e) => setDraft({ ...draft, is_admin: e.target.checked })} />
-                Administrator
               </label>
               <button className="btn primary">Create account</button>
             </form>
@@ -326,12 +310,16 @@ export default function SystemAdmin() {
                           </button>
                           <span className="muted small">{u.email}</span>
                           <span className="badges">
-                            {u.is_system_admin ? <span className="kind system">System admin</span> : u.is_admin && <span className="kind game">Admin</span>}
+                            {u.is_system_admin && <span className="kind system">System admin</span>}
+                            {u.can_import && <span className="kind">Plan import</span>}
                             {u.id === me.id && <span className="kind">You</span>}
                           </span>
                         </span>
                       </td>
-                      <td>{u.status === 'active' ? 'Active' : u.status === 'pending' ? 'Awaiting email confirmation' : 'Turned off'}</td>
+                      <td>
+                        {u.status === 'active' ? 'Active' : u.status === 'pending' ? 'Awaiting email confirmation' : 'Turned off'}
+                        {u.must_change_password && u.status === 'active' && <span className="muted small"> · has not set own password</span>}
+                      </td>
                       <td>
                         {fmtAgo(u.last_seen_at ?? u.last_login_at)}
                         {u.last_seen_at && Date.now() - asDate(u.last_seen_at).getTime() < 300_000 && <span className="online-dot" title="Using Dime Coach right now" />}
@@ -365,7 +353,7 @@ export default function SystemAdmin() {
                           items={[
                             { label: 'Details', onSelect: () => setViewing(u) },
                             ...(u.id !== me.id ? [{ label: 'Set password', onSelect: () => setPasswordFor(u) }] : []),
-                            ...(!u.is_system_admin ? [{ label: u.is_admin ? 'Remove admin' : 'Make admin', onSelect: () => setRole(u, !u.is_admin) }] : []),
+                            { label: u.can_import ? 'Stop plan import' : 'Allow plan import', onSelect: () => setImport(u, !u.can_import) },
                             ...(!u.is_system_admin && u.status !== 'pending'
                               ? [{ label: u.status === 'active' ? 'Turn off account' : 'Turn on account', onSelect: () => setStatus(u, u.status === 'active' ? 'disabled' : 'active') }]
                               : []),

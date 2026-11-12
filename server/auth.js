@@ -412,7 +412,8 @@ export function mountAuth(app) {
   });
 
   // --- System administration -------------------------------------------------
-  const admin = (req, res, next) => (req.user.is_admin ? next() : res.status(403).json({ error: 'Only the administrator can do this.' }));
+  // Accounts and site settings are run from the System admin page, which only the system administrator can open.
+  const admin = (req, res, next) => (isSystemAdmin(req.user) ? next() : res.status(403).json({ error: 'Only the system administrator can do this.' }));
   const adminUserOut = (u) => ({
     ...userOut(u), status: u.status, created_at: u.created_at, last_login_at: u.last_login_at,
     teams: get('SELECT COUNT(*) AS n FROM teams t JOIN memberships m ON m.owner_id=t.owner_id WHERE m.user_id=?', u.id).n,

@@ -9,7 +9,6 @@ import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
 import TeamPicker from './components/TeamPicker';
 import { PasswordForm, Setup, SignedOut } from './pages/Auth';
-import Admin from './pages/Admin';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import CommunityPage from './pages/Community';
@@ -55,7 +54,6 @@ const icons = {
   library: 'M12 4 3.5 8.5 12 13l8.5-4.5zM3.5 12.5 12 17l8.5-4.5M3.5 16.5 12 21l8.5-4.5',
   tags: 'M4 4h7.5l8.5 8.5-7.5 7.5L4 11.5zM8.5 8.5h.01',
   teams: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.900c1.900.700 3.100 2.400 3.500 5.100',
-  admin: 'M12 3 5 6v5.500c0 4.300 2.900 7.600 7 9.500 4.100-1.900 7-5.200 7-9.500V6zM9.500 12l2 2 3.500-4',
   system: 'M4 6h16v5H4zM4 13h16v5H4zM7 8.500h.01M7 15.500h.01M11 8.500h6M11 15.500h6',
   community: 'M4 5h11v8H9l-3 3v-3H4zM15 9h5v8h-2v3l-3-3h-4v-2',
 };
@@ -287,7 +285,8 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     <Routes>
       <Route path="/teams" element={<Teams />} />
       <Route path="/account" element={<Account onChanged={onChanged} />} />
-      {user.is_admin && <Route path="/admin" element={<Admin />} />}
+      {/* The old Administration page was folded into System admin. An old link to it lands there. */}
+      {user.is_system_admin && <Route path="/admin" element={<Navigate to="/system" replace />} />}
       {user.is_system_admin && <Route path="/system" element={<SystemAdmin />} />}
       {needsTeam ? (
         <Route path="*" element={<Navigate to="/teams" replace />} />
@@ -373,12 +372,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
               ))}
             </nav>
             <div className="side-foot">
-              {(user.is_admin || user.is_system_admin) && (
-                <nav className="side-nav admin-nav">
-                  {user.is_system_admin && navLink({ to: '/system', label: 'System admin', icon: icons.system })}
-                  {user.is_admin && navLink({ to: '/admin', label: 'Administration', icon: icons.admin })}
-                </nav>
-              )}
+              {user.is_system_admin && <nav className="side-nav admin-nav">{navLink({ to: '/system', label: 'System admin', icon: icons.system })}</nav>}
               <div className="side-user">
                 <NavLink to="/account" className="side-user-name" title="Your account">
                   {user.name}

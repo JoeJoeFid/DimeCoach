@@ -7712,3 +7712,86 @@ a.ps-title:hover {
     border-top: 1px solid var(--line);
   }
 }
+
+/* ---------- Coaches and helpers: who to add first, then exactly what each can see and change ---------- */
+.staff-add {
+  margin-bottom: 8px;
+}
+.staff-rules {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 14px 0 6px;
+}
+.staff-rules > div {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.staff-rules h3 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+}
+.staff-rules ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.staff-list {
+  margin-top: 6px;
+}
+.staff-row {
+  padding: 16px 0;
+}
+fieldset.perm-list {
+  display: block;
+  flex-basis: 100%;
+  min-width: 0;
+}
+.perm-list .perm-head {
+  display: block;
+  margin: 10px 0 6px;
+}
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+.check.perm {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.check.perm input {
+  flex: none;
+  margin-top: 2px;
+}
+.check.perm > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.check.perm:has(input:checked) {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+.check.perm.manage.on {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+fieldset.perm-list:disabled .check.perm {
+  cursor: default;
+  opacity: 0.7;
+}
+@media (max-width: 700px) {
+  .staff-rules {
+    grid-template-columns: 1fr;
+  }
+}

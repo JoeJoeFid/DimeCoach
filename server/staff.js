@@ -6,13 +6,17 @@
 // given. Everything else in this file is the gate that enforces those limits in one place, so
 // the ordinary routes stay unaware of sharing.
 import { all, get, run } from './db.js';
+import { isSystemAdmin } from './auth.js';
 
 const COOKIE = 'pp_team';
 const str = (v) => (v == null ? '' : String(v));
 
-/** What an owner can allow. All but `contacts` are about changing things; viewing is always on. */
-export const PERMS = ['plans', 'drills', 'plays', 'resources', 'roster', 'schedule', 'contacts'];
-const DEFAULT_PERMS = { plans: true, drills: true, plays: true, resources: true, roster: false, schedule: false, contacts: true };
+/**
+ * What an owner can allow. All but `contacts` are about changing things; viewing is always on.
+ * `manage` is the team itself: renaming or deleting it, and deciding who else it is shared with.
+ */
+export const PERMS = ['plans', 'drills', 'plays', 'resources', 'roster', 'schedule', 'contacts', 'manage'];
+const DEFAULT_PERMS = { plans: true, drills: true, plays: true, resources: true, roster: false, schedule: false, contacts: true, manage: false };
 const AREA = {
   plans: 'practices and homework',
   drills: 'drills and categories',
@@ -73,11 +77,12 @@ function gate(req) {
     case 'teams':
       if (!seg[1]) return write ? ownerOnly('add teams') : null;
       if (!sameTeam(seg[1])) return NOT_FOUND;
-      if (seg[2] === 'staff') return ownerOnly('manage who the team is shared with');
+      // Who the team is shared with, and renaming or deleting it, need the "manage this team" permission.
+      if (seg[2] === 'staff') return perms.manage ? null : { status: 403, error: `${ownerName} has not given you permission to manage who this team is shared with.` };
       if (!write) return null;
       if (seg[2] === 'calendar' || seg[2] === 'events') return need('schedule');
       if (seg[2] === 'players') return need('roster');
-      return ownerOnly('rename or delete the team');
+      return perms.manage ? null : { status: 403, error: `${ownerName} has not given you permission to rename or delete this team.` };
     case 'players': {
       if (!write) return null;
       const p = get('SELECT team_id FROM players WHERE id=?', Number(seg[1]));
@@ -195,12 +200,14 @@ export function mountStaff(app) {
     if (!team) return res.status(404).json({ error: 'Not found' });
     const email = str(req.body.email).trim().toLowerCase();
     if (!email) return res.status(400).json({ error: 'Enter the email they sign in to Dime Coach with.' });
-    if (email === str(req.user.email).toLowerCase()) return res.status(400).json({ error: 'This is your own team already.' });
+    if (email === str(req.user.email).toLowerCase()) return res.status(400).json({ error: req.staff ? 'This team is already shared with you.' : 'This is your own team already.' });
     const person = get("SELECT id FROM users WHERE lower(email)=? AND status='active'", email);
+    if (person && get("SELECT 1 AS ok FROM memberships WHERE user_id=? AND owner_id=? AND role='owner'", person.id, team.owner_id))
+      return res.status(400).json({ error: 'That is the owner of this team.' });
     if (!person)
       return res.status(404).json({
-        error: req.user.is_admin
-          ? 'Nobody has an account with that email yet. Add them under Administration first, then share the team.'
+        error: isSystemAdmin(req.user)
+          ? 'Nobody has an account with that email yet. Add them under System admin first, then share the team.'
           : 'Nobody has an account with that email yet. Ask the administrator to add them, then share the team.',
       });
     if (get('SELECT 1 AS ok FROM team_staff WHERE team_id=? AND user_id=?', team.id, person.id))
@@ -215,6 +222,8 @@ export function mountStaff(app) {
     const team = ownTeam(req);
     const row = team && get('SELECT * FROM team_staff WHERE team_id=? AND user_id=?', team.id, Number(req.params.userId));
     if (!row) return res.status(404).json({ error: 'Not found' });
+    // Someone managing a team that is not theirs changes other people, never their own access.
+    if (req.staff && row.user_id === req.user.id) return res.status(403).json({ error: 'You cannot change your own access to this team.' });
     const title = req.body.title === undefined ? row.title : str(req.body.title).trim().slice(0, 60) || 'Assistant coach';
     run('UPDATE team_staff SET title=?, perms_json=? WHERE team_id=? AND user_id=?', title, JSON.stringify(cleanPerms(req.body.perms, permsOf(row))), team.id, row.user_id);
     res.json(staffOf(team.id));
@@ -222,6 +231,7 @@ export function mountStaff(app) {
   app.delete('/api/teams/:id/staff/:userId', (req, res) => {
     const team = ownTeam(req);
     if (!team) return res.status(404).json({ error: 'Not found' });
+    if (req.staff && Number(req.params.userId) === req.user.id) return res.status(403).json({ error: 'To leave this team, use "Leave" on your own Teams page.' });
     run('DELETE FROM team_staff WHERE team_id=? AND user_id=?', team.id, Number(req.params.userId));
     res.json(staffOf(team.id));
   });

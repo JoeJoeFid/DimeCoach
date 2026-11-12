@@ -243,7 +243,7 @@ export interface Drill {
 }
 
 /** What a team's owner can let a helper do. All but `contacts` are about changing things; `contacts` is about seeing them. */
-export type TeamPerm = 'plans' | 'drills' | 'plays' | 'resources' | 'roster' | 'schedule' | 'contacts';
+export type TeamPerm = 'plans' | 'drills' | 'plays' | 'resources' | 'roster' | 'schedule' | 'contacts' | 'manage';
 export type TeamPerms = Record<TeamPerm, boolean>;
 /** A team someone else owns and has shared with the signed-in person. */
 export interface SharedTeam {
