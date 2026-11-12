@@ -5324,8 +5324,7 @@ fieldset.plain {
   font-size: 0.78rem;
 }
 .tour-rows li,
-.tour-timeline li,
-.tour-bars li {
+.tour-timeline li {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -5382,70 +5381,6 @@ fieldset.plain {
 .tour-play .hero-court {
   max-height: 170px;
   margin: 0 auto;
-}
-.tour-tiles {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-.tour-tiles span {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 12px 6px;
-  border-radius: 10px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  font-weight: 600;
-}
-.tour-tiles b {
-  font-size: 1.1rem;
-  color: var(--ink-2);
-}
-.tour-bars li > span:first-child {
-  flex: none;
-  width: 58px;
-  font-weight: 600;
-}
-.tour-bar {
-  position: relative;
-  flex: 1;
-  height: 8px;
-  border-radius: 4px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-}
-.tour-bar i {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 4px;
-  background: #2a78d6;
-}
-.tour-bar u {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 2px;
-  background: var(--ink);
-}
-.tour-chat {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tour-chat p {
-  align-self: flex-start;
-  max-width: 85%;
-  margin: 0;
-  padding: 7px 11px;
-  border-radius: 12px 12px 12px 3px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-}
-.tour-chat p.mine {
-  align-self: flex-end;
-  border-radius: 12px 12px 3px 12px;
 }
 
 /* A faint rule above each group in the side menu. On narrow screens the menu is one row, so no rules there. */
@@ -5563,4 +5498,142 @@ fieldset.plain {
 }
 .order-beat.group .order-row + .order-row::after {
   content: none;
+}
+
+/* ---------- Tour: choosing what to be shown ---------- */
+.tour-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+.tour-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tour-choice:hover,
+.tour-choice:focus-visible {
+  border-color: var(--ink);
+  background: var(--surface-2);
+}
+.tour-choice strong {
+  font-size: 1.02rem;
+}
+.tour-choice-art {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.tour-choice-art .tour-chip.practice {
+  padding: 2px 9px;
+  font-size: 0.74rem;
+}
+.tour-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+@media (max-width: 460px) {
+  .tour-choices {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Sport pictures, the new-team steps, and picking a team after signing in ---------- */
+.sport-icon {
+  flex: none;
+}
+.wizard-step {
+  margin: 0 0 4px;
+}
+.wizard-title {
+  margin: 0 0 14px;
+  font-size: 1.15rem;
+}
+.sport-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
+}
+.sport-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 10px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sport-tile:hover,
+.sport-tile:focus-visible {
+  border-color: var(--ink);
+  background: var(--surface-2);
+}
+.wizard-sport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.wizard-sport .link {
+  margin-left: auto;
+}
+.team-pick .auth-card {
+  max-width: 480px;
+}
+.team-pick-list {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.team-pick-label {
+  display: block;
+  margin: 22px 0 -8px;
+}
+.team-pick-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.team-pick-card:hover,
+.team-pick-card:focus-visible {
+  border-color: var(--ink);
+  background: var(--surface-2);
+}
+.team-pick-card > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }

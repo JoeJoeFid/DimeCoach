@@ -32,7 +32,7 @@ export interface Bootstrap {
   teams: Team[];
   tags: Tag[];
   /** The signed-in person's own teams, wherever they are working right now. */
-  own_teams: Pick<Team, 'id' | 'name' | 'season'>[];
+  own_teams: (Pick<Team, 'id' | 'name' | 'season'> & { sport: string })[];
   shared_teams: SharedTeam[];
   /** Null in your own workspace. */
   access: TeamAccess | null;

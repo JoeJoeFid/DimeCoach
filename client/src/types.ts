@@ -242,6 +242,8 @@ export interface SharedTeam {
   id: number;
   name: string;
   season: string;
+  /** The sport's name, such as "Basketball". */
+  sport: string;
   /** What the owner calls this person on the team, such as "Assistant coach". */
   title: string;
   owner_name: string;

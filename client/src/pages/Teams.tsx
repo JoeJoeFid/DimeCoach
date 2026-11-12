@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Player, StaffMember, Team, TeamPerm } from '../types';
 import { Field, Modal } from '../components/bits';
+import SportIcon from '../components/SportIcon';
 import { fmtSynced } from '../util';
 import { SPORT_CHOICES, sportKind, surfaceWord } from '../sports';
 import { confirmDialog } from '../components/dialogs';
@@ -297,9 +298,11 @@ function NewTeam({ onClose, onCreated }: { onClose: () => void; onCreated: (t: T
   const [season, setSeason] = useState('');
   // Basketball, baseball and football first, then any other sport this workspace already has. '' means a new one.
   const choices = [...SPORT_CHOICES, ...app.sports.map((s) => s.name).filter((n) => !SPORT_CHOICES.some((c) => c.toLowerCase() === n.toLowerCase()))];
-  const [sportName, setSportName] = useState(SPORT_CHOICES[0]);
+  // Null until a sport is picked on the first screen. '' is "another sport", named on the second.
+  const [sportName, setSportName] = useState<string | null>(null);
   const [newSport, setNewSport] = useState('');
   const chosen = (sportName || newSport).trim();
+  const other = sportName === '';
   const have = app.sports.find((s) => s.name.toLowerCase() === chosen.toLowerCase());
   const kind = sportKind(chosen);
   const [error, setError] = useState('');
@@ -316,31 +319,55 @@ function NewTeam({ onClose, onCreated }: { onClose: () => void; onCreated: (t: T
       setError((e as Error).message);
     }
   };
+  if (sportName === null)
+    return (
+      <Modal title="New team" onClose={onClose}>
+        <p className="wizard-step muted small">Step 1 of 2</p>
+        <h3 className="wizard-title">Which sport?</h3>
+        <div className="sport-tiles">
+          {choices.map((c) => (
+            <button key={c} type="button" className="sport-tile" onClick={() => setSportName(c)}>
+              <SportIcon sport={c} size={40} />
+              {c}
+            </button>
+          ))}
+          <button type="button" className="sport-tile" onClick={() => setSportName('')}>
+            <SportIcon sport="" size={40} />
+            Another sport
+          </button>
+        </div>
+      </Modal>
+    );
   return (
     <Modal title="New team" onClose={onClose}>
+      <p className="wizard-step muted small">Step 2 of 2</p>
+      <div className="wizard-sport">
+        <SportIcon sport={chosen} size={30} />
+        <strong>{other ? chosen || 'Another sport' : sportName}</strong>
+        <button
+          type="button"
+          className="link small"
+          onClick={() => {
+            setSportName(null);
+            setError('');
+          }}
+        >
+          Change sport
+        </button>
+      </div>
       {error && <p className="error">{error}</p>}
       <div className="fields stack">
+        {other && (
+          <Field label="Sport name">
+            <input className="input" autoFocus placeholder="Soccer" value={newSport} onChange={(e) => setNewSport(e.target.value)} />
+          </Field>
+        )}
         <Field label="Team name">
-          <input className="input" autoFocus placeholder="5th grade boys" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="input" autoFocus={!other} placeholder="5th grade boys" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="Season or year">
           <input className="input" placeholder="2026-27" value={season} onChange={(e) => setSeason(e.target.value)} />
         </Field>
-        <Field label="Sport">
-          <select className="input" value={sportName} onChange={(e) => setSportName(e.target.value)}>
-            {choices.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-            <option value="">Another sport…</option>
-          </select>
-        </Field>
-        {sportName === '' && (
-          <Field label="New sport name">
-            <input className="input" placeholder="Soccer" value={newSport} onChange={(e) => setNewSport(e.target.value)} />
-          </Field>
-        )}
       </div>
       {!have && kind && (
         <p className="muted small">
@@ -349,10 +376,10 @@ function NewTeam({ onClose, onCreated }: { onClose: () => void; onCreated: (t: T
       )}
       {!have && !kind && chosen && <p className="muted small">This sport starts with no categories or drills, and has no playbook yet. Add categories on the Categories page.</p>}
       <div className="modal-foot">
-        <button className="btn" onClick={onClose}>
-          Cancel
+        <button className="btn" onClick={() => setSportName(null)}>
+          Back
         </button>
-        <button className="btn primary" onClick={save} disabled={!name.trim()}>
+        <button className="btn primary" onClick={save} disabled={!name.trim() || !chosen}>
           Create team
         </button>
       </div>
@@ -637,7 +664,7 @@ function CalendarCard({ team }: { team: Team }) {
   const save = () => run(() => api.setCalendar(team.id, url.trim()), (n) => (url.trim() ? `Linked. Found ${n} events.` : 'Calendar unlinked.'));
 
   return (
-    <div className="card">
+    <div className="card" data-tour="calendar">
       <div className="card-head">
         <h2>Schedule from GameChanger</h2>
         {team.calendar_url && <span className="muted small">Last synced {fmtSynced(team.calendar_synced_at)}</span>}

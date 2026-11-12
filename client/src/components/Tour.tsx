@@ -13,38 +13,6 @@ const EXAMPLES: Record<SportKind, [string, string, string]> = {
 
 // --- Pictures ---------------------------------------------------------------
 
-/** Drills, plays and your own items all feed a practice. */
-function FlowArt() {
-  return (
-    <div className="tour-art tour-flow">
-      <div className="tour-flow-in">
-        <span className="tour-chip drill">Drills</span>
-        <span className="tour-chip play">Plays</span>
-        <span className="tour-chip custom">Your own items</span>
-      </div>
-      <span className="tour-arrow" aria-hidden="true">
-        →
-      </span>
-      <span className="tour-chip practice">Practice</span>
-    </div>
-  );
-}
-function RosterArt() {
-  return (
-    <ul className="tour-art tour-rows">
-      {[
-        ['12', 'Jordan Smith'],
-        ['4', 'Sam Lee'],
-        ['23', 'Riley Cruz'],
-      ].map(([n, name]) => (
-        <li key={n}>
-          <span className="tour-num">{n}</span>
-          {name}
-        </li>
-      ))}
-    </ul>
-  );
-}
 /** One drill, used again and again. */
 function DrillArt({ sport }: { sport: SportKind }) {
   return (
@@ -77,6 +45,26 @@ function PlayArt({ sport }: { sport: SportKind }) {
     </div>
   );
 }
+/** A play is a few steps in a row, then it runs. */
+function StepsArt() {
+  return (
+    <div className="tour-art tour-steps">
+      <span className="tour-chip play">Step 1</span>
+      <span className="tour-arrow" aria-hidden="true">
+        →
+      </span>
+      <span className="tour-chip play">Step 2</span>
+      <span className="tour-arrow" aria-hidden="true">
+        →
+      </span>
+      <span className="tour-chip play">Step 3</span>
+      <span className="tour-arrow" aria-hidden="true">
+        →
+      </span>
+      <span className="tour-chip practice">▶ Play</span>
+    </div>
+  );
+}
 /** A practice built from drills, a play, a break and something typed in on the spot. */
 function TimelineArt({ sport }: { sport: SportKind }) {
   const [warm, teach, play] = EXAMPLES[sport];
@@ -99,75 +87,37 @@ function TimelineArt({ sport }: { sport: SportKind }) {
     </ul>
   );
 }
-function ChecklistArt() {
-  return (
-    <ul className="tour-art tour-rows">
-      {['50 form shots', '10 minutes of ball handling', 'Watch the film clip'].map((t, i) => (
-        <li key={t}>
-          <span className={`tour-box ${i === 0 ? 'on' : ''}`} aria-hidden="true">
-            {i === 0 ? '✓' : ''}
-          </span>
-          {t}
-        </li>
-      ))}
-    </ul>
-  );
-}
-function TilesArt() {
-  return (
-    <div className="tour-art tour-tiles">
-      <span>
-        <b aria-hidden="true">▶</b>Film
-      </span>
-      <span>
-        <b aria-hidden="true">▧</b>Pictures
-      </span>
-      <span>
-        <b aria-hidden="true">↗</b>Links
-      </span>
-    </div>
-  );
-}
-/** Time spent against a target, per category. */
-function BarsArt() {
-  const bars: [string, number, number][] = [
-    ['Offense', 78, 60],
-    ['Defense', 34, 55],
-    ['Skills', 52, 50],
+/** The schedule from the team app: every practice already on its date, waiting for a plan. */
+function ShellsArt() {
+  const rows: [string, string, boolean][] = [
+    ['Tue', 'Practice · 5:30 PM', true],
+    ['Thu', 'Practice · 5:30 PM', false],
+    ['Sat', 'Practice · 9:00 AM', false],
   ];
   return (
-    <ul className="tour-art tour-bars">
-      {bars.map(([name, value, target]) => (
-        <li key={name}>
-          <span>{name}</span>
-          <span className="tour-bar">
-            <i style={{ width: `${value}%` }} />
-            <u style={{ left: `${target}%` }} />
-          </span>
+    <ul className="tour-art tour-timeline">
+      {rows.map(([day, what, planned]) => (
+        <li key={day}>
+          <time>{day}</time>
+          <span>{what}</span>
+          <span className={`tour-chip ${planned ? 'drill' : 'break'}`}>{planned ? 'Planned' : 'No plan yet'}</span>
         </li>
       ))}
     </ul>
-  );
-}
-function ChatArt({ sport }: { sport: SportKind }) {
-  return (
-    <div className="tour-art tour-chat">
-      <p>Anyone have a good press break?</p>
-      <p className="mine">
-        Sharing mine now. <span className="tour-chip play">{EXAMPLES[sport][2]}</span>
-      </p>
-    </div>
   );
 }
 
 // --- Steps ------------------------------------------------------------------
 
+type Path = 'practices' | 'playbook';
 interface Step {
   id: string;
   /** What to light up: a link in the menu, or a button on the page. Nothing means a card in the middle. */
   target?: string;
   /** The page shown behind the card. */
   route?: string;
+  /** For a panel part way down a page: bring it to the top, so the card fits underneath. */
+  toTop?: boolean;
   /** Skipped until there is a team, because the page it points at is not reachable before then. */
   needsTeam?: boolean;
   title: string;
@@ -177,115 +127,117 @@ interface Step {
 }
 const nav = (to: string) => `.side-nav a[href="${to}"]`;
 const PAGE_BUTTON = '.page-head .head-actions .btn.primary';
-const STEPS: Step[] = [
-  {
-    id: 'welcome',
-    title: 'Welcome to Dime Coach',
-    text: 'Build drills and plays once, then put them together into practices. This quick tour points out where everything lives.',
-    points: ['Skip it whenever you like.', 'Reopen it any time with "Take the tour" at the bottom of the menu.'],
-    art: () => <FlowArt />,
+/** The first card: nothing lit, and a choice of what to be shown. */
+const CHOOSE: Step = { id: 'choose', title: 'Welcome to Dime Coach', text: 'What would you like to do first? Pick one for a short look around.' };
+const PATHS: Record<Path, { label: string; blurb: string; other: string; steps: Step[] }> = {
+  practices: {
+    label: 'Plan practices',
+    blurb: 'Build practices from drills you write once and reuse.',
+    other: 'Show me the playbook',
+    steps: [
+      {
+        id: 'drills',
+        target: nav('/library'),
+        route: '/library',
+        title: 'Practices start with drills',
+        text: 'A drill is one activity: a name, how long it takes, and your coaching notes. Write it once and drop it into as many practices as you like.',
+        art: (sport) => <DrillArt sport={sport} />,
+      },
+      {
+        id: 'new-drill',
+        target: PAGE_BUTTON,
+        route: '/library',
+        needsTeam: true,
+        title: 'Add your own drills',
+        text: 'Your account starts with a few examples. Create your own here, and they are ready to pick from in every practice from then on.',
+      },
+      {
+        id: 'practices',
+        target: nav('/practices'),
+        route: '/practices',
+        title: 'Fill a practice from your drills',
+        text: 'A practice is your plan for one day. Add drills from your list, and type in anything of your own on the spot: a team talk, a scrimmage, a water break.',
+        points: ['Start times work themselves out as you add and reorder.'],
+        art: (sport) => <TimelineArt sport={sport} />,
+      },
+      {
+        id: 'new-practice',
+        target: PAGE_BUTTON,
+        route: '/practices',
+        needsTeam: true,
+        title: 'Plan a practice from here',
+        text: 'This button starts a new practice. Inside it, "+ Item" lets you choose a drill or add a custom item. Print the finished plan to take with you.',
+      },
+      {
+        id: 'gamechanger',
+        target: '[data-tour="calendar"]',
+        route: '/teams',
+        toTop: true,
+        needsTeam: true,
+        title: 'Bring in your schedule from GameChanger',
+        text: 'Paste your team calendar link here and every scheduled practice shows up on its date as an empty shell. Open one and fill it with drills.',
+        points: ['Games come across too, so you can see what you are preparing for.', 'TeamSnap, SportsEngine and Google Calendar links work the same way.'],
+        art: () => <ShellsArt />,
+      },
+    ],
   },
-  {
-    id: 'teams',
-    target: nav('/teams'),
-    route: '/teams',
-    title: 'Start with your team',
-    text: 'Everything belongs to a team: a sport, a season and a roster of players.',
-    points: ['Coach more than one team? Switch between them at the top of the menu.', 'Share a team with an assistant coach and choose what they can change.'],
-    art: () => <RosterArt />,
+  playbook: {
+    label: 'Build a playbook',
+    blurb: 'Draw your plays step by step and watch them run.',
+    other: 'Show me practices',
+    steps: [
+      {
+        id: 'playbook',
+        target: nav('/playbook'),
+        route: '/playbook',
+        title: 'Your playbook lives here',
+        text: 'Every play you draw is kept here, sorted by kind, on a court or field for your sport.',
+        art: (sport) => <PlayArt sport={sport} />,
+      },
+      {
+        id: 'new-play',
+        target: PAGE_BUTTON,
+        route: '/playbook',
+        needsTeam: true,
+        title: 'Draw a play step by step',
+        text: 'Start a play here. Place your players, draw where each one goes, then add the next step. Each step picks up where the last one ended.',
+        art: () => <StepsArt />,
+      },
+      {
+        id: 'animate',
+        route: '/playbook',
+        title: 'Then watch it run',
+        text: 'Press play and the players move through every step. You choose which movements happen one after another and which happen at the same time.',
+        art: (sport) => <PlayArt sport={sport} />,
+      },
+      {
+        id: 'use-plays',
+        target: nav('/practices'),
+        route: '/practices',
+        title: 'Take plays to practice',
+        text: 'Attach a play to a drill or a practice item so it is on the plan when you need it, or print plays on their own.',
+        art: (sport) => <TimelineArt sport={sport} />,
+      },
+    ],
   },
-  {
-    id: 'drills',
-    target: nav('/library'),
-    route: '/library',
-    title: 'Drills you write once and reuse',
-    text: 'A drill is one activity: a name, how long it takes, and your coaching notes. Drop the same drill into as many practices as you like.',
-    art: (sport) => <DrillArt sport={sport} />,
-  },
-  {
-    id: 'new-drill',
-    target: PAGE_BUTTON,
-    route: '/library',
-    needsTeam: true,
-    title: 'Add your own drills',
-    text: 'Your account starts with a few examples. Create your own here, and they are ready to use in every practice from then on.',
-  },
-  {
-    id: 'playbook',
-    target: nav('/playbook'),
-    route: '/playbook',
-    title: 'Plays that move',
-    text: 'Draw a play step by step on a court or field for your sport, then press play and watch it run.',
-    points: ['Attach plays to drills and practices, or print them on their own.'],
-    art: (sport) => <PlayArt sport={sport} />,
-  },
-  {
-    id: 'practices',
-    target: nav('/practices'),
-    route: '/practices',
-    title: 'Put it together into a practice',
-    text: 'A practice is your plan for one day. Build it from your drills and plays, and type in anything of your own on the spot: a team talk, a scrimmage, a water break.',
-    points: ['Start times work themselves out as you add and reorder.'],
-    art: (sport) => <TimelineArt sport={sport} />,
-  },
-  {
-    id: 'new-practice',
-    target: PAGE_BUTTON,
-    route: '/practices',
-    needsTeam: true,
-    title: 'Plan a practice from here',
-    text: 'Start a new practice with this button. Switch to the calendar to see the whole season, and print a practice to take to the gym or field.',
-  },
-  {
-    id: 'homework',
-    target: nav('/homework'),
-    route: '/homework',
-    title: 'Homework for between practices',
-    text: 'Homework is a plan players do on their own. It is built the same way as a practice.',
-    art: () => <ChecklistArt />,
-  },
-  {
-    id: 'resources',
-    target: nav('/resources'),
-    route: '/resources',
-    title: 'Film, pictures and links',
-    text: 'Keep them in one place, and attach them to drills, plays and practice items so they are on hand when you need them.',
-    art: () => <TilesArt />,
-  },
-  {
-    id: 'categories',
-    target: nav('/tags'),
-    route: '/tags',
-    title: 'Keep practices balanced',
-    text: 'Categories label what a drill works on. Give each one a target share of practice time, and the dashboard shows where you are over or under.',
-    art: () => <BarsArt />,
-  },
-  {
-    id: 'communities',
-    target: nav('/communities'),
-    route: '/communities',
-    title: 'Trade ideas with other coaches',
-    text: 'A community is a group of coaches. Talk, and share drills, plays and practice plans.',
-    points: ['Nothing of yours is shared unless you choose to share it.'],
-    art: (sport) => <ChatArt sport={sport} />,
-  },
-  {
-    id: 'done',
-    target: nav('/'),
-    route: '/',
-    title: 'You are set',
-    text: 'The dashboard is home: what is coming up next, and how your practice time has been spent. A good first step is to set up your team and add your players.',
-    art: () => <FlowArt />,
-  },
-];
+};
+const DONE: Step = {
+  id: 'done',
+  target: nav('/'),
+  route: '/',
+  title: 'You are set',
+  text: 'The dashboard is home: what is coming up next, and how your practice time has been spent.',
+  points: ['The menu also has homework, film and links, categories, and communities of other coaches.', 'Reopen this any time with "Take the tour" at the bottom of the menu.'],
+};
 
 const CARD_WIDTH = 380;
 const EDGE = 12;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /**
- * A walk through the app for someone new. Each step lights up the part of the screen it is about
- * and opens that page behind the card. Skip, the close button and Escape all leave it.
+ * A short look around for someone new. They pick what they came to do, plan practices or build a
+ * playbook, and the tour walks through just that, lighting up each part of the screen it is about.
+ * Skip, the close button and Escape all leave it.
  */
 export default function Tour({ onClose }: { onClose: () => void }) {
   const app = useApp();
@@ -293,15 +245,25 @@ export default function Tour({ onClose }: { onClose: () => void }) {
   const startedAt = useRef(useLocation().pathname);
   const sport = sportKind(app.sport?.name) ?? 'basketball';
   const hasTeam = !!app.team;
-  const steps = useMemo(() => STEPS.filter((s) => !s.needsTeam || hasTeam), [hasTeam]);
+  const [path, setPath] = useState<Path | null>(null);
+  // Which of the two have been shown, so the last card only offers the one not seen yet.
+  const [seen, setSeen] = useState<Path[]>([]);
+  const steps = useMemo(() => (path ? [...PATHS[path].steps.filter((s) => !s.needsTeam || hasTeam), DONE] : [CHOOSE]), [path, hasTeam]);
   const [index, setIndex] = useState(0);
   const step = steps[Math.min(index, steps.length - 1)];
-  const last = index >= steps.length - 1;
+  const last = !!path && index >= steps.length - 1;
+  const other: Path | null = path && !seen.includes(path === 'practices' ? 'playbook' : 'practices') ? (path === 'practices' ? 'playbook' : 'practices') : null;
   const [spot, setSpot] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [view, setView] = useState({ w: window.innerWidth, h: window.innerHeight });
   const card = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
 
+  const start = (p: Path) => {
+    setSeen((s) => [...s, p]);
+    setPath(p);
+    setIndex(0);
+  };
+  const back = () => (index > 0 ? setIndex(index - 1) : setPath(null));
   /** Leaves the tour, going back to the page it was started from unless told otherwise. */
   const leave = (to = startedAt.current) => {
     onClose();
@@ -331,7 +293,7 @@ export default function Tour({ onClose }: { onClose: () => void }) {
       if (!el || !r || r.width === 0) return setSpot(null);
       if (!scrolled) {
         scrolled = true;
-        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        el.scrollIntoView({ block: step.toTop ? 'start' : 'nearest', inline: 'nearest' });
       }
       setSpot((s) => (s && s.x === r.left && s.y === r.top && s.w === r.width && s.h === r.height ? s : { x: r.left, y: r.top, w: r.width, h: r.height }));
     };
@@ -339,14 +301,14 @@ export default function Tour({ onClose }: { onClose: () => void }) {
     const timer = setInterval(measure, 150);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step.id]);
+  }, [path, step.id]);
 
   useLayoutEffect(() => {
     const h = card.current?.offsetHeight ?? 0;
     if (h && h !== cardHeight) setCardHeight(h);
   });
 
-  const width = Math.min(CARD_WIDTH, view.w - EDGE * 2);
+  const width = Math.min(path ? CARD_WIDTH : 460, view.w - EDGE * 2);
   const height = cardHeight || 420;
   let at: CSSProperties;
   if (!spot) at = { left: (view.w - width) / 2, top: Math.max(EDGE, (view.h - height) / 2) };
@@ -354,7 +316,7 @@ export default function Tour({ onClose }: { onClose: () => void }) {
   else if (view.w <= 900) at = { left: (view.w - width) / 2, top: Math.max(EDGE, view.h - height - EDGE) };
   // Beside a link in the side menu.
   else if (spot.x + spot.w < 320) at = { left: spot.x + spot.w + 20, top: clamp(spot.y - 28, EDGE, view.h - height - EDGE) };
-  // Under a button on the page, or above it when there is no room below.
+  // Under a button or a panel on the page, or above it when there is no room below.
   else {
     const below = spot.y + spot.h + 16;
     at = { left: clamp(spot.x + spot.w - width, EDGE, view.w - width - EDGE), top: below + height + EDGE <= view.h ? below : Math.max(EDGE, spot.y - height - 16) };
@@ -366,9 +328,7 @@ export default function Tour({ onClose }: { onClose: () => void }) {
       {spot ? <div className="tour-spot" style={{ left: spot.x - 6, top: spot.y - 6, width: spot.w + 12, height: spot.h + 12 }} /> : <div className="tour-dim" />}
       <div ref={card} className="tour" role="dialog" aria-modal="true" aria-label="Tour of Dime Coach" style={{ ...at, width }}>
         <div className="tour-top">
-          <span className="muted small">
-            {index + 1} of {steps.length}
-          </span>
+          <span className="muted small">{path ? `${PATHS[path].label} · ${index + 1} of ${steps.length}` : ''}</span>
           <button type="button" className="btn ghost" onClick={() => leave()} aria-label="Close the tour">
             ✕
           </button>
@@ -384,37 +344,65 @@ export default function Tour({ onClose }: { onClose: () => void }) {
               ))}
             </ul>
           )}
+          {!path && (
+            <div className="tour-choices">
+              <button type="button" className="tour-choice" onClick={() => start('practices')}>
+                <span className="tour-choice-art" aria-hidden="true">
+                  <span className="tour-chip drill">Drill</span>
+                  <span className="tour-chip drill">Drill</span>
+                  <span className="tour-chip custom">Custom</span>
+                </span>
+                <strong>{PATHS.practices.label}</strong>
+                <span className="muted small">{PATHS.practices.blurb}</span>
+              </button>
+              <button type="button" className="tour-choice" onClick={() => start('playbook')}>
+                <span className="tour-choice-art" aria-hidden="true">
+                  <span className="tour-chip play">Step 1</span>
+                  <span className="tour-chip play">Step 2</span>
+                  <span className="tour-chip practice">▶</span>
+                </span>
+                <strong>{PATHS.playbook.label}</strong>
+                <span className="muted small">{PATHS.playbook.blurb}</span>
+              </button>
+            </div>
+          )}
         </div>
-        <div className="tour-dots" aria-hidden="true">
-          {steps.map((s, i) => (
-            <span key={s.id} className={i === index ? 'on' : ''} />
-          ))}
-        </div>
+        {path && (
+          <div className="tour-dots" aria-hidden="true">
+            {steps.map((s, i) => (
+              <span key={s.id} className={i === index ? 'on' : ''} />
+            ))}
+          </div>
+        )}
         <div className="tour-foot">
           {!last && (
             <button type="button" className="link small" onClick={() => leave()}>
-              Skip the tour
+              {path ? 'Skip the tour' : 'Skip, I will look around myself'}
             </button>
           )}
           <span className="tour-spacer" />
-          {index > 0 && (
-            <button type="button" className="btn" onClick={() => setIndex(index - 1)}>
+          {path && (
+            <button type="button" className="btn" onClick={back}>
               Back
             </button>
           )}
           {last ? (
             <>
-              <button type="button" className="btn" onClick={() => leave('/teams')}>
-                Set up my team
-              </button>
-              <button type="button" className="btn primary" onClick={() => leave('/')}>
-                Done
+              {other && (
+                <button type="button" className="btn" onClick={() => start(other)}>
+                  {PATHS[path!].other}
+                </button>
+              )}
+              <button type="button" className="btn primary" onClick={() => leave(hasTeam ? '/' : '/teams')}>
+                {hasTeam ? 'Done' : 'Set up my team'}
               </button>
             </>
           ) : (
-            <button type="button" className="btn primary" onClick={() => setIndex(index + 1)}>
-              Next
-            </button>
+            path && (
+              <button type="button" className="btn primary" onClick={() => setIndex(index + 1)}>
+                Next
+              </button>
+            )
           )}
         </div>
       </div>

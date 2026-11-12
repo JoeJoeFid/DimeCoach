@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { SIGNED_OUT_EVENT, api, type AuthStatus, type Bootstrap, type User } from './api';
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { DialogHost } from './components/dialogs';
 import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
+import TeamPicker from './components/TeamPicker';
 import { PasswordForm, Setup, SignedOut } from './pages/Auth';
 import Admin from './pages/Admin';
 import SystemAdmin from './pages/SystemAdmin';
@@ -101,6 +102,8 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
 export default function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [error, setError] = useState('');
+  // Set by signing in, and cleared once a team is picked: coming back to an open session skips the question.
+  const [justSignedIn, setJustSignedIn] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -133,9 +136,18 @@ export default function App() {
 
   let view;
   if (auth.setup_needed) view = <Setup onDone={refresh} />;
-  else if (!auth.user) view = <SignedOut registrationOpen={auth.registration_open} onSignedIn={refresh} />;
+  else if (!auth.user)
+    view = (
+      <SignedOut
+        registrationOpen={auth.registration_open}
+        onSignedIn={() => {
+          setJustSignedIn(true);
+          refresh();
+        }}
+      />
+    );
   else if (auth.user.must_change_password) view = <PasswordForm forced onDone={refresh} />;
-  else view = <SignedIn key={auth.user.id} user={auth.user} onChanged={refresh} />;
+  else view = <SignedIn key={auth.user.id} user={auth.user} onChanged={refresh} choosingTeam={justSignedIn} onTeamChosen={() => setJustSignedIn(false)} />;
   return (
     <>
       {view}
@@ -144,12 +156,13 @@ export default function App() {
   );
 }
 
-function SignedIn({ user, onChanged }: { user: User; onChanged: () => void }) {
+function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User; onChanged: () => void; choosingTeam: boolean; onTeamChosen: () => void }) {
   const teamKey = `practiceplan.teamId.${user.id}`;
   const [data, setData] = useState<Bootstrap | null>(null);
   const [error, setError] = useState('');
   const [teamId, setTeamIdState] = useState<number>(() => Number(localStorage.getItem(teamKey)) || 0);
   const location = useLocation();
+  const navigate = useNavigate();
   // Someone new gets the tour once. Finishing or skipping it is remembered with their account.
   const [touring, setTouring] = useState(!user.prefs.tour_done);
   const endTour = useCallback(() => {
@@ -236,6 +249,19 @@ function SignedIn({ user, onChanged }: { user: User; onChanged: () => void }) {
     await api.logout().catch(() => {});
     onChanged();
   };
+
+  // Straight after signing in, with more than one team to work on, the first thing is to say which.
+  if (choosingTeam && !printing && state.own_teams.length + state.shared_teams.length > 1) {
+    const pick = (shared: boolean, id: number) => {
+      const here = state.access ? shared && state.access.team_id === id : !shared;
+      // Staying in the same workspace only changes the team. Anything else reloads into the other workspace.
+      if (!here) return openTeam(shared, id);
+      if (!shared) setTeamId(id);
+      onTeamChosen();
+      navigate('/');
+    };
+    return <TeamPicker name={user.name} ownTeams={state.own_teams} sharedTeams={state.shared_teams} onPick={pick} onSignOut={signOut} />;
+  }
 
   const routes = (
     <Routes>

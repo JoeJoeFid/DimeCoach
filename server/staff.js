@@ -131,12 +131,12 @@ function gate(req) {
 /** The sharing part of the bootstrap: the caller's own teams, teams shared with them, and where they are now. */
 export function staffBootstrap(req) {
   return {
-    own_teams: all('SELECT id, name, season FROM teams WHERE owner_id=? ORDER BY id DESC', req.homeOwnerId ?? req.ownerId),
+    own_teams: all(`SELECT t.id, t.name, t.season, (SELECT name FROM sports WHERE id=t.sport_id) AS sport FROM teams t WHERE t.owner_id=? ORDER BY t.id DESC`, req.homeOwnerId ?? req.ownerId),
     shared_teams: all(
-      `SELECT t.id, t.name, t.season, s.title, s.perms_json, ${OWNER_NAME} AS owner_name
+      `SELECT t.id, t.name, t.season, (SELECT name FROM sports WHERE id=t.sport_id) AS sport, s.title, s.perms_json, ${OWNER_NAME} AS owner_name
          FROM team_staff s JOIN teams t ON t.id=s.team_id WHERE s.user_id=? ORDER BY t.name COLLATE NOCASE`,
       req.user.id,
-    ).map((r) => ({ id: r.id, name: r.name, season: r.season, title: r.title, owner_name: r.owner_name || 'The owner', perms: permsOf(r) })),
+    ).map((r) => ({ id: r.id, name: r.name, season: r.season, sport: r.sport, title: r.title, owner_name: r.owner_name || 'The owner', perms: permsOf(r) })),
     access: req.staff ? { team_id: req.staff.teamId, owner_name: req.staff.ownerName, title: req.staff.title, perms: req.staff.perms } : null,
   };
 }
