@@ -284,13 +284,15 @@ export default function PlanEditor() {
           Choose a drill
           {libraryDrills.length > 0 && <span className="chip-num">{libraryDrills.length}</span>}
         </button>
-        <button type="button" className="btn" onClick={() => setCommunityAt(index)}>
-          From a community
-        </button>
         <button type="button" className="btn" onClick={() => addCustom(index)}>
           Custom item
         </button>
-        <span className="muted small grow">A drill comes with its notes, categories and resources. A custom item starts blank.</span>
+        <span className="muted small grow">
+          A drill comes with its notes, categories and resources. A custom item starts blank.{' '}
+          <button type="button" className="link" onClick={() => setCommunityAt(index)}>
+            Or take one from a community
+          </button>
+        </span>
         <button type="button" className="btn ghost" aria-label="Cancel new item" onClick={() => setChoosingAt(null)}>
           ✕
         </button>

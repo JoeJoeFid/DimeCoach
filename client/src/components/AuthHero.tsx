@@ -31,6 +31,8 @@ interface Mover {
 }
 interface Scene {
   sport: string;
+  /** False for a scene kept only for the welcome tour, and left off the sign-in page. */
+  home?: boolean;
   court: Play['court'];
   caption: string;
   /** The drawn lines under the players. A trailing "p" marks a pass or throw, drawn dashed. */
@@ -43,17 +45,20 @@ export const SCENES: Scene[] = [
   {
     sport: 'Basketball',
     court: 'half',
-    caption: 'A give and go drawn on a half court',
-    lines: [['M 25 30 L 11.6 21.1', 'p'], ['M 25 28.2 L 25 10'], ['M 40 20 L 33 14.7'], ['M 11.4 18.6 L 23.6 9.4', 'p']],
+    caption: 'A pick and roll from the top of the key, drawn on a half court',
+    // 5 comes up to screen for 1, 1 dribbles off the screen, 5 rolls to the rim and gets the pass.
+    lines: [['M 29 19.8 L 28 25.6'], ['M 26.6 29.6 C 29 30 31.5 27 32 22.8'], ['M 27.4 25.6 L 26.2 11.2'], ['M 31.2 19.8 L 27.2 10.6', 'p']],
     players: [
-      { label: '2', path: 'M 10 20 L 10 20', ...HOLD },
-      { label: '3', path: 'M 40 20 L 32 14', keyPoints: '0;0;1;1', keyTimes: '0;0.3;0.62;1' },
-      { label: '1', lead: true, path: 'M 25 30 L 25 8.6', keyPoints: '0;0;1;1', keyTimes: '0;0.24;0.6;1' },
+      { label: '2', path: 'M 7 21 L 7 21', ...HOLD },
+      { label: '3', path: 'M 45 9 L 45 9', ...HOLD },
+      { label: '5', path: 'M 29 18 L 27.8 27.2 L 26 9.5', keyPoints: '0;0;0.343;0.343;1;1', keyTimes: '0;0.08;0.28;0.42;0.7;1' },
+      { label: '1', lead: true, path: 'M 25 29 C 28.5 30 31.5 27 32 21', keyPoints: '0;0;1;1', keyTimes: '0;0.3;0.55;1' },
     ],
-    ball: { path: 'M 26.8 28.4 L 11.8 18.4 L 26.6 7.2', keyPoints: '0;0;0.5;0.5;1;1', keyTimes: '0;0.06;0.22;0.58;0.74;1' },
+    ball: { path: 'M 26.6 27.6 C 30.1 28.6 33.1 25.6 33.6 19.6 L 27.4 8.6', keyPoints: '0;0;0.455;0.455;1;1', keyTimes: '0;0.3;0.55;0.62;0.76;1' },
   },
   {
     sport: 'Baseball',
+    home: false,
     court: 'infield',
     caption: 'A double play drawn on a baseball infield',
     lines: [['M 25 42 L 18.6 22.4', 'p'], ['M 31 20 L 26.6 18.6'], ['M 19.4 20.4 L 24.4 18.8', 'p'], ['M 27 19.4 L 37 28.6', 'p'], ['M 26 42 L 36 32']],
@@ -80,6 +85,8 @@ export const SCENES: Scene[] = [
   },
 ];
 const SCENE_SECONDS = 7;
+/** The plays shown on the sign-in page, one after another. */
+const HOME_SCENES = SCENES.filter((s) => s.home !== false);
 
 /** One short play, looping on the surface its sport is played on. */
 export function HeroPlay({ scene, still }: { scene: Scene; still: boolean }) {
@@ -120,14 +127,13 @@ export function HeroPlay({ scene, still }: { scene: Scene; still: boolean }) {
 export default function AuthHero() {
   const still = useReducedMotion();
   const [index, setIndex] = useState(0);
-  const [picked, setPicked] = useState(false);
-  // Moves on to the next sport after each play has run twice, until the visitor picks one.
+  // Each play runs once, then the next sport's play takes its place.
   useEffect(() => {
-    if (still || picked) return;
-    const t = setTimeout(() => setIndex((i) => (i + 1) % SCENES.length), SCENE_SECONDS * 2000);
+    if (still) return;
+    const t = setTimeout(() => setIndex((i) => (i + 1) % HOME_SCENES.length), SCENE_SECONDS * 1000);
     return () => clearTimeout(t);
-  }, [index, still, picked]);
-  const scene = SCENES[index];
+  }, [index, still]);
+  const scene = HOME_SCENES[index];
   return (
     <aside className="hero">
       <div className="hero-top">
@@ -163,16 +169,13 @@ export default function AuthHero() {
       <div className="hero-art">
         <HeroPlay key={scene.sport} scene={scene} still={still} />
         <div className="hero-sports" role="group" aria-label="Show a play for">
-          {SCENES.map((s, i) => (
+          {HOME_SCENES.map((s, i) => (
             <button
               key={s.sport}
               type="button"
               className={i === index ? 'on' : ''}
               aria-pressed={i === index}
-              onClick={() => {
-                setIndex(i);
-                setPicked(true);
-              }}
+              onClick={() => setIndex(i)}
             >
               {s.sport}
             </button>

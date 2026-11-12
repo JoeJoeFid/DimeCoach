@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, PlanKind, PlanSummary, ScheduleEvent } from '../types';
@@ -111,7 +111,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     (nextRow.current ?? lastRow.current)?.scrollIntoView({ block: 'start' });
   }, [plans, teamId, kind, entries, calendar]);
 
-  const create = (fromPlanId?: number) =>
+  const create = (fromPlanId?: number, replace = false) =>
     act(async () => {
       const last = plans?.[0];
       // A new practice is most likely for the next one on the team calendar that has no plan yet.
@@ -126,8 +126,18 @@ export default function Plans({ kind }: { kind: PlanKind }) {
         location: fromPlanId ? undefined : open?.location || last?.location,
         from_plan_id: fromPlanId,
       });
-      navigate(`/plans/${p.id}`);
+      navigate(`/plans/${p.id}`, { replace });
     });
+  // "Plan a practice" on the dashboard lands here asking for a new one: start it as soon as the
+  // schedule is known, and take this stop out of the history so Back returns to the dashboard.
+  const [params] = useSearchParams();
+  const wantsNew = kind === 'practice' && params.get('new') === '1';
+  const started = useRef(false);
+  useEffect(() => {
+    if (!wantsNew || plans === null || started.current) return;
+    started.current = true;
+    create(undefined, true);
+  }, [wantsNew, plans]);
   const planEvent = (e: ScheduleEntry) =>
     act(async () => {
       const p = await api.createPlan({

@@ -161,7 +161,8 @@ export default function Dashboard() {
               ))}
             </select>
           </label>
-          <Link className="btn primary" to="/practices">
+          {/* Straight into a new practice, not the list of them. */}
+          <Link className="btn primary" to="/practices?new=1">
             Plan a practice
           </Link>
         </div>
@@ -177,7 +178,8 @@ export default function Dashboard() {
               ? 'Once you have run a practice, this page shows where your time went and which categories need attention.'
               : 'Pick a longer period under "Track over" to see where your time went.'}
           </p>
-          <Link className="btn primary" to="/practices">
+          {/* Straight into a new practice, not the list of them. */}
+          <Link className="btn primary" to="/practices?new=1">
             Plan a practice
           </Link>
         </div>
