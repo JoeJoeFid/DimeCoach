@@ -7268,3 +7268,22 @@ fieldset.plain {
     grid-template-columns: 1fr;
   }
 }
+
+/* The schedule heading, larger still. */
+.plan-column-title {
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+/* Practice header: title, date and start time are one modest size. */
+.plan-head .plan-head-left > .field:first-child .input,
+.plan-head .plan-head-left .plan-when > .field .input,
+.plan-head .plan-head-left .plan-when > .field:has(input[type='date']) .input,
+.plan-head .plan-head-left .plan-when > .field:has(input[type='time']) .input {
+  height: 44px;
+  padding: 6px 12px;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
