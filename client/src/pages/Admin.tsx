@@ -150,7 +150,7 @@ export default function Admin() {
         <h2>Add a person</h2>
         <p className="muted small">
           Until email is connected, you create accounts here and pass the starting password along yourself. Plan import runs Claude on the
-          computer hosting PracticePlan, so grant it only to people you want using that.
+          computer hosting Dime Coach, so grant it only to people you want using that.
         </p>
         <form className="fields" onSubmit={create}>
           <Field label="Name" grow>

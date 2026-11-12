@@ -87,6 +87,90 @@ export interface StorageSpace {
   cap_bytes: number;
   left_bytes: number;
 }
+export type ShareKind = 'drill' | 'play' | 'plan';
+export interface Community {
+  id: number;
+  name: string;
+  description: string;
+  /** What members may share, each turned on separately by the community's admins. */
+  share_drills: boolean;
+  share_plays: boolean;
+  share_plans: boolean;
+  require_approval: boolean;
+  /** The caller's place in it. */
+  role: 'creator' | 'admin' | 'member';
+  status: 'active' | 'invited';
+  members: number;
+  created_by_name: string;
+}
+export interface CommunityPerson {
+  id: number;
+  name: string;
+  /** Only sent to community admins. */
+  email?: string;
+  role: 'creator' | 'admin' | 'member';
+  status: 'active' | 'invited';
+}
+export interface CommunityDetail extends Community {
+  join_code?: string;
+  people: CommunityPerson[];
+  pending_shares: number;
+}
+export interface CommunityPost {
+  id: number;
+  body: string;
+  created_at: string;
+  by: string;
+  mine: boolean;
+  can_delete: boolean;
+}
+export interface CommunityShare {
+  id: number;
+  community_id: number;
+  community_name: string;
+  kind: ShareKind;
+  status: 'pending' | 'approved';
+  title: string;
+  summary: string;
+  by: string;
+  mine: boolean;
+  item_id?: number;
+  shared_at: string;
+  tags: { name: string; color: string }[];
+}
+type SharedLink = { url: string; label: string };
+type SharedTag = { name: string; color: string };
+export interface SharedPlay extends Pick<Play, 'id' | 'name' | 'category' | 'labels' | 'court' | 'flipped' | 'notes' | 'frames'> {
+  links: SharedLink[];
+}
+export interface SharedDrill {
+  name: string;
+  duration_min: number;
+  notes_html: string;
+  groups: { name: string; notes_html: string }[];
+  links: SharedLink[];
+  tags: SharedTag[];
+  plays: SharedPlay[];
+}
+export interface SharedPlan {
+  title: string;
+  kind: PlanKind;
+  is_game: boolean;
+  start_time: string;
+  intro_html: string;
+  items: { kind: 'item' | 'break'; title: string; duration_min: number; notes_html: string; reps: string; links: SharedLink[]; tags: SharedTag[]; plays: SharedPlay[] }[];
+}
+export interface CommunityShareDetail extends CommunityShare {
+  content: SharedDrill | SharedPlay | SharedPlan;
+}
+/** For one of the caller's own things: a community of theirs, and whether it is shared there. */
+export interface MyShareState {
+  community_id: number;
+  name: string;
+  allowed: boolean;
+  share_id: number | null;
+  status: 'pending' | 'approved' | null;
+}
 export interface AdminSettings {
   registration_enabled: boolean;
   registration_open: boolean;
@@ -113,6 +197,30 @@ export const api = {
   systemSetDefaults: (b: { default_cap_mb: number }) => req<SystemState>('PUT', '/system/settings', b),
   systemUpdateUser: (id: number, b: { upload_cap_mb?: number | null; is_admin?: boolean }) => req<SystemState>('PUT', `/system/users/${id}`, b),
   storage: () => req<StorageSpace>('GET', '/storage'),
+  communities: () => req<Community[]>('GET', '/communities'),
+  createCommunity: (b: { name: string; description: string }) => req<CommunityDetail>('POST', '/communities', b),
+  joinCommunity: (code: string) => req<Community>('POST', '/communities/join', { code }),
+  community: (id: number) => req<CommunityDetail>('GET', `/communities/${id}`),
+  updateCommunity: (id: number, b: Partial<Pick<Community, 'name' | 'description' | 'share_drills' | 'share_plays' | 'share_plans' | 'require_approval'>>) =>
+    req<CommunityDetail>('PUT', `/communities/${id}`, b),
+  deleteCommunity: (id: number) => req<{ ok: true }>('DELETE', `/communities/${id}`),
+  newJoinCode: (id: number) => req<CommunityDetail>('POST', `/communities/${id}/code`, {}),
+  inviteToCommunity: (id: number, email: string) => req<CommunityDetail>('POST', `/communities/${id}/invite`, { email }),
+  acceptInvite: (id: number) => req<{ ok: true }>('POST', `/communities/${id}/accept`, {}),
+  setMemberRole: (id: number, userId: number, role: 'admin' | 'member') => req<CommunityDetail>('PUT', `/communities/${id}/members/${userId}`, { role }),
+  /** Removes someone, declines an invitation, or leaves, depending on who asks about whom. */
+  removeMember: (id: number, userId: number) => req<{ ok: true }>('DELETE', `/communities/${id}/members/${userId}`),
+  communityPosts: (id: number) => req<CommunityPost[]>('GET', `/communities/${id}/posts`),
+  postToCommunity: (id: number, body: string) => req<CommunityPost[]>('POST', `/communities/${id}/posts`, { body }),
+  deletePost: (id: number, postId: number) => req<CommunityPost[]>('DELETE', `/communities/${id}/posts/${postId}`),
+  communityShares: (id: number) => req<CommunityShare[]>('GET', `/communities/${id}/shares`),
+  share: (id: number, kind: ShareKind, itemId: number) => req<CommunityShare[]>('POST', `/communities/${id}/shares`, { kind, item_id: itemId }),
+  unshare: (shareId: number) => req<CommunityShare[]>('DELETE', `/community-shares/${shareId}`),
+  approveShare: (shareId: number) => req<CommunityShare[]>('POST', `/community-shares/${shareId}/approve`, {}),
+  myShares: (kind: ShareKind, itemId: number) => req<MyShareState[]>('GET', `/community-shares/mine?kind=${kind}&item_id=${itemId}`),
+  communityLibrary: (kind: ShareKind, community: 'all' | number) => req<CommunityShare[]>('GET', `/community-library?kind=${kind}&community=${community}`),
+  communityShare: (shareId: number) => req<CommunityShareDetail>('GET', `/community-library/${shareId}`),
+  copyShare: (shareId: number, b: { sport_id?: number; team_id?: number; date?: string }) => req<{ kind: ShareKind; id: number }>('POST', `/community-library/${shareId}/copy`, b),
   adminSetSettings: (b: { registration_enabled: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
 
   aiStatus: () => req<AiStatus>('GET', '/ai/status'),

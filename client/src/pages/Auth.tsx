@@ -1,25 +1,40 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
+import { Link, Route, Routes, useSearchParams } from 'react-router-dom';
 import { api, type User } from '../api';
 import { ThemeToggle } from '../theme';
 import { Field } from '../components/bits';
+import AuthHero from '../components/AuthHero';
 
 const MIN_PASSWORD = 10;
 
-/** The centered card used by every signed-out screen. */
-export function AuthShell({ title, lead, children }: { title: string; lead?: string; children: ReactNode }) {
+/**
+ * Every signed-out screen: what Dime Coach is on one side, the form on the other.
+ * `tab` adds the Sign in / Sign up switch, for the two screens a visitor chooses between.
+ */
+export function AuthShell({ title, lead, children, tab }: { title: string; lead?: string; children: ReactNode; tab?: 'in' | 'up' }) {
   return (
-    <div className="auth">
-      <div className="auth-card">
-        <div className="brand auth-brand">
-          <span className="brand-mark" aria-hidden="true" />
-          PracticePlan
+    <div className="landing">
+      <AuthHero />
+      <main className="landing-side">
+        <div className="auth-card">
+          {tab && (
+            <nav className="auth-tabs" aria-label="Sign in or sign up">
+              <Link to="/" className={tab === 'in' ? 'on' : ''} aria-current={tab === 'in' ? 'page' : undefined}>
+                Sign in
+              </Link>
+              <Link to="/register" className={tab === 'up' ? 'on' : ''} aria-current={tab === 'up' ? 'page' : undefined}>
+                Sign up
+              </Link>
+            </nav>
+          )}
+          <h1>{title}</h1>
+          {lead && <p className="muted auth-lead">{lead}</p>}
+          {children}
         </div>
-        <h1>{title}</h1>
-        {lead && <p className="muted">{lead}</p>}
-        {children}
-      </div>
-      <ThemeToggle />
+        <div className="landing-foot">
+          <ThemeToggle />
+        </div>
+      </main>
     </div>
   );
 }
@@ -54,7 +69,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
   });
   return (
     <AuthShell
-      title="Set up PracticePlan"
+      title="Set up Dime Coach"
       lead="Create the administrator account. It takes over the teams and practices already on this install, and it is the account that adds other people."
     >
       <form className="fields stack" onSubmit={submit}>
@@ -87,7 +102,7 @@ function Login({ registrationOpen, onSignedIn }: { registrationOpen: boolean; on
     onSignedIn();
   });
   return (
-    <AuthShell title="Sign in">
+    <AuthShell title="Welcome back, Coach" lead="Sign in to get to your practices and plays." tab="in">
       <form className="fields stack" onSubmit={submit}>
         {error && <p className="error">{error}</p>}
         <Field label="Email">
@@ -106,7 +121,7 @@ function Login({ registrationOpen, onSignedIn }: { registrationOpen: boolean; on
             New here? <Link to="/register">Create an account</Link>
           </>
         ) : (
-          'Accounts are created by the administrator. Ask them for one, or to reset a forgotten password.'
+          'Forgot your password? Ask the administrator to reset it.'
         )}
       </p>
     </AuthShell>
@@ -131,7 +146,7 @@ function Register() {
       </AuthShell>
     );
   return (
-    <AuthShell title="Create an account" lead="You will get an email with a link to confirm your address.">
+    <AuthShell title="Join the bench" lead="Create your account. You will get an email with a link to confirm your address." tab="up">
       <form className="fields stack" onSubmit={submit}>
         {error && <p className="error">{error}</p>}
         <Field label="Your name">
@@ -191,12 +206,28 @@ function Confirm() {
   );
 }
 
+/** Sign up while accounts are still handed out by the administrator. */
+function InviteOnly() {
+  return (
+    <AuthShell title="Sign-ups are invite-only" lead="Dime Coach is still warming up, so accounts are handed out by the administrator for now." tab="up">
+      <ol className="invite-steps">
+        <li>Ask the administrator for an account.</li>
+        <li>They send you a starting password.</li>
+        <li>Sign in and choose a password of your own.</li>
+      </ol>
+      <Link className="btn primary" to="/">
+        I have an account
+      </Link>
+    </AuthShell>
+  );
+}
+
 /** Everything a signed-out visitor can reach. */
 export function SignedOut({ registrationOpen, onSignedIn }: { registrationOpen: boolean; onSignedIn: () => void }) {
   return (
     <Routes>
       <Route path="/confirm" element={<Confirm />} />
-      <Route path="/register" element={registrationOpen ? <Register /> : <Navigate to="/" replace />} />
+      <Route path="/register" element={registrationOpen ? <Register /> : <InviteOnly />} />
       <Route path="*" element={<Login registrationOpen={registrationOpen} onSignedIn={onSignedIn} />} />
     </Routes>
   );

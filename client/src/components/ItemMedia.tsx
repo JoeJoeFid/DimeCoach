@@ -29,7 +29,7 @@ export function SheetLinks({ links, videos }: { links: ItemLink[]; videos: numbe
       ))}
       {videos > 0 && (
         <p style={{ margin: '2px 0', color: '#555' }}>
-          {videos} video{videos === 1 ? '' : 's'} attached. Watch in PracticePlan.
+          {videos} video{videos === 1 ? '' : 's'} attached. Watch in Dime Coach.
         </p>
       )}
     </div>

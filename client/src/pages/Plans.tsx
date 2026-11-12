@@ -9,6 +9,7 @@ import { TagChip } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import SchedulePreview from '../components/SchedulePreview';
 import PlanCalendar from '../components/PlanCalendar';
+import { CommunityPicker } from '../components/community';
 
 const STALE_AFTER_MS = 3 * 60 * 60 * 1000;
 type View = 'list' | 'calendar';
@@ -33,6 +34,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const [templates, setTemplates] = useState<PlanSummary[]>([]);
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [fromCommunity, setFromCommunity] = useState(false);
   const [view, setView] = useState<View>(savedView);
   // Homework sheets are not tied to dates the same way, so only practices get the calendar.
   const calendar = kind === 'practice' && view === 'calendar';
@@ -297,12 +299,18 @@ export default function Plans({ kind }: { kind: PlanKind }) {
               Import old plans
             </Link>
           )}
+          {kind === 'practice' && (
+            <button className="btn" onClick={() => setFromCommunity(true)}>
+              From a community
+            </button>
+          )}
           <button className="btn primary" onClick={() => create()}>
             + New {noun}
           </button>
         </div>
       </div>
       {error && <p className="error">{error}</p>}
+      {fromCommunity && <CommunityPicker kind="plan" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plans/${id}`)} />}
 
       {kind === 'practice' && (
         <p className="muted small list-note">

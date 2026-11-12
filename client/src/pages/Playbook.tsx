@@ -1,3 +1,4 @@
+import { CommunityPicker } from '../components/community';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
@@ -14,6 +15,7 @@ export default function Playbook() {
   const navigate = useNavigate();
   const [plays, setPlays] = useState<Play[] | null>(null);
   const [error, setError] = useState('');
+  const [fromCommunity, setFromCommunity] = useState(false);
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [label, setLabel] = useState('');
@@ -64,12 +66,16 @@ export default function Playbook() {
           <p className="muted">Diagram your {sport!.name.toLowerCase()} plays step by step. Attach them to practice items, or print them on their own.</p>
         </div>
         <div className="head-actions">
+          <button className="btn" onClick={() => setFromCommunity(true)}>
+            From a community
+          </button>
           <button className="btn primary" onClick={create}>
             + New play
           </button>
         </div>
       </div>
       {error && <p className="error">{error}</p>}
+      {fromCommunity && <CommunityPicker kind="play" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plays/${id}`)} />}
 
       {plays === null ? (
         <p className="muted">Loading…</p>

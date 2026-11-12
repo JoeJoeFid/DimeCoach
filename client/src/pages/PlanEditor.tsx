@@ -9,6 +9,7 @@ import type { Drill, ImportDraft, Item, Plan, Play, Player, Tag, Team } from '..
 import { blankItem, fmtClock, fmtDateShort, fmtDuration, htmlPreview, isBlankHtml, planMinutes, schedule, slotLabel, type Slot } from '../util';
 import ItemBody from '../components/ItemBody';
 import { Field, Modal, MoreMenu, TagChip, type MenuItem } from '../components/bits';
+import { CommunityPicker, ShareDialog } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { DraftReview, SourcePicker, defaultChoices, resolveDraft, useAiStatus, type DraftChoices } from '../components/planImport';
 
@@ -34,6 +35,9 @@ export default function PlanEditor() {
   const [focusKey, setFocusKey] = useState('');
   /** Whether the "start from a previous practice" picker is open. */
   const [starting, setStarting] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  /** Where a drill taken from a community library will be inserted. */
+  const [communityAt, setCommunityAt] = useState<number | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [importing, setImporting] = useState(searchParams.has('import') && app.user.can_import);
 
@@ -258,6 +262,7 @@ export default function PlanEditor() {
   const moreItems: MenuItem[] = [
     ...(!isHomework && app.user.can_import ? [{ label: 'Import plan', onSelect: () => setImporting(true) }] : []),
     { label: 'Duplicate', onSelect: duplicate },
+    ...(!plan.is_template ? [{ label: 'Share with a community', onSelect: () => setSharing(true) }] : []),
     ...(!plan.is_template ? [{ label: 'Save as template', onSelect: saveAsTemplate }] : []),
     { label: 'Delete', onSelect: remove, danger: true },
   ];
@@ -278,6 +283,9 @@ export default function PlanEditor() {
         <button type="button" className="btn primary" autoFocus onClick={() => setPickAt(index)}>
           Choose a drill
           {libraryDrills.length > 0 && <span className="chip-num">{libraryDrills.length}</span>}
+        </button>
+        <button type="button" className="btn" onClick={() => setCommunityAt(index)}>
+          From a community
         </button>
         <button type="button" className="btn" onClick={() => addCustom(index)}>
           Custom item
@@ -471,6 +479,26 @@ export default function PlanEditor() {
         />
       )}
 
+      {sharing && <ShareDialog kind="plan" itemId={plan.id} title={plan.title || 'Practice'} onClose={() => setSharing(false)} />}
+      {communityAt !== null && (
+        <CommunityPicker
+          kind="drill"
+          onClose={() => setCommunityAt(null)}
+          onAdded={async (drillId) => {
+            // The drill is now in this coach's own library: reload it, then drop it in like any other drill.
+            const at = communityAt;
+            setCommunityAt(null);
+            try {
+              const library = await api.drills();
+              setDrills(library);
+              const d = library.find((x) => x.id === drillId);
+              if (d) addDrill(d, at);
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        />
+      )}
       {starting && <PreviousPlanPicker current={plan} tags={tags} onPick={startFrom} onClose={() => setStarting(false)} />}
 
       {pickAt !== null && (

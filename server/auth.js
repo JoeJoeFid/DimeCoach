@@ -158,12 +158,12 @@ export function mountAuth(app) {
 
   // First run: create the administrator, who takes over the data already on this install.
   app.post('/api/auth/setup', (req, res) => {
-    if (userCount() > 0) return res.status(409).json({ error: 'PracticePlan is already set up. Sign in instead.' });
+    if (userCount() > 0) return res.status(409).json({ error: 'Dime Coach is already set up. Sign in instead.' });
     // On a public server, anyone could reach this page first. Require a token there.
     const token = process.env.PP_SETUP_TOKEN;
     if (token ? str(req.body.setup_token) !== token : !isLoopback(req))
       return res.status(403).json({
-        error: token ? 'The setup code is not right.' : 'Setup must be done from the computer running PracticePlan, or with a setup code.',
+        error: token ? 'The setup code is not right.' : 'Setup must be done from the computer running Dime Coach, or with a setup code.',
       });
     const email = normEmail(req.body.email);
     const name = str(req.body.name).trim();
@@ -225,8 +225,8 @@ export function mountAuth(app) {
       const base = process.env.PP_PUBLIC_URL || `${req.protocol}://${req.headers.host}`;
       sendMail({
         to: email,
-        subject: 'Confirm your PracticePlan account',
-        text: `Hi ${name},\n\nConfirm your email address to finish creating your PracticePlan account:\n\n${base}/confirm?token=${token}\n\nThe link works for ${CONFIRM_HOURS} hours. If you did not ask for an account, ignore this message.`,
+        subject: 'Confirm your Dime Coach account',
+        text: `Hi ${name},\n\nConfirm your email address to finish creating your Dime Coach account:\n\n${base}/confirm?token=${token}\n\nThe link works for ${CONFIRM_HOURS} hours. If you did not ask for an account, ignore this message.`,
       });
     }
     res.json({ ok: true });

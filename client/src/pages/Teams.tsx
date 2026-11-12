@@ -95,7 +95,7 @@ export default function Teams() {
       {app.teams.length === 0 ? (
         <div className="empty">
           <h2>Create your first team</h2>
-          <p>Everything in PracticePlan belongs to a team, so start here.</p>
+          <p>Everything in Dime Coach belongs to a team, so start here.</p>
           <button className="btn primary" onClick={() => setAdding(true)}>
             + New team
           </button>

@@ -1,3 +1,4 @@
+import { CommunityPicker, ShareDialog } from '../components/community';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { useApp } from '../App';
@@ -18,6 +19,8 @@ export default function Library() {
   const [q, setQ] = useState('');
   const [tagId, setTagId] = useState(0);
   const [error, setError] = useState('');
+  const [fromCommunity, setFromCommunity] = useState(false);
+  const [sharing, setSharing] = useState<Drill | null>(null);
   const [plays, setPlays] = useState<Play[]>([]);
   useEffect(() => {
     api.plays().then(setPlays).catch(() => {});
@@ -69,6 +72,9 @@ export default function Library() {
           </p>
         </div>
         <div className="head-actions">
+          <button className="btn" onClick={() => setFromCommunity(true)}>
+            From a community
+          </button>
           <button className="btn primary" onClick={() => setDraft(blank())}>
             + New drill
           </button>
@@ -115,6 +121,9 @@ export default function Library() {
                 </span>
               </button>
               <span className="row-actions">
+                <button className="btn small" onClick={() => setSharing(d)}>
+                  Share
+                </button>
                 <button className="btn small" onClick={() => setDraft(toDraft(d))}>
                   Edit
                 </button>
@@ -127,6 +136,17 @@ export default function Library() {
         </ul>
       )}
 
+      {fromCommunity && (
+        <CommunityPicker
+          kind="drill"
+          onClose={() => setFromCommunity(false)}
+          onAdded={() => {
+            setFromCommunity(false);
+            load();
+          }}
+        />
+      )}
+      {sharing && <ShareDialog kind="drill" itemId={sharing.id} title={sharing.name} onClose={() => setSharing(null)} />}
       {draft && (
         <Modal title={draft.id ? 'Edit drill' : 'New drill'} onClose={() => setDraft(null)} wide>
           {error && <p className="error">{error}</p>}

@@ -24,6 +24,7 @@ import {
   type Pt,
 } from '../components/PlayDiagram';
 import PlayAnimation from '../components/PlayAnimation';
+import { ShareDialog } from '../components/community';
 import { beatsOf, describeLine, ordinal, orderOf, withOrder } from '../playAnimation';
 import { HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, sources, targets, withEnd } from '../playLogic';
 import Attachments from '../components/Attachments';
@@ -141,6 +142,7 @@ export default function PlayEditor() {
   const [selected, setSelectedOne] = useState<string | null>(null);
   /** Two or more things selected together, by dragging an area or shift-clicking. Empty otherwise. */
   const [multi, setMulti] = useState<string[]>([]);
+  const [sharing, setSharing] = useState(false);
   /** Whether the animated playback is open. */
   const [watching, setWatching] = useState(false);
   /** A tool being dragged from the palette: which one, and where the pointer is on the page. */
@@ -292,7 +294,7 @@ export default function PlayEditor() {
       const el = e.target as HTMLElement;
       if (el.closest('input, textarea, select, [contenteditable="true"]')) return;
       // While the animation is showing, the keyboard belongs to it, not to the drawing underneath.
-      if (watching) return;
+      if (watching || sharing) return;
       if ((e.key === 'Delete' || e.key === 'Backspace') && (selected || multi.length > 0)) {
         e.preventDefault();
         removeSelected();
@@ -311,7 +313,7 @@ export default function PlayEditor() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selected, multi, removeSelected, undo, redo, aim, cancelAim, watching]);
+  }, [selected, multi, removeSelected, undo, redo, aim, cancelAim, watching, sharing]);
 
   const selectedObject = useMemo(() => frame?.objects.find((o) => o.id === selected) ?? null, [frame, selected]);
 
@@ -812,6 +814,9 @@ export default function PlayEditor() {
             <button className="btn" onClick={duplicate}>
               Duplicate
             </button>
+            <button className="btn" onClick={() => setSharing(true)}>
+              Share
+            </button>
             <button className="btn" onClick={() => setWatching(true)} title="Watch the play move, step by step">
               ▶ Play animation
             </button>
@@ -1203,6 +1208,7 @@ export default function PlayEditor() {
         </div>
       </div>
 
+      {sharing && <ShareDialog kind="play" itemId={play.id} title={play.name || 'Play'} onClose={() => setSharing(false)} />}
       {watching && (
         <Modal title={play.name || 'Play'} onClose={() => setWatching(false)} wide>
           <PlayAnimation play={play} />

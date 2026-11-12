@@ -88,7 +88,7 @@ export function mountImages(app) {
     if (buf.length === 0) return res.status(400).json({ error: 'The picture was empty.' });
     if (buf.length > MAX_IMAGE_BYTES) return res.status(413).json({ error: 'That picture is too large. Use one under 6 MB.' });
     const kind = sniff(buf);
-    if (!kind || !kind.mime.startsWith('image/')) return res.status(400).json({ error: 'That file is not a picture PracticePlan can use. Use a JPEG, PNG or WebP.' });
+    if (!kind || !kind.mime.startsWith('image/')) return res.status(400).json({ error: 'That file is not a picture Dime Coach can use. Use a JPEG, PNG or WebP.' });
     const space = spaceFor(req);
     if (buf.length > space.left_bytes) return res.status(413).json({ error: fullMessage(space) });
     const filename = crypto.randomUUID() + kind.ext;
@@ -143,7 +143,7 @@ export function mountImages(app) {
         const kind = sniff(head);
         if (bytes === 0 || !kind || !kind.mime.startsWith('video/')) {
           cleanup();
-          return res.status(400).json({ error: 'That file is not a video PracticePlan can use. Use an MP4, MOV or WebM.' });
+          return res.status(400).json({ error: 'That file is not a video Dime Coach can use. Use an MP4, MOV or WebM.' });
         }
         const filename = crypto.randomUUID() + kind.ext;
         fs.renameSync(temp, path.join(uploadsDir, filename));

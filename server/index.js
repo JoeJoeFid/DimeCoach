@@ -7,6 +7,7 @@ import { seedIfEmpty } from './seed.js';
 import { ImportError, analyzePlan, claudeStatus, manualPrompt, parseDraft } from './ai.js';
 import { CalendarError, fetchCalendar, normalizeCalendarUrl } from './calendar.js';
 import { mountAuth, requireImport } from './auth.js';
+import { mountCommunities } from './communities.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
 import { cleanPlayIds, mountPlays } from './plays.js';
 import { mountResources } from './resources.js';
@@ -33,6 +34,7 @@ app.disable('x-powered-by');
 // req.ownerId (that user's workspace), and every query below scopes by req.ownerId.
 mountAuth(app);
 mountImages(app);
+mountCommunities(app);
 mountPlays(app);
 mountResources(app);
 
@@ -444,7 +446,7 @@ const importContext = (req, teamId) => {
 const importFail = (res, e) => {
   if (e instanceof ImportError) return res.status(e.status).json({ error: e.message });
   console.error(e);
-  return res.status(500).json({ error: 'The import failed unexpectedly. Check the PracticePlan console window for details.' });
+  return res.status(500).json({ error: 'The import failed unexpectedly. Check the Dime Coach console window for details.' });
 };
 
 // Plan import is granted per user by the system administrator.
@@ -489,4 +491,4 @@ if (fs.existsSync(dist)) {
 
 const port = Number(process.env.PORT) || 4780;
 const host = process.env.HOST || '127.0.0.1';
-app.listen(port, host, () => console.log(`PracticePlan is running at http://localhost:${port}`));
+app.listen(port, host, () => console.log(`Dime Coach is running at http://localhost:${port}`));

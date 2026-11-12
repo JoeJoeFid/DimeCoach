@@ -161,6 +161,45 @@ CREATE TABLE IF NOT EXISTS resources (
 `);
 
 // Columns added after the first release. Existing data files get them here.
+// Communities. See server/communities.js. People join as users; what they share stays in their own workspace.
+db.exec(`
+CREATE TABLE IF NOT EXISTS communities (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT DEFAULT '',
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  share_drills INTEGER DEFAULT 0, share_plays INTEGER DEFAULT 0, share_plans INTEGER DEFAULT 0,
+  require_approval INTEGER DEFAULT 1,             -- an admin approves each shared item before others see it
+  join_code TEXT UNIQUE,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS community_members (
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'member',            -- 'creator' | 'admin' | 'member'
+  status TEXT NOT NULL DEFAULT 'active',          -- 'invited' until the person accepts
+  invited_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (community_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS community_posts (
+  id INTEGER PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS community_shares (
+  id INTEGER PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  owner_id INTEGER NOT NULL REFERENCES owners(id),
+  kind TEXT NOT NULL,                             -- 'drill' | 'play' | 'plan'
+  item_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',         -- 'pending' | 'approved'
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (community_id, kind, item_id, owner_id)
+);
+CREATE INDEX IF NOT EXISTS idx_posts_community ON community_posts(community_id, id);
+CREATE INDEX IF NOT EXISTS idx_shares_community ON community_shares(community_id, kind, status);
+`);
+
 function addColumn(table, column, ddl) {
   const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
   if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
