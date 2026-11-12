@@ -141,8 +141,34 @@ const FOOTBALL = {
     { name: 'Special teams period', dur: 10, tags: ['Special teams'], notes: ul('Kickoff lanes', 'Punt protection and coverage') },
   ],
 };
+const VOLLEYBALL = {
+  tags: [
+    ['Serving', '#2a78d6', 15],
+    ['Passing', '#eda100', 20],
+    ['Setting', '#6250d6', 10],
+    ['Attacking', '#eb6834', 15],
+    ['Blocking', '#e34948', 5],
+    ['Defense', '#008300', 15],
+    ['Team play', '#1baf7a', 15],
+    ['Culture & mindset', '#e87ba4', 5],
+  ],
+  drills: [
+    { name: 'Dynamic warm-up', dur: 8, tags: ['Culture & mindset'], notes: ul('Jog, shuffle and carioca along the net', 'Arm circles and band work for shoulders', 'Approach jumps, three each side') },
+    { name: 'Partner pepper', dur: 8, tags: ['Passing', 'Setting'], notes: ul('Pass, set, controlled hit, dig', 'Keep it off the floor for ten in a row', 'Switch partners at the whistle') },
+    { name: 'Serving progression', dur: 10, tags: ['Serving'], notes: ul('Toss in front of the hitting shoulder', 'Start at the 3 m line, step back after five in', 'Finish with ten from the end line') },
+    { name: 'Target serving', dur: 10, tags: ['Serving'], notes: ul('Call the zone before every serve', 'Zones 1, 5 and 6 first, then the seams', 'Two misses in a row: reset the routine') },
+    { name: 'Serve receive triangles', dur: 12, tags: ['Passing'], notes: ul('Three passers, one target at the net', 'Platform out early, angle it to the target', 'Call "mine" before the ball crosses the net', 'Rotate after five good passes') },
+    { name: 'Butterfly passing', dur: 10, tags: ['Passing'], notes: ul('Serve, pass, catch, then follow your ball', 'Keep both lines moving', 'Count passes that reach the target') },
+    { name: 'Setter footwork and targets', dur: 10, tags: ['Setting'], notes: ul('Right foot forward, square to the left antenna', 'Sets to outside, middle and back', 'Setters call the set before the pass arrives') },
+    { name: 'Hitting lines', dur: 12, tags: ['Attacking'], groups: [{ name: 'Outside' }, { name: 'Middle' }, { name: 'Right side' }], notes: ul('Left, right, left approach, big last two steps', 'Reach high and snap the wrist', 'Shag your own ball and switch lines') },
+    { name: 'Blocking footwork', dur: 8, tags: ['Blocking'], notes: ul('Shuffle for short moves, crossover for long ones', 'Hands over the net, press and seal', 'Land on two feet') },
+    { name: 'Dig and cover', dur: 10, tags: ['Defense'], notes: ul('Stay low and still as the hitter contacts', 'Dig high to the middle of the court', 'Everyone covers the hitter after the set') },
+    { name: 'Wash drill: serve receive to attack', dur: 15, tags: ['Team play'], notes: ul('Six against six, receiving side must win the rally and the free ball that follows', 'Win both to rotate', 'Talk before every serve: who has the seams') },
+    { name: 'Six on six scrimmage', dur: 15, tags: ['Team play'], notes: ul('Play it out with rally scoring', 'Stop to fix one thing at a time', 'Rotate the bench in every five points') },
+  ],
+};
 /** Sports that come with starter material. Anything else starts empty. */
-const STARTERS = { basketball: { tags: TAG_DEFS, drills: DRILL_DEFS }, baseball: BASEBALL, softball: BASEBALL, football: FOOTBALL };
+const STARTERS = { basketball: { tags: TAG_DEFS, drills: DRILL_DEFS }, baseball: BASEBALL, softball: BASEBALL, football: FOOTBALL, volleyball: VOLLEYBALL };
 
 /** Adds a sport to a workspace, with its starter categories and drills when it has them. Call inside a transaction. */
 export function seedSport(ownerId, name) {

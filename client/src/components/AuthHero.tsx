@@ -83,6 +83,21 @@ export const SCENES: Scene[] = [
     ],
     ball: { path: 'M 26.6 25 L 26.6 28.6 L 26.6 31.6 L 17.4 13', keyPoints: '0;0;0.13;0.24;0.24;1;1', keyTimes: '0;0.08;0.14;0.4;0.5;0.72;1' },
   },
+  {
+    sport: 'Volleyball',
+    home: false,
+    court: 'vhalf',
+    caption: 'A pass, a set and an outside attack drawn on a volleyball court',
+    lines: [['M 26 32.500 L 31 10.500', 'p'], ['M 31 10.500 L 12.500 8.500', 'p'], ['M 11 26 L 11 11']],
+    players: [
+      { label: '6', path: 'M 25 34.500 L 25 34.500', ...HOLD },
+      { label: 'S', path: 'M 32.500 9 L 32.500 9', ...HOLD },
+      { label: '2', path: 'M 39 20 L 39 20', ...HOLD },
+      { label: '4', lead: true, path: 'M 11 26 L 11 10.500', keyPoints: '0;0;1;1', keyTimes: '0;0.4;0.66;1' },
+    ],
+    // Served over the net, passed to the setter, set outside, and hit back over.
+    ball: { path: 'M 26 1 L 26 32.500 L 31 10.500 L 12.500 8.500 L 22 0.500', keyPoints: '0;0;0.37;0.37;0.635;0.635;0.855;0.855;1;1', keyTimes: '0;0.06;0.26;0.3;0.46;0.5;0.66;0.7;0.78;1' },
+  },
 ];
 const SCENE_SECONDS = 7;
 /** The plays shown on the sign-in page, one after another. */
@@ -147,7 +162,7 @@ export default function AuthHero() {
         <h2 className="hero-title">
           Plan the practice. <em>Draw the play.</em>
         </h2>
-        <p className="hero-lead">A practice planner and playbook for basketball, baseball and football coaches. Walk in knowing exactly what comes next.</p>
+        <p className="hero-lead">A practice planner and playbook for basketball, baseball, football and volleyball coaches. Walk in knowing exactly what comes next.</p>
         <ul className="hero-points">
           {POINTS.map((p, i) => (
             <li key={p.title}>

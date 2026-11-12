@@ -2,14 +2,14 @@
 // same drawing scales to a thumbnail, the editor or a printed sheet.
 import type { CSSProperties, ReactNode } from 'react';
 import type { Play, PlayFrame, PlayLine, PlayMark, PlayObject, PlayShape } from '../types';
-import { DIAMONDS, GRIDIRONS, YARD, isDiamond, isGridiron } from '../sports';
+import { DIAMONDS, GRIDIRONS, METER, VOLLEY_COURTS, VOLLEY_LEFT, YARD, isDiamond, isGridiron, isVolley } from '../sports';
 
 export type Pt = [number, number];
 
 /** High school dimensions, in feet. */
 export const COURT = { width: 50, half: 42, basketY: 5.25, threeR: 19.75, laneW: 12, ftY: 19, ftR: 6, centerR: 6 };
 export const courtHeight = (court: Play['court']) =>
-  isDiamond(court) ? DIAMONDS[court].height : isGridiron(court) ? GRIDIRONS[court].height : court === 'full' ? COURT.half * 2 : COURT.half;
+  isDiamond(court) ? DIAMONDS[court].height : isGridiron(court) ? GRIDIRONS[court].height : isVolley(court) ? VOLLEY_COURTS[court].height : court === 'full' ? COURT.half * 2 : COURT.half;
 const PAD = 1.2;
 export const VIEW_PAD = PAD;
 export const MARK_R = 1.5;
@@ -120,11 +120,36 @@ function FootballField({ court }: { court: 'gridiron' | 'redzone' }) {
   );
 }
 
+/** A volleyball court seen from above: our side below the net, with the attack line 3 m back from it. */
+function VolleyballCourt({ court }: { court: 'vfull' | 'vhalf' }) {
+  const W = COURT.width;
+  const { net, end, far, height: h } = VOLLEY_COURTS[court];
+  const left = VOLLEY_LEFT;
+  const right = W - VOLLEY_LEFT;
+  const top = far ?? net;
+  const attack = 3 * METER;
+  return (
+    <g>
+      <rect className="court-floor" x={0} y={0} width={W} height={h} />
+      {/* The playing area, tinted so the free space around it reads as out of bounds. */}
+      <rect className="field-zone" x={left} y={top} width={right - left} height={end - top} />
+      <g className="court-lines">
+        <rect x={left} y={top} width={right - left} height={end - top} />
+        <line x1={left} y1={net + attack} x2={right} y2={net + attack} />
+        {far !== null && <line x1={left} y1={net - attack} x2={right} y2={net - attack} />}
+      </g>
+      {/* The net runs a little past each sideline, to the posts. */}
+      <line className="court-net" x1={left - 2} y1={net} x2={right + 2} y2={net} />
+    </g>
+  );
+}
+
 export function Court({ court, flipped }: { court: Play['court']; flipped: boolean }) {
   const { width: W, half: H } = COURT;
   const h = courtHeight(court);
   if (isDiamond(court)) return <BaseballField court={court} />;
   if (isGridiron(court)) return <FootballField court={court} />;
+  if (isVolley(court)) return <VolleyballCourt court={court} />;
   return (
     <g>
       <rect className="court-floor" x={0} y={0} width={W} height={h} />

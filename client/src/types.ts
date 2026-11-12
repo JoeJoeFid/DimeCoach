@@ -119,7 +119,7 @@ export interface Play {
   /** Free-form tags, such as "vs 2-3 zone". */
   labels: string[];
   /** What the play is drawn on: a basketball court, a baseball field or a football field. See sports.ts. */
-  court: 'half' | 'full' | 'infield' | 'diamond' | 'gridiron' | 'redzone';
+  court: 'half' | 'full' | 'infield' | 'diamond' | 'gridiron' | 'redzone' | 'vfull' | 'vhalf';
   /** Half court only: true when the basket is drawn at the bottom. */
   flipped: boolean;
   notes: string;

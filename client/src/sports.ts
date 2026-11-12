@@ -2,9 +2,9 @@
 // line, the kinds of play, and where a starting lineup stands.
 import type { Play, PlayLine, PlayMark } from './types';
 
-export type SportKind = 'basketball' | 'baseball' | 'football';
+export type SportKind = 'basketball' | 'baseball' | 'football' | 'volleyball';
 /** Sports offered when making a team. Each has its own starter categories, drills and playbook. */
-export const SPORT_CHOICES = ['Basketball', 'Baseball', 'Football'];
+export const SPORT_CHOICES = ['Basketball', 'Baseball', 'Football', 'Volleyball'];
 
 /** Which playbook a sport gets, from its name. Softball shares baseball's. Null when none is drawn yet. */
 export function sportKind(name: string | undefined): SportKind | null {
@@ -12,9 +12,10 @@ export function sportKind(name: string | undefined): SportKind | null {
   if (n.includes('basketball')) return 'basketball';
   if (n.includes('baseball') || n.includes('softball')) return 'baseball';
   if (n.includes('football')) return 'football';
+  if (n.includes('volleyball')) return 'volleyball';
   return null;
 }
-export const surfaceWord = (kind: SportKind) => (kind === 'basketball' ? 'court' : 'field');
+export const surfaceWord = (kind: SportKind) => (kind === 'basketball' || kind === 'volleyball' ? 'court' : 'field');
 
 export const SURFACES: Record<SportKind, { id: Play['court']; label: string }[]> = {
   basketball: [
@@ -29,6 +30,10 @@ export const SURFACES: Record<SportKind, { id: Play['court']; label: string }[]>
     { id: 'gridiron', label: 'Open field' },
     { id: 'redzone', label: 'Goal line' },
   ],
+  volleyball: [
+    { id: 'vfull', label: 'Whole court' },
+    { id: 'vhalf', label: 'Our side' },
+  ],
 };
 
 /** Starter kinds of play per sport. Coaches can type any category; these are suggestions. */
@@ -36,6 +41,7 @@ export const PLAY_CATEGORIES_BY_SPORT: Record<SportKind, string[]> = {
   basketball: ['Man offense', 'Zone offense', 'Quick hitter', 'Baseline out of bounds', 'Sideline out of bounds', 'Press break', 'Transition', 'Man defense', 'Zone defense', 'Press', 'End of game'],
   baseball: ['Defensive alignment', 'Bunt defense', 'First and third', 'Cutoffs and relays', 'Pickoffs and rundowns', 'Backing up', 'Baserunning', 'Bunt offense', 'Hit and run', 'Situations'],
   football: ['Run', 'Pass', 'Play action', 'Screen', 'Option', 'Goal line', 'Defensive front', 'Coverage', 'Blitz', 'Kickoff', 'Punt', 'Field goal'],
+  volleyball: ['Serve receive', 'Rotations', 'Offense', 'Quick attack', 'Out of system', 'Free ball', 'Transition', 'Base defense', 'Blocking', 'Hitter coverage', 'Serving'],
 };
 
 type LineKind = PlayLine['kind'];
@@ -62,6 +68,12 @@ export const LINE_WORDS: Record<SportKind, Record<LineKind, { label: string; ver
     dribble: { label: 'Ball carrier', verb: 'carries the ball', hint: 'Drag onto the player with the ball, then click where they run it. Or click here and drag on the field.' },
     screen: { label: 'Block', verb: 'blocks', hint: 'Drag onto the blocker, then click the player they block. Or click here and drag on the field.' },
   },
+  volleyball: {
+    cut: { label: 'Move', verb: 'moves', hint: 'Drag onto a player, then click where they move to: a switch, a release to base, or cover. Or click here and drag on the court.' },
+    pass: { label: 'Ball', verb: 'sends the ball', hint: 'Drag onto whoever plays the ball, then click who it goes to or where it lands. Use it for serves, passes, sets and attacks. Or click here and drag on the court.' },
+    dribble: { label: 'Approach', verb: 'approaches', hint: 'Drag onto a hitter, then click where their approach ends at the net. Or click here and drag on the court.' },
+    screen: { label: 'Block', verb: 'blocks', hint: 'Drag onto the blocker, then click the hitter or the spot at the net they close on. Or click here and drag on the court.' },
+  },
 };
 
 // --- Field geometry, in the same units as the court (the drawing is always 50 wide) -------------
@@ -79,6 +91,17 @@ export const GRIDIRONS = {
   redzone: { los: 10 * YARD * 2, goal: 10 * YARD, height: 42 },
 };
 
+/** One meter on the volleyball court. The court is 9 m wide, drawn 40 wide with room down each side. */
+export const METER = 40 / 9;
+/** Where the net and our end line sit, for each volleyball view. `far` is the other team's end line, when it is in view. */
+export const VOLLEY_COURTS = {
+  vfull: { net: 45, end: 85, far: 5 as number | null, height: 90 },
+  vhalf: { net: 4, end: 44, far: null as number | null, height: 52 },
+};
+/** The left edge of the volleyball court in the drawing. */
+export const VOLLEY_LEFT = 5;
+export const isVolley = (court: Play['court']): court is 'vfull' | 'vhalf' => court === 'vfull' || court === 'vhalf';
+
 export const isDiamond = (court: Play['court']): court is 'infield' | 'diamond' => court === 'infield' || court === 'diamond';
 export const isGridiron = (court: Play['court']): court is 'gridiron' | 'redzone' => court === 'gridiron' || court === 'redzone';
 
@@ -95,6 +118,10 @@ export function moveBetween(from: Play['court'], to: Play['court']): ((p: number
   }
   if (isGridiron(from) && isGridiron(to) && from !== to) {
     const dy = GRIDIRONS[to].los - GRIDIRONS[from].los;
+    return ([x, y]) => [x, y + dy];
+  }
+  if (isVolley(from) && isVolley(to) && from !== to) {
+    const dy = VOLLEY_COURTS[to].net - VOLLEY_COURTS[from].net;
     return ([x, y]) => [x, y + dy];
   }
   return null;
@@ -149,6 +176,23 @@ export function lineups(court: Play['court']): Lineup[] {
         spots: [x('T', -1.9, 1.7), x('T', 1.9, 1.7), x('E', -6.6, 1.7), x('E', 7.6, 1.7), x('M', 0, 5.6), x('W', -7.6, 5.6), x('S', 8.6, 5.6), x('C', -20, 5), x('C', 19, 5), x('FS', -6, 9.5), x('SS', 7, 8.6)],
       },
     ];
+  }
+  if (isVolley(court)) {
+    const { net, far } = VOLLEY_COURTS[court];
+    // Across the court from its left sideline and back from the net, in meters.
+    const us = (label: string, across: number, back: number, hasBall = false): Spot => ({ type: 'o', label, x: VOLLEY_LEFT + across * METER, y: net + back * METER, hasBall });
+    const them = (label: string, across: number, back: number): Spot => ({ type: 'x', label, x: VOLLEY_LEFT + across * METER, y: net - back * METER });
+    const six: Lineup[] = [
+      {
+        id: 'six',
+        label: 'Add our six',
+        // Rotation order: 4, 3, 2 across the front from the left, and 5, 6, 1 across the back.
+        spots: [us('4', 1.5, 1.6), us('3', 4.5, 1.6), us('2', 7.5, 1.6), us('5', 1.5, 6), us('6', 4.5, 6.4), us('1', 7.5, 6)],
+      },
+    ];
+    // The other side of the net is only in view on the whole court. Their left is our right.
+    if (far !== null) six.push({ id: 'opponents', label: 'Add opponents', spots: [them('2', 1.5, 1.6), them('3', 4.5, 1.6), them('4', 7.5, 1.6), them('1', 1.5, 6), them('6', 4.5, 6.4), them('5', 7.5, 6)] });
+    return six;
   }
   return [];
 }

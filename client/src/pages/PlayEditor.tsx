@@ -36,7 +36,7 @@ import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater } from '../components/toasts';
 import { TAG_COLORS } from '../util';
 import { useApp } from '../App';
-import { LINE_WORDS, PLAY_CATEGORIES_BY_SPORT, SURFACES, lineups, moveBetween, sportKind, type Lineup, type SportKind } from '../sports';
+import { LINE_WORDS, PLAY_CATEGORIES_BY_SPORT, SURFACES, VOLLEY_COURTS, lineups, moveBetween, sportKind, surfaceWord, type Lineup, type SportKind } from '../sports';
 
 /** Stands for "these do not all share one value", so no swatch shows as chosen. */
 const MIXED = '\u0000mixed';
@@ -79,13 +79,16 @@ const NOTE_EXAMPLES: Record<SportKind, string> = {
   basketball: '1 passes to 2 and cuts through',
   baseball: '1B and 3B charge, 2B covers first',
   football: 'X runs a slant, Z clears out deep',
+  volleyball: '6 passes to the setter, 4 hits the outside set',
 };
+type Snapshot = Pick<Play, 'frames' | 'court'>;
+const snapshotOf = (p: Play): Snapshot => ({ frames: p.frames, court: p.court });
 /** The palette in a sport's own words: a cut in basketball is a route in football and a run in baseball. */
 function toolsFor(sport: SportKind) {
   return TOOLS.map((t) => {
     const words = isLineTool(t.id) ? LINE_WORDS[sport][t.id] : null;
     const hint = words?.hint ?? t.hint;
-    return { ...t, label: words?.label ?? t.label, hint: sport === 'basketball' ? hint : hint.replaceAll('the court', 'the field') };
+    return { ...t, label: words?.label ?? t.label, hint: surfaceWord(sport) === 'court' ? hint : hint.replaceAll('the court', 'the field') };
   });
 }
 /** Colors offered for shapes and players. The first entry of the player list means "the default ink". */
@@ -198,8 +201,9 @@ export default function PlayEditor() {
   const version = useRef(0);
   const timer = useRef<number | undefined>(undefined);
   // Undo history holds whole drawings. A drag is recorded once, when it starts.
-  const past = useRef<PlayFrame[][]>([]);
-  const future = useRef<PlayFrame[][]>([]);
+  // Each step back holds the drawing and the surface it was drawn on, so undoing a change of surface puts both back.
+  const past = useRef<Snapshot[]>([]);
+  const future = useRef<Snapshot[]>([]);
   const [, bump] = useState(0);
 
   // --- Load and autosave ---------------------------------------------------
@@ -258,7 +262,7 @@ export default function PlayEditor() {
 
   const remember = () => {
     if (!latest.current) return;
-    past.current.push(latest.current.frames);
+    past.current.push(snapshotOf(latest.current));
     if (past.current.length > 100) past.current.shift();
     future.current = [];
     bump((n) => n + 1);
@@ -272,16 +276,16 @@ export default function PlayEditor() {
   const undo = useCallback(() => {
     const prev = past.current.pop();
     if (!prev || !latest.current) return;
-    future.current.push(latest.current.frames);
+    future.current.push(snapshotOf(latest.current));
     setSelected(null);
-    update({ frames: prev });
+    update(prev);
   }, [update]);
   const redo = useCallback(() => {
     const next = future.current.pop();
     if (!next || !latest.current) return;
-    past.current.push(latest.current.frames);
+    past.current.push(snapshotOf(latest.current));
     setSelected(null);
-    update({ frames: next });
+    update(next);
   }, [update]);
   const removeSelected = useCallback(() => {
     const gone = new Set(selected ? [selected] : multi);
@@ -750,17 +754,25 @@ export default function PlayEditor() {
       const [x, y] = move(p);
       return [Math.min(COURT.width - 1, Math.max(1, x)), Math.min(top - 1, Math.max(1, y))];
     };
+    // "Our side" of a volleyball court has no room for the other team: anyone across the net is
+    // left out, with the lines drawn from or to them. Undo brings them back.
+    const across = (o: PlayObject) => court === 'vhalf' && isMark(o) && move([o.x, o.y])[1] < VOLLEY_COURTS.vhalf.net - 0.5;
     remember();
     update({
       court,
-      frames: play.frames.map((f) => ({
-        ...f,
-        objects: f.objects.map((o) => {
-          if (!isMark(o)) return { ...o, points: o.points.map(fit) };
-          const [x, y] = fit([o.x, o.y]);
-          return { ...o, x, y };
-        }),
-      })),
+      frames: play.frames.map((f) => {
+        const out = new Set(f.objects.filter(across).map((o) => o.id));
+        return {
+          ...f,
+          objects: f.objects
+            .filter((o) => !out.has(o.id) && !(isLine(o) && ((o.from && out.has(o.from)) || (o.to && out.has(o.to)))))
+            .map((o) => {
+              if (!isMark(o)) return { ...o, points: o.points.map(fit) };
+              const [x, y] = fit([o.x, o.y]);
+              return { ...o, x, y };
+            }),
+        };
+      }),
     });
   };
   const selLine = selectedObject && isLine(selectedObject) ? selectedObject : null;
@@ -865,7 +877,7 @@ export default function PlayEditor() {
                   <option value={NEW_CATEGORY}>+ New category…</option>
                 </select>
               </Field>
-              <Field label={sport === 'basketball' ? 'Court' : 'Field'}>
+              <Field label={surfaceWord(sport) === 'court' ? 'Court' : 'Field'}>
                 <select className="input" value={play.court} onChange={(e) => changeSurface(e.target.value as Play['court'])}>
                   {SURFACES[sport].map((v) => (
                     <option key={v.id} value={v.id}>

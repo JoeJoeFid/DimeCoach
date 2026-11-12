@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEventHandler, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useDraggable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core';
-import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
 import { useApp } from '../App';
@@ -226,7 +226,8 @@ export default function PlanEditor() {
     }
     let at = 0;
     for (const group of el.querySelectorAll<HTMLElement>(':scope > .slot-group')) {
-      const r = group.getBoundingClientRect();
+      // Judged against the item itself, not the gap with the add buttons under it.
+      const r = (group.querySelector('.slot-box') ?? group).getBoundingClientRect();
       const top = space && r.top > space.top ? r.top - pushed : r.top;
       if (y > top + r.height / 2) at = Number(group.dataset.end);
     }
@@ -249,15 +250,22 @@ export default function PlanEditor() {
       if (spot) addNew(String(e.active.id), spot.at, spot.beside);
       return;
     }
-    if (!e.over || e.active.id === e.over.id) return;
+    if (!e.over) return;
     const from = plan.items.findIndex((i) => i.key === e.active.id);
     const to = plan.items.findIndex((i) => i.key === e.over!.id);
     if (from < 0 || to < 0) return;
+    const moved = plan.items[from];
+    const paired = !!moved.beside || !!plan.items[from + 1]?.beside;
+    // Let go more or less where it started: nothing to do, unless it was pulled out of a shared box.
+    if (from === to && !(paired && Math.hypot(e.delta.x, e.delta.y) > 30)) return;
     // An item moved by its handle gets a time slot of its own where it lands. If it led a shared
     // slot, the item that was beside it takes that slot over.
-    const moved = plan.items[from];
-    const items = plan.items.map((it, i) => (i === from || (i === from + 1 && !moved.beside) ? { ...it, beside: false } : it));
-    setItems(arrayMove(items, from, to));
+    const rest = plan.items.map((it, i) => (i === from + 1 && !moved.beside ? { ...it, beside: false } : it)).filter((_, i) => i !== from);
+    // It lands before or after the whole slot it was dropped on, never in the middle of a shared one.
+    const target = slotGroups(rest).find((g) => g.includes(Math.min(to > from ? to - 1 : to, rest.length - 1)))!;
+    const at = to > from ? target[target.length - 1] + 1 : to === from ? Math.min(from, rest.length) : target[0];
+    rest.splice(at, 0, { ...moved, beside: false });
+    setItems(rest);
   };
   const addDrill = (d: Drill, index: number, beside = false) => {
     insertAt(
@@ -570,15 +578,8 @@ export default function PlanEditor() {
                       <div className={`slot-group ${shared ? 'paired' : ''}`} data-end={end}>
                         {/* The outline around drills that share a time. The buttons for adding the next item stay below it. */}
                         <div className="slot-box">
-                          {shared && (
-                            <p className="slot-shared">
-                              {!isHomework && <span className="time">{slotLabel(slots[first])}</span>}
-                              <strong>{group.length} at the same time</strong>
-                              <button type="button" className="link small" onClick={() => setItems(plan.items.map((it, i) => (group.includes(i) ? { ...it, beside: false } : it)))}>
-                                Give each its own time
-                              </button>
-                            </p>
-                          )}
+                          {/* One time for everything in the box, on the same line as the drills. */}
+                          {shared && !isHomework && <span className="time slot-time">{slotLabel(slots[first])}</span>}
                           <div className="slot-row">
                             {group.map((i) => {
                               const it = plan.items[i];
@@ -891,14 +892,14 @@ function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; t
       <h2>Add to this {sheet}</h2>
       <p className="muted small">Drag onto the plan where you want it, or click to add it at the end.</p>
       <div className="palette-blocks">
-        <PaletteTile id={`${NEW}custom`} kind="block" onAdd={onAdd}>
+        <PaletteTile id={`${NEW}custom`} kind="block custom" onAdd={onAdd}>
           <span className="palette-grip" aria-hidden="true">
             ⠿
           </span>
           Custom item
         </PaletteTile>
         {withBreak && (
-          <PaletteTile id={`${NEW}break`} kind="block" onAdd={onAdd}>
+          <PaletteTile id={`${NEW}break`} kind="block break" onAdd={onAdd}>
             <span className="palette-grip" aria-hidden="true">
               ⠿
             </span>
@@ -911,7 +912,7 @@ function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; t
       </h3>
       {drills.length === 0 ? (
         <p className="muted small">
-          No drills yet. Add them on the <Link to="/library">Drills</Link> page, or use "Save to drill library" on an item.
+          No drills yet. Use "Save to drill library" on an item, or add them on the Drills page.
         </p>
       ) : (
         <>
@@ -947,6 +948,9 @@ function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; t
           </div>
         </>
       )}
+      <Link className="btn small palette-manage" to="/library">
+        Add or edit drills
+      </Link>
     </aside>
   );
 }

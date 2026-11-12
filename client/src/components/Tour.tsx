@@ -9,6 +9,7 @@ const EXAMPLES: Record<SportKind, [string, string, string]> = {
   basketball: ['Dynamic warm-up', 'Shell drill', 'Give and go'],
   baseball: ['Throwing progression', 'Ground ball triangles', 'Bunt defense'],
   football: ['Dynamic warm-up', 'Form tackling', 'Slant pass'],
+  volleyball: ['Serving warm-up', 'Serve receive', 'Outside attack'],
 };
 
 // --- Pictures ---------------------------------------------------------------
@@ -41,6 +42,58 @@ function PlayArt({ sport }: { sport: SportKind }) {
   const scene = SCENES.find((s) => s.sport.toLowerCase() === sport) ?? SCENES[0];
   return (
     <div className="tour-art tour-play">
+      <HeroPlay scene={scene} still={still} />
+    </div>
+  );
+}
+/** A small practice plan, with a drill being dragged out of the list and dropped into it, over and over. */
+function DragArt({ sport }: { sport: SportKind }) {
+  const [warm, teach, play] = EXAMPLES[sport];
+  return (
+    <div className="choice-art drag-art" aria-hidden="true">
+      <div className="da-list">
+        <span className="da-label">Drills</span>
+        <span className="da-tile">{warm}</span>
+        <span className="da-tile">Scrimmage</span>
+        <span className="da-tile da-source">{teach}</span>
+      </div>
+      <div className="da-plan">
+        <span className="da-label">Practice</span>
+        <span className="da-row">
+          <time>5:30</time>
+          {warm}
+        </span>
+        <span className="da-slot">
+          <span className="da-drop">Drop here</span>
+          <span className="da-row da-landed">
+            <time>5:40</time>
+            {teach}
+          </span>
+        </span>
+        <span className="da-row">
+          <time>5:55</time>
+          {play}
+        </span>
+        <span className="da-row da-break">
+          <time>6:05</time>
+          Water break
+        </span>
+      </div>
+      <span className="da-fly">
+        {teach}
+        <svg viewBox="0 0 16 16" width="15" height="15">
+          <path d="M3 2l9.500 4.600-4 1.300-1.500 4.100z" fill="#fff" stroke="#0d0d0e" strokeWidth="1.1" strokeLinejoin="round" />
+        </svg>
+      </span>
+    </div>
+  );
+}
+/** The play for the coach's sport, running on its own court or field, as it looks in the playbook. */
+function RunningPlayArt({ sport }: { sport: SportKind }) {
+  const still = useReducedMotion();
+  const scene = SCENES.find((s) => s.sport.toLowerCase() === sport) ?? SCENES[0];
+  return (
+    <div className="choice-art play-art" aria-hidden="true">
       <HeroPlay scene={scene} still={still} />
     </div>
   );
@@ -308,7 +361,7 @@ export default function Tour({ onClose }: { onClose: () => void }) {
     if (h && h !== cardHeight) setCardHeight(h);
   });
 
-  const width = Math.min(path ? CARD_WIDTH : 460, view.w - EDGE * 2);
+  const width = Math.min(path ? CARD_WIDTH : 820, view.w - EDGE * 2);
   const height = cardHeight || 420;
   let at: CSSProperties;
   if (!spot) at = { left: (view.w - width) / 2, top: Math.max(EDGE, (view.h - height) / 2) };
@@ -347,20 +400,12 @@ export default function Tour({ onClose }: { onClose: () => void }) {
           {!path && (
             <div className="tour-choices">
               <button type="button" className="tour-choice" onClick={() => start('practices')}>
-                <span className="tour-choice-art" aria-hidden="true">
-                  <span className="tour-chip drill">Drill</span>
-                  <span className="tour-chip drill">Drill</span>
-                  <span className="tour-chip custom">Custom</span>
-                </span>
+                <DragArt sport={sport} />
                 <strong>{PATHS.practices.label}</strong>
                 <span className="muted small">{PATHS.practices.blurb}</span>
               </button>
               <button type="button" className="tour-choice" onClick={() => start('playbook')}>
-                <span className="tour-choice-art" aria-hidden="true">
-                  <span className="tour-chip play">Step 1</span>
-                  <span className="tour-chip play">Step 2</span>
-                  <span className="tour-chip practice">▶</span>
-                </span>
+                <RunningPlayArt sport={sport} />
                 <strong>{PATHS.playbook.label}</strong>
                 <span className="muted small">{PATHS.playbook.blurb}</span>
               </button>

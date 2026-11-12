@@ -91,9 +91,9 @@ const playOut = (p) => ({
 
 /** Keeps only play ids this workspace owns. Used when saving items and drills. */
 /** The surfaces a play can be drawn on: basketball courts, baseball fields and football fields. */
-const COURTS = ['half', 'full', 'infield', 'diamond', 'gridiron', 'redzone'];
+const COURTS = ['half', 'full', 'infield', 'diamond', 'gridiron', 'redzone', 'vfull', 'vhalf'];
 const cleanCourt = (v, fallback) => (COURTS.includes(v) ? v : fallback);
-const defaultCourt = (sportName) => (/base|soft/i.test(sportName) ? 'infield' : /football/i.test(sportName) ? 'gridiron' : 'half');
+const defaultCourt = (sportName) => (/base|soft/i.test(sportName) ? 'infield' : /football/i.test(sportName) ? 'gridiron' : /volleyball/i.test(sportName) ? 'vfull' : 'half');
 
 export function cleanPlayIds(list, ownerId) {
   const out = [];
