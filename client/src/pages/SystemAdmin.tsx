@@ -151,6 +151,17 @@ export default function SystemAdmin() {
           </div>
 
           <div className="card">
+            <h2>Backup</h2>
+            <p className="muted small">
+              One file with every account, team, practice, drill, play and community. Keep a copy somewhere safe, or use it to move to another
+              site: a brand new Dime Coach site offers to restore it on its first visit. Uploaded pictures and videos are not included.
+            </p>
+            <a className="btn" href="/api/system/backup" download>
+              Download a backup
+            </a>
+          </div>
+
+          <div className="card">
             <h2>Default upload space</h2>
             <p className="muted small">
               Applies to everyone who has no cap of their own. It counts uploaded pictures and videos. Links take no space. Set it to 0 to turn

@@ -86,6 +86,7 @@ function useSubmit(action: () => Promise<void>) {
  */
 export function Setup({ onDone }: { onDone: () => void }) {
   const [tab, setTab] = useState<'in' | 'up'>('up');
+  const [restoring, setRestoring] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -94,6 +95,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
     await api.setup({ name, email, password, setup_token: code || undefined });
     onDone();
   });
+  if (restoring) return <Restore onDone={onDone} onBack={() => setRestoring(false)} />;
   if (tab === 'in')
     return (
       <AuthShell title="Welcome back, Coach" lead="Nobody has an account on this site yet, so there is nothing to sign in to." tab="in" onTab={setTab}>
@@ -101,6 +103,12 @@ export function Setup({ onDone }: { onDone: () => void }) {
         <button type="button" className="btn primary" onClick={() => setTab('up')}>
           Create an account
         </button>
+        <p className="muted small auth-foot">
+          Already use Dime Coach somewhere else?{' '}
+          <button type="button" className="link" onClick={() => setRestoring(true)}>
+            Bring your account and work over
+          </button>
+        </p>
       </AuthShell>
     );
   return (
@@ -127,6 +135,52 @@ export function Setup({ onDone }: { onDone: () => void }) {
         Already have an account?{' '}
         <button type="button" className="link" onClick={() => setTab('in')}>
           Sign in
+        </button>
+      </p>
+      <p className="muted small auth-foot">
+        Already use Dime Coach somewhere else?{' '}
+        <button type="button" className="link" onClick={() => setRestoring(true)}>
+          Bring your account and work over
+        </button>
+      </p>
+    </AuthShell>
+  );
+}
+
+/** First visit: fill this empty site from a backup of another copy, accounts and all. */
+function Restore({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [code, setCode] = useState('');
+  const [count, setCount] = useState<number | null>(null);
+  const { busy, error, submit } = useSubmit(async () => {
+    if (!file) throw new Error('Choose the backup file first.');
+    setCount((await api.restore(file, code)).accounts);
+  });
+  if (count !== null)
+    return (
+      <AuthShell title="Everything is here" lead={`${count} account${count === 1 ? '' : 's'} and all the teams, practices and plays came across. Sign in with the email and password you already use.`}>
+        <button type="button" className="btn primary" onClick={onDone}>
+          Go to sign in
+        </button>
+      </AuthShell>
+    );
+  return (
+    <AuthShell title="Bring your work over" lead="Upload a backup from another copy of Dime Coach. Its accounts, teams, practices, drills and plays move in here, and you sign in with the same email and password as before.">
+      <form className="fields stack" onSubmit={submit}>
+        {error && <p className="error">{error}</p>}
+        <Field label="Backup file">
+          <input className="input" type="file" accept=".db,application/octet-stream" required onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </Field>
+        <Field label="Setup code (from the hosting settings)">
+          <input className="input" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" />
+        </Field>
+        <button className="btn primary" disabled={busy || !file}>
+          {busy ? 'Restoring…' : 'Restore backup'}
+        </button>
+      </form>
+      <p className="muted small auth-foot">
+        <button type="button" className="link" onClick={onBack}>
+          Back to creating a new account
         </button>
       </p>
     </AuthShell>

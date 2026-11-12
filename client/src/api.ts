@@ -197,6 +197,13 @@ export const api = {
   systemSetDefaults: (b: { default_cap_mb: number }) => req<SystemState>('PUT', '/system/settings', b),
   systemUpdateUser: (id: number, b: { upload_cap_mb?: number | null; is_admin?: boolean }) => req<SystemState>('PUT', `/system/users/${id}`, b),
   storage: () => req<StorageSpace>('GET', '/storage'),
+  /** First visit only: fills an empty site from a backup file made by another copy of Dime Coach. */
+  restore: async (file: File, setupToken: string) => {
+    const res = await fetch('/api/auth/restore', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Setup-Token': setupToken }, body: file });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+    return body as { ok: true; accounts: number };
+  },
   communities: () => req<Community[]>('GET', '/communities'),
   createCommunity: (b: { name: string; description: string }) => req<CommunityDetail>('POST', '/communities', b),
   joinCommunity: (code: string) => req<Community>('POST', '/communities/join', { code }),

@@ -5,7 +5,9 @@
 // every query by that user's workspace. Today each user has exactly one workspace of their own;
 // the memberships table is what will let staff share one later.
 import crypto from 'node:crypto';
-import { all, get, run, tx } from './db.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { all, db, dbPath, get, run, tx } from './db.js';
 import { createWorkspace } from './seed.js';
 import { mailerStatus, sendMail } from './mailer.js';
 import { MAX_CAP_MB, capMbFor, defaultCapMb, parseCapMb, usageOf } from './quota.js';
@@ -175,6 +177,53 @@ export function mountAuth(app) {
     const userId = tx(() => createUser({ email, name, password: str(req.body.password), isAdmin: true, canImport: true, ownerId: firstWorkspace }));
     startSession(req, res, userId);
     res.json({ user: userOut(get('SELECT * FROM users WHERE id=?', userId)) });
+  });
+
+  // Moving in from another copy of Dime Coach. Only possible while this site has no accounts, and
+  // behind the same lock as first-run setup. The backup's accounts, teams and plans replace the
+  // empty starting data, so people sign in afterwards with the passwords they already had.
+  app.post('/api/auth/restore', (req, res) => {
+    const refuse = (status, error) => {
+      req.resume();
+      res.status(status).json({ error });
+    };
+    if (userCount() > 0) return refuse(409, 'This site already has accounts, so a backup cannot be restored over it.');
+    const token = process.env.PP_SETUP_TOKEN;
+    if (token ? str(req.headers['x-setup-token']) !== token : !isLoopback(req))
+      return refuse(403, token ? 'The setup code is not right.' : 'A restore must be done from the computer running Dime Coach, or with a setup code.');
+    const MAX = 300 * 1024 * 1024;
+    const file = path.join(path.dirname(dbPath), `restore-${crypto.randomUUID()}.db`);
+    const out = fs.createWriteStream(file);
+    let bytes = 0;
+    let tooBig = false;
+    req.on('data', (chunk) => {
+      bytes += chunk.length;
+      if (bytes > MAX && !tooBig) {
+        tooBig = true;
+        req.unpipe(out);
+        out.destroy();
+        req.resume();
+      }
+    });
+    req.pipe(out);
+    const cleanup = () => fs.rm(file, { force: true }, () => {});
+    req.on('aborted', cleanup);
+    req.on('end', () => {
+      if (tooBig) {
+        cleanup();
+        return res.status(413).json({ error: 'That backup is too large.' });
+      }
+      out.end(() => {
+        try {
+          const people = restoreFrom(file);
+          res.json({ ok: true, accounts: people });
+        } catch (e) {
+          res.status(400).json({ error: e.restoreMessage || 'That file could not be restored. Choose a backup made by Dime Coach.' });
+        } finally {
+          cleanup();
+        }
+      });
+    });
   });
 
   app.post('/api/auth/login', (req, res) => {
@@ -379,6 +428,14 @@ export function mountAuth(app) {
     res.json(systemOut());
   });
 
+  // Everything in one file: accounts, teams, practices, plays, communities. Uploaded pictures and
+  // videos are files on disk and are not part of it.
+  app.get('/api/system/backup', systemOnly, (_req, res) => {
+    const file = path.join(path.dirname(dbPath), `backup-${crypto.randomUUID()}.db`);
+    db.exec(`VACUUM INTO '${file.replaceAll("'", "''")}'`);
+    res.download(file, `dimecoach-backup-${new Date().toISOString().slice(0, 10)}.db`, () => fs.rm(file, { force: true }, () => {}));
+  });
+
   app.get('/api/admin/settings', admin, (_req, res) => res.json(settingsOut()));
   app.put('/api/admin/settings', admin, (req, res) => {
     if (typeof req.body.registration_enabled === 'boolean') {
@@ -388,6 +445,49 @@ export function mountAuth(app) {
     }
     res.json(settingsOut());
   });
+}
+
+/**
+ * Replaces this site's data with a backup file's. Tables and columns are matched by name, so a
+ * backup from a slightly older version still fits. Returns how many accounts came across.
+ */
+function restoreFrom(file) {
+  const bad = (message) => Object.assign(new Error(message), { restoreMessage: message });
+  const head = Buffer.alloc(16);
+  const fd = fs.openSync(file, 'r');
+  fs.readSync(fd, head, 0, 16, 0);
+  fs.closeSync(fd);
+  if (head.toString('latin1') !== 'SQLite format 3\u0000') throw bad('That file is not a Dime Coach backup.');
+  db.exec(`ATTACH DATABASE '${file.replaceAll("'", "''")}' AS src`);
+  try {
+    const srcTables = new Set(all("SELECT name FROM src.sqlite_master WHERE type='table'").map((r) => r.name));
+    if (!srcTables.has('users') || !srcTables.has('owners') || get("SELECT COUNT(*) AS n FROM src.users WHERE status='active'").n === 0)
+      throw bad('That file is not a Dime Coach backup, or it has no accounts in it.');
+    // Rows arrive table by table, so links between tables are only checked once everything is in.
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec('BEGIN');
+    try {
+      const tables = all("SELECT name FROM main.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").map((r) => r.name);
+      for (const t of tables) {
+        db.exec(`DELETE FROM main."${t}"`);
+        // Sign-ins do not carry over: everyone signs in again on the new site.
+        if (!srcTables.has(t) || t === 'sessions') continue;
+        const theirs = new Set(all(`PRAGMA src.table_info("${t}")`).map((c) => c.name));
+        const cols = all(`PRAGMA main.table_info("${t}")`).map((c) => c.name).filter((c) => theirs.has(c)).map((c) => `"${c}"`).join(', ');
+        if (cols) db.exec(`INSERT INTO main."${t}" (${cols}) SELECT ${cols} FROM src."${t}"`);
+      }
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    } finally {
+      db.exec('PRAGMA foreign_keys = ON');
+    }
+  } finally {
+    db.exec('DETACH DATABASE src');
+  }
+  run('UPDATE users SET is_admin=1 WHERE lower(email)=?', SYSTEM_ADMIN_EMAIL);
+  return get('SELECT COUNT(*) AS n FROM users').n;
 }
 
 /** Guard for the plan import routes: the administrator grants this per user. */
