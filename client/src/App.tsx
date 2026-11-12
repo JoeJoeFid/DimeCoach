@@ -343,7 +343,7 @@ function SignedIn({ user, onChanged }: { user: User; onChanged: () => void }) {
             {state.access && <SharedBar />}
             {routes}
           </main>
-          {touring && <Tour icons={icons} onClose={endTour} />}
+          {touring && <Tour onClose={endTour} />}
         </div>
       )}
     </Ctx.Provider>

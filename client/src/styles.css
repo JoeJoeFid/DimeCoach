@@ -5135,63 +5135,85 @@ fieldset.plain {
   color: #151b00;
 }
 
-/* ---------- Welcome tour ---------- */
-.tour-back {
-  align-items: center;
+/* ---------- Welcome tour: a card beside whatever it is pointing at ---------- */
+.tour-layer {
+  position: fixed;
+  inset: 0;
   z-index: 70;
 }
-.modal.tour {
-  max-width: 480px;
+/* Swallows clicks on the app while the tour is open. */
+.tour-block {
+  position: absolute;
+  inset: 0;
+}
+.tour-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.58);
+}
+/* The lit area: everything outside it is dimmed by one very large shadow. */
+.tour-spot {
+  position: absolute;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 2px #d2f24b,
+    0 0 0 200vmax rgba(0, 0, 0, 0.58);
+  pointer-events: none;
+  transition:
+    left 0.25s ease,
+    top 0.25s ease,
+    width 0.25s ease,
+    height 0.25s ease;
+}
+.tour {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-3);
+  transition:
+    left 0.25s ease,
+    top 0.25s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour,
+  .tour-spot {
+    transition: none;
+  }
 }
 .tour-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px 0 22px;
+  padding: 8px 10px 0 20px;
 }
 .tour-body {
-  padding: 6px 26px 4px;
-  min-height: 250px;
-}
-.tour-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  margin-bottom: 12px;
-  border-radius: 14px;
-  background: var(--surface-3);
-  color: var(--ink);
+  padding: 4px 22px 2px;
 }
 .tour-body h2 {
-  margin: 0 0 4px;
-  font-size: 1.45rem;
+  margin: 0 0 6px;
+  font-size: 1.25rem;
   letter-spacing: -0.02em;
 }
-.tour-where {
-  margin: 0 0 12px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink-2);
-}
 .tour-body p {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   line-height: 1.5;
 }
-.tour-body ul {
+.tour-points {
   margin: 0;
   padding-left: 20px;
   color: var(--ink-2);
+  font-size: 0.92rem;
   line-height: 1.5;
 }
-.tour-body li + li {
-  margin-top: 4px;
+.tour-points li + li {
+  margin-top: 3px;
 }
 .tour-dots {
   display: flex;
   justify-content: center;
-  gap: 6px;
-  padding: 14px 0 4px;
+  gap: 5px;
+  padding: 12px 0 2px;
 }
 .tour-dots span {
   width: 6px;
@@ -5207,11 +5229,223 @@ fieldset.plain {
 .tour-foot {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 22px 20px;
+  padding: 10px 20px 18px;
 }
 .tour-spacer {
   flex: 1;
+}
+
+/* Pictures inside the tour card */
+.tour-art {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--surface-3);
+  font-size: 0.86rem;
+}
+.tour-chip {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 650;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.tour-chip.drill {
+  background: #2a78d6;
+  border-color: #2a78d6;
+  color: #fff;
+}
+.tour-chip.play {
+  background: #d2f24b;
+  border-color: #d2f24b;
+  color: #151b00;
+}
+.tour-chip.custom {
+  background: #eb6834;
+  border-color: #eb6834;
+  color: #fff;
+}
+.tour-chip.practice {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+.tour-arrow {
+  color: var(--ink-2);
+  font-size: 1.2rem;
+}
+.tour-flow,
+.tour-drill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.tour-flow-in,
+.tour-uses {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.tour-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+}
+.tour-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tour-pill {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-2);
+}
+.tour-uses span {
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px dashed var(--line-strong);
+  font-size: 0.78rem;
+}
+.tour-rows li,
+.tour-timeline li,
+.tour-bars li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+.tour-rows li + li,
+.tour-timeline li + li {
+  border-top: 1px solid var(--line);
+}
+.tour-num,
+.tour-box {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.tour-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+}
+.tour-box.on {
+  background: #1baf7a;
+  border-color: #1baf7a;
+  color: #fff;
+}
+.tour-timeline time {
+  flex: none;
+  width: 34px;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--ink-2);
+}
+.tour-timeline li > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+.tour-chip.break {
+  color: var(--ink-2);
+}
+.tour-play {
+  --court-floor: transparent;
+  --court-line: rgba(245, 245, 240, 0.22);
+  padding: 10px;
+  background: #0b0b0c;
+}
+.tour-play .hero-court {
+  max-height: 170px;
+  margin: 0 auto;
+}
+.tour-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.tour-tiles span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-weight: 600;
+}
+.tour-tiles b {
+  font-size: 1.1rem;
+  color: var(--ink-2);
+}
+.tour-bars li > span:first-child {
+  flex: none;
+  width: 58px;
+  font-weight: 600;
+}
+.tour-bar {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.tour-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+  background: #2a78d6;
+}
+.tour-bar u {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--ink);
+}
+.tour-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tour-chat p {
+  align-self: flex-start;
+  max-width: 85%;
+  margin: 0;
+  padding: 7px 11px;
+  border-radius: 12px 12px 12px 3px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.tour-chat p.mine {
+  align-self: flex-end;
+  border-radius: 12px 12px 3px 12px;
 }
 
 /* A faint rule above each group in the side menu. On narrow screens the menu is one row, so no rules there. */

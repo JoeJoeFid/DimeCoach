@@ -9,7 +9,7 @@ const POINTS = [
   { title: 'The whole season in one place', text: 'Drills, homework, film and the calendar, for every team you coach.' },
 ];
 
-function useReducedMotion() {
+export function useReducedMotion() {
   const [reduced, setReduced] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
   useEffect(() => {
     if (typeof matchMedia !== 'function') return;
@@ -39,7 +39,7 @@ interface Scene {
   ball: Mover;
 }
 const HOLD = { keyPoints: '0;1', keyTimes: '0;1' };
-const SCENES: Scene[] = [
+export const SCENES: Scene[] = [
   {
     sport: 'Basketball',
     court: 'half',
@@ -82,7 +82,7 @@ const SCENES: Scene[] = [
 const SCENE_SECONDS = 7;
 
 /** One short play, looping on the surface its sport is played on. */
-function HeroPlay({ scene, still }: { scene: Scene; still: boolean }) {
+export function HeroPlay({ scene, still }: { scene: Scene; still: boolean }) {
   const h = courtHeight(scene.court);
   const place = (m: Mover) => {
     // With motion turned off, everyone simply stands where they start.
