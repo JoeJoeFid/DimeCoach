@@ -7287,3 +7287,45 @@ fieldset.plain {
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+
+/* Tour, first screen: each choice leads with its name and what it is, then the picture. */
+.tour-choice strong {
+  margin-top: 0;
+  font-size: 1.55rem;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.tour-choice .muted.small {
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+}
+/* Behind the welcome, the app is blurred well out of focus and darkened. */
+.tour-dim.deep {
+  background: rgba(0, 0, 0, 0.7);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* ---------- Practices page: when the team calendar was last read, and a button to read it again ---------- */
+.sync-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+.sync-status > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.sync-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--series);
+}

@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, PlanKind, PlanSummary, ScheduleEvent } from '../types';
 import { fmtClock, fmtDateShort, fmtDuration, fmtSynced, parseClock, planMinutes, todayISO } from '../util';
-import { KIND_LABEL, PLAN_STATE_LABEL, buildSchedule, nextEntry, planStateOf, type ScheduleEntry } from '../schedule';
+import { KIND_LABEL, PLAN_STATE_LABEL, buildSchedule, withoutDuplicateBlanks, nextEntry, planStateOf, type ScheduleEntry } from '../schedule';
 import { TagChip } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, useCompletedDeletes, usePendingDeletes } from '../components/toasts';
@@ -12,7 +12,6 @@ import SchedulePreview from '../components/SchedulePreview';
 import PlanCalendar from '../components/PlanCalendar';
 import { CommunityPicker } from '../components/community';
 
-const STALE_AFTER_MS = 3 * 60 * 60 * 1000;
 type View = 'list' | 'calendar';
 const VIEW_KEY = 'pp.practicesView';
 const savedView = (): View => {
@@ -82,9 +81,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   useEffect(() => {
     setPlans(null);
     load();
-    // Refresh the linked calendar quietly when the last sync is old.
-    const last = team!.calendar_synced_at ? new Date(team!.calendar_synced_at).getTime() : 0;
-    if (hasCalendar && Date.now() - last > STALE_AFTER_MS) sync();
+    // The team calendar is only read again when the coach asks: see the status line at the top of the page.
     // Only when the team, the kind of plan or the calendar link changes.
   }, [teamId, kind, hasCalendar]);
 
@@ -106,7 +103,8 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     if (deletes > 0) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deletes]);
-  const entries = useMemo(() => buildSchedule((plans || []).filter((p) => !gone.has(`plan:${p.id}`)), events), [plans, events, gone]);
+  // An empty plan that doubles up a filled-in one for the same day and time is left out, as on the dashboard.
+  const entries = useMemo(() => withoutDuplicateBlanks(buildSchedule((plans || []).filter((p) => !gone.has(`plan:${p.id}`)), events)), [plans, events, gone]);
   const next = useMemo(() => nextEntry(entries, today), [entries, today]);
   const shownTemplates = templates.filter((t) => !gone.has(`plan:${t.id}`));
 
@@ -333,16 +331,21 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       {error && <p className="error">{error}</p>}
       {fromCommunity && <CommunityPicker kind="plan" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plans/${id}`)} />}
 
+      {kind === 'practice' && hasCalendar && (
+        <div className="sync-status" role="status">
+          <span className="sync-dot" aria-hidden="true" />
+          <span>
+            <strong>Team calendar</strong> last updated {fmtSynced(team!.calendar_synced_at)}
+            <span className="muted"> · games and practices from GameChanger or your team app. It is not updated on its own.</span>
+          </span>
+          <button className="btn small" onClick={sync} disabled={syncing}>
+            {syncing ? 'Updating…' : 'Re-sync'}
+          </button>
+        </div>
+      )}
       {kind === 'practice' && (
         <p className="muted small list-note">
-          {hasCalendar ? (
-            <>
-              Includes the team calendar, synced {fmtSynced(team!.calendar_synced_at)}.{' '}
-              <button className="link" onClick={sync} disabled={syncing}>
-                {syncing ? 'Syncing…' : 'Sync now'}
-              </button>
-            </>
-          ) : (
+          {!hasCalendar && (
             <>
               Use GameChanger, TeamSnap or another team app? <Link to="/teams">Link the team's calendar</Link> to see upcoming games and
               practices in this list.
@@ -350,7 +353,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           )}
           {next && !calendar && (
             <>
-              {' · '}
+              {!hasCalendar && ' · '}
               <button className="link" onClick={() => nextRow.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })}>
                 Jump to next up
               </button>

@@ -378,7 +378,7 @@ export default function Tour({ onClose }: { onClose: () => void }) {
   return (
     <div className="tour-layer">
       <div className="tour-block" />
-      {spot ? <div className="tour-spot" style={{ left: spot.x - 6, top: spot.y - 6, width: spot.w + 12, height: spot.h + 12 }} /> : <div className="tour-dim" />}
+      {spot ? <div className="tour-spot" style={{ left: spot.x - 6, top: spot.y - 6, width: spot.w + 12, height: spot.h + 12 }} /> : <div className={`tour-dim ${path ? '' : 'deep'}`} />}
       <div ref={card} className="tour" role="dialog" aria-modal="true" aria-label="Tour of Dime Coach" style={{ ...at, width }}>
         <div className="tour-top">
           <span className="muted small">{path ? `${PATHS[path].label} · ${index + 1} of ${steps.length}` : ''}</span>
@@ -400,14 +400,14 @@ export default function Tour({ onClose }: { onClose: () => void }) {
           {!path && (
             <div className="tour-choices">
               <button type="button" className="tour-choice" onClick={() => start('practices')}>
-                <DragArt sport={sport} />
                 <strong>{PATHS.practices.label}</strong>
                 <span className="muted small">{PATHS.practices.blurb}</span>
+                <DragArt sport={sport} />
               </button>
               <button type="button" className="tour-choice" onClick={() => start('playbook')}>
-                <RunningPlayArt sport={sport} />
                 <strong>{PATHS.playbook.label}</strong>
                 <span className="muted small">{PATHS.playbook.blurb}</span>
+                <RunningPlayArt sport={sport} />
               </button>
             </div>
           )}

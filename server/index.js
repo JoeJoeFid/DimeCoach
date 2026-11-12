@@ -415,15 +415,25 @@ app.post('/api/plans', (req, res) => {
   if (!ownTeam(req, b.team_id)) return res.status(400).json({ error: 'Unknown team' });
   const src = b.from_plan_id ? ownPlan(req, b.from_plan_id) : null;
   if (b.from_plan_id && !src) return res.status(400).json({ error: 'Unknown source plan' });
-  // Asking for a blank practice on a day that already has a blank one opens that one, so a
-  // double click or a second "Plan this practice" never leaves two cards for the same day.
-  if (!src && !b.is_template && str(b.date ?? '')) {
+  // Asking for a practice on a day that already has a blank one uses that one, so a double click,
+  // a second "Plan this practice", or starting from a template never leaves two for the same day.
+  if (!b.is_template && str(b.date ?? '')) {
     const blank = get(
       `SELECT * FROM plans p WHERE owner_id=? AND team_id=? AND kind=? AND date=? AND is_game=? AND is_template=0
          AND NOT EXISTS (SELECT 1 FROM plan_items i WHERE i.plan_id=p.id) ORDER BY id LIMIT 1`,
-      req.ownerId, id(b.team_id), b.kind ?? 'practice', str(b.date), b.is_game ? 1 : 0,
+      req.ownerId, id(b.team_id), b.kind ?? src?.kind ?? 'practice', str(b.date), (b.is_game ?? src?.is_game) ? 1 : 0,
     );
-    if (blank) return res.json(planOut(blank));
+    if (blank && !src) return res.json(planOut(blank));
+    if (blank && src.id !== blank.id) {
+      // Started from a template or an earlier practice: its items go into the blank one already there.
+      tx(() => {
+        let items = planOut(src).items;
+        if (src.is_template || src.team_id !== blank.team_id) items = items.map((it) => ({ ...it, player_notes: [], groups: it.groups.map((g) => ({ ...g, members: [] })) }));
+        writeItems(blank.id, items, req.ownerId);
+        run('UPDATE plans SET updated_at=CURRENT_TIMESTAMP WHERE id=?', blank.id);
+      });
+      return res.json(planOut(get('SELECT * FROM plans WHERE id=?', blank.id)));
+    }
   }
   const newId = tx(() => {
     const r = run(
@@ -459,6 +469,14 @@ app.put('/api/plans/:id', (req, res) => {
       str(b.notes).slice(0, 20000), b.print_notes === false ? 0 : 1, p.id,
     );
     writeItems(p.id, b.items, req.ownerId);
+    // A practice with something in it makes an empty one for the same day, time and team redundant:
+    // it is usually a blank that was started and left. Removing it stops the day showing twice.
+    if (!p.is_template && str(b.date) && Array.isArray(b.items) && b.items.length > 0)
+      run(
+        `DELETE FROM plans WHERE owner_id=? AND team_id=? AND kind=? AND date=? AND start_time=? AND is_game=? AND is_template=0 AND id<>?
+           AND COALESCE(notes, '')='' AND NOT EXISTS (SELECT 1 FROM plan_items i WHERE i.plan_id=plans.id)`,
+        req.ownerId, p.team_id, p.kind, str(b.date), str(b.start_time, '17:30'), b.is_game ? 1 : 0, p.id,
+      );
   });
   res.json(planOut(get('SELECT * FROM plans WHERE id=?', p.id)));
 });

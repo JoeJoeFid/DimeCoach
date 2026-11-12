@@ -21,11 +21,13 @@ export function buildSchedule(plans: Plan[], events: ScheduleEvent[]): ScheduleE
   const list: ScheduleEntry[] = plans
     .filter((p) => p.date)
     .map((p) => ({ key: `p${p.id}`, date: p.date, time: p.start_time, kind: p.is_game ? 'game' : 'practice', title: p.title || 'Practice', location: p.location, plan: p }));
+  // When a day has both a filled-in plan and an empty one, the calendar event belongs to the filled-in one.
+  const filledFirst = [...list].sort((a, b) => Number(b.plan!.items?.length > 0) - Number(a.plan!.items?.length > 0));
   for (const ev of events) {
     // A game only pairs with a plan made for it (same title), so a practice on game day stays separate.
     const planned =
-      list.find((e) => e.plan && e.date === ev.date && !e.event && e.title === ev.title) ||
-      (ev.kind !== 'game' ? list.find((e) => e.plan && e.date === ev.date && !e.event) : undefined);
+      filledFirst.find((e) => e.plan && e.date === ev.date && !e.event && e.title === ev.title) ||
+      (ev.kind !== 'game' ? filledFirst.find((e) => e.plan && e.date === ev.date && !e.event) : undefined);
     if (planned) planned.event = ev;
     else list.push({ key: `e${ev.id}`, date: ev.date, time: ev.start_time, kind: ev.kind, title: ev.title, location: ev.location, event: ev });
   }

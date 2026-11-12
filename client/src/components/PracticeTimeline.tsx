@@ -8,7 +8,6 @@ import { Field, Modal, TagChip } from './bits';
 import SchedulePreview from './SchedulePreview';
 import { KIND_LABEL, buildSchedule, isStrayBlank, withoutDuplicateBlanks, type ScheduleEntry } from '../schedule';
 
-const STALE_AFTER_MS = 3 * 60 * 60 * 1000;
 /** Cards shown on each side of the big one. */
 const SIDE = 2;
 type Entry = ScheduleEntry;
@@ -28,7 +27,6 @@ const relative = (date: string, today: string) => {
 export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Plan[]; tags: Tag[]; /** Called after a plan was changed here, so the page reads its plans again. */ onChanged: () => void }) {
   const app = useApp();
   const team = app.team!;
-  const { reload } = app;
   const navigate = useNavigate();
   const today = todayISO();
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
@@ -41,11 +39,10 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
     setEvents([]);
     if (!team.calendar_url) return;
     let alive = true;
-    const load = () => api.events(team.id, '2000-01-01').then((ev) => alive && setEvents(ev));
-    const last = team.calendar_synced_at ? new Date(team.calendar_synced_at).getTime() : 0;
-    // Refresh the linked calendar quietly when the last sync is old. A failed refresh keeps the last copy.
-    (Date.now() - last > STALE_AFTER_MS ? api.syncCalendar(team.id).then(reload, () => {}) : Promise.resolve())
-      .then(load)
+    // The events as they were when the calendar was last read. It is read again only from the Practices page, when asked.
+    api
+      .events(team.id, '2000-01-01')
+      .then((ev) => alive && setEvents(ev))
       .catch((e) => alive && setError((e as Error).message));
     return () => {
       alive = false;
