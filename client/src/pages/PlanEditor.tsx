@@ -568,47 +568,50 @@ export default function PlanEditor() {
                     <Fragment key={plan.items[first].key}>
                       {incoming && !dropBeside && dropAt === first && dropSlot}
                       <div className={`slot-group ${shared ? 'paired' : ''}`} data-end={end}>
-                        {shared && (
-                          <p className="slot-shared">
-                            {!isHomework && <span className="time">{slotLabel(slots[first])}</span>}
-                            <strong>{group.length} at the same time</strong>
-                            <button type="button" className="link small" onClick={() => setItems(plan.items.map((it, i) => (group.includes(i) ? { ...it, beside: false } : it)))}>
-                              Give each its own time
-                            </button>
-                          </p>
-                        )}
-                        <div className="slot-row">
-                          {group.map((i) => {
-                            const it = plan.items[i];
-                            return (
-                              <SortableRow
-                                key={it.key}
-                                still={incoming !== ''}
-                                item={it}
-                                slot={slots[i]}
-                                shared={shared}
-                                canJoin={i > 0 && it.kind !== 'break' && plan.items[i - 1].kind !== 'break'}
-                                isHomework={isHomework}
-                                isOpen={open.has(it.key)}
-                                autoFocusTitle={it.key === focusKey}
-                                tags={tags}
-                                players={players}
-                                plays={plays.filter((p) => p.sport_id === team?.sport_id)}
-                                onToggle={() => toggle(it.key)}
-                                onPatch={(patch) => patchItem(it.key, patch)}
-                                onDelete={() => removeItem(it)}
-                                onDuplicate={() => insertAt(end, { ...structuredClone(it), key: newKey(), beside: false }, false)}
-                                onSaveToLibrary={() => saveToLibrary(it)}
-                                onBeside={(beside) => setBeside(it.key, beside)}
-                              />
-                            );
-                          })}
-                          {/* While a drill is being dragged in: let go here to run it at the same time as this one. */}
-                          {incoming && incoming !== `${NEW}break` && plan.items[first].kind !== 'break' && (
-                            <div className={`beside-zone ${dropBeside && dropAt === end ? 'on' : ''}`} data-end={end}>
-                              Drop here to run it at the same time
-                            </div>
+                        {/* The outline around drills that share a time. The buttons for adding the next item stay below it. */}
+                        <div className="slot-box">
+                          {shared && (
+                            <p className="slot-shared">
+                              {!isHomework && <span className="time">{slotLabel(slots[first])}</span>}
+                              <strong>{group.length} at the same time</strong>
+                              <button type="button" className="link small" onClick={() => setItems(plan.items.map((it, i) => (group.includes(i) ? { ...it, beside: false } : it)))}>
+                                Give each its own time
+                              </button>
+                            </p>
                           )}
+                          <div className="slot-row">
+                            {group.map((i) => {
+                              const it = plan.items[i];
+                              return (
+                                <SortableRow
+                                  key={it.key}
+                                  still={incoming !== ''}
+                                  item={it}
+                                  slot={slots[i]}
+                                  shared={shared}
+                                  canJoin={i > 0 && it.kind !== 'break' && plan.items[i - 1].kind !== 'break'}
+                                  isHomework={isHomework}
+                                  isOpen={open.has(it.key)}
+                                  autoFocusTitle={it.key === focusKey}
+                                  tags={tags}
+                                  players={players}
+                                  plays={plays.filter((p) => p.sport_id === team?.sport_id)}
+                                  onToggle={() => toggle(it.key)}
+                                  onPatch={(patch) => patchItem(it.key, patch)}
+                                  onDelete={() => removeItem(it)}
+                                  onDuplicate={() => insertAt(end, { ...structuredClone(it), key: newKey(), beside: false }, false)}
+                                  onSaveToLibrary={() => saveToLibrary(it)}
+                                  onBeside={(beside) => setBeside(it.key, beside)}
+                                />
+                              );
+                            })}
+                            {/* While a drill is being dragged in: let go here to run it at the same time as this one. */}
+                            {incoming && incoming !== `${NEW}break` && plan.items[first].kind !== 'break' && (
+                              <div className={`beside-zone ${dropBeside && dropAt === end ? 'on' : ''}`} data-end={end}>
+                                Drop here to run it at the same time
+                              </div>
+                            )}
+                          </div>
                         </div>
                         {inserter(end)}
                       </div>
