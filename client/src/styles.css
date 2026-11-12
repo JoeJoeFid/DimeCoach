@@ -5519,3 +5519,48 @@ fieldset.plain {
   min-width: 24px;
   padding: 0 4px;
 }
+
+/* ---------- Wider main content again (another 5%) ---------- */
+.page {
+  max-width: 1401px;
+}
+.page.editor {
+  max-width: 1304px;
+}
+.page.play-editor {
+  max-width: 1546px;
+}
+
+/* ---------- Lines that move together read as one bracketed block ---------- */
+.order-beat.group {
+  position: relative;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--series) 55%, transparent);
+  border-left: 4px solid var(--series);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--series) 11%, transparent);
+}
+.order-beat.group .order-place {
+  color: var(--series);
+}
+.order-beat.group .order-place .muted {
+  color: inherit;
+}
+/* Between two lines of a group: a short link that says so. */
+.order-beat.group .order-row + .order-row {
+  margin-top: 2px;
+}
+.order-beat.group .order-row + .order-row::before {
+  content: '+ at the same time';
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0 0 3px;
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: var(--series);
+}
+.order-beat.group .order-row + .order-row::after {
+  content: none;
+}

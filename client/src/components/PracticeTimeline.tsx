@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../App';
@@ -53,6 +53,41 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
 
   // Blank plans left behind for today or earlier get no card, so "next up" is the next real event.
   const entries = useMemo(() => withoutDuplicateBlanks(buildSchedule(plans, events).filter((e) => !isStrayBlank(e, today))), [plans, events, today]);
+
+  // When a different card takes the middle, every card glides from where it was to where it now
+  // sits (and the one that was clicked grows into the big card), so the strip reads as sliding over.
+  const track = useRef<HTMLDivElement>(null);
+  const places = useRef(new Map<string, { x: number; y: number; w: number; h: number }>());
+  const shownFor = useRef<string | null | undefined>(undefined);
+  useLayoutEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    const origin = el.getBoundingClientRect();
+    const moved = shownFor.current !== undefined && shownFor.current !== focusKey;
+    const animate = moved && typeof el.animate === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const timing = { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
+    const now = new Map<string, { x: number; y: number; w: number; h: number }>();
+    el.querySelectorAll<HTMLElement>('[data-key]').forEach((node) => {
+      // Measured without any glide still running, so a quick second click starts from the right place.
+      node.getAnimations().forEach((a) => a.cancel());
+      const r = node.getBoundingClientRect();
+      const at = { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height };
+      now.set(node.dataset.key!, at);
+      if (!animate) return;
+      const was = places.current.get(node.dataset.key!);
+      if (!was) node.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+      else if (was.x !== at.x || was.w !== at.w)
+        node.animate(
+          [
+            { transformOrigin: 'top left', transform: `translate(${was.x - at.x}px, ${was.y - at.y}px) scale(${was.w / at.w}, ${was.h / at.h})` },
+            { transformOrigin: 'top left', transform: 'none' },
+          ],
+          timing,
+        );
+    });
+    places.current = now;
+    shownFor.current = focusKey;
+  });
 
   if (entries.length === 0) return null;
 
@@ -116,18 +151,12 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
     );
     const past = e.date < today ? 'past done' : '';
     const next = e.key === nextKey ? 'tl-next' : '';
-    // The card itself is a link, so the preview button sits beside it in the same slot, not inside it.
+    // The card itself is a button, so the preview button sits beside it in the same slot, not inside it.
     return (
-      <div key={e.key} className="tl-slot">
-        {e.plan ? (
-          <Link to={`/plans/${e.plan.id}`} className={`tl-card tl-small ${past} ${next}`} title="Open this practice">
-            {body}
-          </Link>
-        ) : (
-          <button type="button" className={`tl-card tl-small ${past} ${next}`} onClick={() => setFocusKey(e.key)}>
-            {body}
-          </button>
-        )}
+      <div key={e.key} className="tl-slot" data-key={e.key}>
+        <button type="button" className={`tl-card tl-small ${past} ${next}`} title="Bring this to the middle" onClick={() => setFocusKey(e.key)}>
+          {body}
+        </button>
         {e.plan && <SchedulePreview plan={e.plan} label="" />}
       </div>
     );
@@ -144,10 +173,10 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
         <button className="tl-arrow" aria-label="Earlier" disabled={index === 0} onClick={() => setFocusKey(entries[index - 1].key)}>
           ‹
         </button>
-        <div className="tl-track">
+        <div className="tl-track" ref={track}>
           {Array.from({ length: SIDE }, (_, i) => small(entries[index - SIDE + i], i))}
 
-          <div className={`tl-card tl-focus ${focus.kind} ${focus.key === nextKey ? 'tl-next' : ''} ${focusDone ? 'done' : ''}`}>
+          <div data-key={focus.key} className={`tl-card tl-focus ${focus.kind} ${focus.key === nextKey ? 'tl-next' : ''} ${focusDone ? 'done' : ''}`}>
             <div className="tl-eyebrow">
               <span>
                 {focusDone && doneMark} {focusDone ? 'Completed' : heading} · {relative(focus.date, today)}
