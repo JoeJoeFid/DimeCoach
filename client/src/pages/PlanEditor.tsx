@@ -6,7 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
 import { useApp } from '../App';
 import type { Drill, ImportDraft, Item, Plan, Play, Player, Tag, Team } from '../types';
-import { blankItem, fmtClock, fmtDateShort, fmtDuration, htmlPreview, isBlankHtml, planMinutes, schedule, slotLabel, type Slot } from '../util';
+import { blankItem, fmtClock, fmtDateShort, fmtDuration, htmlPreview, isBlankHtml, planMinutes, schedule, slotGroups, slotLabel, type Slot } from '../util';
 import ItemBody from '../components/ItemBody';
 import { Field, Modal, MoreMenu, TagChip, type MenuItem } from '../components/bits';
 import { CommunityPicker, ShareDialog } from '../components/community';
@@ -46,6 +46,8 @@ export default function PlanEditor() {
   /** What is being dragged in from the side list, and the place in the plan it would land. */
   const [incoming, setIncoming] = useState('');
   const [dropAt, setDropAt] = useState<number | null>(null);
+  /** True while the place it would land is beside an item already there, sharing its time. */
+  const [dropBeside, setDropBeside] = useState(false);
   const column = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [importing, setImporting] = useState(searchParams.has('import') && app.user.can_import);
@@ -117,6 +119,7 @@ export default function PlanEditor() {
   const tags = useMemo(() => app.tags.filter((t) => t.sport_id === team?.sport_id), [app.tags, team]);
   const tagIds = useMemo(() => new Set(tags.map((t) => t.id)), [tags]);
   const slots = useMemo(() => (plan ? schedule(plan.start_time, plan.items) : []), [plan]);
+  const groups = useMemo(() => (plan ? slotGroups(plan.items) : []), [plan]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -167,8 +170,13 @@ export default function PlanEditor() {
       });
       if (!ok) return;
     }
-    setItems((latest.current ?? plan).items.filter((x) => x.key !== it.key));
+    const items = (latest.current ?? plan).items;
+    const at = items.findIndex((x) => x.key === it.key);
+    // If it led a shared time slot, the next one takes over the slot and does not join whatever is above.
+    setItems(items.filter((x) => x.key !== it.key).map((x, i) => (i === at && !it.beside && x.beside ? { ...x, beside: false } : x)));
   };
+  /** Puts an item in the time slot of the one above it, or gives it back a slot of its own. */
+  const setBeside = (key: string, beside: boolean) => patchItem(key, { beside });
   /**
    * The place in the plan a dragged-in thing would take. Anywhere over the plan's column counts,
    * not just over an item: it lands after every item whose middle is above the pointer, so the
@@ -186,34 +194,48 @@ export default function PlanEditor() {
     // it, or the space would chase the pointer and never settle.
     const space = el.querySelector(':scope > .drop-slot:not(.idle)')?.getBoundingClientRect();
     const pushed = space ? space.height + 12 : 0;
-    return [...el.querySelectorAll(':scope > .sheet-row')].filter((row) => {
-      const r = row.getBoundingClientRect();
+    // Over a "same time" area at the right of a slot: it joins that slot.
+    for (const zone of el.querySelectorAll<HTMLElement>('.beside-zone')) {
+      const r = zone.getBoundingClientRect();
+      const down = space && r.top > space.top ? pushed : 0;
+      if (x >= r.left && x <= r.right && y >= r.top - down && y <= r.bottom - down) return { at: Number(zone.dataset.end), beside: true };
+    }
+    let at = 0;
+    for (const group of el.querySelectorAll<HTMLElement>(':scope > .slot-group')) {
+      const r = group.getBoundingClientRect();
       const top = space && r.top > space.top ? r.top - pushed : r.top;
-      return y > top + r.height / 2;
-    }).length;
+      if (y > top + r.height / 2) at = Number(group.dataset.end);
+    }
+    return { at, beside: false };
   };
   /** Adds what a side-list id stands for. With no place given it goes at the end. */
-  const addNew = (id: string, index = (latest.current ?? plan).items.length) => {
+  const addNew = (id: string, index = (latest.current ?? plan).items.length, beside = false) => {
     const what = id.slice(NEW.length);
-    if (what === 'custom') return addCustom(index);
+    if (what === 'custom') return addCustom(index, beside);
     if (what === 'break') return insertAt(index, blankItem(newKey(), 'break'));
     const drill = drills.find((d) => d.id === Number(what.split(':')[1]));
-    if (drill) addDrill(drill, index);
+    if (drill) addDrill(drill, index, beside);
   };
   const onDragEnd = (e: DragEndEvent) => {
     if (isNew(e.active.id)) {
-      const at = landing(e);
+      const spot = landing(e);
       setIncoming('');
       setDropAt(null);
-      if (at !== null) addNew(String(e.active.id), at);
+      setDropBeside(false);
+      if (spot) addNew(String(e.active.id), spot.at, spot.beside);
       return;
     }
     if (!e.over || e.active.id === e.over.id) return;
     const from = plan.items.findIndex((i) => i.key === e.active.id);
     const to = plan.items.findIndex((i) => i.key === e.over!.id);
-    if (from >= 0 && to >= 0) setItems(arrayMove(plan.items, from, to));
+    if (from < 0 || to < 0) return;
+    // An item moved by its handle gets a time slot of its own where it lands. If it led a shared
+    // slot, the item that was beside it takes that slot over.
+    const moved = plan.items[from];
+    const items = plan.items.map((it, i) => (i === from || (i === from + 1 && !moved.beside) ? { ...it, beside: false } : it));
+    setItems(arrayMove(items, from, to));
   };
-  const addDrill = (d: Drill, index: number) => {
+  const addDrill = (d: Drill, index: number, beside = false) => {
     insertAt(
       index,
       {
@@ -230,6 +252,7 @@ export default function PlanEditor() {
         videos: (d.videos || []).map((v) => ({ ...v })),
         tag_ids: [...d.tag_ids],
         drill_id: d.id,
+        beside,
       },
       false,
     );
@@ -294,8 +317,8 @@ export default function PlanEditor() {
     navigate(`/plans/${plan.id}/print`);
   };
 
-  const addCustom = (index: number) => {
-    const item = blankItem(newKey());
+  const addCustom = (index: number, beside = false) => {
+    const item = { ...blankItem(newKey()), beside };
     insertAt(index, item);
     setFocusKey(item.key);
     setChoosingAt(null);
@@ -383,129 +406,112 @@ export default function PlanEditor() {
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={(e) => isNew(e.active.id) && setIncoming(String(e.active.id))}
-        onDragMove={(e) => isNew(e.active.id) && incoming && setDropAt(landing(e))}
+        onDragMove={(e) => {
+          if (!isNew(e.active.id) || !incoming) return;
+          const spot = landing(e);
+          setDropAt(spot ? spot.at : null);
+          setDropBeside(!!spot?.beside);
+        }}
         onDragCancel={() => {
           setIncoming('');
           setDropAt(null);
+          setDropBeside(false);
         }}
         onDragEnd={onDragEnd}
       >
+        <div className="card plan-head">
+          <div className="fields">
+            <Field label={plan.is_template ? 'Template name' : 'Title'} grow>
+              <input className="input" value={plan.title} onChange={(e) => update({ title: e.target.value })} />
+            </Field>
+            {!plan.is_template && (
+              <Field label={isHomework ? 'Date assigned' : 'Date'}>
+                <input className="input" type="date" value={plan.date} onChange={(e) => update({ date: e.target.value })} />
+              </Field>
+            )}
+            {!isHomework && (
+              <>
+                <Field label="Start time">
+                  <input
+                    className="input"
+                    type="time"
+                    value={plan.start_time}
+                    onChange={(e) => update({ start_time: e.target.value || '17:30' })}
+                  />
+                </Field>
+              </>
+            )}
+          </div>
+
+          <div className={`plan-extra ${isHomework ? 'one' : ''}`}>
+            {!isHomework && (
+              <Field label="Location">
+                <input className="input" value={plan.location} onChange={(e) => update({ location: e.target.value })} />
+              </Field>
+            )}
+            <div className="plan-notes">
+              <Field label="Notes">
+                <textarea
+                  className="input"
+                  rows={3}
+                  placeholder="Jot down anything for this day: the focus, who is out, what to bring"
+                  value={plan.notes}
+                  onChange={(e) => update({ notes: e.target.value })}
+                />
+              </Field>
+              <label className="check small">
+                <input type="checkbox" checked={plan.print_notes} onChange={(e) => update({ print_notes: e.target.checked })} />
+                Show these notes on the printed {sheet}
+              </label>
+            </div>
+          </div>
+
+          {!isHomework && (
+            <label className="check game-check">
+              <input type="checkbox" checked={plan.is_game} onChange={(e) => update({ is_game: e.target.checked })} />
+              <span>
+                This is a game plan <span className="muted">(kept out of dashboard category totals and targets)</span>
+              </span>
+            </label>
+          )}
+
+          {isHomework && !plan.is_template && (
+            <div className="assigned">
+              <span className="field-label">For</span>
+              <div className="chips">
+                <button
+                  type="button"
+                  className={`chip toggle ${plan.assigned.length === 0 ? 'on' : ''}`}
+                  aria-pressed={plan.assigned.length === 0}
+                  onClick={() => update({ assigned: [] })}
+                >
+                  Whole team
+                </button>
+                {players
+                  .filter((p) => p.active)
+                  .map((p) => {
+                    const on = plan.assigned.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className={`chip toggle ${on ? 'on' : ''}`}
+                        aria-pressed={on}
+                        onClick={() => update({ assigned: on ? plan.assigned.filter((x) => x !== p.id) : [...plan.assigned, p.id] })}
+                      >
+                        {p.name}
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+        </div>
+
         <div className="plan-layout">
           <Palette drills={libraryDrills} tags={tags} withBreak={!isHomework} sheet={sheet} onAdd={addNew} />
           <div className="plan-column" ref={column}>
-            <div className="card plan-head">
-              <div className="fields">
-                <Field label={plan.is_template ? 'Template name' : 'Title'} grow>
-                  <input className="input" value={plan.title} onChange={(e) => update({ title: e.target.value })} />
-                </Field>
-                {!plan.is_template && (
-                  <Field label={isHomework ? 'Date assigned' : 'Date'}>
-                    <input className="input" type="date" value={plan.date} onChange={(e) => update({ date: e.target.value })} />
-                  </Field>
-                )}
-                {!isHomework && (
-                  <>
-                    <Field label="Start time">
-                      <input
-                        className="input"
-                        type="time"
-                        value={plan.start_time}
-                        onChange={(e) => update({ start_time: e.target.value || '17:30' })}
-                      />
-                    </Field>
-                  </>
-                )}
-              </div>
-
-              <div className={`plan-extra ${isHomework ? 'one' : ''}`}>
-                {!isHomework && (
-                  <Field label="Location">
-                    <input className="input" value={plan.location} onChange={(e) => update({ location: e.target.value })} />
-                  </Field>
-                )}
-                <div className="plan-notes">
-                  <Field label="Notes">
-                    <textarea
-                      className="input"
-                      rows={3}
-                      placeholder="Jot down anything for this day: the focus, who is out, what to bring"
-                      value={plan.notes}
-                      onChange={(e) => update({ notes: e.target.value })}
-                    />
-                  </Field>
-                  <label className="check small">
-                    <input type="checkbox" checked={plan.print_notes} onChange={(e) => update({ print_notes: e.target.checked })} />
-                    Show these notes on the printed {sheet}
-                  </label>
-                </div>
-              </div>
-
-              {!isHomework && (
-                <label className="check game-check">
-                  <input type="checkbox" checked={plan.is_game} onChange={(e) => update({ is_game: e.target.checked })} />
-                  <span>
-                    This is a game plan <span className="muted">(kept out of dashboard category totals and targets)</span>
-                  </span>
-                </label>
-              )}
-
-              {isHomework && !plan.is_template && (
-                <div className="assigned">
-                  <span className="field-label">For</span>
-                  <div className="chips">
-                    <button
-                      type="button"
-                      className={`chip toggle ${plan.assigned.length === 0 ? 'on' : ''}`}
-                      aria-pressed={plan.assigned.length === 0}
-                      onClick={() => update({ assigned: [] })}
-                    >
-                      Whole team
-                    </button>
-                    {players
-                      .filter((p) => p.active)
-                      .map((p) => {
-                        const on = plan.assigned.includes(p.id);
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            className={`chip toggle ${on ? 'on' : ''}`}
-                            aria-pressed={on}
-                            onClick={() => update({ assigned: on ? plan.assigned.filter((x) => x !== p.id) : [...plan.assigned, p.id] })}
-                          >
-                            {p.name}
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
-
-              <div className="plan-summary">
-                <div className="summary-nums">
-                  <strong>{fmtDuration(total)}</strong>
-                  {!isHomework && slots.length > 0 && <span> · ends {fmtClock(slots[slots.length - 1].end)}</span>}
-                  {mins.breaks > 0 && <span className="muted"> · {fmtDuration(mins.breaks)} of breaks</span>}
-                  {(mins.byTag.get(0) || 0) > 0 && <span className="muted"> · {Math.round(mins.byTag.get(0)!)} min untagged</span>}
-                </div>
-                <div className="chips">
-                  {tags
-                    .filter((t) => mins.byTag.has(t.id))
-                    .map((t) => (
-                      <TagChip key={t.id} tag={t} minutes={mins.byTag.get(t.id)} />
-                    ))}
-                </div>
-                <div className="head-actions">
-                  {!plan.is_template && (
-                    <button className="btn primary" onClick={openPrint}>
-                      Print / share
-                    </button>
-                  )}
-                  <MoreMenu items={moreItems} />
-                </div>
-              </div>
-            </div>
-
             {plan.items.length === 0 ? (
               <div className={`empty ${incoming && dropAt !== null ? 'drop-here' : ''}`}>
                 <h2>Nothing scheduled yet</h2>
@@ -517,35 +523,75 @@ export default function PlanEditor() {
               </div>
             ) : (
               <SortableContext items={plan.items.map((i) => i.key)} strategy={verticalListSortingStrategy}>
-                {plan.items.map((it, i) => (
-                  <Fragment key={it.key}>
-                    {incoming && dropAt === i && dropSlot}
-                    <SortableRow
-                      still={incoming !== ''}
-                      item={it}
-                      slot={slots[i]}
-                      isHomework={isHomework}
-                      isOpen={open.has(it.key)}
-                      autoFocusTitle={it.key === focusKey}
-                      tags={tags}
-                      players={players}
-                      plays={plays.filter((p) => p.sport_id === team?.sport_id)}
-                      onToggle={() => toggle(it.key)}
-                      onPatch={(patch) => patchItem(it.key, patch)}
-                      onDelete={() => removeItem(it)}
-                      onDuplicate={() => insertAt(i + 1, { ...structuredClone(it), key: newKey() }, false)}
-                      onSaveToLibrary={() => saveToLibrary(it)}
-                    >
-                      {inserter(i + 1)}
-                    </SortableRow>
-                  </Fragment>
-                ))}
+                {groups.map((group) => {
+                  const first = group[0];
+                  const end = group[group.length - 1] + 1;
+                  const shared = group.length > 1;
+                  return (
+                    <Fragment key={plan.items[first].key}>
+                      {incoming && !dropBeside && dropAt === first && dropSlot}
+                      <div className={`slot-group ${shared ? 'paired' : ''}`} data-end={end}>
+                        {shared && (
+                          <p className="slot-shared">
+                            {!isHomework && <span className="time">{slotLabel(slots[first])}</span>}
+                            <strong>{group.length} at the same time</strong>
+                            <button type="button" className="link small" onClick={() => setItems(plan.items.map((it, i) => (group.includes(i) ? { ...it, beside: false } : it)))}>
+                              Give each its own time
+                            </button>
+                          </p>
+                        )}
+                        <div className="slot-row">
+                          {group.map((i) => {
+                            const it = plan.items[i];
+                            return (
+                              <SortableRow
+                                key={it.key}
+                                still={incoming !== ''}
+                                item={it}
+                                slot={slots[i]}
+                                shared={shared}
+                                canJoin={i > 0 && it.kind !== 'break' && plan.items[i - 1].kind !== 'break'}
+                                isHomework={isHomework}
+                                isOpen={open.has(it.key)}
+                                autoFocusTitle={it.key === focusKey}
+                                tags={tags}
+                                players={players}
+                                plays={plays.filter((p) => p.sport_id === team?.sport_id)}
+                                onToggle={() => toggle(it.key)}
+                                onPatch={(patch) => patchItem(it.key, patch)}
+                                onDelete={() => removeItem(it)}
+                                onDuplicate={() => insertAt(end, { ...structuredClone(it), key: newKey(), beside: false }, false)}
+                                onSaveToLibrary={() => saveToLibrary(it)}
+                                onBeside={(beside) => setBeside(it.key, beside)}
+                              />
+                            );
+                          })}
+                          {/* While a drill is being dragged in: let go here to run it at the same time as this one. */}
+                          {incoming && incoming !== `${NEW}break` && plan.items[first].kind !== 'break' && (
+                            <div className={`beside-zone ${dropBeside && dropAt === end ? 'on' : ''}`} data-end={end}>
+                              Drop here to run it at the same time
+                            </div>
+                          )}
+                        </div>
+                        {inserter(end)}
+                      </div>
+                    </Fragment>
+                  );
+                })}
                 {/* Under the last item: always there while dragging, so the end of the plan is an easy target. */}
-                {incoming && (dropAt === plan.items.length ? dropSlot : <div className="drop-slot idle">or drop here to add it at the end</div>)}
+                {incoming && (dropAt === plan.items.length && !dropBeside ? dropSlot : <div className="drop-slot idle">or drop here to add it at the end</div>)}
               </SortableContext>
             )}
 
           </div>
+          <Glance mins={mins} tags={tags} total={total} ends={!isHomework && slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : ''}>
+            {!plan.is_template && (
+              <button className="btn primary" onClick={openPrint}>
+                Print / share
+              </button>
+            )}
+            <MoreMenu items={moreItems} />
+          </Glance>
         </div>
         <DragOverlay dropAnimation={null}>{incoming && <div className="palette-tile lifted">{paletteLabel(incoming, drills)}</div>}</DragOverlay>
       </DndContext>
@@ -608,6 +654,61 @@ export default function PlanEditor() {
         />
       )}
     </div>
+  );
+}
+
+/** The practice at a glance: which categories it works on, and for how long. */
+function Glance({ mins, tags, total, ends, children }: { mins: ReturnType<typeof planMinutes>; tags: Tag[]; total: number; ends: string; /** Print and the other things to do with the whole plan. */ children: ReactNode }) {
+  const rows = tags
+    .filter((t) => (mins.byTag.get(t.id) || 0) > 0)
+    .map((t) => ({ tag: t, minutes: mins.byTag.get(t.id)! }))
+    .sort((a, b) => b.minutes - a.minutes);
+  const untagged = mins.byTag.get(0) || 0;
+  const share = (m: number) => `${Math.min(100, mins.work > 0 ? Math.round((m / mins.work) * 100) : 0)}%`;
+  return (
+    <aside className="plan-glance" aria-label="At a glance">
+      <div className="glance-actions">{children}</div>
+      <h2>At a glance</h2>
+      <p className="glance-total">
+        <strong>{fmtDuration(total)}</strong>
+        {ends && <span className="muted"> · ends {ends}</span>}
+      </p>
+      {rows.length === 0 ? (
+        <p className="muted small">Add drills that have categories, and this shows where the time goes.</p>
+      ) : (
+        <ul className="glance-list">
+          {rows.map(({ tag, minutes }) => (
+            <li key={tag.id}>
+              <span className="glance-name">
+                <span className="dot" style={{ background: tag.color }} />
+                {tag.name}
+              </span>
+              <span className="glance-min">{Math.round(minutes)} min</span>
+              <span className="glance-bar" title={`${share(minutes)} of the working time`}>
+                <i style={{ width: share(minutes), background: tag.color }} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(untagged > 0 || mins.breaks > 0) && (
+        <ul className="glance-list plain">
+          {untagged > 0 && (
+            <li>
+              <span className="glance-name muted">No category</span>
+              <span className="glance-min">{Math.round(untagged)} min</span>
+            </li>
+          )}
+          {mins.breaks > 0 && (
+            <li>
+              <span className="glance-name muted">Breaks</span>
+              <span className="glance-min">{Math.round(mins.breaks)} min</span>
+            </li>
+          )}
+        </ul>
+      )}
+      {rows.length > 0 && <p className="muted small">A drill with two categories counts toward both.</p>}
+    </aside>
   );
 }
 
@@ -714,6 +815,11 @@ function SortableRow(props: {
   autoFocusTitle: boolean;
   /** True while something is being dragged in: the rows stay put and only the line shows where it lands. */
   still: boolean;
+  /** True when it shares its time slot with another item. The slot's time is shown once, above them. */
+  shared: boolean;
+  /** Whether it could run at the same time as the item above it. */
+  canJoin: boolean;
+  onBeside: (beside: boolean) => void;
   tags: Tag[];
   players: Player[];
   plays: Play[];
@@ -722,7 +828,6 @@ function SortableRow(props: {
   onDelete: () => void;
   onDuplicate: () => void;
   onSaveToLibrary: () => void;
-  children: ReactNode;
 }) {
   const { item, slot, isHomework, isOpen, tags, players, onPatch } = props;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.key });
@@ -761,7 +866,7 @@ function SortableRow(props: {
           <button type="button" className="handle" aria-label="Drag to reorder" {...attributes} {...listeners}>
             ⠿
           </button>
-          {!isHomework && <span className="time">{slotLabel(slot)}</span>}
+          {!isHomework && !props.shared && <span className="time">{slotLabel(slot)}</span>}
           <input
             className="input title"
             aria-label="Item title"
@@ -826,6 +931,11 @@ function SortableRow(props: {
                 ▲ Collapse
               </button>
               <span className="spacer" />
+              {(props.canJoin || item.beside) && (
+                <button type="button" className="btn small" onClick={() => props.onBeside(!item.beside)} title={item.beside ? 'It gets a time slot of its own again' : 'Both run at once and share one start and end time'}>
+                  {item.beside ? 'Give it its own time' : 'Run at the same time as the item above'}
+                </button>
+              )}
               <button type="button" className="btn small" onClick={props.onDuplicate}>
                 Duplicate item
               </button>
@@ -836,7 +946,6 @@ function SortableRow(props: {
           </>
         )}
       </div>
-      {props.children}
     </div>
   );
 }

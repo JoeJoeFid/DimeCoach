@@ -167,6 +167,18 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
   const navigate = useNavigate();
   // Someone new gets the tour once. Finishing or skipping it is remembered with their account.
   const [touring, setTouring] = useState(!user.prefs.tour_done);
+  // Whether the side menu is folded down to its icons. Everywhere but the editors it is the
+  // person's own choice, remembered on this computer. Opening an editor folds it; leaving puts it back.
+  const navKey = `practiceplan.navFolded.${user.id}`;
+  const inEditor = /^\/(plans|plays)\/\d+$/.test(location.pathname);
+  const [navFolded, setNavFolded] = useState(() => inEditor || localStorage.getItem(navKey) === '1');
+  useEffect(() => {
+    setNavFolded(inEditor || localStorage.getItem(navKey) === '1');
+  }, [inEditor, navKey]);
+  const foldNav = (folded: boolean) => {
+    setNavFolded(folded);
+    if (!inEditor) localStorage.setItem(navKey, folded ? '1' : '0');
+  };
   const endTour = useCallback(() => {
     setTouring(false);
     if (!user.prefs.tour_done)
@@ -246,6 +258,8 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
   if (!state) return <div className="page muted">Loading…</div>;
 
   const printing = /\/(plans|plays)\/\d+\/print/.test(location.pathname);
+  // The practice and play editors want the room, so the menu folds itself away there.
+
   const needsTeam = !state.team;
   const signOut = async () => {
     await api.logout().catch(() => {});
@@ -295,7 +309,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     </Routes>
   );
   const navLink = (n: NavItem) => (
-    <NavLink key={n.to} to={n.to} end={n.end}>
+    <NavLink key={n.to} to={n.to} end={n.end} title={navFolded ? n.label : undefined}>
       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d={n.icon} />
       </svg>
@@ -308,12 +322,17 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
       {printing ? (
         routes
       ) : (
-        <div className="shell">
+        <div className={`shell ${navFolded ? 'nav-folded' : ''}`}>
           <aside className="sidebar">
-            <NavLink to="/" className="brand">
-              <span className="brand-mark" aria-hidden="true" />
-              Dime Coach
-            </NavLink>
+            <div className="side-top">
+              <NavLink to="/" className="brand">
+                <span className="brand-mark" aria-hidden="true" />
+                Dime Coach
+              </NavLink>
+              <button type="button" className={`nav-fold ${navFolded ? 'open-it' : ''}`} onClick={() => foldNav(!navFolded)} aria-expanded={!navFolded} aria-label={navFolded ? 'Show the menu' : 'Hide the menu'} title={navFolded ? 'Show the menu' : 'Hide the menu'}>
+                {navFolded ? '»' : '«'}
+              </button>
+            </div>
             {(state.team || state.shared_teams.length > 0) && (
               <label className="team-select">
                 <span className="side-label">Team</span>

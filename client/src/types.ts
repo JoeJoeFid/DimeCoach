@@ -181,6 +181,8 @@ export interface Item extends ItemContent {
   reps: string;
   player_notes: PlayerNote[];
   drill_id: number | null;
+  /** Runs at the same time as the item before it: the two share one time slot, for when the team splits up. */
+  beside?: boolean;
 }
 export type PlanKind = 'practice' | 'homework';
 export interface Plan {

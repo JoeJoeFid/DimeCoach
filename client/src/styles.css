@@ -6320,3 +6320,260 @@ fieldset.plain {
 .palette-list > p {
   grid-column: 1 / -1;
 }
+
+/* ---------- Practice editor: items that share a time slot sit side by side ---------- */
+.slot-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.slot-row > .sheet-row {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.slot-group.paired {
+  margin-bottom: 2px;
+  padding: 10px 10px 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface-2);
+}
+.slot-shared {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px 4px;
+}
+.slot-shared .time {
+  font-family: var(--mono);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+/* Half-width cards: smaller titles, and the head wraps instead of squeezing. */
+.slot-group.paired .item-head {
+  flex-wrap: wrap;
+}
+.slot-group.paired .item-head .input.title {
+  flex: 1 1 180px;
+  height: 44px;
+  font-size: 1.25rem;
+}
+.beside-zone {
+  flex: 0 0 170px;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 550;
+  text-align: center;
+}
+.beside-zone.on {
+  border-color: var(--series);
+  background: color-mix(in srgb, var(--series) 12%, transparent);
+  color: var(--series);
+  font-weight: 650;
+}
+
+/* ---------- Practice editor: header across the top, then drills | plan | at a glance ---------- */
+.page.plan-editor > .plan-head,
+.page.plan-editor .plan-head {
+  margin-bottom: 16px;
+}
+.plan-layout {
+  grid-template-columns: clamp(300px, 28%, 472px) minmax(0, 1fr) 232px;
+}
+.plan-glance {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.plan-glance h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.plan-glance p {
+  margin: 0;
+}
+.glance-total strong {
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+.glance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.glance-list.plain {
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.glance-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 0.88rem;
+}
+.glance-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 600;
+}
+.glance-name.muted {
+  font-weight: 500;
+}
+.glance-min {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+.glance-bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.glance-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+@media (max-width: 1100px) {
+  .plan-glance {
+    position: static;
+    margin-top: 16px;
+  }
+}
+
+/* ---------- Side menu that folds down to its icons ---------- */
+.side-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.nav-fold {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0 0 2px;
+  border: 1px solid var(--side-line);
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.nav-fold:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+@media (max-width: 900px) {
+  /* On a narrow screen the menu is a row along the top, with nothing to fold. */
+  .nav-fold {
+    display: none;
+  }
+}
+@media (min-width: 901px) {
+  .shell.nav-folded {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+  .nav-folded .sidebar {
+    align-items: center;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .nav-folded .side-top {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .nav-folded .brand {
+    padding: 0;
+    font-size: 0;
+    gap: 0;
+  }
+  .nav-folded .team-select,
+  .nav-folded .side-label,
+  .nav-folded .side-user,
+  .nav-folded .theme-toggle {
+    display: none;
+  }
+  .nav-folded .side-nav a {
+    justify-content: center;
+    gap: 0;
+    padding: 9px;
+    font-size: 0;
+  }
+  .nav-folded .nav-group {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+  /* The way back: bright, and gently pulsing so it is easy to find. */
+  .nav-fold.open-it {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 1.2rem;
+    font-weight: 700;
+    animation: nav-pulse 1.8s ease-out infinite;
+  }
+  .nav-fold.open-it:hover {
+    color: var(--accent-ink);
+    filter: brightness(1.06);
+  }
+}
+@keyframes nav-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 75%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 11px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-fold.open-it {
+    animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+/* Print and the "more" menu sit at the top of the summary column. */
+.glance-actions {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.glance-actions .btn.primary {
+  flex: 1;
+  justify-content: center;
+}

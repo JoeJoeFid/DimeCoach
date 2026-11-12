@@ -327,6 +327,8 @@ const itemOut = (it) => ({
   images: parse(it.images_json, []),
   play_ids: parse(it.plays_json, []),
   ...extrasOut(it),
+  // Runs at the same time as the item before it, sharing that item's time slot.
+  beside: parse(it.extras_json, {})?.beside === true,
   tag_ids: all('SELECT tag_id FROM plan_item_tags WHERE item_id=?', it.id).map((r) => r.tag_id),
 });
 const planOut = (p, withItems = true) => ({
@@ -364,8 +366,8 @@ function writeItems(planId, items, ownerId) {
     if (images.length) run('UPDATE plan_items SET images_json=? WHERE id=?', JSON.stringify(images), Number(r.lastInsertRowid));
     const playIds = it.kind === 'break' ? [] : cleanPlayIds(it.play_ids, ownerId);
     if (playIds.length) run('UPDATE plan_items SET plays_json=? WHERE id=?', JSON.stringify(playIds), Number(r.lastInsertRowid));
-    if (it.kind !== 'break' && ((it.links || []).length || (it.videos || []).length))
-      run('UPDATE plan_items SET extras_json=? WHERE id=?', extrasJson(it, ownerId), Number(r.lastInsertRowid));
+    if (it.kind !== 'break' && ((it.links || []).length || (it.videos || []).length || it.beside === true))
+      run('UPDATE plan_items SET extras_json=? WHERE id=?', JSON.stringify({ ...JSON.parse(extrasJson(it, ownerId)), ...(it.beside === true ? { beside: true } : {}) }), Number(r.lastInsertRowid));
   });
 }
 

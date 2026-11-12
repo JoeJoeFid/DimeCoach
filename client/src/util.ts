@@ -113,14 +113,29 @@ export interface Slot {
   start: number;
   end: number;
 }
-/** Each item starts when the one before it ends. */
-export function schedule(startTime: string, items: Pick<Item, 'duration_min'>[]): Slot[] {
-  let t = parseClock(startTime);
-  return items.map((it) => {
-    const slot = { start: t, end: t + (it.duration_min || 0) };
-    t = slot.end;
-    return slot;
+type Timed = Pick<Item, 'duration_min'> & Partial<Pick<Item, 'kind' | 'beside'>>;
+/**
+ * The items as time slots, by position in the list. Most slots hold one item. An item marked
+ * "beside" joins the slot of the item before it, so both run at once. Breaks always stand alone.
+ */
+export function slotGroups(items: Partial<Pick<Item, 'kind' | 'beside'>>[]): number[][] {
+  const groups: number[][] = [];
+  items.forEach((it, i) => {
+    if (i > 0 && it.beside && it.kind !== 'break' && items[i - 1].kind !== 'break') groups[groups.length - 1].push(i);
+    else groups.push([i]);
   });
+  return groups;
+}
+/** Each slot starts when the one before it ends. Items sharing a slot share its start and end: it lasts as long as the longest of them. */
+export function schedule(startTime: string, items: Timed[]): Slot[] {
+  let t = parseClock(startTime);
+  const slots: Slot[] = [];
+  for (const group of slotGroups(items)) {
+    const slot = { start: t, end: t + Math.max(...group.map((i) => items[i].duration_min || 0)) };
+    for (const i of group) slots[i] = slot;
+    t = slot.end;
+  }
+  return slots;
 }
 export const slotLabel = (s: Slot) => `${fmtClock(s.start)} - ${fmtClock(s.end)}`;
 
@@ -139,13 +154,14 @@ export function planMinutes(plan: Pick<Plan, 'items'>, validTagIds?: Set<number>
   const byTag = new Map<number, number>();
   let work = 0;
   let breaks = 0;
+  // Items that run at the same time take up the clock once: as long as the longest of them.
+  for (const group of slotGroups(plan.items)) work += plan.items[group[0]].kind === 'break' ? 0 : Math.max(...group.map((i) => plan.items[i].duration_min || 0));
   for (const it of plan.items) {
     const mins = it.duration_min || 0;
     if (it.kind === 'break') {
       breaks += mins;
       continue;
     }
-    work += mins;
     const tags = validTagIds ? it.tag_ids.filter((t) => validTagIds.has(t)) : it.tag_ids;
     if (tags.length === 0) byTag.set(UNTAGGED, (byTag.get(UNTAGGED) || 0) + mins);
     for (const t of tags) byTag.set(t, (byTag.get(t) || 0) + mins);
