@@ -7,7 +7,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Drill, GamePlan, GameSubs, Plan, Play, Player } from '../types';
 import { sportKind } from '../sports';
-import { SITUATIONS, UNIT_CHOICES, assignSpots, availablePlayers, fillEvenly, parsePositions, playerStats, playingTime, positionsOf, prefsOf, readOpponent, segmentsOf, spotOf, subsOf } from '../game';
+import { SITUATIONS, UNIT_CHOICES, availablePlayers, parsePositions, playerStats, playingTime, positionsOf, prefsOf, readOpponent, segmentsOf, spotOf, subsOf } from '../game';
 import { confirmDialog } from './dialogs';
 import { TAG_COLORS, fmtClock, parseClock } from '../util';
 
@@ -197,49 +197,14 @@ export default function GamePlanner({
       <div className="gp-grid">
         <Card
           wide
-          title="Positions"
-          hint="What you call each position, and where each player plays best. Kept for the team, and used by “Share time evenly”."
+          title="Player positions"
+          hint="Where each player plays best: first, second and third choice. Kept for the team, as a reminder when you set the lineup."
           action={
             <button type="button" className="btn small" aria-expanded={showPrefs} onClick={() => setShowPrefs(!showPrefs)}>
               {showPrefs ? 'Hide player choices' : `Player choices (${roster.filter((p) => (prefs[String(p.id)] || []).some(Boolean)).length} of ${roster.length} set)`}
             </button>
           }
         >
-          <div className="gp-positions">
-            <span className="field-label">Positions</span>
-            {editingNames ? (
-              <>
-                <input
-                  className="input"
-                  autoFocus
-                  aria-label="Position names, separated by commas"
-                  value={namesText}
-                  placeholder="Such as 1, 2, 3, 4, 5"
-                  onChange={(e) => setNamesText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') saveNames();
-                    if (e.key === 'Escape') {
-                      setNamesText(names.join(', '));
-                      setEditingNames(false);
-                    }
-                  }}
-                />
-                <button type="button" className="btn small primary" onClick={saveNames}>
-                  Save
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="chips">
-                  {names.length === 0 ? <span className="muted small">None named yet</span> : names.map((n) => <span key={n} className="chip">{n}</span>)}
-                </span>
-                <button type="button" className="link small" onClick={() => setEditingNames(true)}>
-                  Change what they are called
-                </button>
-              </>
-            )}
-            {editingNames && <span className="muted small">Separate them with commas, in the order you want them listed. They become this team's names for every game.</span>}
-          </div>
           {showPrefs &&
             (names.length === 0 ? (
               <p className="muted small">Name your positions first, then choose where each player plays.</p>
@@ -319,21 +284,9 @@ export default function GamePlanner({
         <Card
           wide
           title="Lineup and playing time"
-          hint="For each stretch, choose the position each player is in. The first column is your starters."
           action={
             here.length > 0 && (
               <span className="row-actions">
-                <button
-                  type="button"
-                  className="btn small"
-                  title="Shares the stretches out so everyone plays about the same, and hands out positions"
-                  onClick={() => {
-                    const even = fillEvenly(here.map((p) => p.id), segments.length, subs.on);
-                    set({ lineup: even, spots: assignSpots(even, names, prefs) });
-                  }}
-                >
-                  Share time evenly
-                </button>
                 <button
                   type="button"
                   className="btn small"
@@ -396,6 +349,41 @@ export default function GamePlanner({
               <span className="field-label">Players on at once</span>
               <input className="input gp-num" type="number" min={1} max={15} value={subs.on} onChange={(e) => setSubs({ on: Math.max(1, Math.min(15, Number(e.target.value) || 1)) })} />
             </label>
+          </div>
+          <div className="gp-positions">
+            <span className="field-label">Positions</span>
+            {editingNames ? (
+              <>
+                <input
+                  className="input"
+                  autoFocus
+                  aria-label="Position names, separated by commas"
+                  value={namesText}
+                  placeholder="Such as 1, 2, 3, 4, 5"
+                  onChange={(e) => setNamesText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveNames();
+                    if (e.key === 'Escape') {
+                      setNamesText(names.join(', '));
+                      setEditingNames(false);
+                    }
+                  }}
+                />
+                <button type="button" className="btn small primary" onClick={saveNames}>
+                  Save
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="chips">
+                  {names.length === 0 ? <span className="muted small">None named yet</span> : names.map((n) => <span key={n} className="chip">{n}</span>)}
+                </span>
+                <button type="button" className="link small" onClick={() => setEditingNames(true)}>
+                  Change what they are called
+                </button>
+              </>
+            )}
+            {editingNames && <span className="muted small">Separate them with commas, in the order you want them listed. They become this team's names for every game.</span>}
           </div>
           {here.length === 0 ? (
             <p className="muted small">Nobody is marked as here yet.</p>
