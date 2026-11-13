@@ -7,8 +7,9 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Drill, GamePlan, GameSubs, Plan, Play, Player } from '../types';
 import { sportKind } from '../sports';
-import { SITUATIONS, UNIT_CHOICES, assignSpots, availablePlayers, fillEvenly, parsePositions, playingTime, positionsOf, readOpponent, segmentsOf, spotOf, subsOf } from '../game';
-import { fmtClock, parseClock } from '../util';
+import { SITUATIONS, UNIT_CHOICES, assignSpots, availablePlayers, fillEvenly, parsePositions, playerStats, playingTime, positionsOf, prefsOf, readOpponent, segmentsOf, spotOf, subsOf } from '../game';
+import { confirmDialog } from './dialogs';
+import { TAG_COLORS, fmtClock, parseClock } from '../util';
 
 const Card = ({ title, hint, action, children, wide }: { title: string; hint?: string; action?: ReactNode; children: ReactNode; wide?: boolean }) => (
   <section className={`gp-card ${wide ? 'wide' : ''}`}>
@@ -104,6 +105,28 @@ export default function GamePlanner({
     }
     set({ lineup: nextLineup, spots: nextSpots });
   };
+  // Where each player plays best: first, second and third choice. Kept with the team, so it carries to every game.
+  const [prefs, setPrefs] = useState<Record<string, string[]>>(() => prefsOf(app.team));
+  const [showPrefs, setShowPrefs] = useState(false);
+  const setPref = (playerId: number, rank: number, name: string) => {
+    const mine = [...(prefs[String(playerId)] || [])];
+    while (mine.length < 3) mine.push('');
+    mine[rank] = name;
+    const next = { ...prefs, [String(playerId)]: mine };
+    setPrefs(next);
+    if (app.team) api.setPositionPrefs(app.team.id, next).catch(() => {});
+  };
+  const [statView, setStatView] = useState<StatView>('total');
+  // Positions that more than one player has in the same stretch. Allowed, but pointed out.
+  const shared = segments.map((_, i) => {
+    const count = new Map<string, number>();
+    for (const id of lineup[i]) {
+      const spot = spotOf(game, i, id);
+      if (spot && here.some((p) => p.id === id)) count.set(spot, (count.get(spot) || 0) + 1);
+    }
+    return new Map([...count].filter(([, n]) => n > 1));
+  });
+  const clashes = segments.map((seg, i) => ({ seg, list: [...shared[i]] })).filter((c) => c.list.length > 0);
   const saveNames = () => {
     const next = parsePositions(namesText);
     setEditingNames(false);
@@ -112,7 +135,14 @@ export default function GamePlanner({
     const swap = (label: string) => (names.includes(label) ? (next[names.indexOf(label)] ?? '') : label);
     set({ position_names: next, spots: spots.map((s) => Object.fromEntries(Object.entries(s).map(([id, label]) => [id, swap(label)]))) });
     setNamesText(next.join(', '));
-    if (app.team) api.setTeamPositions(app.team.id, next).then(() => app.reload(), () => {});
+    // Players' choices follow the rename the same way.
+    const renamed = Object.fromEntries(Object.entries(prefs).map(([id, list]) => [id, list.map((label) => (label ? swap(label) : ''))]));
+    setPrefs(renamed);
+    if (app.team)
+      api
+        .setTeamPositions(app.team.id, next)
+        .then(() => api.setPositionPrefs(app.team!.id, renamed))
+        .then(() => app.reload(), () => {});
   };
   const setStatus = (id: number, status: 'in' | 'out' | 'late') => {
     const availability = { ...(game.availability || {}) };
@@ -165,6 +195,81 @@ export default function GamePlanner({
       {fromCalendar && <p className="banner ok">{fromCalendar}</p>}
 
       <div className="gp-grid">
+        <Card
+          wide
+          title="Positions"
+          hint="What you call each position, and where each player plays best. Kept for the team, and used by “Share time evenly”."
+          action={
+            <button type="button" className="btn small" aria-expanded={showPrefs} onClick={() => setShowPrefs(!showPrefs)}>
+              {showPrefs ? 'Hide player choices' : `Player choices (${roster.filter((p) => (prefs[String(p.id)] || []).some(Boolean)).length} of ${roster.length} set)`}
+            </button>
+          }
+        >
+          <div className="gp-positions">
+            <span className="field-label">Positions</span>
+            {editingNames ? (
+              <>
+                <input
+                  className="input"
+                  autoFocus
+                  aria-label="Position names, separated by commas"
+                  value={namesText}
+                  placeholder="Such as 1, 2, 3, 4, 5"
+                  onChange={(e) => setNamesText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveNames();
+                    if (e.key === 'Escape') {
+                      setNamesText(names.join(', '));
+                      setEditingNames(false);
+                    }
+                  }}
+                />
+                <button type="button" className="btn small primary" onClick={saveNames}>
+                  Save
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="chips">
+                  {names.length === 0 ? <span className="muted small">None named yet</span> : names.map((n) => <span key={n} className="chip">{n}</span>)}
+                </span>
+                <button type="button" className="link small" onClick={() => setEditingNames(true)}>
+                  Change what they are called
+                </button>
+              </>
+            )}
+            {editingNames && <span className="muted small">Separate them with commas, in the order you want them listed. They become this team's names for every game.</span>}
+          </div>
+          {showPrefs &&
+            (names.length === 0 ? (
+              <p className="muted small">Name your positions first, then choose where each player plays.</p>
+            ) : (
+              <ul className="gp-prefs">
+                {roster.map((p) => {
+                  const mine = prefs[String(p.id)] || [];
+                  return (
+                    <li key={p.id}>
+                      <span className="gp-avail-name">
+                        {p.number && <b>{p.number}</b>}
+                        {p.name}
+                      </span>
+                      {[0, 1, 2].map((rank) => (
+                        <select key={rank} className="input" aria-label={`${p.name}: ${['first', 'second', 'third'][rank]} choice`} value={mine[rank] ?? ''} onChange={(e) => setPref(p.id, rank, e.target.value)}>
+                          <option value="">{['1st', '2nd', '3rd'][rank]}</option>
+                          {names.map((n) => (
+                            <option key={n} value={n} disabled={mine.includes(n) && mine[rank] !== n}>
+                              {n}
+                            </option>
+                          ))}
+                        </select>
+                      ))}
+                    </li>
+                  );
+                })}
+              </ul>
+            ))}
+        </Card>
+
         <Card title="Who is here" hint="Anyone marked out is left off the lineup.">
           {roster.length === 0 ? (
             <p className="muted small">
@@ -224,12 +329,20 @@ export default function GamePlanner({
                   title="Shares the stretches out so everyone plays about the same, and hands out positions"
                   onClick={() => {
                     const even = fillEvenly(here.map((p) => p.id), segments.length, subs.on);
-                    set({ lineup: even, spots: assignSpots(even, names) });
+                    set({ lineup: even, spots: assignSpots(even, names, prefs) });
                   }}
                 >
                   Share time evenly
                 </button>
-                <button type="button" className="btn small" onClick={() => set({ lineup: [], spots: [] })}>
+                <button
+                  type="button"
+                  className="btn small"
+                  onClick={async () => {
+                    if (!lineup.some((x) => x.length > 0)) return;
+                    if (await confirmDialog({ title: 'Clear the whole lineup?', body: 'Everyone is taken off in every stretch, along with their positions. Who is here, and the rest of the game plan, stays.', confirmLabel: 'Clear the lineup', danger: true }))
+                      set({ lineup: [], spots: [] });
+                  }}
+                >
                   Clear
                 </button>
               </span>
@@ -284,44 +397,10 @@ export default function GamePlanner({
               <input className="input gp-num" type="number" min={1} max={15} value={subs.on} onChange={(e) => setSubs({ on: Math.max(1, Math.min(15, Number(e.target.value) || 1)) })} />
             </label>
           </div>
-          <div className="gp-positions">
-            <span className="field-label">Positions</span>
-            {editingNames ? (
-              <>
-                <input
-                  className="input"
-                  autoFocus
-                  aria-label="Position names, separated by commas"
-                  value={namesText}
-                  placeholder="Such as 1, 2, 3, 4, 5"
-                  onChange={(e) => setNamesText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') saveNames();
-                    if (e.key === 'Escape') {
-                      setNamesText(names.join(', '));
-                      setEditingNames(false);
-                    }
-                  }}
-                />
-                <button type="button" className="btn small primary" onClick={saveNames}>
-                  Save
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="chips">
-                  {names.length === 0 ? <span className="muted small">None named yet</span> : names.map((n) => <span key={n} className="chip">{n}</span>)}
-                </span>
-                <button type="button" className="link small" onClick={() => setEditingNames(true)}>
-                  Change what they are called
-                </button>
-              </>
-            )}
-            {editingNames && <span className="muted small">Separate them with commas, in the order you want them listed. They become this team's names for every game.</span>}
-          </div>
           {here.length === 0 ? (
             <p className="muted small">Nobody is marked as here yet.</p>
           ) : (
+            <div className="gp-lineup-wrap">
             <div className="table-scroll">
               <table className="gp-lineup">
                 <thead>
@@ -353,8 +432,9 @@ export default function GamePlanner({
                           return (
                             <td key={i}>
                               <select
-                                className={`gp-cell ${on ? 'on' : ''}`}
-                                aria-label={`${p.name}, ${s.name}`}
+                                className={`gp-cell ${on ? 'on' : ''} ${on && shared[i].has(spot) ? 'dup' : ''}`}
+                                aria-label={`${p.name}, ${s.name}${on && shared[i].has(spot) ? `. ${shared[i].get(spot)} players are at ${spot} here` : ''}`}
+                                title={on && shared[i].has(spot) ? `${shared[i].get(spot)} players are at ${spot} in ${s.name}` : undefined}
                                 value={!on ? '-' : spot || '*'}
                                 onChange={(e) => setCell(i, p.id, e.target.value === '-' ? null : e.target.value === '*' ? '' : e.target.value)}
                               >
@@ -390,6 +470,17 @@ export default function GamePlanner({
                 </tfoot>
               </table>
             </div>
+            <LineupStats view={statView} onView={setStatView} players={here} game={game} segments={segments} names={names} />
+            </div>
+          )}
+          {clashes.length > 0 && (
+            <p className="gp-clash" role="status">
+              <span aria-hidden="true">!</span>
+              <span>
+                Same position twice:{' '}
+                {clashes.map((c) => `${c.seg.name} has ${c.list.map(([spot, n]) => `${n} at ${spot}`).join(' and ')}`).join('; ')}. That is fine if you mean it.
+              </span>
+            </p>
           )}
         </Card>
 
@@ -577,5 +668,79 @@ export default function GamePlanner({
         </Card>
       </div>
     </div>
+  );
+}
+
+type StatView = 'total' | 'position' | 'rest';
+const STAT_VIEWS: { id: StatView; label: string }[] = [
+  { id: 'total', label: 'Total time' },
+  { id: 'position', label: 'By position' },
+  { id: 'rest', label: 'Time sitting' },
+];
+/** Positions keep one color each, in the order they are named. Past the palette, the rest share a gray. */
+const positionColor = (names: string[], name: string) => {
+  const i = names.indexOf(name);
+  return i >= 0 && i < TAG_COLORS.length ? TAG_COLORS[i] : 'var(--pie-none)';
+};
+
+/** Playing time beside the lineup grid, as bars: how much each player plays, where, and how long they sit. */
+function LineupStats({ view, onView, players, game, segments, names }: { view: StatView; onView: (v: StatView) => void; players: Player[]; game: GamePlan; segments: ReturnType<typeof segmentsOf>; names: string[] }) {
+  const stats = playerStats(players.map((p) => p.id), game, segments);
+  const unit = stats.timed ? 'min' : '';
+  const fmt = (n: number) => `${Math.round(n * 10) / 10}${unit ? ` ${unit}` : ''}`;
+  const nameOf = (id: number) => players.find((p) => p.id === id)?.name ?? '';
+  const most = Math.max(1, ...stats.rows.map((r) => r.total));
+  const share = stats.rows.length ? stats.rows.reduce((n, r) => n + r.total, 0) / stats.rows.length : 0;
+  const rows = [...stats.rows].sort((a, b) => (view === 'rest' ? b.longestSit - a.longestSit : b.total - a.total) || nameOf(a.id).localeCompare(nameOf(b.id)));
+  const used = [...new Set(stats.rows.flatMap((r) => r.byPosition.map((b) => b.name)))].sort((a, b) => (names.indexOf(a) + 1 || 99) - (names.indexOf(b) + 1 || 99));
+  const none = stats.rows.every((r) => r.total === 0);
+  return (
+    <aside className="gp-stats" aria-label="Playing time">
+      <div className="gp-stats-head">
+        <h4>Playing time</h4>
+        <div className="seg" role="group" aria-label="Chart">
+          {STAT_VIEWS.map((v) => (
+            <button key={v.id} type="button" className={view === v.id ? 'on' : ''} aria-pressed={view === v.id} onClick={() => onView(v.id)}>
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {none ? (
+        <p className="muted small">Put players on in the grid, and their playing time is charted here.</p>
+      ) : (
+        <>
+          <p className="muted small gp-stats-note">
+            {view === 'total' && `Each player's time on, most first. The line marks an even share: ${fmt(share)}${stats.timed ? '' : ` of ${stats.whole}`}.`}
+            {view === 'position' && 'Where each player spends their time.'}
+            {view === 'rest' && `The longest each player sits in one go, and how many times they come on.`}
+          </p>
+          <ul className={`gp-bars ${view}`}>
+            {rows.map((r) => (
+              <li key={r.id}>
+                <span className="gp-bar-name">{nameOf(r.id)}</span>
+                <span className="gp-bar-track" title={view === 'position' ? r.byPosition.map((b) => `${b.name}: ${fmt(b.amount)}`).join(', ') : undefined}>
+                  {view === 'total' && <i style={{ width: `${(r.total / most) * 100}%` }} className={r.total === 0 ? 'zero' : ''} />}
+                  {view === 'total' && <em style={{ left: `${(share / most) * 100}%` }} />}
+                  {view === 'position' && r.byPosition.map((b) => <i key={b.name} style={{ width: `${(b.amount / most) * 100}%`, background: positionColor(names, b.name) }} />)}
+                  {view === 'rest' && <i className="sit" style={{ width: `${(r.longestSit / Math.max(1, stats.whole)) * 100}%` }} />}
+                </span>
+                <span className="gp-bar-num">{view === 'rest' ? `${fmt(r.longestSit)} · on ${r.entries}×` : fmt(r.total)}</span>
+              </li>
+            ))}
+          </ul>
+          {view === 'position' && (
+            <ul className="gp-legend">
+              {used.map((n) => (
+                <li key={n}>
+                  <span className="dot" style={{ background: positionColor(names, n) }} />
+                  {n}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </aside>
   );
 }

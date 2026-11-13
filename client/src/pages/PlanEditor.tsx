@@ -494,7 +494,7 @@ export default function PlanEditor() {
         }}
         onDragEnd={onDragEnd}
       >
-        <div className={`card plan-head ${headOpen ? 'open' : ''}`}>
+        <div className={`card plan-head ${headOpen ? 'open' : ''} ${gameMode ? 'game' : ''}`}>
           <button type="button" className="head-brief" onClick={() => setHeadOpen(!headOpen)} aria-expanded={headOpen}>
             <span className="head-brief-text">
               <strong>{plan.title || 'Untitled'}</strong>
@@ -507,6 +507,52 @@ export default function PlanEditor() {
           {/* Left: what and when and where, one row each. Right: the coach's notes for the day. */}
           <div className="plan-head-grid">
             <div className="plan-head-left">
+              {gameMode ? (
+                /* A game: every input the same size, with the times side by side. */
+                <div className="game-head">
+                  <div className="gh-row">
+                    <Field label="Title" grow>
+                      <input className="input" value={plan.title} onChange={(e) => update({ title: e.target.value })} />
+                    </Field>
+                    <Field label="Opponent" grow>
+                      <input className="input" value={plan.game?.opponent ?? ''} placeholder="Who you are playing" onChange={(e) => update({ game: { ...plan.game, opponent: e.target.value } })} />
+                    </Field>
+                    <div className="field">
+                      <span className="field-label">Where</span>
+                      <div className="seg" role="group" aria-label="Home or away">
+                        {(['home', 'away', 'neutral'] as const).map((side) => (
+                          <button key={side} type="button" className={plan.game?.side === side ? 'on' : ''} aria-pressed={plan.game?.side === side} onClick={() => update({ game: { ...plan.game, side: plan.game?.side === side ? '' : side } })}>
+                            {side[0].toUpperCase() + side.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="gh-row">
+                    <Field label="Date">
+                      <input className="input" type="date" value={plan.date} onChange={(e) => update({ date: e.target.value })} />
+                    </Field>
+                    <Field label="Arrive by">
+                      <input className="input" type="time" value={plan.game?.arrive ?? ''} onChange={(e) => update({ game: { ...plan.game, arrive: e.target.value } })} />
+                    </Field>
+                    <Field label="Start time">
+                      <input className="input" type="time" value={plan.start_time} onChange={(e) => update({ start_time: e.target.value || '17:30' })} />
+                    </Field>
+                    <Field label="Location" grow>
+                      <input className="input" value={plan.location} onChange={(e) => update({ location: e.target.value })} />
+                    </Field>
+                  </div>
+                  <div className="gh-row">
+                    <Field label="Uniform" grow>
+                      <input className="input" value={plan.game?.uniform ?? ''} placeholder="Such as white jerseys" onChange={(e) => update({ game: { ...plan.game, uniform: e.target.value } })} />
+                    </Field>
+                    <Field label="Bring" grow>
+                      <input className="input" value={plan.game?.bring ?? ''} placeholder="Water, both jerseys…" onChange={(e) => update({ game: { ...plan.game, bring: e.target.value } })} />
+                    </Field>
+                  </div>
+                </div>
+              ) : (
+                <>
               <Field label={plan.is_template ? 'Template name' : 'Title'}>
                 <input className="input" value={plan.title} onChange={(e) => update({ title: e.target.value })} />
               </Field>
@@ -532,35 +578,7 @@ export default function PlanEditor() {
                   <input className="input" value={plan.location} onChange={(e) => update({ location: e.target.value })} />
                 </Field>
               )}
-              {gameMode && (
-                <div className="game-details">
-                  <div className="fields">
-                    <Field label="Opponent" grow>
-                      <input className="input" value={plan.game?.opponent ?? ''} placeholder="Who you are playing" onChange={(e) => update({ game: { ...plan.game, opponent: e.target.value } })} />
-                    </Field>
-                    <div className="field">
-                      <span className="field-label">Where</span>
-                      <div className="seg" role="group" aria-label="Home or away">
-                        {(['home', 'away', 'neutral'] as const).map((side) => (
-                          <button key={side} type="button" className={plan.game?.side === side ? 'on' : ''} aria-pressed={plan.game?.side === side} onClick={() => update({ game: { ...plan.game, side: plan.game?.side === side ? '' : side } })}>
-                            {side[0].toUpperCase() + side.slice(1)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <Field label="Arrive by">
-                      <input className="input" type="time" value={plan.game?.arrive ?? ''} onChange={(e) => update({ game: { ...plan.game, arrive: e.target.value } })} />
-                    </Field>
-                  </div>
-                  <div className="fields">
-                    <Field label="Uniform" grow>
-                      <input className="input" value={plan.game?.uniform ?? ''} placeholder="Such as white jerseys" onChange={(e) => update({ game: { ...plan.game, uniform: e.target.value } })} />
-                    </Field>
-                    <Field label="Bring" grow>
-                      <input className="input" value={plan.game?.bring ?? ''} placeholder="Water, both jerseys…" onChange={(e) => update({ game: { ...plan.game, bring: e.target.value } })} />
-                    </Field>
-                  </div>
-                </div>
+                </>
               )}
               {!isHomework && (
                 <div className="field game-switch">
@@ -754,8 +772,9 @@ export default function PlanEditor() {
           <div className="plan-side">
             {/* Coaches talk about the plan here. A template is not a day anyone is planning, so it has none. */}
             {!plan.is_template && <PlanCollaborators planId={plan.id} />}
-            {!plan.is_template && <PlanDiscussion planId={plan.id} what={isHomework ? 'homework sheet' : 'practice'} />}
-            <PreviousPractices current={plan} tags={tags} />
+            {!plan.is_template && <PlanDiscussion planId={plan.id} what={gameMode ? 'game' : isHomework ? 'homework sheet' : 'practice'} />}
+            {/* Earlier practices are for building a practice. A game has no use for them. */}
+            {!gameMode && <PreviousPractices current={plan} tags={tags} />}
           </div>
         </div>
         <DragOverlay dropAnimation={null} modifiers={[centreOnPointer]}>{incoming && <div className="palette-tile lifted">{paletteLabel(incoming, drills)}</div>}</DragOverlay>

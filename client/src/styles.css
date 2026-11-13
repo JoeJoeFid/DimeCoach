@@ -11389,3 +11389,230 @@ select.gp-cell option {
     width: 50px;
   }
 }
+
+/* Two players given the same position in one stretch: allowed, but marked. */
+select.gp-cell.dup {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 2px var(--warn);
+  background: color-mix(in srgb, var(--warn) 55%, var(--accent));
+}
+.gp-clash {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: 0.86rem;
+}
+.gp-clash > span:first-child {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--warn);
+  color: #1a1400;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+/* ---------- Game: one tidy block of inputs at the top, all the same size ---------- */
+.game-head {
+  display: grid;
+  gap: 12px;
+}
+.gh-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 14px;
+}
+.gh-row > .field {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+.gh-row > .field.grow {
+  flex: 1 1 220px;
+}
+.plan-head .game-head .input {
+  width: 100%;
+  height: 44px;
+  padding: 8px 12px;
+  font-size: 1rem;
+  font-weight: 550;
+  letter-spacing: 0;
+}
+.plan-head .game-head input[type='date'],
+.plan-head .game-head input[type='time'] {
+  width: 168px;
+}
+.game-head .seg {
+  height: 44px;
+}
+.game-head .seg button {
+  padding: 0 14px;
+}
+.plan-head.game .plan-head-grid {
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr);
+}
+
+/* ---------- Game: positions and each player's choices, and playing time beside the lineup ---------- */
+.gp-prefs {
+  list-style: none;
+  margin: 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 6px 22px;
+}
+.gp-prefs li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 74px);
+  gap: 6px;
+  align-items: center;
+}
+.gp-card .gp-prefs .input {
+  width: 100%;
+  min-height: 32px;
+  padding: 3px 6px;
+  font-size: 0.82rem;
+}
+.gp-lineup-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(260px, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.gp-stats {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.gp-stats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gp-stats h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.gp-stats .seg button {
+  padding: 0 9px;
+  font-size: 0.76rem;
+}
+.gp-stats-note {
+  margin: 0;
+}
+.gp-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.gp-bars li {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.82rem;
+}
+.gp-bar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+.gp-bar-track {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 4px;
+  background: var(--surface-3);
+}
+.gp-bar-track i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--series, #2a78d6);
+}
+.gp-bar-track i:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.gp-bar-track i:only-of-type {
+  border-radius: 4px;
+}
+.gp-bar-track i.zero {
+  min-width: 0;
+}
+.gp-bar-track i.sit {
+  background: var(--warn);
+}
+/* The even share: a thin line across every bar. */
+.gp-bar-track em {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+.gp-bar-num {
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+.gp-legend {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+.gp-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+@media (max-width: 1500px) {
+  .gp-lineup-wrap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .gp-prefs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gp-prefs li {
+    grid-template-columns: minmax(0, 1fr) repeat(3, 62px);
+  }
+  .plan-head .game-head input[type='date'],
+  .plan-head .game-head input[type='time'] {
+    width: 100%;
+  }
+  .gh-row > .field {
+    flex: 1 1 140px;
+  }
+  .plan-head.game .plan-head-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

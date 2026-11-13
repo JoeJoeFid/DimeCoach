@@ -13,6 +13,8 @@ export interface Team {
   calendar_synced_at: string;
   /** How the team names its positions, comma separated, or '' to use the sport's usual names. */
   positions?: string;
+  /** Each player's first, second and third choice of position, as JSON by player id. */
+  position_prefs?: string;
 }
 /** A game, practice or other event read from the team's linked calendar. */
 export interface ScheduleEvent {

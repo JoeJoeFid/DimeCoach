@@ -71,7 +71,7 @@ const extrasOut = (row) => {
   return { links: Array.isArray(e?.links) ? e.links : [], videos: Array.isArray(e?.videos) ? e.videos : [] };
 };
 const extrasJson = (b, ownerId) => JSON.stringify({ links: cleanLinks(b.links), videos: cleanVideos(b.videos, ownerId) });
-const TEAM_COLS = 'id, sport_id, name, season, notes, calendar_url, calendar_synced_at, positions';
+const TEAM_COLS = 'id, sport_id, name, season, notes, calendar_url, calendar_synced_at, positions, position_prefs';
 
 // --- Bootstrap ------------------------------------------------------------
 app.get('/api/bootstrap', (req, res) => {
@@ -120,8 +120,17 @@ app.put('/api/teams/:id', (req, res) => {
 /** The names this team uses for its positions, in order. Anyone who can change plans can set them. */
 app.put('/api/teams/:id/positions', (req, res) => {
   if (!ownTeam(req, req.params.id)) return notFound(res);
-  const names = (Array.isArray(req.body.positions) ? req.body.positions : []).map((n) => str(n).trim().slice(0, 12)).filter(Boolean).slice(0, 30);
-  run('UPDATE teams SET positions=? WHERE id=?', names.join(','), id(req.params.id));
+  if (Array.isArray(req.body.positions)) {
+    const names = req.body.positions.map((n) => str(n).trim().slice(0, 12)).filter(Boolean).slice(0, 30);
+    run('UPDATE teams SET positions=? WHERE id=?', names.join(','), id(req.params.id));
+  }
+  // Each player's choices, first to last: { "12": ["PG", "SG"] }.
+  if (req.body.prefs && typeof req.body.prefs === 'object' && !Array.isArray(req.body.prefs)) {
+    const prefs = {};
+    for (const [pid, list] of Object.entries(req.body.prefs).slice(0, 200))
+      if (Array.isArray(list)) prefs[String(Number(pid) || 0)] = list.map((n) => str(n).trim().slice(0, 12)).slice(0, 5);
+    run('UPDATE teams SET position_prefs=? WHERE id=?', JSON.stringify(prefs), id(req.params.id));
+  }
   res.json(get(`SELECT ${TEAM_COLS} FROM teams WHERE id=?`, id(req.params.id)));
 });
 app.delete('/api/teams/:id', (req, res) => {

@@ -143,28 +143,96 @@ export function positionsOf(game: GamePlan, team: Pick<Team, 'positions'> | null
 /** The position one player has in one stretch, or '' when none was chosen. */
 export const spotOf = (game: GamePlan, seg: number, playerId: number) => game.spots?.[seg]?.[String(playerId)] ?? '';
 
+/** Each player's choices of position, first to last, read from what the team keeps. */
+export function prefsOf(team: Pick<Team, 'position_prefs'> | null | undefined): Record<string, string[]> {
+  try {
+    const v = JSON.parse(team?.position_prefs || '{}');
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+
 /**
- * Hands out positions for a whole lineup. Someone who stays on keeps the position they had; the
- * others take what is left, in the order the positions are named.
+ * Hands out positions for a whole lineup. In each stretch, players get their first choice where
+ * it is free, then second choices, then third. Someone who stays on keeps the position they had
+ * when it is one of their choices (or they have none). Whoever is left takes what is still open.
  */
-export function assignSpots(lineup: number[][], names: string[]): Record<string, string>[] {
+export function assignSpots(lineup: number[][], names: string[], prefs: Record<string, string[]> = {}): Record<string, string>[] {
   const out: Record<string, string>[] = [];
+  const wants = (id: number) => (prefs[String(id)] || []).filter((n) => n && names.includes(n));
   lineup.forEach((on, s) => {
     const spots: Record<string, string> = {};
     const taken = new Set<string>();
+    const give = (id: number, name: string) => {
+      spots[String(id)] = name;
+      taken.add(name);
+    };
     const before = out[s - 1] || {};
+    // Staying put, when that suits the player.
     for (const id of on) {
       const had = before[String(id)];
-      if (had && !taken.has(had)) {
-        spots[String(id)] = had;
-        taken.add(had);
-      }
+      const w = wants(id);
+      if (had && !taken.has(had) && (w.length === 0 || w[0] === had)) give(id, had);
     }
+    // Then each rank of choice in turn, so nobody's second choice beats another's first.
+    for (let rank = 0; rank < 5; rank++)
+      for (const id of on) {
+        const name = wants(id)[rank];
+        if (!(String(id) in spots) && name && !taken.has(name)) give(id, name);
+      }
     const free = names.filter((n) => !taken.has(n));
     for (const id of on) if (!(String(id) in spots)) spots[String(id)] = free.shift() ?? '';
     out.push(spots);
   });
   return out;
+}
+
+/** How much each player plays, where, and how long they sit: the figures behind the playing-time charts. */
+export interface PlayerStats {
+  id: number;
+  /** In minutes when the game is timed, else in stretches. */
+  total: number;
+  byPosition: { name: string; amount: number }[];
+  /** The longest run of stretches in a row on the bench, and on the court or field. */
+  longestSit: number;
+  longestRun: number;
+  /** How many times they come on after sitting. */
+  entries: number;
+}
+export function playerStats(playerIds: number[], game: GamePlan, segments: Segment[]): { timed: boolean; whole: number; rows: PlayerStats[] } {
+  const timed = segments.some((s) => s.minutes > 0);
+  const size = (i: number) => (timed ? segments[i].minutes : 1);
+  const whole = segments.reduce((n, _, i) => n + size(i), 0);
+  const rows = playerIds.map((id) => {
+    const by = new Map<string, number>();
+    let total = 0;
+    let sit = 0;
+    let run = 0;
+    let longestSit = 0;
+    let longestRun = 0;
+    let entries = 0;
+    let wasOn = false;
+    segments.forEach((_, i) => {
+      const on = (game.lineup?.[i] ?? []).includes(id);
+      if (on) {
+        total += size(i);
+        const spot = spotOf(game, i, id) || 'No position';
+        by.set(spot, (by.get(spot) || 0) + size(i));
+        run += size(i);
+        sit = 0;
+        if (!wasOn) entries++;
+      } else {
+        sit += size(i);
+        run = 0;
+      }
+      longestSit = Math.max(longestSit, sit);
+      longestRun = Math.max(longestRun, run);
+      wasOn = on;
+    });
+    return { id, total, byPosition: [...by].map(([name, amount]) => ({ name, amount })), longestSit, longestRun, entries };
+  });
+  return { timed, whole, rows };
 }
 
 /** What changes going into one stretch of play: who comes on, who goes off, and who changes position. */

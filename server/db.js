@@ -318,6 +318,8 @@ CREATE INDEX IF NOT EXISTS plan_posts_plan ON plan_posts (plan_id, id);`);
 
 // How a team names its positions ("PG, SG, SF, PF, C", or "1, 2, 3, 4, 5"), used in its game lineups.
 addColumn('teams', 'positions', "TEXT DEFAULT ''");
+// Each player's first, second and third choice of position, as JSON by player id. Used when sharing out a lineup.
+addColumn('teams', 'position_prefs', "TEXT DEFAULT '{}'");
 // The plan for a game: lineup, keys, play sheet and the rest. It sits beside the practice items on
 // the same plan, so turning a practice into a game and back loses nothing on either side.
 addColumn('plans', 'game_json', "TEXT DEFAULT '{}'");
