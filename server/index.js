@@ -513,6 +513,24 @@ const coachesOf = (plan) => [
   ...all("SELECT user_id FROM memberships WHERE owner_id=? AND role='owner'", plan.owner_id),
   ...all('SELECT user_id FROM team_staff WHERE team_id=?', plan.team_id),
 ].map((r) => r.user_id);
+/** Who works on a plan: the team's owner, then everyone the team is shared with, and whether each may change plans. */
+app.get('/api/plans/:id/collaborators', (req, res) => {
+  const plan = ownPlan(req, req.params.id);
+  if (!plan) return notFound(res);
+  const owners = all("SELECT u.id, u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.owner_id=? AND m.role='owner' ORDER BY u.id", plan.owner_id);
+  const staff = all('SELECT u.id, u.name, s.title, s.perms_json FROM team_staff s JOIN users u ON u.id=s.user_id WHERE s.team_id=? ORDER BY u.name COLLATE NOCASE', plan.team_id);
+  const perms = (json) => {
+    try {
+      return JSON.parse(json) || {};
+    } catch {
+      return {};
+    }
+  };
+  res.json([
+    ...owners.map((u) => ({ id: u.id, name: u.name, role: 'Owner', owner: true, can_edit: true, you: u.id === req.user.id })),
+    ...staff.map((u) => ({ id: u.id, name: u.name, role: u.title || 'Coach', owner: false, can_edit: !!perms(u.perms_json).plans, you: u.id === req.user.id })),
+  ]);
+});
 app.get('/api/plans/:id/posts', (req, res) => {
   const plan = ownPlan(req, req.params.id);
   if (!plan) return notFound(res);

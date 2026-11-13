@@ -10502,3 +10502,82 @@ fieldset.perm-list:disabled .check.perm {
     grid-template-columns: minmax(110px, 150px) minmax(0, 1fr);
   }
 }
+
+/* "At a glance" now opens in a window from a button on the schedule, so it is a plain block there. */
+.plan-glance.in-modal {
+  position: static;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  gap: 14px;
+}
+.plan-glance.in-modal .glance-total strong {
+  font-size: 1.7rem;
+}
+.plan-column-actions .glance-btn {
+  min-width: 40px;
+}
+
+/* ---------- Practice page: who is working on this plan ---------- */
+.plan-collab {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.plan-collab-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.plan-collab h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.plan-collab p {
+  margin: 0;
+}
+.plan-collab ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+}
+.plan-collab li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.plan-collab-name {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  line-height: 1.25;
+}
+.plan-collab-name > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan-collab-can {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.plan-collab-can.edit {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+}

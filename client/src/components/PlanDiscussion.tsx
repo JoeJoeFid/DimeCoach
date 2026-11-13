@@ -1,7 +1,8 @@
 // Coaches talking about one practice: the team's owner and everyone the team is shared with.
 // Messages can be replied to, and replies replied to. A new one shows up in each coach's Messages.
 import { useCallback, useEffect, useState } from 'react';
-import { api, type PlanPost } from '../api';
+import { Link } from 'react-router-dom';
+import { api, type PlanCollaborator, type PlanPost } from '../api';
 import { useApp } from '../App';
 import { confirmDialog } from './dialogs';
 
@@ -113,8 +114,52 @@ function Node({ p, depth, onReply, onDelete }: { p: PlanPost; depth: number; onR
   );
 }
 
-export default function PlanDiscussion({ planId, what }: { planId: number; /** "practice" or "homework sheet". */ what: string }) {
+/** Who can work on this plan with you: the team's owner and the people the team is shared with. */
+export function PlanCollaborators({ planId }: { planId: number }) {
   const app = useApp();
+  const [people, setPeople] = useState<PlanCollaborator[] | null>(null);
+  useEffect(() => {
+    setPeople(null);
+    api.planCollaborators(planId).then(setPeople, () => setPeople([]));
+  }, [planId]);
+  // The owner, or a helper who manages the team, decides who is on it.
+  const manages = !app.access || app.can('manage');
+  return (
+    <section className="plan-collab" aria-label="Collaborators">
+      <div className="plan-collab-head">
+        <h2>
+          Collaborators {people && people.length > 0 && <span className="muted">({people.length})</span>}
+        </h2>
+        {manages && (
+          <Link className="link small" to="/teams?tab=people">
+            {people && people.length > 1 ? 'Manage' : 'Add a coach'}
+          </Link>
+        )}
+      </div>
+      {people === null ? (
+        <p className="muted small">Loading…</p>
+      ) : (
+        <ul>
+          {people.map((p) => (
+            <li key={p.id}>
+              <Avatar name={p.name} />
+              <span className="plan-collab-name">
+                <strong>{p.you ? 'You' : p.name}</strong>
+                <span className="muted small">{p.role}</span>
+              </span>
+              <span className={`plan-collab-can ${p.can_edit ? 'edit' : ''}`} title={p.can_edit ? 'Can change this plan and take part in the discussion' : 'Can read this plan and take part in the discussion'}>
+                {p.can_edit ? 'Can edit' : 'Can comment'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {people && people.length === 1 && <p className="muted small">Only you so far. Share the team with another coach to plan together.</p>}
+    </section>
+  );
+}
+
+export default function PlanDiscussion({ planId, what }: { planId: number; /** "practice" or "homework sheet". */ what: string }) {
   const [posts, setPosts] = useState<PlanPost[] | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(() => api.planPosts(planId).then(setPosts, (e) => setError((e as Error).message)), [planId]);
@@ -141,13 +186,11 @@ export default function PlanDiscussion({ planId, what }: { planId: number; /** "
     api.deletePlanPost(planId, p.id).then(setPosts, (e) => setError((e as Error).message));
   };
   const total = count(posts || []);
-  const others = app.access ? `${app.access.owner_name} and the other coaches on this team` : 'the coaches this team is shared with';
   return (
     <section className="plan-discussion" aria-label="Discussion">
       <h2>
         Discussion {total > 0 && <span className="muted">({total})</span>}
       </h2>
-      <p className="muted small">Thoughts on this {what}, for {others}. They get a message when you post.</p>
       {error && <p className="error">{error}</p>}
       <Write placeholder={`Write about this ${what}…`} onSend={(text) => send(text)} />
       {posts === null ? (

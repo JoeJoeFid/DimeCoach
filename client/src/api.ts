@@ -276,6 +276,17 @@ export interface PlanPost {
   parent_id: number | null;
   replies: PlanPost[];
 }
+/** Someone who works on a plan's team. Everyone listed can read it and join its discussion. */
+export interface PlanCollaborator {
+  id: number;
+  name: string;
+  /** "Owner", or the title they were given on the team. */
+  role: string;
+  owner: boolean;
+  /** Whether they may change the plan, or only read and discuss it. */
+  can_edit: boolean;
+  you: boolean;
+}
 /** Something published in the coach library, for every coach to take a copy of. */
 export interface LibraryItem {
   id: number;
@@ -381,6 +392,7 @@ export const api = {
   unshare: (shareId: number) => req<CommunityShare[]>('DELETE', `/community-shares/${shareId}`),
   approveShare: (shareId: number) => req<CommunityShare[]>('POST', `/community-shares/${shareId}/approve`, {}),
   myShares: (kind: ShareKind, itemId: number) => req<MyShareState[]>('GET', `/community-shares/mine?kind=${kind}&item_id=${itemId}`),
+  planCollaborators: (planId: number) => req<PlanCollaborator[]>('GET', `/plans/${planId}/collaborators`),
   planPosts: (planId: number) => req<PlanPost[]>('GET', `/plans/${planId}/posts`),
   postToPlan: (planId: number, body: string, parentId?: number) => req<PlanPost[]>('POST', `/plans/${planId}/posts`, { body, parent_id: parentId }),
   deletePlanPost: (planId: number, postId: number) => req<PlanPost[]>('DELETE', `/plans/${planId}/posts/${postId}`),
