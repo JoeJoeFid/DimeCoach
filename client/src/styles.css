@@ -11616,3 +11616,26 @@ select.gp-cell.dup {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Practices list: the whole season in one list, with a heading for each month ---------- */
+.ps-week > h2.ps-month-head {
+  margin: 26px 0 10px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--line-strong);
+  background: none;
+  color: var(--ink);
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+  scroll-margin-top: 70px;
+}
+.ps-week:first-of-type > h2.ps-month-head {
+  margin-top: 6px;
+}
+.ps-month-anchor {
+  display: block;
+  scroll-margin-top: 70px;
+}
+.ps-jump {
+  width: auto;
+  min-width: 190px;
+}

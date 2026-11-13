@@ -7,7 +7,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Drill, GamePlan, GameSubs, Plan, Play, Player } from '../types';
 import { sportKind } from '../sports';
-import { SITUATIONS, UNIT_CHOICES, availablePlayers, parsePositions, playerStats, playingTime, positionsOf, prefsOf, readOpponent, segmentsOf, spotOf, subsOf } from '../game';
+import { SITUATIONS, UNIT_CHOICES, availablePlayers, parsePositions, playerStats, playingTime, positionsOf, readOpponent, segmentsOf, spotOf, subsOf } from '../game';
 import { confirmDialog } from './dialogs';
 import { TAG_COLORS, fmtClock, parseClock } from '../util';
 
@@ -105,17 +105,6 @@ export default function GamePlanner({
     }
     set({ lineup: nextLineup, spots: nextSpots });
   };
-  // Where each player plays best: first, second and third choice. Kept with the team, so it carries to every game.
-  const [prefs, setPrefs] = useState<Record<string, string[]>>(() => prefsOf(app.team));
-  const [showPrefs, setShowPrefs] = useState(false);
-  const setPref = (playerId: number, rank: number, name: string) => {
-    const mine = [...(prefs[String(playerId)] || [])];
-    while (mine.length < 3) mine.push('');
-    mine[rank] = name;
-    const next = { ...prefs, [String(playerId)]: mine };
-    setPrefs(next);
-    if (app.team) api.setPositionPrefs(app.team.id, next).catch(() => {});
-  };
   const [statView, setStatView] = useState<StatView>('total');
   // Positions that more than one player has in the same stretch. Allowed, but pointed out.
   const shared = segments.map((_, i) => {
@@ -135,14 +124,7 @@ export default function GamePlanner({
     const swap = (label: string) => (names.includes(label) ? (next[names.indexOf(label)] ?? '') : label);
     set({ position_names: next, spots: spots.map((s) => Object.fromEntries(Object.entries(s).map(([id, label]) => [id, swap(label)]))) });
     setNamesText(next.join(', '));
-    // Players' choices follow the rename the same way.
-    const renamed = Object.fromEntries(Object.entries(prefs).map(([id, list]) => [id, list.map((label) => (label ? swap(label) : ''))]));
-    setPrefs(renamed);
-    if (app.team)
-      api
-        .setTeamPositions(app.team.id, next)
-        .then(() => api.setPositionPrefs(app.team!.id, renamed))
-        .then(() => app.reload(), () => {});
+    if (app.team) api.setTeamPositions(app.team.id, next).then(() => app.reload(), () => {});
   };
   const setStatus = (id: number, status: 'in' | 'out' | 'late') => {
     const availability = { ...(game.availability || {}) };
@@ -195,46 +177,6 @@ export default function GamePlanner({
       {fromCalendar && <p className="banner ok">{fromCalendar}</p>}
 
       <div className="gp-grid">
-        <Card
-          wide
-          title="Player positions"
-          hint="Where each player plays best: first, second and third choice. Kept for the team, as a reminder when you set the lineup."
-          action={
-            <button type="button" className="btn small" aria-expanded={showPrefs} onClick={() => setShowPrefs(!showPrefs)}>
-              {showPrefs ? 'Hide player choices' : `Player choices (${roster.filter((p) => (prefs[String(p.id)] || []).some(Boolean)).length} of ${roster.length} set)`}
-            </button>
-          }
-        >
-          {showPrefs &&
-            (names.length === 0 ? (
-              <p className="muted small">Name your positions first, then choose where each player plays.</p>
-            ) : (
-              <ul className="gp-prefs">
-                {roster.map((p) => {
-                  const mine = prefs[String(p.id)] || [];
-                  return (
-                    <li key={p.id}>
-                      <span className="gp-avail-name">
-                        {p.number && <b>{p.number}</b>}
-                        {p.name}
-                      </span>
-                      {[0, 1, 2].map((rank) => (
-                        <select key={rank} className="input" aria-label={`${p.name}: ${['first', 'second', 'third'][rank]} choice`} value={mine[rank] ?? ''} onChange={(e) => setPref(p.id, rank, e.target.value)}>
-                          <option value="">{['1st', '2nd', '3rd'][rank]}</option>
-                          {names.map((n) => (
-                            <option key={n} value={n} disabled={mine.includes(n) && mine[rank] !== n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                      ))}
-                    </li>
-                  );
-                })}
-              </ul>
-            ))}
-        </Card>
-
         <Card title="Who is here" hint="Anyone marked out is left off the lineup.">
           {roster.length === 0 ? (
             <p className="muted small">

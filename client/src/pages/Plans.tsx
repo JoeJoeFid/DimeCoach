@@ -59,8 +59,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const [fromCommunity, setFromCommunity] = useState(false);
   // A link can ask for the calendar outright, as "View calendar" on the dashboard does.
   const [view, setView] = useState<View>(() => (new URLSearchParams(window.location.search).get('view') === 'calendar' ? 'calendar' : savedView()));
-  /** The month on show, as "2026-11", and which kind of thing is listed. */
-  const [month, setMonth] = useState(() => todayISO().slice(0, 7));
+  /** Which kind of thing is listed. The list itself runs through the whole season, month after month. */
   const [only, setOnly] = useState<Filter>('all');
   // Homework sheets are not tied to dates the same way, so only practices get the calendar.
   const calendar = kind === 'practice' && view === 'calendar';
@@ -144,8 +143,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     const where = `${teamId}:${kind}:${calendar}:${visit}`;
     if (plans === null || calendar || snapped.current === where) return;
     snapped.current = where;
-    // Open on the month that holds what is coming up, with that row in the middle of the screen.
-    if (next) setMonth(next.date.slice(0, 7));
+    // Open with what is coming up in the middle of the screen.
     requestAnimationFrame(() => requestAnimationFrame(() => (nextRow.current ?? lastRow.current)?.scrollIntoView({ block: 'center' })));
   }, [plans, teamId, kind, entries, calendar, visit]);
 
@@ -323,14 +321,12 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     );
   };
 
-  // --- The month on show, the kind filter, and the weeks inside that month ---
-  const monthLabel = new Date(`${month}-15T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const stepMonth = (by: number) => {
-    const m = new Date(`${month}-15T12:00:00`);
-    m.setMonth(m.getMonth() + by);
-    setMonth(m.toLocaleDateString('en-CA').slice(0, 7));
-  };
-  const shown = entries.map((e, i) => ({ e, i })).filter(({ e }) => e.date.startsWith(month) && (only === 'all' || e.kind === only));
+  // --- Everything in date order, a heading for each month and each week inside it, and the kind filter ---
+  const monthName = (ym: string) => new Date(`${ym}-15T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const shown = entries.map((e, i) => ({ e, i })).filter(({ e }) => only === 'all' || e.kind === only);
+  // The months that have something in them, for jumping straight to one.
+  const months = [...new Set(shown.map(({ e }) => e.date.slice(0, 7)))];
+  const jumpToMonth = (ym: string) => document.getElementById(`month-${ym}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   const weeks: { label: string; rows: typeof shown }[] = [];
   for (const item of shown) {
     const day = new Date(`${item.e.date}T12:00:00`);
@@ -356,16 +352,15 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           <PageTitle>{kind === 'practice' ? 'Practice schedule' : 'Homework'}</PageTitle>
         </div>
         <div className="head-actions">
-          {!calendar && (
-            <div className="ps-month" role="group" aria-label="Month">
-              <button type="button" aria-label="Previous month" onClick={() => stepMonth(-1)}>
-                ‹
-              </button>
-              <span aria-live="polite">{monthLabel}</span>
-              <button type="button" aria-label="Next month" onClick={() => stepMonth(1)}>
-                ›
-              </button>
-            </div>
+          {!calendar && months.length > 1 && (
+            <select className="input ps-jump" aria-label="Jump to a month" value="" onChange={(e) => e.target.value && jumpToMonth(e.target.value)}>
+              <option value="">Jump to a month…</option>
+              {months.map((ym) => (
+                <option key={ym} value={ym}>
+                  {monthName(ym)}
+                </option>
+              ))}
+            </select>
           )}
           <div className="split-btn">
             <button className="btn primary" onClick={() => create()}>
@@ -426,9 +421,8 @@ export default function Plans({ kind }: { kind: PlanKind }) {
               <button
                 className="link"
                 onClick={() => {
-                  // The next one may be in another month, or filtered out: show it, then bring it to the middle.
+                  // The next one may be filtered out: show it, then bring it to the middle.
                   setOnly('all');
-                  setMonth(next.date.slice(0, 7));
                   requestAnimationFrame(() => requestAnimationFrame(() => nextRow.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })));
                 }}
               >
@@ -457,18 +451,31 @@ export default function Plans({ kind }: { kind: PlanKind }) {
         </div>
       ) : weeks.length === 0 ? (
         <div className="empty">
-          <h2>
-            Nothing {only === 'all' ? '' : `of that kind `}in {monthLabel}
-          </h2>
-          <p>Use the arrows at the top to look at another month, or add a {noun}.</p>
+          <h2>Nothing of that kind yet</h2>
+          <p>Choose "All" to see everything, or add a {noun}.</p>
         </div>
       ) : (
-        weeks.map((w) => (
-          <section key={w.label} className="ps-week">
-            <h2>{w.label}</h2>
-            <ul className="ps-list">{w.rows.map(({ e, i }) => row(e, i))}</ul>
-          </section>
-        ))
+        weeks.map((w, n) => {
+          // A month's name stands above the first week that has something from it.
+          const ym = w.rows[0].e.date.slice(0, 7);
+          const opens = n === 0 || weeks[n - 1].rows[weeks[n - 1].rows.length - 1].e.date.slice(0, 7) !== ym;
+          // A week that runs across two months also opens the second one, at its first row there.
+          const later = [...new Set(w.rows.map(({ e }) => e.date.slice(0, 7)))].filter((m) => m !== ym);
+          return (
+            <section key={w.label} className="ps-week">
+              {opens && (
+                <h2 className="ps-month-head" id={`month-${ym}`}>
+                  {monthName(ym)}
+                </h2>
+              )}
+              {later.map((m) => (
+                <span key={m} id={`month-${m}`} className="ps-month-anchor" />
+              ))}
+              <h2>{w.label}</h2>
+              <ul className="ps-list">{w.rows.map(({ e, i }) => row(e, i))}</ul>
+            </section>
+          );
+        })
       )}
 
       {shownTemplates.length > 0 && (

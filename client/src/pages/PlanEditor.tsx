@@ -591,7 +591,6 @@ export default function PlanEditor() {
                       Game
                     </button>
                   </div>
-                  <span className="muted small">Switching keeps both: the practice schedule and the game plan are saved side by side. Games are left out of dashboard totals.</span>
                 </div>
               )}
               {isHomework && !plan.is_template && (
