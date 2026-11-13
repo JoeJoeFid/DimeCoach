@@ -200,11 +200,53 @@ export interface Plan {
   print_notes: boolean;
   intro_html: string;
   is_template: boolean;
-  /** A game-day plan: built like a practice, left out of dashboard category totals. */
+  /** A game: shown as a game plan, and left out of dashboard category totals. The practice items are kept all the same. */
   is_game: boolean;
+  /** The game side of the plan. Kept whether or not the plan is currently marked as a game. */
+  game?: GamePlan;
   assigned: number[];
   updated_at: string;
   items: Item[];
+}
+/** How a coach thinks about substituting in one game: by period, or at set times on the clock. */
+export interface GameSubs {
+  mode: 'periods' | 'time';
+  /** What a period is called: Quarter, Half, Inning, Set, Period. */
+  unit: string;
+  /** How many periods. */
+  count: number;
+  /** Minutes in a period. 0 when it is not timed. */
+  minutes: number;
+  /** By the clock: how long the game is, and how often players change. */
+  game_minutes: number;
+  every: number;
+  /** Players on the court or field at once. */
+  on: number;
+}
+/** Everything in a game plan. Every part is optional: a new game has none of it. */
+export interface GamePlan {
+  opponent?: string;
+  side?: 'home' | 'away' | 'neutral' | '';
+  /** When to be there, as "17:00". */
+  arrive?: string;
+  uniform?: string;
+  bring?: string;
+  /** Players marked out or late, by player id. Anyone not listed is in. */
+  availability?: Record<string, 'out' | 'late'>;
+  subs?: Partial<GameSubs>;
+  /** For each stretch of play, the ids of the players who are on. */
+  lineup?: number[][];
+  /** Baseball and softball: the batting order, and each batter's position. */
+  batting?: number[];
+  positions?: Record<string, string>;
+  keys?: { offense: string[]; defense: string[]; focus: string };
+  plays?: { situation: string; play_ids: number[] }[];
+  matchups?: { player_id: number; opponent: string; note: string }[];
+  warmup?: { title: string; minutes: number }[];
+  scouting?: string;
+  result?: { us: string; them: string; went_well: string; work_on: string };
+  /** Set once the opponent was read from the team calendar, so it is only done the first time. */
+  prefilled?: boolean;
 }
 /** What the AI import returns for one uploaded plan. Nothing is saved until the coach confirms. */
 export interface ImportDraft {

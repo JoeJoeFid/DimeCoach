@@ -364,6 +364,7 @@ const planOut = (p, withItems = true) => ({
   id: p.id, team_id: p.team_id, kind: p.kind, title: p.title, date: p.date, start_time: p.start_time,
   location: p.location, intro_html: p.intro_html, is_template: !!p.is_template, is_game: !!p.is_game,
   notes: p.notes ?? '', print_notes: p.print_notes !== 0,
+  game: parse(p.game_json, {}) || {},
   assigned: parse(p.assigned_json, []), updated_at: p.updated_at,
   ...(withItems
     ? { items: all('SELECT * FROM plan_items WHERE plan_id=? ORDER BY position, id', p.id).map(itemOut) }
@@ -427,7 +428,7 @@ app.post('/api/plans', (req, res) => {
   if (!b.is_template && str(b.date ?? '')) {
     const blank = get(
       `SELECT * FROM plans p WHERE owner_id=? AND team_id=? AND kind=? AND date=? AND is_game=? AND is_template=0
-         AND NOT EXISTS (SELECT 1 FROM plan_items i WHERE i.plan_id=p.id) ORDER BY id LIMIT 1`,
+         AND COALESCE(p.game_json, '{}') IN ('{}', '') AND NOT EXISTS (SELECT 1 FROM plan_items i WHERE i.plan_id=p.id) ORDER BY id LIMIT 1`,
       req.ownerId, id(b.team_id), b.kind ?? src?.kind ?? 'practice', str(b.date), (b.is_game ?? src?.is_game) ? 1 : 0,
     );
     if (blank && !src) return res.json(planOut(blank));
@@ -475,13 +476,19 @@ app.put('/api/plans/:id', (req, res) => {
       JSON.stringify((Array.isArray(b.assigned) ? b.assigned : []).map(Number)), b.is_game ? 1 : 0,
       str(b.notes).slice(0, 20000), b.print_notes === false ? 0 : 1, p.id,
     );
+    // The game side is only touched when it is sent. Anything that saves a plan without it (changing
+    // the date from the dashboard, say) leaves it exactly as it was.
+    if (b.game && typeof b.game === 'object' && !Array.isArray(b.game)) {
+      const json = JSON.stringify(b.game);
+      if (json.length <= 200000) run('UPDATE plans SET game_json=? WHERE id=?', json, p.id);
+    }
     writeItems(p.id, b.items, req.ownerId);
     // A practice with something in it makes an empty one for the same day, time and team redundant:
     // it is usually a blank that was started and left. Removing it stops the day showing twice.
     if (!p.is_template && str(b.date) && Array.isArray(b.items) && b.items.length > 0)
       run(
         `DELETE FROM plans WHERE owner_id=? AND team_id=? AND kind=? AND date=? AND start_time=? AND is_game=? AND is_template=0 AND id<>?
-           AND COALESCE(notes, '')='' AND NOT EXISTS (SELECT 1 FROM plan_items i WHERE i.plan_id=plans.id)`,
+           AND COALESCE(notes, '')='' AND COALESCE(game_json, '{}') IN ('{}', '') AND NOT EXISTS (SELECT 1 FROM plan_items i WHERE i.plan_id=plans.id)`,
         req.ownerId, p.team_id, p.kind, str(b.date), str(b.start_time, '17:30'), b.is_game ? 1 : 0, p.id,
       );
   });
@@ -503,7 +510,7 @@ const planPostsOut = (req, plan) => {
   for (const r of rows) if (r.parent_id) under.set(r.parent_id, [...(under.get(r.parent_id) ?? []), r]);
   const tree = (r) => ({
     id: r.id, body: r.body, created_at: r.created_at, by: r.name, by_id: r.user_id, mine: r.user_id === req.user.id,
-    can_delete: r.user_id === req.user.id || moderator, parent_id: r.parent_id ?? null, replies: (under.get(r.id) ?? []).map(tree),
+    can_delete: r.user_id === req.user.id || moderator, parent_id: r.parent_id ?? null, edited_at: r.edited_at ?? null, replies: (under.get(r.id) ?? []).map(tree),
   });
   // Newest conversation first; inside one, replies in the order they were written.
   return rows.filter((r) => !r.parent_id).reverse().map(tree);
@@ -559,6 +566,31 @@ app.post('/api/plans/:id/posts', (req, res) => {
         : `${req.user.name} ${parent ? 'replied' : 'wrote'} about a ${what} for ${team?.name ?? 'your team'}`,
       body: `${label}: ${body.length > 140 ? `${body.slice(0, 140)}…` : body}`,
     });
+  res.json(planPostsOut(req, plan));
+});
+/** The writer changes what their own message says. */
+app.put('/api/plans/:id/posts/:postId', (req, res) => {
+  const plan = ownPlan(req, req.params.id);
+  const post = plan && get('SELECT * FROM plan_posts WHERE id=? AND plan_id=?', id(req.params.postId), plan.id);
+  if (!post) return notFound(res);
+  if (post.user_id !== req.user.id) return res.status(403).json({ error: 'Only the person who wrote a message can change it.' });
+  const body = str(req.body.body).slice(0, 4000).trim();
+  if (!body) return res.status(400).json({ error: 'Write something first.' });
+  if (body !== post.body) {
+    run("UPDATE plan_posts SET body=?, edited_at=datetime('now') WHERE id=?", body, post.id);
+    // Someone named for the first time in the new words is told.
+    const coaches = [...new Set(coachesOf(plan))].filter((u) => u !== req.user.id).map((u) => ({ id: u, name: get('SELECT name FROM users WHERE id=?', u)?.name }));
+    const before = new Set(mentionedIn(post.body, coaches).map((p) => p.id));
+    const team = get('SELECT name FROM teams WHERE id=?', plan.team_id);
+    const what = plan.kind === 'homework' ? 'homework' : 'practice';
+    for (const p of mentionedIn(body, coaches))
+      if (!before.has(p.id))
+        notify(p.id, {
+          kind: 'mention', ref: `plan-${plan.id}`, link: `/go/plan/${plan.team_id}/${plan.id}`,
+          title: `${req.user.name} mentioned you about a ${what} for ${team?.name ?? 'your team'}`,
+          body: body.length > 140 ? `${body.slice(0, 140)}…` : body,
+        });
+  }
   res.json(planPostsOut(req, plan));
 });
 app.delete('/api/plans/:id/posts/:postId', (req, res) => {

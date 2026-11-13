@@ -6,10 +6,11 @@ import type { Plan, ScheduleEvent, Tag } from '../types';
 import { daysBetween, fmtClock, fmtDateShort, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
 import { Field, Modal } from './bits';
 import SchedulePreview from './SchedulePreview';
-import { KIND_LABEL, buildSchedule, isStrayBlank, withoutDuplicateBlanks, type ScheduleEntry } from '../schedule';
+import SportIcon from './SportIcon';
+import { KIND_LABEL, buildSchedule, isStrayBlank, planFilled, withoutDuplicateBlanks, type ScheduleEntry } from '../schedule';
 
-/** Cards shown on each side of the big one. */
-const SIDE = 2;
+/** Smaller cards shown to the right of the big one. The arrows move through these; the big one stays. */
+const AFTER = 4;
 type Entry = ScheduleEntry;
 
 const relative = (date: string, today: string) => {
@@ -22,7 +23,8 @@ const relative = (date: string, today: string) => {
 
 /**
  * A strip of the team's practices and calendar events in date order. The next one coming up
- * sits large in the middle, with earlier ones to its left and later ones to its right.
+ * stays large on the left. Beside it are smaller cards for everything else, starting with what
+ * follows it: the arrows move those back and forward in time.
  */
 export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Plan[]; tags: Tag[]; /** Called after a plan was changed here, so the page reads its plans again. */ onChanged: () => void }) {
   const app = useApp();
@@ -32,7 +34,8 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   /** The card being edited: its type, and for a plan its title, date, time and place. */
   const [editing, setEditing] = useState<Entry | null>(null);
-  const [focusKey, setFocusKey] = useState<string | null>(null);
+  // Where the row of smaller cards starts, counted in everything except the big one. Null is "just after the big one".
+  const [startAt, setStartAt] = useState<number | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -57,12 +60,12 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
   // sits (and the one that was clicked grows into the big card), so the strip reads as sliding over.
   const track = useRef<HTMLDivElement>(null);
   const places = useRef(new Map<string, { x: number; y: number; w: number; h: number }>());
-  const shownFor = useRef<string | null | undefined>(undefined);
+  const shownFor = useRef<number | null | undefined>(undefined);
   useLayoutEffect(() => {
     const el = track.current;
     if (!el) return;
     const origin = el.getBoundingClientRect();
-    const moved = shownFor.current !== undefined && shownFor.current !== focusKey;
+    const moved = shownFor.current !== undefined && shownFor.current !== startAt;
     const animate = moved && typeof el.animate === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
     const timing = { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
     const now = new Map<string, { x: number; y: number; w: number; h: number }>();
@@ -85,7 +88,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
         );
     });
     places.current = now;
-    shownFor.current = focusKey;
+    shownFor.current = startAt;
   });
 
   if (entries.length === 0) return null;
@@ -93,9 +96,15 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
   // "Next up" is the first thing today or later. With nothing ahead, it is the most recent one.
   const nextIndex = entries.findIndex((e) => e.date >= today);
   const homeIndex = nextIndex >= 0 ? nextIndex : entries.length - 1;
-  const found = entries.findIndex((e) => e.key === focusKey);
-  const index = found >= 0 ? found : homeIndex;
-  const focus = entries[index];
+  // The big card never changes. The smaller ones are everything else, and the arrows slide along them.
+  const focus = entries[homeIndex];
+  const others = entries.filter((_, i) => i !== homeIndex);
+  // What comes after the big card is where the row starts, unless there is nothing after it.
+  const homeStart = Math.min(homeIndex, Math.max(0, others.length - 1));
+  // How many smaller cards fit: four, two on a tablet, one on a phone. The row stops once the last one is showing.
+  const fits = window.innerWidth <= 640 ? 1 : window.innerWidth <= 1000 ? 2 : AFTER;
+  const lastStart = Math.max(homeStart, others.length - fits, 0);
+  const start = Math.max(0, Math.min(startAt ?? homeStart, lastStart));
   // Today's or the next upcoming entry keeps its own color wherever it sits in the strip.
   const nextKey = nextIndex >= 0 ? entries[nextIndex].key : null;
 
@@ -119,7 +128,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
   };
   // Whether there is a usable plan behind this entry. Shown as a badge so a gap is hard to miss.
   const planState = (e: Entry) => {
-    const ready = !!e.plan && e.plan.items.length > 0;
+    const ready = !!e.plan && planFilled(e.plan);
     return (
       <span className={`plan-state ${ready ? 'ready' : 'missing'}`}>
         <span aria-hidden="true">{ready ? '✓' : '!'}</span>
@@ -150,12 +159,18 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
     );
     const past = e.date < today ? 'past done' : '';
     const next = e.key === nextKey ? 'tl-next' : '';
-    // The card itself is a button, so the preview button sits beside it in the same slot, not inside it.
+    // The card itself is a link or a button, so the preview button sits beside it in the same slot, not inside it.
     return (
       <div key={e.key} className="tl-slot" data-key={e.key}>
-        <button type="button" className={`tl-card tl-small ${e.kind} ${past} ${next}`} title="Bring this to the middle" onClick={() => setFocusKey(e.key)}>
-          {body}
-        </button>
+        {e.plan ? (
+          <Link className={`tl-card tl-small ${e.kind} ${past} ${next}`} to={`/plans/${e.plan.id}`} title="Open this practice">
+            {body}
+          </Link>
+        ) : (
+          <button type="button" className={`tl-card tl-small ${e.kind} ${past} ${next}`} title={`Plan this ${e.kind === 'game' ? 'game' : e.kind === 'practice' ? 'practice' : 'event'}`} onClick={() => planEvent(e)}>
+            {body}
+          </button>
+        )}
         {e.plan && <SchedulePreview plan={e.plan} label="" />}
       </div>
     );
@@ -163,19 +178,23 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
 
   const focusDone = focus.date < today;
   const mins = focus.plan ? planMinutes(focus.plan, new Set(tags.map((t) => t.id))) : null;
-  const heading = index === homeIndex && nextIndex >= 0 ? 'Next up' : focus.date < today ? 'Earlier' : 'Coming up';
+  const heading = nextIndex >= 0 ? 'Next up' : 'Most recent';
 
   return (
     <section className="timeline" aria-label="Practice timeline">
       {error && <p className="error">{error}</p>}
+      <div className="tl-head">
+        <Link className="tl-cal-link" to="/practices?view=calendar">
+          View calendar <span aria-hidden="true">→</span>
+        </Link>
+      </div>
       <div className="tl-row">
-        <button className="tl-arrow" aria-label="Earlier" disabled={index === 0} onClick={() => setFocusKey(entries[index - 1].key)}>
-          ‹
-        </button>
         <div className="tl-track" ref={track}>
-          {Array.from({ length: SIDE }, (_, i) => small(entries[index - SIDE + i], i))}
-
           <div data-key={focus.key} className={`tl-card tl-focus ${focus.kind} ${focus.key === nextKey ? 'tl-next' : ''} ${focusDone ? 'done' : ''}`}>
+            {/* The ball of the team's sport, faint, in the corner. */}
+            <span className="tl-ball" aria-hidden="true">
+              <SportIcon sport={app.sport?.name} size={190} />
+            </span>
             <div className="tl-eyebrow">
               <span>
                 {focusDone && doneMark} {focusDone ? 'Completed' : heading} · {relative(focus.date, today)}
@@ -183,19 +202,29 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
               <span className={`kind ${focus.kind}`}>{KIND_LABEL[focus.kind]}</span>
             </div>
             <div className="tl-date">{fmtDateShort(focus.date)}</div>
-            <div className="tl-time">
-              {timeRange(focus)} {planState(focus)}
-            </div>
-            <div className="tl-title">
-              {focus.title}
-              {focus.location && <span className="muted"> · {focus.location}</span>}
+            <div className="tl-title">{focus.title}</div>
+            <div className="tl-where">
+              <span className="tl-time">{timeRange(focus)}</span>
+              {focus.location && (
+                <span className="tl-place">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 21s-6.500-6-6.500-11a6.500 6.500 0 0 1 13 0c0 5-6.500 11-6.500 11ZM12 12.500a2.500 2.500 0 1 0 0-5 2.500 2.500 0 0 0 0 5Z" />
+                  </svg>
+                  {focus.location}
+                </span>
+              )}
+              {planState(focus)}
             </div>
             {focus.plan && mins && (
               <>
                 <div className="muted small">
-                  {focus.plan.items.length === 0
-                    ? 'Nothing scheduled in this plan yet.'
-                    : `${focus.plan.items.filter((i) => i.kind === 'item').length} items · ${fmtDuration(mins.work + mins.breaks)}`}
+                  {focus.plan.is_game
+                    ? planFilled(focus.plan)
+                      ? [focus.plan.game?.opponent && `${focus.plan.game.side === 'away' ? 'at' : 'vs.'} ${focus.plan.game.opponent}`, 'Game plan started'].filter(Boolean).join(' · ')
+                      : 'Nothing in this game plan yet.'
+                    : focus.plan.items.length === 0
+                      ? 'Nothing scheduled in this plan yet.'
+                      : `${focus.plan.items.filter((i) => i.kind === 'item').length} items · ${fmtDuration(mins.work + mins.breaks)}`}
                 </div>
               </>
             )}
@@ -203,7 +232,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
               {focus.plan ? (
                 <>
                   <Link className="btn primary" to={`/plans/${focus.plan.id}`}>
-                    Open practice
+                    {focus.plan.is_game ? 'Open game plan' : 'Open practice'}
                   </Link>
                   <SchedulePreview plan={focus.plan} />
                   <Link className="btn" to={`/plans/${focus.plan.id}/print`}>
@@ -221,16 +250,22 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
             </div>
           </div>
 
-          {Array.from({ length: SIDE }, (_, i) => small(entries[index + 1 + i], SIDE + i))}
+          {/* The arrows sit either side of the smaller cards, since those are what they move. */}
+          <div className="tl-rest">
+            <button className="tl-arrow" aria-label="Earlier" disabled={start === 0} onClick={() => setStartAt(start - 1)}>
+              ‹
+            </button>
+            <div className="tl-smalls">{Array.from({ length: AFTER }, (_, i) => small(others[start + i], i))}</div>
+            <button className="tl-arrow" aria-label="Later" disabled={start >= lastStart} onClick={() => setStartAt(start + 1)}>
+              ›
+            </button>
+          </div>
         </div>
-        <button className="tl-arrow" aria-label="Later" disabled={index === entries.length - 1} onClick={() => setFocusKey(entries[index + 1].key)}>
-          ›
-        </button>
       </div>
       <div className="tl-foot">
-        {index !== homeIndex && (
-          <button className="link small" onClick={() => setFocusKey(null)}>
-            Back to {nextIndex >= 0 ? 'next up' : 'most recent'}
+        {start !== homeStart && (
+          <button className="link small" onClick={() => setStartAt(null)}>
+            Back to what is coming up
           </button>
         )}
         {!team.calendar_url && (

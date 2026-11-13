@@ -14,6 +14,8 @@ import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, showUndo } from '../components/toasts';
 import CategoryRows from '../components/CategoryRows';
 import PlanDiscussion, { PlanCollaborators } from '../components/PlanDiscussion';
+import GamePlanner from '../components/GamePlanner';
+import { gameHasContent } from '../game';
 import { DraftReview, SourcePicker, defaultChoices, resolveDraft, useAiStatus, type DraftChoices } from '../components/planImport';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
@@ -175,6 +177,8 @@ export default function PlanEditor() {
   if (!plan) return <div className="page muted">Loading…</div>;
 
   const isHomework = plan.kind === 'homework';
+  // A game has its own screen. A template or a homework sheet never does.
+  const gameMode = plan.is_game && !plan.is_template && !isHomework;
   const listPath = isHomework ? '/homework' : '/practices';
   const mins = planMinutes(plan, tagIds);
   const total = mins.work + mins.breaks;
@@ -529,12 +533,18 @@ export default function PlanEditor() {
                 </Field>
               )}
               {!isHomework && (
-                <label className="check game-check">
-                  <input type="checkbox" checked={plan.is_game} onChange={(e) => update({ is_game: e.target.checked })} />
-                  <span>
-                    This is a game plan <span className="muted">(kept out of dashboard category totals and targets)</span>
-                  </span>
-                </label>
+                <div className="field game-switch">
+                  <span className="field-label">This is a</span>
+                  <div className="seg" role="group" aria-label="Practice or game">
+                    <button type="button" className={plan.is_game ? '' : 'on'} aria-pressed={!plan.is_game} onClick={() => update({ is_game: false })}>
+                      Practice
+                    </button>
+                    <button type="button" className={plan.is_game ? 'on' : ''} aria-pressed={plan.is_game} onClick={() => update({ is_game: true })}>
+                      Game
+                    </button>
+                  </div>
+                  <span className="muted small">Switching keeps both: the practice schedule and the game plan are saved side by side. Games are left out of dashboard totals.</span>
+                </div>
               )}
               {isHomework && !plan.is_template && (
                 <div className="assigned">
@@ -586,7 +596,26 @@ export default function PlanEditor() {
           </div>
         </div>
 
-        <div className="plan-layout">
+        <div className={`plan-layout ${gameMode ? 'game' : ''}`}>
+          {gameMode ? (
+            <GamePlanner
+              plan={plan}
+              players={players}
+              plays={plays.filter((p) => p.sport_id === team?.sport_id)}
+              drills={libraryDrills}
+              onChange={(game) => update({ game })}
+              onPractice={() => update({ is_game: false })}
+              actions={
+                <>
+                  <button className="btn primary" onClick={openPrint}>
+                    Print / share
+                  </button>
+                  <MoreMenu items={moreItems} />
+                </>
+              }
+            />
+          ) : (
+            <>
           <Palette drills={libraryDrills} tags={tags} withBreak={!isHomework} sheet={sheet} onAdd={addNew} />
           <div className={`plan-column ${compact ? 'compact' : ''} ${app.keyboard_access ? '' : 'drag-only'}`} ref={column}>
             <div className="plan-column-head">
@@ -613,6 +642,15 @@ export default function PlanEditor() {
                 <MoreMenu items={moreItems} />
               </div>
             </div>
+            {/* The game side is still there after switching back to a practice. */}
+            {!plan.is_game && !plan.is_template && !isHomework && gameHasContent(plan.game) && (
+              <p className="banner gp-kept">
+                This plan also has a game plan{plan.game?.opponent ? ` (${plan.game.side === 'away' ? 'at' : 'vs.'} ${plan.game.opponent})` : ''}. It is kept as it was.{' '}
+                <button type="button" className="link" onClick={() => update({ is_game: true })}>
+                  Switch to game
+                </button>
+              </p>
+            )}
             {plan.items.length === 0 ? (
               <div className={`empty ${incoming && dropAt !== null ? 'drop-here' : ''}`}>
                 <h2>Nothing scheduled yet</h2>
@@ -681,6 +719,8 @@ export default function PlanEditor() {
             )}
 
           </div>
+            </>
+          )}
           <div className="plan-side">
             {/* Coaches talk about the plan here. A template is not a day anyone is planning, so it has none. */}
             {!plan.is_template && <PlanCollaborators planId={plan.id} />}

@@ -3,6 +3,9 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../App';
 import type { Group, Item, Plan, Play, Player } from '../types';
+import { SITUATIONS, availablePlayers, playingTime, segmentsOf, subsOf } from '../game';
+import { sportKind } from '../sports';
+import { fmtClock, parseClock } from '../util';
 import { PlaySteps } from '../components/PlayDiagram';
 import { SheetLinks } from '../components/ItemMedia';
 import { imageUrl } from '../components/ItemImages';
@@ -237,7 +240,8 @@ export default function PrintView() {
           </p>
         )}
 
-        {slotGroups(plan.items).map((group) => {
+        {plan.is_game && !isHomework && <GameSheet plan={plan} players={players} plays={plays} audience={audience} sport={app.sports.find((s) => s.id === team?.sport_id)?.name} showPlays={playMode !== 'hide'} only={only} />}
+        {(plan.is_game && !isHomework ? [] : slotGroups(plan.items)).map((group) => {
           const i = group[0];
           const it = plan.items[i];
           if (it.kind === 'break') {
@@ -291,6 +295,193 @@ export default function PrintView() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A game on paper. The simple version is for parents: who, when, where, what to wear and bring.
+ * The others are the bench card: keys, lineup and playing time, the play sheet, matchups, warm-up.
+ * Scouting notes and the result only go on the coach copy.
+ */
+function GameSheet({ plan, players, plays, audience, sport, showPlays, only }: { plan: Plan; players: Player[]; plays: Play[]; audience: Audience; sport: string | undefined; showPlays: boolean; only?: Set<number> }) {
+  const g = plan.game || {};
+  const kind = sportKind(sport);
+  const subs = subsOf(g, kind);
+  const segments = segmentsOf(subs);
+  const lineup = segments.map((_, i) => g.lineup?.[i] ?? []);
+  const here = availablePlayers(players, g);
+  const nameOf = (id: number) => players.find((p) => p.id === id)?.name || '';
+  const h3: CSSProperties = { fontSize: '13pt', margin: '16px 0 6px', lineHeight: 1.2 };
+  const small: CSSProperties = { color: '#666', fontSize: '9.5pt' };
+  const facts = [
+    g.opponent && ['Opponent', `${g.side === 'away' ? 'at ' : g.side === 'home' ? 'vs. ' : ''}${g.opponent}${g.side === 'neutral' ? ' (neutral site)' : g.side === 'home' ? ' (home)' : g.side === 'away' ? ' (away)' : ''}`],
+    plan.start_time && ['Starts', fmtClock(parseClock(plan.start_time))],
+    g.arrive && ['Arrive by', fmtClock(parseClock(g.arrive))],
+    plan.location && ['Where', plan.location],
+    g.uniform && ['Uniform', g.uniform],
+    g.bring && ['Bring', g.bring],
+  ].filter(Boolean) as [string, string][];
+  const keys = [...(g.keys?.offense || []), ...(g.keys?.defense || []), g.keys?.focus || ''].some((k) => k.trim());
+  const anyLineup = lineup.some((s) => s.length > 0);
+  const batting = (g.batting || []).filter((id) => nameOf(id));
+  const sheet = SITUATIONS.map((s) => ({ situation: s, list: (g.plays?.find((p) => p.situation === s)?.play_ids ?? []).map((id) => plays.find((p) => p.id === id)).filter((p): p is Play => !!p) })).filter((s) => s.list.length > 0);
+  const out = players.filter((p) => p.active && (g.availability || {})[String(p.id)] === 'out');
+  const result = g.result;
+  return (
+    <div className="game-sheet">
+      {facts.length > 0 && (
+        <table style={{ ...table, margin: '0 0 12px' }}>
+          <tbody>
+            {facts.map(([label, value]) => (
+              <tr key={label}>
+                <td style={{ ...cell, fontWeight: 700, whiteSpace: 'nowrap' }}>{label}</td>
+                <td style={cell}>{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {audience !== 'simple' && (
+        <>
+          {keys && (
+            <>
+              <h3 style={h3}>Keys to the game</h3>
+              {g.keys?.focus?.trim() && <p style={{ fontSize: '14pt', fontWeight: 700, margin: '0 0 8px' }}>{g.keys.focus.trim()}</p>}
+              <table style={{ ...table, width: '100%', tableLayout: 'fixed' }}>
+                <tbody>
+                  <tr>
+                    {(['offense', 'defense'] as const).map((side) => (
+                      <td key={side} style={{ ...cell, width: '50%' }}>
+                        <p style={{ ...small, fontWeight: 700, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{side === 'offense' ? 'On offense' : 'On defense'}</p>
+                        <ol style={{ margin: 0, paddingLeft: 20, fontSize: '12pt' }}>
+                          {(g.keys?.[side] || [])
+                            .filter((k) => k.trim())
+                            .map((k, i) => (
+                              <li key={i}>{k}</li>
+                            ))}
+                        </ol>
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </>
+          )}
+          {anyLineup && (
+            <>
+              <h3 style={h3}>Lineup and playing time</h3>
+              <table style={{ ...table, fontSize: '10pt' }}>
+                <thead>
+                  <tr>
+                    <th style={cell}>Player</th>
+                    {segments.map((s, i) => (
+                      <th key={i} style={{ ...cell, textAlign: 'center', padding: '6px 6px' }}>
+                        {s.label}
+                      </th>
+                    ))}
+                    <th style={cell}>Plays</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {here.map((p) => (
+                    <tr key={p.id}>
+                      <td style={{ ...cell, whiteSpace: 'nowrap' }}>
+                        {p.number ? `${p.number} ` : ''}
+                        {p.name}
+                        {(g.availability || {})[String(p.id)] === 'late' ? ' (late)' : ''}
+                      </td>
+                      {segments.map((_, i) => (
+                        <td key={i} style={{ ...cell, textAlign: 'center', padding: '6px 6px' }}>
+                          {lineup[i].includes(p.id) ? '●' : ''}
+                        </td>
+                      ))}
+                      <td style={{ ...cell, whiteSpace: 'nowrap' }}>{playingTime(p.id, lineup, segments, subs).text}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {out.length > 0 && <p style={small}>Out: {out.map((p) => p.name).join(', ')}</p>}
+            </>
+          )}
+          {batting.length > 0 && (
+            <>
+              <h3 style={h3}>Batting order</h3>
+              <ol style={{ margin: '0 0 8px', paddingLeft: 22 }}>
+                {batting.map((id) => (
+                  <li key={id}>
+                    {nameOf(id)}
+                    {(g.positions || {})[String(id)] ? ` (${(g.positions || {})[String(id)]})` : ''}
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+          {(g.matchups || []).length > 0 && (
+            <>
+              <h3 style={h3}>Matchups</h3>
+              <table style={table}>
+                <tbody>
+                  {(g.matchups || []).map((m, i) => (
+                    <tr key={i}>
+                      <td style={{ ...cell, fontWeight: 700 }}>{nameOf(m.player_id)}</td>
+                      <td style={cell}>{m.opponent}</td>
+                      <td style={cell}>{m.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+          {(g.warmup || []).length > 0 && (
+            <>
+              <h3 style={h3}>Warm-up</h3>
+              <ul style={{ margin: '0 0 8px', paddingLeft: 20 }}>
+                {(g.warmup || []).map((w, i) => (
+                  <li key={i}>
+                    {w.title || 'Warm-up'} <span style={small}>{w.minutes} min</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {sheet.length > 0 && (
+            <>
+              <h3 style={h3}>Play sheet</h3>
+              {sheet.map((s) => (
+                <div key={s.situation} style={{ margin: '0 0 10px' }}>
+                  <p style={{ ...small, fontWeight: 700, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.situation}</p>
+                  {s.list.map((p) => (
+                    <div key={p.id} className="sheet-play" style={{ margin: '6px 0 10px' }}>
+                      <p style={{ fontWeight: 700, margin: '0 0 4px' }}>{p.name}</p>
+                      {showPlays && <PlaySteps play={p} columns={Math.max(3, Math.min(4, p.frames.length))} only={only} />}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </>
+          )}
+        </>
+      )}
+      {audience === 'coach' && (
+        <>
+          {(g.scouting || '').trim() && (
+            <div className="sheet-coach" style={{ borderLeft: '3px solid #999', padding: '2px 0 2px 10px', margin: '12px 0' }}>
+              <p style={{ fontWeight: 700, margin: '0 0 4px' }}>Scouting notes</p>
+              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{g.scouting}</p>
+            </div>
+          )}
+          {result && (result.us || result.them || result.went_well || result.work_on) && (
+            <div className="sheet-coach" style={{ borderLeft: '3px solid #999', padding: '2px 0 2px 10px', margin: '12px 0' }}>
+              <p style={{ fontWeight: 700, margin: '0 0 4px' }}>
+                Result{result.us || result.them ? `: ${result.us || '?'} to ${result.them || '?'}` : ''}
+              </p>
+              {result.went_well && <p style={{ margin: '0 0 4px', whiteSpace: 'pre-wrap' }}>Went well: {result.went_well}</p>}
+              {result.work_on && <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>To work on: {result.work_on}</p>}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

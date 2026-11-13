@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { api, type PlanCollaborator, type PlanPost } from '../api';
 import { useApp } from '../App';
 import { confirmDialog } from './dialogs';
-import { MentionArea, MentionText } from './Mentions';
+import { EditBox, EditedMark, MentionArea, MentionText } from './Mentions';
 
 const stamp = (at: string) => new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`).getTime();
 function ago(at: string) {
@@ -71,23 +71,62 @@ function Write({ placeholder, autoFocus, people, onSend, onCancel }: { placehold
   );
 }
 
-function Node({ p, depth, names, me, onReply, onDelete }: { p: PlanPost; depth: number; /** Everyone on the plan, and the reader's own name. */ names: string[]; me: string; onReply: (parent: number, text: string) => Promise<boolean>; onDelete: (p: PlanPost) => void }) {
+function Node({
+  p,
+  depth,
+  names,
+  me,
+  onReply,
+  onEdit,
+  onDelete,
+}: {
+  p: PlanPost;
+  depth: number;
+  /** Everyone on the plan, and the reader's own name. */
+  names: string[];
+  me: string;
+  onReply: (parent: number, text: string) => Promise<boolean>;
+  onEdit: (p: PlanPost, text: string) => Promise<boolean>;
+  onDelete: (p: PlanPost) => void;
+}) {
   const [writing, setWriting] = useState(false);
+  const [editing, setEditing] = useState(false);
   return (
     <li className="cm-reply pd-post">
       <Avatar name={p.by} />
       <div className="cm-reply-main">
         <div className="cm-post-head">
           <strong>{p.mine ? 'You' : p.by}</strong>
-          <span className="muted small">{ago(p.created_at)}</span>
+          <span className="muted small">
+            {ago(p.created_at)}
+            <EditedMark at={p.edited_at} />
+          </span>
         </div>
-        <p className="message-body">
-          <MentionText text={p.body} people={names} me={me} />
-        </p>
+        {editing ? (
+          <EditBox
+            initial={p.body}
+            people={names.filter((n) => n !== me)}
+            onCancel={() => setEditing(false)}
+            onSave={async (text) => {
+              const ok = await onEdit(p, text);
+              if (ok) setEditing(false);
+              return ok;
+            }}
+          />
+        ) : (
+          <p className="message-body">
+            <MentionText text={p.body} people={names} me={me} />
+          </p>
+        )}
         <div className="cm-thread-bar">
           <button type="button" className="cm-reply-btn" onClick={() => setWriting(!writing)} aria-expanded={writing}>
             Reply
           </button>
+          {p.mine && !editing && (
+            <button type="button" className="link small cm-reply-del" onClick={() => setEditing(true)}>
+              Edit
+            </button>
+          )}
           {p.can_delete && (
             <button type="button" className="link small cm-reply-del" onClick={() => onDelete(p)}>
               Delete
@@ -110,7 +149,7 @@ function Node({ p, depth, names, me, onReply, onDelete }: { p: PlanPost; depth: 
         {p.replies.length > 0 && (
           <ul className={`cm-replies ${depth >= MAX_INDENT ? 'level' : ''}`}>
             {p.replies.map((r) => (
-              <Node key={r.id} p={r} depth={depth + 1} names={names} me={me} onReply={onReply} onDelete={onDelete} />
+              <Node key={r.id} p={r} depth={depth + 1} names={names} me={me} onReply={onReply} onEdit={onEdit} onDelete={onDelete} />
             ))}
           </ul>
         )}
@@ -191,6 +230,16 @@ export default function PlanDiscussion({ planId, what }: { planId: number; /** "
       return false;
     }
   };
+  const edit = async (p: PlanPost, text: string) => {
+    try {
+      setPosts(await api.editPlanPost(planId, p.id, text));
+      setError('');
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    }
+  };
   const remove = async (p: PlanPost) => {
     const n = count(p.replies);
     if (!(await confirmDialog({ title: 'Delete this message?', body: n ? `It is removed for everyone, along with the ${n === 1 ? 'reply' : `${n} replies`} to it.` : 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
@@ -211,7 +260,7 @@ export default function PlanDiscussion({ planId, what }: { planId: number; /** "
       ) : (
         <ul className="pd-list">
           {posts.map((p) => (
-            <Node key={p.id} p={p} depth={1} names={names} me={me} onReply={(parent, text) => send(text, parent)} onDelete={remove} />
+            <Node key={p.id} p={p} depth={1} names={names} me={me} onReply={(parent, text) => send(text, parent)} onEdit={edit} onDelete={remove} />
           ))}
         </ul>
       )}

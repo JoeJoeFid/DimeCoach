@@ -411,12 +411,12 @@ export function mountCommunities(app) {
    */
   const postsOut = (c, m) => {
     const rows = all(
-      `SELECT p.id, p.body, p.created_at, p.user_id, p.parent_id, p.share_id, p.attach_share_id, u.name FROM community_posts p JOIN users u ON u.id=p.user_id
+      `SELECT p.id, p.body, p.created_at, p.edited_at, p.user_id, p.parent_id, p.share_id, p.attach_share_id, u.name FROM community_posts p JOIN users u ON u.id=p.user_id
        WHERE p.community_id=? AND (p.share_id IS NULL OR EXISTS (SELECT 1 FROM community_shares s WHERE s.id=p.share_id)) ORDER BY p.id`,
       c.id,
     ).map((p) => ({
       id: p.id, body: p.body, created_at: p.created_at, by: p.name, by_id: p.user_id, mine: p.user_id === m.user_id, can_delete: p.user_id === m.user_id || can(m, 'moderate'),
-      parent_id: p.parent_id ?? null, share_id: p.share_id ?? null, attach_share_id: p.attach_share_id ?? null,
+      parent_id: p.parent_id ?? null, share_id: p.share_id ?? null, attach_share_id: p.attach_share_id ?? null, edited_at: p.edited_at ?? null,
     }));
     const under = new Map();
     for (const r of rows) if (r.parent_id) under.set(r.parent_id, [...(under.get(r.parent_id) ?? []), r]);
@@ -454,6 +454,30 @@ export function mountCommunities(app) {
         title: `${req.user.name} mentioned you in ${at.c.name}`, body: body.length > 160 ? `${body.slice(0, 160)}…` : body,
       });
     pokeMembers(at.c.id, req.user.id);
+    res.json(postsOut(at.c, at.m));
+  });
+  /** The writer changes what their own message says. Nobody else can, whatever their role. */
+  app.put('/api/communities/:id/posts/:postId', (req, res) => {
+    const at = enter(req, res);
+    if (!at) return;
+    const p = get('SELECT * FROM community_posts WHERE id=? AND community_id=?', Number(req.params.postId), at.c.id);
+    if (!p) return res.status(404).json({ error: 'Not found' });
+    if (p.user_id !== req.user.id) return res.status(403).json({ error: 'Only the person who wrote a message can change it.' });
+    const body = str(req.body.body, 4000).trim();
+    if (!body && !p.attach_share_id) return res.status(400).json({ error: 'Write something first.' });
+    if (body !== p.body) {
+      run("UPDATE community_posts SET body=?, edited_at=datetime('now') WHERE id=?", body, p.id);
+      // Someone named for the first time in the new words is told, as if it had been written that way.
+      const members = all("SELECT u.id, u.name FROM community_members cm JOIN users u ON u.id=cm.user_id WHERE cm.community_id=? AND cm.status='active' AND u.id<>?", at.c.id, req.user.id);
+      const before = new Set(mentionedIn(p.body, members).map((m) => m.id));
+      for (const m of mentionedIn(body, members))
+        if (!before.has(m.id))
+          notify(m.id, {
+            kind: 'mention', ref: `community-post-${p.id}`, link: `/communities/${at.c.id}`,
+            title: `${req.user.name} mentioned you in ${at.c.name}`, body: body.length > 160 ? `${body.slice(0, 160)}…` : body,
+          });
+      pokeMembers(at.c.id, req.user.id);
+    }
     res.json(postsOut(at.c, at.m));
   });
   app.delete('/api/communities/:id/posts/:postId', (req, res) => {

@@ -1,13 +1,81 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FocusEvent, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { useApp } from '../App';
 import { KIND_LABEL, PLAN_STATE_LABEL, planStateOf, type ScheduleEntry } from '../schedule';
-import { fmtClock, fmtDateShort, parseClock } from '../util';
+import { fmtClock, fmtDateShort, fmtDuration, parseClock, planMinutes, schedule } from '../util';
+import CategoryRows from './CategoryRows';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n: number) => String(n).padStart(2, '0');
 const iso = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
 /** "2026-11-12" to the first of its month, as [year, month index]. */
 const monthOf = (date: string): [number, number] => [Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1];
+
+const PEEK_WIDTH = 320;
+/** How many of a practice's items the summary lists before saying how many more there are. */
+const PEEK_ITEMS = 7;
+
+/**
+ * What pops up beside something on the calendar while the pointer is over it: when and where it
+ * is, and for a practice that has been planned, what is in it and where the time goes.
+ */
+function Peek({ entry, at, today }: { entry: ScheduleEntry; at: { left: number; top: number }; today: string }) {
+  const { sportTags } = useApp();
+  const plan = entry.plan;
+  const state = planStateOf(entry);
+  const done = entry.date < today;
+  const items = plan?.items ?? [];
+  const slots = plan ? schedule(plan.start_time, items) : [];
+  const mins = plan ? planMinutes(plan, new Set(sportTags.map((t) => t.id))) : null;
+  const total = mins ? mins.work + mins.breaks : 0;
+  const start = entry.time ? fmtClock(parseClock(entry.time)) : '';
+  // A planned practice ends when its last item does. A calendar event says when it ends.
+  const end = slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : entry.event?.end_time ? fmtClock(parseClock(entry.event.end_time)) : '';
+  const location = plan?.location || entry.location;
+  return (
+    <div className="cal-peek" role="tooltip" style={{ left: at.left, top: at.top, width: PEEK_WIDTH }}>
+      <div className="cal-peek-top">
+        <span className={`kind ${entry.kind === 'game' ? 'game' : entry.kind === 'practice' ? 'practice' : ''}`}>{KIND_LABEL[entry.kind]}</span>
+        <span className={`cal-peek-state ${state}`}>{done && state === 'ready' ? 'Completed' : PLAN_STATE_LABEL[state]}</span>
+      </div>
+      <strong className="cal-peek-title">{plan ? plan.title || 'Practice' : entry.title}</strong>
+      <p className="cal-peek-when">
+        {[fmtDateShort(entry.date), start && (end ? `${start} to ${end}` : start), total > 0 && fmtDuration(total)].filter(Boolean).join(' · ')}
+      </p>
+      {location && <p className="cal-peek-where">{location}</p>}
+      {entry.event?.notes && <p className="cal-peek-notes">{entry.event.notes}</p>}
+      {items.length > 0 ? (
+        <>
+          <ol className="cal-peek-items">
+            {items.slice(0, PEEK_ITEMS).map((it, i) => (
+              <li key={i} className={it.kind === 'break' ? 'break' : ''}>
+                <time>{fmtClock(slots[i].start)}</time>
+                <span>{it.title || (it.kind === 'break' ? 'Break' : 'Untitled')}</span>
+                <small>{it.duration_min} min</small>
+              </li>
+            ))}
+          </ol>
+          {items.length > PEEK_ITEMS && <p className="cal-peek-more">and {items.length - PEEK_ITEMS} more</p>}
+          {mins && [...mins.byTag.keys()].some((k) => k !== 0) && (
+            <div className="cal-peek-cats">
+              <CategoryRows mins={mins} tags={sportTags} empty="" />
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="cal-peek-more">
+          {plan?.is_game && state === 'ready'
+            ? [plan.game?.opponent && `${plan.game.side === 'away' ? 'at' : 'vs.'} ${plan.game.opponent}`, plan.game?.arrive && `arrive by ${fmtClock(parseClock(plan.game.arrive))}`, plan.game?.uniform, 'Game plan started. Click to open it.'].filter(Boolean).join(' · ')
+            : entry.kind === 'practice' || plan
+              ? plan
+                ? 'Nothing has been added to this plan yet. Click to open it.'
+                : 'No plan yet. Click to plan it.'
+              : 'From the team calendar.'}
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * The team's practices, games and calendar events on a month grid. A planned entry opens its
@@ -29,6 +97,17 @@ export default function PlanCalendar({
   // Open on the month that holds what is coming up next.
   const home = monthOf(entries.find((e) => e.key === nextKey)?.date ?? today);
   const [[year, month], setMonth] = useState<[number, number]>(home);
+  // What the pointer is over, and where its summary should go.
+  const [peek, setPeek] = useState<{ entry: ScheduleEntry; left: number; top: number } | null>(null);
+  const showPeek = (entry: ScheduleEntry) => (ev: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>) => {
+    const r = ev.currentTarget.getBoundingClientRect();
+    // Beside it on the right when there is room, else on the left. Kept on the screen top and bottom.
+    const right = r.right + 8 + PEEK_WIDTH <= window.innerWidth - 8;
+    const left = right ? r.right + 8 : Math.max(8, r.left - 8 - PEEK_WIDTH);
+    const guess = 150 + Math.min(PEEK_ITEMS, entry.plan?.items.length ?? 0) * 26 + (entry.plan?.items.length ? 130 : 0);
+    setPeek({ entry, left, top: Math.max(8, Math.min(r.top - 8, window.innerHeight - guess - 8)) });
+  };
+  const hidePeek = () => setPeek(null);
 
   const byDate = useMemo(() => {
     const map = new Map<string, ScheduleEntry[]>();
@@ -76,12 +155,23 @@ export default function PlanCalendar({
         <span className="cal-name">{name}</span>
       </>
     );
+    const hover = { onMouseEnter: showPeek(e), onMouseLeave: hidePeek, onFocus: showPeek(e), onBlur: hidePeek };
     return e.plan ? (
-      <Link key={e.key} to={`/plans/${e.plan.id}`} className={cls} aria-label={label}>
+      <Link key={e.key} to={`/plans/${e.plan.id}`} className={cls} aria-label={label} {...hover}>
         {body}
       </Link>
     ) : (
-      <button key={e.key} type="button" className={cls} aria-label={`${label} Click to plan it.`} onClick={() => onPlan(e)}>
+      <button
+        key={e.key}
+        type="button"
+        className={cls}
+        aria-label={`${label} Click to plan it.`}
+        onClick={() => {
+          hidePeek();
+          onPlan(e);
+        }}
+        {...hover}
+      >
         {body}
       </button>
     );
@@ -139,6 +229,7 @@ export default function PlanCalendar({
         </span>
         <span className="cal-chip practice next">Next up</span>
       </div>
+      {peek && <Peek entry={peek.entry} at={peek} today={today} />}
     </section>
   );
 }

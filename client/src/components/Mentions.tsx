@@ -131,3 +131,52 @@ export function MentionText({ text, people, me }: { text: string; /** Everyone w
   if (last < text.length) out.push(text.slice(last));
   return <>{out}</>;
 }
+
+/** "edited on Nov 13 at 3:42 PM", from a time the database wrote in UTC. */
+export function editedOn(at: string) {
+  const d = new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`);
+  return `edited on ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} at ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+}
+/** The mark on a message that its writer changed after sending it. */
+export function EditedMark({ at }: { at?: string | null }) {
+  return at ? <span className="edited-mark"> · {editedOn(at)}</span> : null;
+}
+
+/** A message opened up to be changed by the person who wrote it. Ctrl+Enter saves, Escape leaves it as it was. */
+export function EditBox({ initial, people, canBeEmpty, onSave, onCancel }: { initial: string; people: string[]; /** True when something is attached, so the words can go. */ canBeEmpty?: boolean; onSave: (text: string) => Promise<boolean>; onCancel: () => void }) {
+  const [text, setText] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const ready = (!!text.trim() || !!canBeEmpty) && !busy;
+  const save = async () => {
+    if (!ready) return;
+    if (text.trim() === initial.trim()) return onCancel();
+    setBusy(true);
+    if (!(await onSave(text.trim()))) setBusy(false);
+  };
+  return (
+    <div className="edit-box">
+      <MentionArea
+        people={people}
+        className="input"
+        rows={Math.min(8, Math.max(2, text.split('\n').length))}
+        maxLength={4000}
+        autoFocus
+        aria-label="Edit your message"
+        value={text}
+        onChange={setText}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save();
+          if (e.key === 'Escape') onCancel();
+        }}
+      />
+      <span className="edit-box-actions">
+        <button type="button" className="btn small" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="button" className="btn small primary" disabled={!ready} onClick={save}>
+          Save
+        </button>
+      </span>
+    </div>
+  );
+}

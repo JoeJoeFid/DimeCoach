@@ -221,6 +221,8 @@ export interface CommunityPost {
   replies?: CommunityPost[];
   /** Something the writer shared along with it. */
   attach_share_id?: number | null;
+  /** When the writer last changed it, if they ever did. */
+  edited_at?: string | null;
 }
 export interface CommunityShare {
   id: number;
@@ -274,6 +276,8 @@ export interface PlanPost {
   mine: boolean;
   can_delete: boolean;
   parent_id: number | null;
+  /** When the writer last changed it, if they ever did. */
+  edited_at: string | null;
   replies: PlanPost[];
 }
 /** Someone who works on a plan's team. Everyone listed can read it and join its discussion. */
@@ -386,6 +390,7 @@ export const api = {
   communityPosts: (id: number) => req<CommunityPost[]>('GET', `/communities/${id}/posts`),
   postToCommunity: (id: number, body: string, to?: { parent_id?: number; share_id?: number; attach_share_id?: number }) =>
     req<CommunityPost[]>('POST', `/communities/${id}/posts`, { body, ...to }),
+  editPost: (id: number, postId: number, body: string) => req<CommunityPost[]>('PUT', `/communities/${id}/posts/${postId}`, { body }),
   deletePost: (id: number, postId: number) => req<CommunityPost[]>('DELETE', `/communities/${id}/posts/${postId}`),
   communityShares: (id: number) => req<CommunityShare[]>('GET', `/communities/${id}/shares`),
   share: (id: number, kind: ShareKind, itemId: number) => req<CommunityShare[]>('POST', `/communities/${id}/shares`, { kind, item_id: itemId }),
@@ -395,6 +400,7 @@ export const api = {
   planCollaborators: (planId: number) => req<PlanCollaborator[]>('GET', `/plans/${planId}/collaborators`),
   planPosts: (planId: number) => req<PlanPost[]>('GET', `/plans/${planId}/posts`),
   postToPlan: (planId: number, body: string, parentId?: number) => req<PlanPost[]>('POST', `/plans/${planId}/posts`, { body, parent_id: parentId }),
+  editPlanPost: (planId: number, postId: number, body: string) => req<PlanPost[]>('PUT', `/plans/${planId}/posts/${postId}`, { body }),
   deletePlanPost: (planId: number, postId: number) => req<PlanPost[]>('DELETE', `/plans/${planId}/posts/${postId}`),
   coachLibrary: () => req<CoachLibrary>('GET', '/coach-library'),
   coachLibraryItem: (id: number) => req<LibraryItem & { content: SharedDrill | SharedPlay | SharedPlan }>('GET', `/coach-library/items/${id}`),

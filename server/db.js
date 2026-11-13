@@ -316,6 +316,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS plan_posts (
 );
 CREATE INDEX IF NOT EXISTS plan_posts_plan ON plan_posts (plan_id, id);`);
 
+// The plan for a game: lineup, keys, play sheet and the rest. It sits beside the practice items on
+// the same plan, so turning a practice into a game and back loses nothing on either side.
+addColumn('plans', 'game_json', "TEXT DEFAULT '{}'");
+// When a message was last changed by the person who wrote it. Empty if it never was.
+addColumn('community_posts', 'edited_at', 'TEXT');
+addColumn('plan_posts', 'edited_at', 'TEXT');
+
 // The coach library: things published for every coach, and the packs they are grouped into.
 // item_id is the frozen copy, kept in the library's own workspace. See server/coachLibrary.js.
 db.exec(`CREATE TABLE IF NOT EXISTS library_items (

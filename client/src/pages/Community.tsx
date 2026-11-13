@@ -8,7 +8,7 @@ import { Field, Modal, MoreMenu, type MenuItem } from '../components/bits';
 import { KIND_WORDS, ShareRow, SharedPreview, sharesKind } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { PlayDiagram } from '../components/PlayDiagram';
-import { MentionArea, MentionText } from '../components/Mentions';
+import { EditBox, EditedMark, MentionArea, MentionText } from '../components/Mentions';
 
 type Tab = 'messages' | 'library' | 'people' | 'settings';
 const KINDS: ShareKind[] = ['drill', 'play', 'plan'];
@@ -616,6 +616,8 @@ function Feed({
   // A drill, play or practice chosen to go with the post. It is shared when the post is sent, not before.
   const [attached, setAttached] = useState<Picked | null>(null);
   const [busy, setBusy] = useState(false);
+  // The message of the reader's own that is open to be changed, if any.
+  const [editing, setEditing] = useState<number | null>(null);
   const send = async (e: FormEvent) => {
     e.preventDefault();
     if ((!body.trim() && !attached) || busy) return;
@@ -652,6 +654,15 @@ function Feed({
     onPreview,
     onCopy,
     send: onSend,
+    edit: async (r, text) => {
+      try {
+        onPosts(await api.editPost(c.id, r.id, text));
+        return true;
+      } catch (err) {
+        onError(err);
+        return false;
+      }
+    },
     del: async (r) => {
       const n = countReplies(r.replies || []);
       if (!(await confirmDialog({ title: 'Delete this reply?', body: n ? `It is removed for everyone, along with the ${n === 1 ? 'reply' : `${n} replies`} to it.` : 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
@@ -727,7 +738,9 @@ function Feed({
             const byId = e.post ? e.post.by_id : e.share!.by_id;
             const role = roleOf(byId);
             const menu: MenuItem[] = e.post
-              ? e.post.can_delete
+              ? [
+                  ...(e.post.mine ? [{ label: 'Edit this message', onSelect: () => setEditing(e.post!.id) }] : []),
+                  ...(e.post.can_delete
                 ? [
                     {
                       label: 'Delete this message',
@@ -739,7 +752,8 @@ function Feed({
                       },
                     },
                   ]
-                : []
+                : []),
+                ]
               : shareMenu(e.share!);
             return (
               <li key={e.key} className="card cm-post">
@@ -751,15 +765,30 @@ function Feed({
                     <span className="muted small">
                       {ago(e.at)}
                       {e.share && ` · shared a ${KIND_WORDS[e.share.kind].one}`}
+                      <EditedMark at={e.post?.edited_at} />
                     </span>
                     <span className="cm-post-menu">
                       <MoreMenu items={menu} />
                     </span>
                   </div>
-                  {e.post?.body && (
-                    <p className="message-body">
-                      <MentionText text={e.post.body} people={people} me={user.name} />
-                    </p>
+                  {e.post && editing === e.post.id ? (
+                    <EditBox
+                      initial={e.post.body}
+                      people={people.filter((n) => n !== user.name)}
+                      canBeEmpty={!!e.post.attach_share_id}
+                      onCancel={() => setEditing(null)}
+                      onSave={async (text) => {
+                        const ok = await ctx.edit(e.post!, text);
+                        if (ok) setEditing(null);
+                        return ok;
+                      }}
+                    />
+                  ) : (
+                    e.post?.body && (
+                      <p className="message-body">
+                        <MentionText text={e.post.body} people={people} me={user.name} />
+                      </p>
+                    )
                   )}
                   {e.post?.attach_share_id &&
                     (allShares.some((s) => s.id === e.post!.attach_share_id) ? (
@@ -823,6 +852,8 @@ interface ThreadCtx {
   /** Opens the list of the writer's own drills, plays or practices, and hands back the one they choose. */
   pick: (kind: ShareKind, done: (p: Picked) => void) => void;
   send: (text: string, to: { parent_id?: number; share_id?: number }, attach?: Picked | null) => Promise<boolean>;
+  /** Saves new words for one of the reader's own messages. */
+  edit: (r: CommunityPost, text: string) => Promise<boolean>;
   del: (r: CommunityPost) => void;
   onPreview: (s: CommunityShare) => void;
   onCopy: (s: CommunityShare) => void;
@@ -924,6 +955,7 @@ function ReplyBox({ ctx, to, onDone }: { ctx: ThreadCtx; to: { parent_id?: numbe
 function ReplyNode({ r, depth, ctx }: { r: CommunityPost; depth: number; ctx: ThreadCtx }) {
   const me = useApp().user.name;
   const [writing, setWriting] = useState(false);
+  const [editing, setEditing] = useState(false);
   const role = ctx.roleOf(r.by_id);
   const kids = r.replies || [];
   const share = r.attach_share_id ? ctx.shares.find((s) => s.id === r.attach_share_id) : undefined;
@@ -934,12 +966,29 @@ function ReplyNode({ r, depth, ctx }: { r: CommunityPost; depth: number; ctx: Th
         <div className="cm-post-head">
           <strong>{r.by}</strong>
           {role && <RoleBadge role={role} />}
-          <span className="muted small">{ago(r.created_at)}</span>
+          <span className="muted small">
+            {ago(r.created_at)}
+            <EditedMark at={r.edited_at} />
+          </span>
         </div>
-        {r.body && (
-          <p className="message-body">
-            <MentionText text={r.body} people={ctx.people} me={me} />
-          </p>
+        {editing ? (
+          <EditBox
+            initial={r.body}
+            people={ctx.people.filter((n) => n !== me)}
+            canBeEmpty={!!r.attach_share_id}
+            onCancel={() => setEditing(false)}
+            onSave={async (text) => {
+              const ok = await ctx.edit(r, text);
+              if (ok) setEditing(false);
+              return ok;
+            }}
+          />
+        ) : (
+          r.body && (
+            <p className="message-body">
+              <MentionText text={r.body} people={ctx.people} me={me} />
+            </p>
+          )
         )}
         {share ? (
           <Embed share={share} onPreview={ctx.onPreview} onCopy={ctx.onCopy} />
@@ -950,6 +999,11 @@ function ReplyNode({ r, depth, ctx }: { r: CommunityPost; depth: number; ctx: Th
           <button type="button" className="cm-reply-btn" onClick={() => setWriting(!writing)} aria-expanded={writing}>
             <Svg d={ICON.talk} size={14} /> Reply
           </button>
+          {r.mine && !editing && (
+            <button type="button" className="link small cm-reply-del" onClick={() => setEditing(true)}>
+              Edit
+            </button>
+          )}
           {r.can_delete && (
             <button type="button" className="link small cm-reply-del" onClick={() => ctx.del(r)}>
               Delete

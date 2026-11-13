@@ -57,7 +57,8 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [fromCommunity, setFromCommunity] = useState(false);
-  const [view, setView] = useState<View>(savedView);
+  // A link can ask for the calendar outright, as "View calendar" on the dashboard does.
+  const [view, setView] = useState<View>(() => (new URLSearchParams(window.location.search).get('view') === 'calendar' ? 'calendar' : savedView()));
   /** The month on show, as "2026-11", and which kind of thing is listed. */
   const [month, setMonth] = useState(() => todayISO().slice(0, 7));
   const [only, setOnly] = useState<Filter>('all');

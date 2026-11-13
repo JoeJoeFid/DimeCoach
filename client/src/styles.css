@@ -10660,3 +10660,639 @@ fieldset.perm-list:disabled .check.perm {
 .added-count {
   margin-right: auto;
 }
+
+/* ---------- Changing a message after sending it ---------- */
+.edited-mark {
+  font-style: italic;
+  white-space: nowrap;
+}
+.edit-box {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.edit-box-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* ---------- Calendar: a summary beside whatever the pointer is over ---------- */
+.cal-peek {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  color: var(--ink);
+  font-size: 0.88rem;
+  /* It is only for reading. The pointer passes through it to the calendar underneath. */
+  pointer-events: none;
+  animation: toast-in 0.12s ease-out;
+}
+.cal-peek p {
+  margin: 0;
+}
+.cal-peek-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cal-peek-state {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+.cal-peek-state.ready {
+  color: var(--good, var(--ink));
+}
+.cal-peek-title {
+  font-size: 1.08rem;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.cal-peek-when {
+  color: var(--ink-2);
+}
+.cal-peek-where,
+.cal-peek-notes,
+.cal-peek-more {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+.cal-peek-notes {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.cal-peek-items {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+}
+.cal-peek-items li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+}
+.cal-peek-items time {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--ink-2);
+}
+.cal-peek-items span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+.cal-peek-items li.break span {
+  font-weight: 400;
+  color: var(--muted);
+}
+.cal-peek-items small {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.cal-peek-cats {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+}
+.cal-peek-cats .glance-list {
+  gap: 7px;
+  font-size: 0.82rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-peek {
+    animation: none;
+  }
+}
+
+/* ---------- Dashboard strip: the next thing up, large on the left, then what follows it ---------- */
+.tl-head {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 44px 8px;
+}
+.tl-cal-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.tl-cal-link:hover {
+  background: var(--surface-3);
+}
+.tl-track {
+  grid-template-columns: 2.3fr 1fr 1fr 1fr 1fr;
+  align-items: stretch;
+}
+.tl-track > .tl-slot {
+  align-self: center;
+}
+.tl-focus {
+  position: relative;
+  overflow: hidden;
+  gap: 4px;
+  padding: 20px 24px 22px;
+}
+.tl-focus > * {
+  position: relative;
+}
+/* The ball sits behind the words, mostly off the corner. */
+.tl-focus > .tl-ball {
+  position: absolute;
+  right: -34px;
+  bottom: -52px;
+  color: var(--ink);
+  opacity: 0.09;
+  pointer-events: none;
+}
+.tl-ball .sport-icon {
+  display: block;
+  stroke-width: 1.1;
+}
+.tl-focus .tl-eyebrow {
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+}
+.tl-focus .tl-eyebrow .kind {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+.tl-focus .tl-date {
+  margin-top: 2px;
+  font-size: 2.5rem;
+}
+.tl-focus .tl-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.tl-where {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--ink-2);
+  font-size: 0.95rem;
+}
+.tl-where .tl-time {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+}
+.tl-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.tl-focus .tl-actions {
+  margin-top: 12px;
+}
+.tl-focus .tl-actions .btn {
+  min-height: 40px;
+  padding: 8px 18px;
+  border-radius: 12px;
+}
+/* The next thing up: a soft lime wash, lighter toward the top left, with dark buttons. */
+.tl-focus.tl-next,
+.tl-focus.game.tl-next {
+  background:
+    radial-gradient(130% 150% at 0% 0%, #e6f98c 0%, rgba(230, 249, 140, 0) 58%),
+    linear-gradient(120deg, #cdef45 0%, #b5e02f 100%);
+  border-color: #a3cf26;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.35) inset,
+    0 14px 40px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.tl-focus.tl-next > .tl-ball {
+  color: #2c3a00;
+  opacity: 0.13;
+}
+.tl-focus.tl-next .kind {
+  background: rgba(21, 27, 0, 0.86);
+  border-color: transparent;
+  color: #e6f98c;
+}
+.tl-focus.tl-next .kind.game {
+  background: var(--game);
+  color: #fff;
+}
+.tl-focus.tl-next .tl-actions .btn:not(.primary) {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(21, 27, 0, 0.14);
+}
+@media (max-width: 1000px) {
+  .tl-track {
+    grid-template-columns: 2.3fr 1fr 1fr;
+  }
+  /* The big card stays. The last two of the four that follow it are left out. */
+  .tl-track > :first-child {
+    display: flex;
+  }
+  .tl-track > :last-child {
+    display: block;
+  }
+  .tl-track > :nth-child(n + 4) {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .tl-track {
+    grid-template-columns: 1fr;
+  }
+  .tl-track > .tl-slot,
+  .tl-track > :last-child {
+    display: none;
+  }
+  .tl-track > .tl-focus {
+    display: flex;
+  }
+  .tl-head {
+    margin: 0 0 8px;
+  }
+  .tl-focus .tl-date {
+    font-size: 2rem;
+  }
+}
+
+/* The big card stays put on the left. The smaller cards and their two arrows fill the rest of the row. */
+.tl-track {
+  grid-template-columns: minmax(0, 2.3fr) minmax(0, 4fr);
+}
+.tl-rest {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.tl-smalls {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: center;
+}
+a.tl-card.tl-small {
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  text-decoration: none;
+}
+.tl-head {
+  margin: 0 0 8px;
+}
+@media (max-width: 1000px) {
+  .tl-track {
+    grid-template-columns: minmax(0, 2.3fr) minmax(0, 2.6fr);
+  }
+  .tl-track > :last-child {
+    display: flex;
+  }
+  .tl-smalls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tl-smalls > :nth-child(n + 3) {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .tl-track {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* On a phone the smaller cards go under the big one, one at a time. */
+  .tl-track > :last-child {
+    display: flex;
+  }
+  .tl-track > .tl-rest .tl-slot {
+    display: block;
+  }
+  .tl-smalls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tl-smalls > :nth-child(n + 2) {
+    display: none !important;
+  }
+}
+
+/* ---------- The game plan: a grid of cards where the practice schedule would be ---------- */
+.plan-layout.game {
+  grid-template-columns: minmax(0, 1fr) clamp(250px, 23%, 360px);
+}
+.game-switch {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.gp-start {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.gp-kept {
+  margin: 0 0 12px;
+}
+.gp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.gp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.gp-card.wide {
+  grid-column: 1 / -1;
+}
+.gp-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.gp-card h3 {
+  margin: 0;
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+}
+.gp-card h3 .hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.gp-card p {
+  margin: 0;
+}
+.gp-card .input {
+  width: 100%;
+}
+.gp-fields,
+.gp-subs,
+.gp-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+}
+.gp-fields .field.grow,
+.gp-result .field.grow {
+  flex: 1 1 200px;
+}
+.gp-card .input.gp-num {
+  width: 92px;
+}
+.gp-card .input.gp-score {
+  width: 76px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: center;
+}
+.gp-keys {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.gp-keys > div {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.gp-avail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 6px 16px;
+}
+.gp-avail li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.gp-avail li.out .gp-avail-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.gp-avail-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+.gp-avail-name b,
+.gp-lineup th b {
+  display: inline-block;
+  min-width: 22px;
+  margin-right: 6px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.gp-avail .seg button {
+  padding: 0 9px;
+  font-size: 0.76rem;
+}
+.gp-lineup {
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-size: 0.9rem;
+}
+.gp-lineup thead th {
+  padding: 2px 4px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-align: center;
+}
+.gp-lineup thead th:first-child,
+.gp-lineup tbody th,
+.gp-lineup tfoot th {
+  padding-right: 12px;
+  text-align: left;
+  white-space: nowrap;
+  font-weight: 550;
+}
+.gp-lineup tfoot th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.gp-cell {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: transparent;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.gp-cell:hover {
+  border-color: var(--ink-2);
+}
+.gp-cell.on {
+  border-color: var(--accent-edge, var(--accent));
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.gp-lineup tfoot td {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.gp-lineup tfoot td.none {
+  color: var(--muted);
+}
+.gp-lineup tfoot td.right {
+  color: var(--good, var(--ink));
+}
+.gp-lineup tfoot td.wrong {
+  color: var(--warn);
+}
+.gp-time,
+.gp-time-head {
+  padding-left: 12px;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: left !important;
+}
+.gp-time.none {
+  color: var(--warn);
+}
+.gp-time-head {
+  color: var(--muted);
+}
+.gp-batting {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 4px;
+}
+.gp-batting li > * {
+  vertical-align: middle;
+}
+.gp-batting li span {
+  display: inline-block;
+  min-width: 130px;
+  font-weight: 550;
+}
+.gp-card .input.gp-pos {
+  width: 64px;
+  margin: 0 4px;
+}
+.gp-situation {
+  display: grid;
+  gap: 4px;
+}
+.gp-situation .chips {
+  align-items: center;
+}
+.gp-situation .chip button {
+  margin-left: 4px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.gp-card .input.gp-add {
+  width: auto;
+  min-height: 32px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  font-size: 0.84rem;
+}
+.gp-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.gp-rows li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gp-rows .input {
+  flex: 1 1 110px;
+  min-width: 0;
+}
+.gp-rows .input.grow {
+  flex: 2 1 140px;
+}
+.gp-rows .input.gp-num {
+  flex: 0 0 70px;
+  width: 70px;
+}
+@media (max-width: 1250px) {
+  .gp-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 1100px) {
+  .plan-layout.game {
+    display: block;
+  }
+}
+@media (max-width: 700px) {
+  .gp-keys {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gp-rows li {
+    flex-wrap: wrap;
+  }
+  .gp-cell {
+    width: 34px;
+  }
+}
