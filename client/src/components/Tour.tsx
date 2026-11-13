@@ -15,7 +15,7 @@ const EXAMPLES: Record<SportKind, [string, string, string]> = {
 // --- Pictures ---------------------------------------------------------------
 
 /** One drill, used again and again. */
-function DrillArt({ sport }: { sport: SportKind }) {
+export function DrillArt({ sport }: { sport: SportKind }) {
   return (
     <div className="tour-art tour-drill">
       <div className="tour-card">
@@ -37,7 +37,7 @@ function DrillArt({ sport }: { sport: SportKind }) {
   );
 }
 /** A play running, on the surface for the coach's sport. */
-function PlayArt({ sport }: { sport: SportKind }) {
+export function PlayArt({ sport }: { sport: SportKind }) {
   const still = useReducedMotion();
   const scene = SCENES.find((s) => s.sport.toLowerCase() === sport) ?? SCENES[0];
   return (
@@ -119,7 +119,7 @@ function StepsArt() {
   );
 }
 /** A practice built from drills, a play, a break and something typed in on the spot. */
-function TimelineArt({ sport }: { sport: SportKind }) {
+export function TimelineArt({ sport }: { sport: SportKind }) {
   const [warm, teach, play] = EXAMPLES[sport];
   const rows: [string, string, string, string][] = [
     ['5:30', warm, 'drill', 'Drill'],
@@ -310,6 +310,10 @@ export default function Tour({ onClose }: { onClose: () => void }) {
   const [view, setView] = useState({ w: window.innerWidth, h: window.innerHeight });
   const card = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
+  // False while a step's page is still loading and shifting about. Nothing is lit until it holds still.
+  const [settled, setSettled] = useState(true);
+  const lastRoute = useRef<string | undefined>(undefined);
+  const lastAt = useRef<CSSProperties | null>(null);
 
   const start = (p: Path) => {
     setSeen((s) => [...s, p]);
@@ -338,20 +342,45 @@ export default function Tour({ onClose }: { onClose: () => void }) {
   // Open the step's page, then keep finding the thing to light up: it can arrive a moment after the page does.
   useEffect(() => {
     if (step.route) navigate(step.route);
+    // A new page loads in pieces and moves as it does. Following that makes the lit area jump about,
+    // so on a change of page it is put out, and comes back once the target has stopped moving.
+    if (step.route && lastRoute.current !== undefined && step.route !== lastRoute.current) setSettled(false);
+    if (step.route) lastRoute.current = step.route;
     let scrolled = false;
+    let ready = false;
+    let misses = 0;
+    let still = 0;
+    let before: DOMRect | null = null;
+    const show = () => {
+      ready = true;
+      setSettled(true);
+    };
     const measure = () => {
       setView((v) => (v.w === window.innerWidth && v.h === window.innerHeight ? v : { w: window.innerWidth, h: window.innerHeight }));
       const el = step.target ? document.querySelector(step.target) : null;
       const r = el?.getBoundingClientRect();
-      if (!el || !r || r.width === 0) return setSpot(null);
+      if (!el || !r || r.width === 0) {
+        // Nothing to light, or it has not arrived yet. Give it a second before settling for a card in the middle.
+        before = null;
+        if (!ready && step.target && ++misses < 12) return;
+        show();
+        return setSpot(null);
+      }
       if (!scrolled) {
         scrolled = true;
-        el.scrollIntoView({ block: step.toTop ? 'start' : 'nearest', inline: 'nearest' });
+        el.scrollIntoView({ block: step.toTop ? 'start' : 'nearest', inline: 'nearest', behavior: 'instant' });
+        return;
+      }
+      if (!ready) {
+        still = before && before.left === r.left && before.top === r.top && before.width === r.width && before.height === r.height ? still + 1 : 0;
+        before = r;
+        if (still < 2) return;
+        show();
       }
       setSpot((s) => (s && s.x === r.left && s.y === r.top && s.w === r.width && s.h === r.height ? s : { x: r.left, y: r.top, w: r.width, h: r.height }));
     };
     measure();
-    const timer = setInterval(measure, 150);
+    const timer = setInterval(measure, 80);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, step.id]);
@@ -364,7 +393,9 @@ export default function Tour({ onClose }: { onClose: () => void }) {
   const width = Math.min(path ? CARD_WIDTH : 820, view.w - EDGE * 2);
   const height = cardHeight || 420;
   let at: CSSProperties;
-  if (!spot) at = { left: (view.w - width) / 2, top: Math.max(EDGE, (view.h - height) / 2) };
+  // While the next page settles the card stays where it was, instead of visiting the middle on its way.
+  if (!settled && lastAt.current) at = lastAt.current;
+  else if (!spot) at = { left: (view.w - width) / 2, top: Math.max(EDGE, (view.h - height) / 2) };
   // On a narrow screen the menu is a row along the top, so the card sits at the bottom out of its way.
   else if (view.w <= 900) at = { left: (view.w - width) / 2, top: Math.max(EDGE, view.h - height - EDGE) };
   // Beside a link in the side menu.
@@ -375,10 +406,12 @@ export default function Tour({ onClose }: { onClose: () => void }) {
     at = { left: clamp(spot.x + spot.w - width, EDGE, view.w - width - EDGE), top: below + height + EDGE <= view.h ? below : Math.max(EDGE, spot.y - height - 16) };
   }
 
+  lastAt.current = at;
+
   return (
     <div className="tour-layer">
       <div className="tour-block" />
-      {spot ? <div className="tour-spot" style={{ left: spot.x - 6, top: spot.y - 6, width: spot.w + 12, height: spot.h + 12 }} /> : <div className={`tour-dim ${path ? '' : 'deep'}`} />}
+      {spot && settled ? <div key="spot" className="tour-spot" style={{ left: spot.x - 6, top: spot.y - 6, width: spot.w + 12, height: spot.h + 12 }} /> : <div key="dim" className={`tour-dim ${path ? '' : 'deep'}`} />}
       <div ref={card} className="tour" role="dialog" aria-modal="true" aria-label="Tour of Dime Coach" style={{ ...at, width }}>
         <div className="tour-top">
           <span className="muted small">{path ? `${PATHS[path].label} · ${index + 1} of ${steps.length}` : ''}</span>

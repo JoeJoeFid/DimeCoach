@@ -8374,3 +8374,69 @@ fieldset.perm-list:disabled .check.perm {
     font-size: 1.5rem;
   }
 }
+
+/* ---------- Dashboard: three steps for a coach who has not planned a practice yet ---------- */
+.start-steps h2 {
+  margin: 8px 0 14px;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+.start-steps ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.start-steps > ol > li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+/* The pictures are all the same height, so the three line up. */
+.start-steps .tour-art {
+  align-self: stretch;
+  height: 190px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.start-steps .tour-drill {
+  flex-direction: row;
+  justify-content: center;
+}
+.start-steps .tour-play .hero-court {
+  max-height: 100%;
+}
+.start-num {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink, #151b00);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.start-steps h3 {
+  margin: 10px 0 4px;
+  font-size: 1.05rem;
+}
+.start-steps p {
+  flex: 1;
+  margin: 0 0 14px;
+  color: var(--ink-2);
+}
+@media (max-width: 900px) {
+  .start-steps ol {
+    grid-template-columns: 1fr;
+  }
+}

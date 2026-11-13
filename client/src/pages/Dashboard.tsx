@@ -5,6 +5,8 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, Tag } from '../types';
 import PracticeTimeline from '../components/PracticeTimeline';
+import { DrillArt, PlayArt, TimelineArt } from '../components/Tour';
+import { sportKind } from '../sports';
 import { HEAT_BASE, HEAT_PRESETS, PERIODS, SCOPES, UNTAGGED, heatRamp, fmtDateShort, periodBounds, scopeOf, targetFor, type Period, type TargetScope, fmtDateTiny, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
 
 const PERIOD_KEY = 'practiceplan.dashboardPeriod';
@@ -27,7 +29,7 @@ const nowMinutes = () => {
 };
 
 export default function Dashboard() {
-  const { team, sportTags } = useApp();
+  const { team, sportTags, sport } = useApp();
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [homeworkCount, setHomeworkCount] = useState(0);
   const [error, setError] = useState('');
@@ -155,6 +157,9 @@ export default function Dashboard() {
   if (error) return <div className="page error">{error}</div>;
   if (!stats) return <div className="page muted">Loading…</div>;
   const n = stats.perPlan.length;
+  // Nothing planned at all, as opposed to nothing in the chosen period. Empty shells from a calendar do not count.
+  const fresh = !(plans || []).some((p) => !p.is_template && !p.is_game && p.items.some((i) => i.kind === 'item'));
+  const kind = sportKind(sport?.name) ?? 'basketball';
   const withTargets = stats.rows.filter((r) => r.gap !== null);
   const onTarget = withTargets.filter((r) => Math.abs(r.gap!) <= ON_TARGET_WITHIN).length;
 
@@ -184,7 +189,49 @@ export default function Dashboard() {
 
       <PracticeTimeline plans={plans || []} tags={sportTags} onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))} />
 
-      {n === 0 ? (
+      {fresh ? (
+        <section className="start-steps" aria-label="Getting started">
+          <h2>Three easy steps to your first practice</h2>
+          <ol>
+            <li>
+              <DrillArt sport={kind} />
+              <span className="start-num" aria-hidden="true">
+                1
+              </span>
+              <h3>Create some reusable drills</h3>
+              <p>Write a drill once, with its length and your coaching notes, and use it in as many practices as you like.</p>
+              <Link className="btn" to="/library">
+                Go to drills
+              </Link>
+            </li>
+            <li>
+              <TimelineArt sport={kind} />
+              <span className="start-num" aria-hidden="true">
+                2
+              </span>
+              <h3>Create a practice</h3>
+              <p>Drop in your drills, or type in anything else on the spot: a team talk, a scrimmage, a water break.</p>
+              <Link className="btn primary" to="/practices?new=1">
+                Plan a practice
+              </Link>
+            </li>
+            <li>
+              <PlayArt sport={kind} />
+              <span className="start-num" aria-hidden="true">
+                3
+              </span>
+              <h3>Refine it</h3>
+              <p>
+                Add <Link to="/playbook">interactive plays</Link>, tag items with <Link to="/tags">categories</Link> to see your progress, or start{' '}
+                <Link to="/communities">sharing with other coaches</Link>.
+              </p>
+              <Link className="btn" to="/playbook">
+                Open the playbook
+              </Link>
+            </li>
+          </ol>
+        </section>
+      ) : n === 0 ? (
         <div className="empty">
           <h2>No practices {period === 'season' ? 'yet' : phrase}</h2>
           <p>
