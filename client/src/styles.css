@@ -10191,3 +10191,314 @@ fieldset.perm-list:disabled .check.perm {
 .btn.icon-btn.danger {
   color: var(--danger);
 }
+
+/* ---------- A shared practice plan, opened to read: a schedule, one item to a row ---------- */
+/* Only the plan's own rows are laid out as two columns. Lists inside an item's notes are ordinary lists. */
+.shared-items li {
+  display: list-item;
+}
+.shared-items > li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.shared-items > li:first-child {
+  border-top: none;
+  padding-top: 2px;
+}
+.shared-plan .shared-items {
+  gap: 0;
+}
+.shared-when {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+.shared-clock {
+  font-family: var(--mono);
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+.shared-what {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.shared-item-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.shared-item-head strong {
+  font-size: 1.02rem;
+}
+.shared-what .shared-notes {
+  color: var(--ink-2);
+  font-size: 0.93rem;
+  line-height: 1.5;
+}
+.shared-what .shared-notes > :first-child {
+  margin-top: 0;
+}
+.shared-what .shared-notes > :last-child {
+  margin-bottom: 0;
+}
+.shared-what .shared-notes ul,
+.shared-what .shared-notes ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+.shared-what .shared-notes table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.shared-what .shared-notes td,
+.shared-what .shared-notes th {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+  text-align: left;
+}
+.shared-items > li.break .shared-item-head strong {
+  font-weight: 550;
+  color: var(--ink-2);
+}
+.shared-total {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.cm-compose-attached {
+  margin-left: 50px;
+}
+@media (max-width: 800px) {
+  .cm-compose-attached {
+    margin-left: 0;
+  }
+}
+@media (max-width: 560px) {
+  .shared-items > li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .shared-when {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+}
+/* The first level of bullets in an item's notes is a filled dot, as the writer saw it. */
+.shared-what .shared-notes > ul {
+  list-style: disc;
+}
+.shared-what .shared-notes > ul ul {
+  list-style: circle;
+}
+
+/* ---------- Practice page: details and "At a glance" across the top, the schedule's own actions, and a discussion ---------- */
+:root {
+  --pie-none: #8d8c87;
+  --pie-break: #c9c8c2;
+}
+:root[data-theme='dark'] {
+  --pie-none: #6f6e6a;
+  --pie-break: #46454a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --pie-none: #6f6e6a;
+    --pie-break: #46454a;
+  }
+}
+.plan-top {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+.plan-top > .card.plan-head {
+  margin: 0;
+}
+.plan-top > .plan-glance {
+  position: static;
+}
+.glance-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.glance-head .seg button {
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+.glance-pie {
+  display: grid;
+  grid-template-columns: minmax(120px, 170px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+.glance-pie svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.glance-pie circle {
+  transition:
+    stroke-width 0.12s ease,
+    opacity 0.12s ease;
+  cursor: default;
+}
+.glance-pie-big {
+  fill: var(--ink);
+  font-size: 5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  dominant-baseline: middle;
+}
+.glance-pie-small {
+  fill: var(--muted);
+  font-size: 2.3px;
+  dominant-baseline: middle;
+}
+.glance-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 0.84rem;
+}
+.glance-legend li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.glance-legend li.on {
+  background: var(--surface-3);
+}
+.glance-legend-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.glance-legend .glance-min {
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 0.76rem;
+}
+.glance-pct {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  text-align: right;
+}
+.plan-column-head {
+  flex-wrap: wrap;
+}
+.plan-column-head .plan-column-title {
+  flex: 1 1 200px;
+}
+.plan-column-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-layout {
+  grid-template-columns: clamp(290px, 26%, 440px) minmax(0, 1fr) clamp(250px, 23%, 360px);
+}
+.plan-side {
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.plan-discussion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.plan-discussion h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.plan-discussion p {
+  margin: 0;
+}
+.pd-write {
+  display: grid;
+  gap: 6px;
+}
+.pd-write textarea {
+  width: 100%;
+  min-height: 40px;
+  resize: vertical;
+}
+.pd-write-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.pd-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.pd-list > .pd-post {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.pd-list > .pd-post:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+.pd-post .cm-replies {
+  padding-left: 10px;
+}
+.pd-post .cm-reply-btn {
+  margin-left: -8px;
+  padding: 2px 8px;
+  min-height: 26px;
+  font-size: 0.8rem;
+}
+.pd-post .cm-reply-del {
+  opacity: 1;
+  margin-left: 0;
+}
+.pd-none {
+  padding: 6px 0;
+}
+@media (max-width: 1100px) {
+  .plan-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .plan-side {
+    max-height: none;
+    overflow: visible;
+  }
+}
+@media (max-width: 700px) {
+  .plan-column-actions {
+    flex: 1 0 100%;
+  }
+  .plan-column-actions .btn.primary {
+    flex: 1;
+    justify-content: center;
+  }
+  .glance-pie {
+    grid-template-columns: minmax(110px, 150px) minmax(0, 1fr);
+  }
+}

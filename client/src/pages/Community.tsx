@@ -117,7 +117,7 @@ export default function CommunityPage() {
   const [sharing, setSharing] = useState<ShareKind | 'choose' | null>(null);
   const [preview, setPreview] = useState<CommunityShare | null>(null);
   // Set while the picker was opened from a reply: what is chosen is shared and handed to that reply.
-  const [attachTo, setAttachTo] = useState<{ done: (s: CommunityShare) => void } | null>(null);
+  const [attachTo, setAttachTo] = useState<{ done: (p: Picked) => void } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
 
   const fail = (e: unknown) => {
@@ -212,9 +212,26 @@ export default function CommunityPage() {
     setAttachTo(null);
     setSharing(kinds.length === 1 ? kinds[0] : 'choose');
   };
-  const pick = (kind: ShareKind, done: (s: CommunityShare) => void) => {
+  const pick = (kind: ShareKind, done: (p: Picked) => void) => {
     setAttachTo({ done });
     setSharing(kind);
+  };
+  /** Sends a message or a reply. Anything attached is shared with the community first, then sent along. */
+  const sendPost = async (text: string, to: { parent_id?: number; share_id?: number }, attach?: Picked | null) => {
+    try {
+      let attachId: number | undefined;
+      if (attach) {
+        const list = await api.share(c.id, attach.kind, attach.item_id);
+        setShares(list);
+        attachId = list.find((x) => x.mine && x.kind === attach.kind && x.item_id === attach.item_id)?.id;
+      }
+      setPosts(await api.postToCommunity(c.id, text, { ...to, attach_share_id: attachId }));
+      setError('');
+      return true;
+    } catch (e) {
+      fail(e);
+      return false;
+    }
   };
   /** What can be done with one shared thing, for the "..." beside it. */
   const shareMenu = (s: CommunityShare): MenuItem[] => [
@@ -301,14 +318,11 @@ export default function CommunityPage() {
             shares={approved.filter((s) => !sentWithReply.has(s.id))}
             allShares={shares || []}
             onPick={pick}
+            onSend={sendPost}
             roleOf={roleOf}
             composer={composer}
             onPosts={setPosts}
             onError={fail}
-            onShare={(k) => {
-              setAttachTo(null);
-              setSharing(k);
-            }}
             onPreview={setPreview}
             onCopy={copy}
             shareMenu={shareMenu}
@@ -505,21 +519,15 @@ export default function CommunityPage() {
         <ShareMine
           c={c}
           kind={sharing}
+          attaching={!!attachTo}
           shared={attachTo ? [] : (shares || []).filter((s) => s.mine && s.kind === sharing)}
           needsApproval={c.require_approval && !may.approve}
-          onShare={async (itemId) => {
+          onShare={(itemId, title) => {
             if (!attachTo) return actShares(() => api.share(c.id, sharing, itemId));
-            // Chosen for a reply: share it here if it is not already, and hand it to the reply.
-            try {
-              const list = await api.share(c.id, sharing, itemId);
-              setShares(list);
-              const made = list.find((x) => x.mine && x.kind === sharing && x.item_id === itemId);
-              if (made) attachTo.done(made);
-              setAttachTo(null);
-              setSharing(null);
-            } catch (e) {
-              fail(e);
-            }
+            // Chosen for a message being written: it is only handed over. Sharing happens when the message is sent.
+            attachTo.done({ kind: sharing, item_id: itemId, title });
+            setAttachTo(null);
+            setSharing(null);
           }}
           onClose={() => {
             setAttachTo(null);
@@ -572,11 +580,11 @@ function Feed({
   shares,
   allShares,
   onPick,
+  onSend,
   roleOf,
   composer,
   onPosts,
   onError,
-  onShare,
   onPreview,
   onCopy,
   shareMenu,
@@ -588,12 +596,12 @@ function Feed({
   shareReplies: Map<number, CommunityPost[]>;
   shares: CommunityShare[];
   allShares: CommunityShare[];
-  onPick: (kind: ShareKind, done: (s: CommunityShare) => void) => void;
+  onPick: (kind: ShareKind, done: (p: Picked) => void) => void;
+  onSend: (text: string, to: { parent_id?: number; share_id?: number }, attach?: Picked | null) => Promise<boolean>;
   roleOf: (userId: number) => CommunityPerson['role'] | undefined;
   composer: React.RefObject<HTMLTextAreaElement | null>;
   onPosts: (p: CommunityPost[]) => void;
   onError: (e: unknown) => void;
-  onShare: (k: ShareKind) => void;
   onPreview: (s: CommunityShare) => void;
   onCopy: (s: CommunityShare) => void;
   shareMenu: (s: CommunityShare) => MenuItem[];
@@ -601,15 +609,18 @@ function Feed({
   const { user } = useApp();
   const [body, setBody] = useState('');
   const [filter, setFilter] = useState<FeedFilter>('all');
+  // A drill, play or practice chosen to go with the post. It is shared when the post is sent, not before.
+  const [attached, setAttached] = useState<Picked | null>(null);
+  const [busy, setBusy] = useState(false);
   const send = async (e: FormEvent) => {
     e.preventDefault();
-    if (!body.trim()) return;
-    try {
-      onPosts(await api.postToCommunity(c.id, body));
+    if ((!body.trim() && !attached) || busy) return;
+    setBusy(true);
+    if (await onSend(body.trim(), {}, attached)) {
       setBody('');
-    } catch (err) {
-      onError(err);
+      setAttached(null);
     }
+    setBusy(false);
   };
   const words = q.trim().toLowerCase();
   const entries = useMemo(() => {
@@ -635,15 +646,7 @@ function Feed({
     pick: onPick,
     onPreview,
     onCopy,
-    send: async (text, to, attach) => {
-      try {
-        onPosts(await api.postToCommunity(c.id, text, { ...to, attach_share_id: attach }));
-        return true;
-      } catch (err) {
-        onError(err);
-        return false;
-      }
-    },
+    send: onSend,
     del: async (r) => {
       const n = countReplies(r.replies || []);
       if (!(await confirmDialog({ title: 'Delete this reply?', body: n ? `It is removed for everyone, along with the ${n === 1 ? 'reply' : `${n} replies`} to it.` : 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
@@ -675,13 +678,25 @@ function Feed({
             }}
           />
         </div>
-        <div className="cm-compose-actions">
-          {kinds.map((k) => (
-            <button key={k} type="button" className="cm-pill" onClick={() => onShare(k)}>
-              <Svg d={ICON[k]} size={15} /> Share a {KIND_WORDS[k].one}
+        {attached && (
+          <div className="cm-attached cm-compose-attached">
+            <Svg d={ICON[attached.kind]} size={15} />
+            <span>
+              <strong>{attached.title}</strong> <span className="muted small">{KIND_WORDS[attached.kind].one} · shared with the community when you post</span>
+            </span>
+            <button type="button" className="link small" onClick={() => setAttached(null)}>
+              Take off
             </button>
-          ))}
-          <button className="btn primary" disabled={!body.trim()}>
+          </div>
+        )}
+        <div className="cm-compose-actions">
+          {!attached &&
+            kinds.map((k) => (
+              <button key={k} type="button" className="cm-pill" onClick={() => onPick(k, setAttached)}>
+                <Svg d={ICON[k]} size={15} /> Attach a {KIND_WORDS[k].one}
+              </button>
+            ))}
+          <button className="btn primary" disabled={(!body.trim() && !attached) || busy}>
             Post
           </button>
         </div>
@@ -735,7 +750,13 @@ function Feed({
                       <MoreMenu items={menu} />
                     </span>
                   </div>
-                  {e.post && <p className="message-body">{e.post.body}</p>}
+                  {e.post?.body && <p className="message-body">{e.post.body}</p>}
+                  {e.post?.attach_share_id &&
+                    (allShares.some((s) => s.id === e.post!.attach_share_id) ? (
+                      <Embed share={allShares.find((s) => s.id === e.post!.attach_share_id)!} onPreview={onPreview} onCopy={onCopy} />
+                    ) : (
+                      <p className="muted small cm-gone">Something was shared with this post. It is waiting for an admin to approve it, or is no longer shared.</p>
+                    ))}
                   {e.share && (
                     <div className="cm-embed">
                       <button type="button" className="cm-embed-main" onClick={() => onPreview(e.share!)}>
@@ -775,15 +796,21 @@ const MAX_INDENT = 3;
 const countReplies = (list: CommunityPost[]): number => list.reduce((n, r) => n + 1 + countReplies(r.replies || []), 0);
 const flatten = (list: CommunityPost[]): CommunityPost[] => list.flatMap((r) => [r, ...flatten(r.replies || [])]);
 
+/** One of the writer's own drills, plays or practices, chosen to go with a message. It is shared when the message is sent. */
+interface Picked {
+  kind: ShareKind;
+  item_id: number;
+  title: string;
+}
 /** What a thread needs from the page around it. */
 interface ThreadCtx {
   kinds: ShareKind[];
   /** Everything shared here that the reader may see, to draw what a reply has attached. */
   shares: CommunityShare[];
   roleOf: (userId: number) => CommunityPerson['role'] | undefined;
-  /** Opens the list of the reader's own drills, plays or practices, and hands back the one they choose, shared. */
-  pick: (kind: ShareKind, done: (s: CommunityShare) => void) => void;
-  send: (text: string, to: { parent_id?: number; share_id?: number }, attach?: number) => Promise<boolean>;
+  /** Opens the list of the writer's own drills, plays or practices, and hands back the one they choose. */
+  pick: (kind: ShareKind, done: (p: Picked) => void) => void;
+  send: (text: string, to: { parent_id?: number; share_id?: number }, attach?: Picked | null) => Promise<boolean>;
   del: (r: CommunityPost) => void;
   onPreview: (s: CommunityShare) => void;
   onCopy: (s: CommunityShare) => void;
@@ -820,13 +847,13 @@ function Embed({ share, onPreview, onCopy }: { share: CommunityShare; onPreview:
 function ReplyBox({ ctx, to, onDone }: { ctx: ThreadCtx; to: { parent_id?: number; share_id?: number }; onDone: (sent: boolean) => void }) {
   const { user } = useApp();
   const [text, setText] = useState('');
-  const [attached, setAttached] = useState<CommunityShare | null>(null);
+  const [attached, setAttached] = useState<Picked | null>(null);
   const [busy, setBusy] = useState(false);
   const ready = !!text.trim() || !!attached;
   const send = async () => {
     if (!ready || busy) return;
     setBusy(true);
-    const ok = await ctx.send(text.trim(), to, attached?.id);
+    const ok = await ctx.send(text.trim(), to, attached);
     setBusy(false);
     if (ok) onDone(true);
   };
@@ -852,7 +879,7 @@ function ReplyBox({ ctx, to, onDone }: { ctx: ThreadCtx; to: { parent_id?: numbe
           <div className="cm-attached">
             <Svg d={ICON[attached.kind]} size={15} />
             <span>
-              <strong>{attached.title}</strong> <span className="muted small">{KIND_WORDS[attached.kind].one} · goes with this reply</span>
+              <strong>{attached.title}</strong> <span className="muted small">{KIND_WORDS[attached.kind].one} · shared when you send this reply</span>
             </span>
             <button type="button" className="link small" onClick={() => setAttached(null)}>
               Take off
@@ -863,7 +890,7 @@ function ReplyBox({ ctx, to, onDone }: { ctx: ThreadCtx; to: { parent_id?: numbe
           {!attached &&
             ctx.kinds.map((k) => (
               <button key={k} type="button" className="cm-pill" onClick={() => ctx.pick(k, setAttached)}>
-                <Svg d={ICON[k]} size={14} /> Share a {KIND_WORDS[k].one}
+                <Svg d={ICON[k]} size={14} /> Attach a {KIND_WORDS[k].one}
               </button>
             ))}
           <span className="cm-reply-send">
@@ -1425,12 +1452,15 @@ function ShareMine({
   needsApproval,
   onShare,
   onClose,
+  attaching,
 }: {
   c: CommunityDetail;
   kind: ShareKind;
   shared: CommunityShare[];
   needsApproval: boolean;
-  onShare: (itemId: number) => void;
+  onShare: (itemId: number, title: string) => void;
+  /** Choosing for a message being written, not sharing straight away. */
+  attaching?: boolean;
   onClose: () => void;
 }) {
   const { sport, team } = useApp();
@@ -1460,9 +1490,10 @@ function ShareMine({
   const sharedIds = useMemo(() => new Set(shared.map((s) => s.item_id)), [shared]);
   const shown = (items || []).filter((i) => !q.trim() || i.title.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <Modal title={`Share one of ${KIND_WORDS[kind].mine.replace('my ', 'your ')} with ${c.name}`} onClose={onClose} wide>
+    <Modal title={attaching ? `Attach a ${KIND_WORDS[kind].one}` : `Share one of ${KIND_WORDS[kind].mine.replace('my ', 'your ')} with ${c.name}`} onClose={onClose} wide>
       {error && <p className="error">{error}</p>}
       <p className="muted small">
+        {attaching ? `It goes with your message, and is shared with ${c.name} when you send it. ` : ''}
         {needsApproval ? 'An admin approves each one before others see it. ' : ''}Members can take their own copy. Your coach-only notes, player notes and uploaded files stay private.
       </p>
       <div className="picker-filters">
@@ -1484,8 +1515,8 @@ function ShareMine({
                 {sharedIds.has(i.id) ? (
                   <span className="muted small">Shared</span>
                 ) : (
-                  <button className="btn small primary" onClick={() => onShare(i.id)}>
-                    Share
+                  <button className="btn small primary" onClick={() => onShare(i.id, i.title)}>
+                    {attaching ? 'Attach' : 'Share'}
                   </button>
                 )}
               </span>

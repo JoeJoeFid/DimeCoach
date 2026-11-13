@@ -264,6 +264,18 @@ export interface SharedPlan {
 export interface CommunityShareDetail extends CommunityShare {
   content: SharedDrill | SharedPlay | SharedPlan;
 }
+/** A message in the discussion on one practice. Replies carry their own replies in the same way. */
+export interface PlanPost {
+  id: number;
+  body: string;
+  created_at: string;
+  by: string;
+  by_id: number;
+  mine: boolean;
+  can_delete: boolean;
+  parent_id: number | null;
+  replies: PlanPost[];
+}
 /** Something published in the coach library, for every coach to take a copy of. */
 export interface LibraryItem {
   id: number;
@@ -369,6 +381,9 @@ export const api = {
   unshare: (shareId: number) => req<CommunityShare[]>('DELETE', `/community-shares/${shareId}`),
   approveShare: (shareId: number) => req<CommunityShare[]>('POST', `/community-shares/${shareId}/approve`, {}),
   myShares: (kind: ShareKind, itemId: number) => req<MyShareState[]>('GET', `/community-shares/mine?kind=${kind}&item_id=${itemId}`),
+  planPosts: (planId: number) => req<PlanPost[]>('GET', `/plans/${planId}/posts`),
+  postToPlan: (planId: number, body: string, parentId?: number) => req<PlanPost[]>('POST', `/plans/${planId}/posts`, { body, parent_id: parentId }),
+  deletePlanPost: (planId: number, postId: number) => req<PlanPost[]>('DELETE', `/plans/${planId}/posts/${postId}`),
   coachLibrary: () => req<CoachLibrary>('GET', '/coach-library'),
   coachLibraryItem: (id: number) => req<LibraryItem & { content: SharedDrill | SharedPlay | SharedPlan }>('GET', `/coach-library/items/${id}`),
   copyLibraryItem: (id: number, b: { sport_id?: number; team_id?: number; date?: string }) => req<{ kind: ShareKind; id: number }>('POST', `/coach-library/items/${id}/copy`, b),

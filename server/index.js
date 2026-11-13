@@ -10,6 +10,7 @@ import { mountAuth, requireImport } from './auth.js';
 import { mountCoachLibrary } from './coachLibrary.js';
 import { mountCommunities } from './communities.js';
 import { mountLive } from './live.js';
+import { notify } from './notices.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
 import { cleanPlayIds, mountPlays } from './plays.js';
 import { mountResources } from './resources.js';
@@ -489,6 +490,67 @@ app.put('/api/plans/:id', (req, res) => {
 app.delete('/api/plans/:id', (req, res) => {
   run('DELETE FROM plans WHERE id=? AND owner_id=?', id(req.params.id), req.ownerId);
   res.json({ ok: true });
+});
+
+// --- Discussion on a plan ---------------------------------------------------
+// The team's owner and everyone the team is shared with can talk about one practice. Reading and
+// writing here needs no permission to change the plan itself: see the gate in server/staff.js.
+const planPostsOut = (req, plan) => {
+  const rows = all('SELECT p.*, u.name FROM plan_posts p JOIN users u ON u.id=p.user_id WHERE p.plan_id=? ORDER BY p.id', plan.id);
+  // The owner, or a helper who manages the team, can remove anyone's message.
+  const moderator = !req.staff || req.staff.perms.manage;
+  const under = new Map();
+  for (const r of rows) if (r.parent_id) under.set(r.parent_id, [...(under.get(r.parent_id) ?? []), r]);
+  const tree = (r) => ({
+    id: r.id, body: r.body, created_at: r.created_at, by: r.name, by_id: r.user_id, mine: r.user_id === req.user.id,
+    can_delete: r.user_id === req.user.id || moderator, parent_id: r.parent_id ?? null, replies: (under.get(r.id) ?? []).map(tree),
+  });
+  // Newest conversation first; inside one, replies in the order they were written.
+  return rows.filter((r) => !r.parent_id).reverse().map(tree);
+};
+/** Everyone who works on a plan's team: the owner of its workspace, and the people the team is shared with. */
+const coachesOf = (plan) => [
+  ...all("SELECT user_id FROM memberships WHERE owner_id=? AND role='owner'", plan.owner_id),
+  ...all('SELECT user_id FROM team_staff WHERE team_id=?', plan.team_id),
+].map((r) => r.user_id);
+app.get('/api/plans/:id/posts', (req, res) => {
+  const plan = ownPlan(req, req.params.id);
+  if (!plan) return notFound(res);
+  res.json(planPostsOut(req, plan));
+});
+app.post('/api/plans/:id/posts', (req, res) => {
+  const plan = ownPlan(req, req.params.id);
+  if (!plan) return notFound(res);
+  const body = str(req.body.body).slice(0, 4000).trim();
+  if (!body) return res.status(400).json({ error: 'Write something first.' });
+  const parent = req.body.parent_id ? get('SELECT id FROM plan_posts WHERE id=? AND plan_id=?', id(req.body.parent_id), plan.id) : null;
+  if (req.body.parent_id && !parent) return res.status(404).json({ error: 'The message you are replying to has been deleted.' });
+  run('INSERT INTO plan_posts (plan_id, user_id, parent_id, body) VALUES (?,?,?,?)', plan.id, req.user.id, parent?.id ?? null, body);
+  // Every other coach on the team hears about it in their Messages.
+  const team = get('SELECT name FROM teams WHERE id=?', plan.team_id);
+  const what = plan.kind === 'homework' ? 'homework' : 'practice';
+  const label = [plan.title || (what === 'homework' ? 'Homework' : 'Practice'), plan.date].filter(Boolean).join(', ');
+  for (const userId of new Set(coachesOf(plan)))
+    if (userId !== req.user.id)
+      notify(userId, {
+        kind: 'plan-post', ref: `plan-${plan.id}`, link: `/go/plan/${plan.team_id}/${plan.id}`,
+        title: `${req.user.name} ${parent ? 'replied' : 'wrote'} about a ${what} for ${team?.name ?? 'your team'}`,
+        body: `${label}: ${body.length > 140 ? `${body.slice(0, 140)}…` : body}`,
+      });
+  res.json(planPostsOut(req, plan));
+});
+app.delete('/api/plans/:id/posts/:postId', (req, res) => {
+  const plan = ownPlan(req, req.params.id);
+  const post = plan && get('SELECT * FROM plan_posts WHERE id=? AND plan_id=?', id(req.params.postId), plan.id);
+  if (!post) return notFound(res);
+  if (post.user_id !== req.user.id && req.staff && !req.staff.perms.manage) return res.status(403).json({ error: 'Only the person who wrote it, or someone who manages this team, can delete a message.' });
+  // Its replies go with it, and the replies to those.
+  run(
+    `WITH RECURSIVE thread(id) AS (SELECT ? UNION ALL SELECT c.id FROM plan_posts c JOIN thread t ON c.parent_id=t.id)
+     DELETE FROM plan_posts WHERE id IN (SELECT id FROM thread)`,
+    post.id,
+  );
+  res.json(planPostsOut(req, plan));
 });
 
 // --- Plan import ----------------------------------------------------------

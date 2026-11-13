@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type Community, type CommunityShare, type CommunityShareDetail, type MyShareState, type ShareKind, type SharedDrill, type SharedPlan, type SharedPlay } from '../api';
 import { useApp } from '../App';
-import { clean, fmtDateShort, isBlankHtml, todayISO } from '../util';
+import { clean, fmtClock, fmtDateShort, isBlankHtml, parseClock, todayISO } from '../util';
 import { Modal } from './bits';
 import PlayAnimation from './PlayAnimation';
 import { PlayDiagram } from './PlayDiagram';
@@ -95,25 +95,42 @@ export function SharedPreview({ detail }: { detail: Pick<CommunityShareDetail, '
     );
   }
   const plan = detail.content as SharedPlan;
+  // A practice has a start time, so each item is shown with when it begins. Homework has none.
+  const timed = plan.kind === 'practice';
+  let at = parseClock(plan.start_time || '17:30');
+  const total = plan.items.reduce((n, it) => n + (it.duration_min || 0), 0);
   return (
-    <div className="shared">
+    <div className="shared shared-plan">
       {!isBlankHtml(plan.intro_html) && <div className="rich shared-notes" dangerouslySetInnerHTML={clean(plan.intro_html)} />}
       <ol className="shared-items">
-        {plan.items.map((it, i) => (
-          <li key={i} className={it.kind === 'break' ? 'break' : ''}>
-            <span className="shared-min">{it.duration_min} min</span>
-            <span>
-              <strong>{it.title || (it.kind === 'break' ? 'Break' : 'Untitled')}</strong>
-              <Chips tags={it.tags} />
-              {!isBlankHtml(it.notes_html) && <span className="rich shared-notes" dangerouslySetInnerHTML={clean(it.notes_html)} />}
-              {it.plays.map((p) => (
-                <PlayPeek key={p.id} play={p} />
-              ))}
-              <Links links={it.links} />
-            </span>
-          </li>
-        ))}
+        {plan.items.map((it, i) => {
+          const starts = at;
+          at += it.duration_min || 0;
+          return (
+            <li key={i} className={it.kind === 'break' ? 'break' : ''}>
+              <div className="shared-when">
+                {timed && <span className="shared-clock">{fmtClock(starts)}</span>}
+                <span className="shared-min">{it.duration_min} min</span>
+              </div>
+              <div className="shared-what">
+                <div className="shared-item-head">
+                  <strong>{it.title || (it.kind === 'break' ? 'Break' : 'Untitled')}</strong>
+                  {it.reps && <span className="muted small">{it.reps}</span>}
+                  <Chips tags={it.tags} />
+                </div>
+                {!isBlankHtml(it.notes_html) && <div className="rich shared-notes" dangerouslySetInnerHTML={clean(it.notes_html)} />}
+                {it.plays.map((p) => (
+                  <PlayPeek key={p.id} play={p} />
+                ))}
+                <Links links={it.links} />
+              </div>
+            </li>
+          );
+        })}
       </ol>
+      <p className="muted small shared-total">
+        {plan.items.filter((it) => it.kind === 'item').length} items · {total} min{timed ? ` · ends ${fmtClock(at)}` : ''}
+      </p>
     </div>
   );
 }

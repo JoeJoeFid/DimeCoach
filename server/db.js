@@ -306,6 +306,16 @@ db.exec(`CREATE TABLE IF NOT EXISTS notices (
 );
 CREATE INDEX IF NOT EXISTS notices_user ON notices (user_id, id);`);
 
+// Coaches talking about one practice. A reply names the message it answers.
+db.exec(`CREATE TABLE IF NOT EXISTS plan_posts (
+  id INTEGER PRIMARY KEY,
+  plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_id INTEGER,
+  body TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS plan_posts_plan ON plan_posts (plan_id, id);`);
+
 // The coach library: things published for every coach, and the packs they are grouped into.
 // item_id is the frozen copy, kept in the library's own workspace. See server/coachLibrary.js.
 db.exec(`CREATE TABLE IF NOT EXISTS library_items (

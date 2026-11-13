@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { SIGNED_OUT_EVENT, api, type AuthStatus, type Bootstrap, type User } from './api';
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { sportKind } from './sports';
@@ -27,6 +27,8 @@ import Resources from './pages/Resources';
 import PlayEditor from './pages/PlayEditor';
 import PlayPrint from './pages/PlayPrint';
 
+/** Where to go once the team has been switched: set by a message that points at a plan on another team. */
+const AFTER_KEY = 'practiceplan.afterSwitch';
 /** Set while the team-choosing screen should come up after a reload. */
 const PICK_KEY = 'practiceplan.pickTeam';
 
@@ -345,6 +347,15 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
       refreshUser: onChanged,
     };
   }, [data, user, teamId, setTeamId, openTeam, pickTeam, touring, reload, onChanged, communityUnread, setCommunityUnread]);
+  // After switching teams to follow a message, carry on to what it pointed at.
+  const teamNow = state?.team?.id;
+  useEffect(() => {
+    const after = teamNow ? sessionStorage.getItem(AFTER_KEY) : null;
+    if (!after) return;
+    sessionStorage.removeItem(AFTER_KEY);
+    navigate(after, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamNow]);
 
   if (error && !state)
     return (
@@ -416,6 +427,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           <Route path="/practices" element={<Plans kind="practice" />} />
           <Route path="/homework" element={<Plans kind="homework" />} />
           <Route path="/plans/:id" element={<PlanEditor />} />
+          <Route path="/go/plan/:teamId/:planId" element={<GoToPlan />} />
           <Route path="/plans/:id/print" element={<PrintView />} />
           {user.can_import && <Route path="/import" element={<ImportPlans />} />}
           <Route path="/library" element={<Library />} />
@@ -524,6 +536,30 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
       )}
     </Ctx.Provider>
   );
+}
+
+/**
+ * Opens a plan from a message. When it belongs to a team other than the one being worked on, that
+ * team is opened first: the page it lands on then carries on to the plan.
+ */
+function GoToPlan() {
+  const app = useApp();
+  const navigate = useNavigate();
+  const { teamId, planId } = useParams();
+  useEffect(() => {
+    const team = Number(teamId);
+    const to = `/plans/${planId}`;
+    const shared = app.shared_teams.some((t) => t.id === team);
+    if (app.team?.id === team) navigate(to, { replace: true });
+    // A team that is no longer theirs to open: back to the messages.
+    else if (!shared && !app.own_teams.some((t) => t.id === team)) navigate('/messages', { replace: true });
+    else {
+      sessionStorage.setItem(AFTER_KEY, to);
+      app.openTeam(shared, team);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return <div className="page muted">Opening…</div>;
 }
 
 const MENU_ICONS = {

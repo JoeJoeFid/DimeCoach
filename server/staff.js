@@ -105,6 +105,8 @@ function gate(req) {
       if (seg[1]) {
         const plan = get('SELECT team_id FROM plans WHERE id=?', Number(seg[1]));
         if (!plan || !sameTeam(plan.team_id)) return NOT_FOUND;
+        // Talking about a plan is open to everyone on the team, whether or not they may change it.
+        if (seg[2] === 'posts') return null;
         return write ? need('plans') : null;
       }
       if (!write) return sameTeam(req.query.team_id) ? null : NOT_FOUND;

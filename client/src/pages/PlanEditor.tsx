@@ -13,6 +13,7 @@ import { CommunityPicker, ShareDialog } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, showUndo } from '../components/toasts';
 import CategoryRows from '../components/CategoryRows';
+import PlanDiscussion from '../components/PlanDiscussion';
 import { DraftReview, SourcePicker, defaultChoices, resolveDraft, useAiStatus, type DraftChoices } from '../components/planImport';
 
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
@@ -488,6 +489,7 @@ export default function PlanEditor() {
         }}
         onDragEnd={onDragEnd}
       >
+        <div className="plan-top">
         <div className={`card plan-head ${headOpen ? 'open' : ''}`}>
           <button type="button" className="head-brief" onClick={() => setHeadOpen(!headOpen)} aria-expanded={headOpen}>
             <span className="head-brief-text">
@@ -583,6 +585,8 @@ export default function PlanEditor() {
             </div>
           </div>
         </div>
+        <Glance mins={mins} tags={tags} total={total} ends={!isHomework && slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : ''} />
+        </div>
 
         <div className="plan-layout">
           <Palette drills={libraryDrills} tags={tags} withBreak={!isHomework} sheet={sheet} onAdd={addNew} />
@@ -596,6 +600,14 @@ export default function PlanEditor() {
                 <button type="button" className={compact ? 'on' : ''} aria-pressed={compact} onClick={() => chooseCompact(true)}>
                   Compact
                 </button>
+              </div>
+              <div className="plan-column-actions">
+                {!plan.is_template && (
+                  <button className="btn primary" onClick={openPrint}>
+                    Print / share
+                  </button>
+                )}
+                <MoreMenu items={moreItems} />
               </div>
             </div>
             {plan.items.length === 0 ? (
@@ -667,14 +679,8 @@ export default function PlanEditor() {
 
           </div>
           <div className="plan-side">
-            <Glance mins={mins} tags={tags} total={total} ends={!isHomework && slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : ''}>
-              {!plan.is_template && (
-                <button className="btn primary" onClick={openPrint}>
-                  Print / share
-                </button>
-              )}
-              <MoreMenu items={moreItems} />
-            </Glance>
+            {/* Coaches talk about the plan here. A template is not a day anyone is planning, so it has none. */}
+            {!plan.is_template && <PlanDiscussion planId={plan.id} what={isHomework ? 'homework sheet' : 'practice'} />}
             <PreviousPractices current={plan} tags={tags} />
           </div>
         </div>
@@ -834,18 +840,100 @@ function PreviousPractices({ current, tags }: { current: Plan; tags: Tag[] }) {
   );
 }
 
-/** The practice at a glance: which categories it works on, and for how long. */
-function Glance({ mins, tags, total, ends, children }: { mins: Minutes; tags: Tag[]; total: number; ends: string; /** Print and the other things to do with the whole plan. */ children: ReactNode }) {
+const GLANCE_KEY = 'practiceplan.glanceView';
+type GlanceView = 'pie' | 'bars';
+/** A ring cut into slices, one for each category's minutes, then time with no category, then breaks. */
+function GlancePie({ mins, tags, total }: { mins: Minutes; tags: Tag[]; total: number }) {
+  const slices = [
+    ...tags
+      .filter((t) => (mins.byTag.get(t.id) || 0) > 0)
+      .map((t) => ({ key: `t${t.id}`, name: t.name, color: t.color, minutes: mins.byTag.get(t.id)! }))
+      .sort((x, y) => y.minutes - x.minutes),
+    ...((mins.byTag.get(0) || 0) > 0 ? [{ key: 'none', name: 'No category', color: 'var(--pie-none)', minutes: mins.byTag.get(0)! }] : []),
+    ...(mins.breaks > 0 ? [{ key: 'breaks', name: 'Breaks', color: 'var(--pie-break)', minutes: mins.breaks }] : []),
+  ];
+  const sum = slices.reduce((n, s) => n + s.minutes, 0);
+  const [over, setOver] = useState<string | null>(null);
+  if (sum === 0) return <p className="muted small">Add items to this plan, and this shows where the time goes.</p>;
+  // The ring's edge is 100 long, so a slice's length is its share in percent. A small gap keeps neighbors apart.
+  const gap = slices.length > 1 ? 0.8 : 0;
+  let from = 0;
+  const hot = slices.find((s) => s.key === over);
+  return (
+    <div className="glance-pie">
+      <svg viewBox="0 0 42 42" role="img" aria-label={`Where the time goes: ${slices.map((s) => `${s.name} ${Math.round(s.minutes)} minutes`).join(', ')}`}>
+        {slices.map((s) => {
+          const share = (s.minutes / sum) * 100;
+          const at = from;
+          from += share;
+          return (
+            <circle
+              key={s.key}
+              cx="21"
+              cy="21"
+              r="15.915"
+              fill="none"
+              stroke={s.color}
+              strokeWidth={over === s.key ? 7.4 : 6}
+              strokeDasharray={`${Math.max(0.2, share - gap)} ${100 - Math.max(0.2, share - gap)}`}
+              strokeDashoffset={25 - at}
+              opacity={over && over !== s.key ? 0.35 : 1}
+              onMouseEnter={() => setOver(s.key)}
+              onMouseLeave={() => setOver(null)}
+            >
+              <title>{`${s.name}: ${Math.round(s.minutes)} min, ${Math.round((s.minutes / sum) * 100)}%`}</title>
+            </circle>
+          );
+        })}
+        <text x="21" y={hot ? 20 : 21.500} textAnchor="middle" className="glance-pie-big">
+          {hot ? `${Math.round(hot.minutes)} min` : fmtDuration(total)}
+        </text>
+        {hot && (
+          <text x="21" y="25" textAnchor="middle" className="glance-pie-small">
+            {hot.name.length > 16 ? `${hot.name.slice(0, 15)}…` : hot.name}
+          </text>
+        )}
+      </svg>
+      <ul className="glance-legend">
+        {slices.map((s) => (
+          <li key={s.key} className={over === s.key ? 'on' : ''} onMouseEnter={() => setOver(s.key)} onMouseLeave={() => setOver(null)}>
+            <span className="dot" style={{ background: s.color }} />
+            <span className="glance-legend-name">{s.name}</span>
+            <span className="glance-min">{Math.round(s.minutes)} min</span>
+            <span className="glance-pct">{Math.round((s.minutes / sum) * 100)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The practice at a glance: which categories it works on, and for how long, as a pie or as bars. */
+function Glance({ mins, tags, total, ends }: { mins: Minutes; tags: Tag[]; total: number; ends: string }) {
   const any = tags.some((t) => (mins.byTag.get(t.id) || 0) > 0);
+  const [view, setViewState] = useState<GlanceView>(() => (localStorage.getItem(GLANCE_KEY) === 'bars' ? 'bars' : 'pie'));
+  const setView = (v: GlanceView) => {
+    localStorage.setItem(GLANCE_KEY, v);
+    setViewState(v);
+  };
   return (
     <aside className="plan-glance" aria-label="At a glance">
-      <div className="glance-actions">{children}</div>
-      <h2>At a glance</h2>
+      <div className="glance-head">
+        <h2>At a glance</h2>
+        <div className="seg" role="group" aria-label="Chart">
+          <button type="button" className={view === 'pie' ? 'on' : ''} aria-pressed={view === 'pie'} onClick={() => setView('pie')}>
+            Pie
+          </button>
+          <button type="button" className={view === 'bars' ? 'on' : ''} aria-pressed={view === 'bars'} onClick={() => setView('bars')}>
+            Bars
+          </button>
+        </div>
+      </div>
       <p className="glance-total">
         <strong>{fmtDuration(total)}</strong>
         {ends && <span className="muted"> · ends {ends}</span>}
       </p>
-      <CategoryRows mins={mins} tags={tags} empty="Add drills that have categories, and this shows where the time goes." />
+      {view === 'pie' ? <GlancePie mins={mins} tags={tags} total={total} /> : <CategoryRows mins={mins} tags={tags} empty="Add drills that have categories, and this shows where the time goes." />}
       {any && <p className="muted small">A drill with two categories counts toward both.</p>}
     </aside>
   );
