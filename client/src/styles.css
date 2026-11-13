@@ -11296,3 +11296,96 @@ a.tl-card.tl-small {
     width: 34px;
   }
 }
+
+/* A green line in the row of smaller cards, at the place in time where the next-up card belongs. */
+.tl-smalls {
+  position: relative;
+  --cols: 4;
+}
+.tl-nowline {
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  left: calc((100% + 12px) / var(--cols) * var(--i) - 7.5px);
+  width: 3px;
+  min-height: 64px;
+  border-radius: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+@media (max-width: 1000px) {
+  .tl-smalls {
+    --cols: 2;
+  }
+}
+@media (max-width: 640px) {
+  .tl-smalls {
+    --cols: 1;
+  }
+}
+/* On narrower screens the extra cards are left out, but never the line. */
+.tl-smalls > .tl-nowline {
+  display: block !important;
+}
+
+/* ---------- Game: details in the top box, and a position in every lineup cell ---------- */
+.game-details {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.game-details .fields {
+  align-items: flex-end;
+  gap: 12px 14px;
+}
+.plan-head .game-details .field .input {
+  height: auto;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 8px 12px;
+}
+.plan-head .game-details .fields > .field.grow:not(:first-child) {
+  flex: 1 1 200px;
+}
+.gp-positions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.gp-positions .input {
+  flex: 1 1 240px;
+  width: auto;
+}
+.gp-positions .chip {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+select.gp-cell {
+  width: 58px;
+  height: 32px;
+  padding: 0 4px;
+  color: var(--muted);
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+  text-align-last: center;
+  appearance: none;
+  min-height: 0;
+}
+select.gp-cell.on {
+  color: var(--accent-ink);
+}
+select.gp-cell option {
+  background: var(--surface);
+  color: var(--ink);
+}
+@media (max-width: 700px) {
+  select.gp-cell {
+    width: 50px;
+  }
+}

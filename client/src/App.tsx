@@ -85,7 +85,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     // The dated things a coach builds and sends out.
     title: 'Plan',
     items: [
-      { to: '/practices', label: 'Practices', icon: icons.practices },
+      { to: '/practices', label: 'Practices & games', icon: icons.practices },
       { to: '/homework', label: 'Homework', icon: icons.homework },
     ],
   },

@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../App';
 import type { Group, Item, Plan, Play, Player } from '../types';
-import { SITUATIONS, availablePlayers, playingTime, segmentsOf, subsOf } from '../game';
+import { SITUATIONS, availablePlayers, playingTime, segmentsOf, spotOf, subsOf, substitutions } from '../game';
 import { sportKind } from '../sports';
 import { fmtClock, parseClock } from '../util';
 import { PlaySteps } from '../components/PlayDiagram';
@@ -53,6 +53,8 @@ export default function PrintView() {
   const [audience, setAudience] = useState<Audience>('notes');
   const [showBreaks, setShowBreaks] = useState(false);
   const [showTags, setShowTags] = useState(false);
+  // For a game: a list of who comes on, who goes off and who changes position at each change.
+  const [showSubs, setShowSubs] = useState(true);
   const [playMode, setPlayMode] = useState<PlayMode>('all');
   const [stepText, setStepText] = useState('');
   const [copied, setCopied] = useState('');
@@ -199,14 +201,20 @@ export default function PrintView() {
           <div className="print-option">
             <span className="field-label">Also show</span>
             <div className="chips">
-              {!isHomework && (
+              {!isHomework && !plan.is_game && (
                 <button type="button" className={`chip toggle ${showBreaks ? 'on' : ''}`} aria-pressed={showBreaks} onClick={() => setShowBreaks(!showBreaks)}>
                   Breaks
                 </button>
               )}
-              <button type="button" className={`chip toggle ${showTags ? 'on' : ''}`} aria-pressed={showTags} onClick={() => setShowTags(!showTags)}>
-                Categories
-              </button>
+              {plan.is_game && !isHomework ? (
+                <button type="button" className={`chip toggle ${showSubs ? 'on' : ''}`} aria-pressed={showSubs} disabled={audience === 'simple'} onClick={() => setShowSubs(!showSubs)}>
+                  Substitutions
+                </button>
+              ) : (
+                <button type="button" className={`chip toggle ${showTags ? 'on' : ''}`} aria-pressed={showTags} onClick={() => setShowTags(!showTags)}>
+                  Categories
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -240,7 +248,7 @@ export default function PrintView() {
           </p>
         )}
 
-        {plan.is_game && !isHomework && <GameSheet plan={plan} players={players} plays={plays} audience={audience} sport={app.sports.find((s) => s.id === team?.sport_id)?.name} showPlays={playMode !== 'hide'} only={only} />}
+        {plan.is_game && !isHomework && <GameSheet plan={plan} players={players} plays={plays} audience={audience} sport={app.sports.find((s) => s.id === team?.sport_id)?.name} showPlays={playMode !== 'hide'} showSubs={showSubs} only={only} />}
         {(plan.is_game && !isHomework ? [] : slotGroups(plan.items)).map((group) => {
           const i = group[0];
           const it = plan.items[i];
@@ -304,7 +312,7 @@ export default function PrintView() {
  * The others are the bench card: keys, lineup and playing time, the play sheet, matchups, warm-up.
  * Scouting notes and the result only go on the coach copy.
  */
-function GameSheet({ plan, players, plays, audience, sport, showPlays, only }: { plan: Plan; players: Player[]; plays: Play[]; audience: Audience; sport: string | undefined; showPlays: boolean; only?: Set<number> }) {
+function GameSheet({ plan, players, plays, audience, sport, showPlays, showSubs, only }: { plan: Plan; players: Player[]; plays: Play[]; audience: Audience; sport: string | undefined; showPlays: boolean; showSubs: boolean; only?: Set<number> }) {
   const g = plan.game || {};
   const kind = sportKind(sport);
   const subs = subsOf(g, kind);
@@ -393,7 +401,7 @@ function GameSheet({ plan, players, plays, audience, sport, showPlays, only }: {
                       </td>
                       {segments.map((_, i) => (
                         <td key={i} style={{ ...cell, textAlign: 'center', padding: '6px 6px' }}>
-                          {lineup[i].includes(p.id) ? '●' : ''}
+                          {lineup[i].includes(p.id) ? spotOf(g, i, p.id) || '●' : ''}
                         </td>
                       ))}
                       <td style={{ ...cell, whiteSpace: 'nowrap' }}>{playingTime(p.id, lineup, segments, subs).text}</td>
@@ -404,6 +412,7 @@ function GameSheet({ plan, players, plays, audience, sport, showPlays, only }: {
               {out.length > 0 && <p style={small}>Out: {out.map((p) => p.name).join(', ')}</p>}
             </>
           )}
+          {anyLineup && showSubs && <SubsList game={g} segments={segments} nameOf={nameOf} h3={h3} small={small} timed={subs.mode === 'time'} />}
           {batting.length > 0 && (
             <>
               <h3 style={h3}>Batting order</h3>
@@ -483,6 +492,49 @@ function GameSheet({ plan, players, plays, audience, sport, showPlays, only }: {
         </>
       )}
     </div>
+  );
+}
+
+/** The substitutions, change by change: who starts, then who comes on, who goes off and who moves each time. */
+function SubsList({ game, segments, nameOf, h3, small, timed }: { game: NonNullable<Plan['game']>; segments: ReturnType<typeof segmentsOf>; nameOf: (id: number) => string; h3: CSSProperties; small: CSSProperties; timed: boolean }) {
+  const { starters, changes } = substitutions(game, segments);
+  const who = (p: { id: number; spot: string }) => `${nameOf(p.id)}${p.spot ? ` (${p.spot})` : ''}`;
+  const tag: CSSProperties = { fontWeight: 700, fontSize: '8.5pt', letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+  return (
+    <>
+      <h3 style={h3}>Substitutions</h3>
+      <table style={{ ...table, width: '100%' }}>
+        <tbody>
+          <tr>
+            <td style={{ ...cell, fontWeight: 700, whiteSpace: 'nowrap', width: '1%' }}>Start</td>
+            <td style={cell}>{starters.length ? starters.map(who).join(', ') : <span style={small}>Nobody chosen</span>}</td>
+          </tr>
+          {changes.map((c) => (
+            <tr key={c.label}>
+              <td style={{ ...cell, fontWeight: 700, whiteSpace: 'nowrap' }}>{timed ? `At ${c.label}` : c.name}</td>
+              <td style={cell}>
+                {c.on.length > 0 && (
+                  <div>
+                    <span style={tag}>In:</span> {c.on.map(who).join(', ')}
+                  </div>
+                )}
+                {c.off.length > 0 && (
+                  <div>
+                    <span style={tag}>Out:</span> {c.off.map((p) => nameOf(p.id)).join(', ')}
+                  </div>
+                )}
+                {c.moves.length > 0 && (
+                  <div>
+                    <span style={tag}>Moves:</span> {c.moves.map((m) => `${nameOf(m.id)} ${m.from || '?'} to ${m.to || '?'}`).join(', ')}
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {changes.length === 0 && starters.length > 0 && <p style={small}>No changes after the start.</p>}
+    </>
   );
 }
 

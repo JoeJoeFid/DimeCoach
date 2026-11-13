@@ -105,6 +105,9 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
   const fits = window.innerWidth <= 640 ? 1 : window.innerWidth <= 1000 ? 2 : AFTER;
   const lastStart = Math.max(homeStart, others.length - fits, 0);
   const start = Math.max(0, Math.min(startAt ?? homeStart, lastStart));
+  // The slot the next-up card would take if it were in the row. Past the last card only when nothing follows it.
+  const nowAt = homeIndex - start;
+  const nowSlot = nextIndex >= 0 && others.length > 0 && nowAt >= 0 && (nowAt < fits || (nowAt === fits && homeIndex === others.length)) ? nowAt : null;
   // Today's or the next upcoming entry keeps its own color wherever it sits in the strip.
   const nextKey = nextIndex >= 0 ? entries[nextIndex].key : null;
 
@@ -255,7 +258,11 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
             <button className="tl-arrow" aria-label="Earlier" disabled={start === 0} onClick={() => setStartAt(start - 1)}>
               ‹
             </button>
-            <div className="tl-smalls">{Array.from({ length: AFTER }, (_, i) => small(others[start + i], i))}</div>
+            <div className="tl-smalls">
+              {Array.from({ length: AFTER }, (_, i) => small(others[start + i], i))}
+              {/* Where the big card belongs in date order: a line between the cards on either side of it. */}
+              {nowSlot !== null && <span className="tl-nowline" style={{ '--i': nowSlot } as React.CSSProperties} role="img" aria-label="Next up falls here" title="Next up falls here" />}
+            </div>
             <button className="tl-arrow" aria-label="Later" disabled={start >= lastStart} onClick={() => setStartAt(start + 1)}>
               ›
             </button>

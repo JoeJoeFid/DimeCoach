@@ -83,6 +83,8 @@ function gate(req) {
       if (seg[2] === 'staff') return perms.manage ? null : { status: 403, error: `${ownerName} has not given you permission to manage who this team is shared with.` };
       if (!write) return null;
       if (seg[2] === 'calendar' || seg[2] === 'events') return need('schedule');
+      // Position names are part of planning games.
+      if (seg[2] === 'positions') return need('plans');
       if (seg[2] === 'players') return need('roster');
       return perms.manage ? null : { status: 403, error: `${ownerName} has not given you permission to rename or delete this team.` };
     case 'players': {

@@ -532,6 +532,36 @@ export default function PlanEditor() {
                   <input className="input" value={plan.location} onChange={(e) => update({ location: e.target.value })} />
                 </Field>
               )}
+              {gameMode && (
+                <div className="game-details">
+                  <div className="fields">
+                    <Field label="Opponent" grow>
+                      <input className="input" value={plan.game?.opponent ?? ''} placeholder="Who you are playing" onChange={(e) => update({ game: { ...plan.game, opponent: e.target.value } })} />
+                    </Field>
+                    <div className="field">
+                      <span className="field-label">Where</span>
+                      <div className="seg" role="group" aria-label="Home or away">
+                        {(['home', 'away', 'neutral'] as const).map((side) => (
+                          <button key={side} type="button" className={plan.game?.side === side ? 'on' : ''} aria-pressed={plan.game?.side === side} onClick={() => update({ game: { ...plan.game, side: plan.game?.side === side ? '' : side } })}>
+                            {side[0].toUpperCase() + side.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <Field label="Arrive by">
+                      <input className="input" type="time" value={plan.game?.arrive ?? ''} onChange={(e) => update({ game: { ...plan.game, arrive: e.target.value } })} />
+                    </Field>
+                  </div>
+                  <div className="fields">
+                    <Field label="Uniform" grow>
+                      <input className="input" value={plan.game?.uniform ?? ''} placeholder="Such as white jerseys" onChange={(e) => update({ game: { ...plan.game, uniform: e.target.value } })} />
+                    </Field>
+                    <Field label="Bring" grow>
+                      <input className="input" value={plan.game?.bring ?? ''} placeholder="Water, both jerseys…" onChange={(e) => update({ game: { ...plan.game, bring: e.target.value } })} />
+                    </Field>
+                  </div>
+                </div>
+              )}
               {!isHomework && (
                 <div className="field game-switch">
                   <span className="field-label">This is a</span>

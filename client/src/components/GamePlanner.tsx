@@ -7,7 +7,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Drill, GamePlan, GameSubs, Plan, Play, Player } from '../types';
 import { sportKind } from '../sports';
-import { SITUATIONS, UNIT_CHOICES, availablePlayers, fillEvenly, playingTime, readOpponent, segmentsOf, subsOf } from '../game';
+import { SITUATIONS, UNIT_CHOICES, assignSpots, availablePlayers, fillEvenly, parsePositions, playingTime, positionsOf, readOpponent, segmentsOf, spotOf, subsOf } from '../game';
 import { fmtClock, parseClock } from '../util';
 
 const Card = ({ title, hint, action, children, wide }: { title: string; hint?: string; action?: ReactNode; children: ReactNode; wide?: boolean }) => (
@@ -87,10 +87,32 @@ export default function GamePlanner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan.id]);
 
-  const flip = (seg: number, playerId: number) => {
-    const next = lineup.map((s) => [...s]);
-    next[seg] = next[seg].includes(playerId) ? next[seg].filter((x) => x !== playerId) : [...next[seg], playerId];
-    set({ lineup: next });
+  // How this team names its positions. Changing them here also becomes the team's own from now on.
+  const names = positionsOf(game, app.team, kind);
+  const [namesText, setNamesText] = useState(names.join(', '));
+  const [editingNames, setEditingNames] = useState(false);
+  const spots = segments.map((_, i) => game.spots?.[i] ?? {});
+  /** Puts a player on in one stretch at a position ('' for no particular one), or takes them off (null). */
+  const setCell = (seg: number, playerId: number, spot: string | null) => {
+    const nextLineup = lineup.map((s) => [...s]);
+    const nextSpots = spots.map((s) => ({ ...s }));
+    nextLineup[seg] = nextLineup[seg].filter((x) => x !== playerId);
+    delete nextSpots[seg][String(playerId)];
+    if (spot !== null) {
+      nextLineup[seg].push(playerId);
+      nextSpots[seg][String(playerId)] = spot;
+    }
+    set({ lineup: nextLineup, spots: nextSpots });
+  };
+  const saveNames = () => {
+    const next = parsePositions(namesText);
+    setEditingNames(false);
+    if (next.join('|') === names.join('|')) return;
+    // What was already chosen follows its place in the list: the first name becomes the new first name.
+    const swap = (label: string) => (names.includes(label) ? (next[names.indexOf(label)] ?? '') : label);
+    set({ position_names: next, spots: spots.map((s) => Object.fromEntries(Object.entries(s).map(([id, label]) => [id, swap(label)]))) });
+    setNamesText(next.join(', '));
+    if (app.team) api.setTeamPositions(app.team.id, next).then(() => app.reload(), () => {});
   };
   const setStatus = (id: number, status: 'in' | 'out' | 'late') => {
     const availability = { ...(game.availability || {}) };
@@ -99,7 +121,9 @@ export default function GamePlanner({
     // Someone marked out comes off the lineup and the batting order.
     set({
       availability,
-      ...(status === 'out' ? { lineup: lineup.map((s) => s.filter((x) => x !== id)), batting: (game.batting || []).filter((x) => x !== id) } : {}),
+      ...(status === 'out'
+        ? { lineup: lineup.map((s) => s.filter((x) => x !== id)), spots: spots.map((s) => Object.fromEntries(Object.entries(s).filter(([k]) => k !== String(id)))), batting: (game.batting || []).filter((x) => x !== id) }
+        : {}),
     });
   };
   const keys = { offense: three(game.keys?.offense), defense: three(game.keys?.defense), focus: game.keys?.focus ?? '' };
@@ -141,56 +165,7 @@ export default function GamePlanner({
       {fromCalendar && <p className="banner ok">{fromCalendar}</p>}
 
       <div className="gp-grid">
-        <Card title="Game details">
-          <div className="gp-fields">
-            <label className="field grow">
-              <span className="field-label">Opponent</span>
-              <input className="input" value={game.opponent ?? ''} placeholder="Who you are playing" onChange={(e) => set({ opponent: e.target.value })} />
-            </label>
-            <div className="field">
-              <span className="field-label">Where</span>
-              <div className="seg" role="group" aria-label="Home or away">
-                {(['home', 'away', 'neutral'] as const).map((s) => (
-                  <button key={s} type="button" className={game.side === s ? 'on' : ''} aria-pressed={game.side === s} onClick={() => set({ side: game.side === s ? '' : s })}>
-                    {s[0].toUpperCase() + s.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <label className="field">
-              <span className="field-label">Arrive by</span>
-              <input className="input" type="time" value={game.arrive ?? ''} onChange={(e) => set({ arrive: e.target.value })} />
-            </label>
-            <label className="field grow">
-              <span className="field-label">Uniform</span>
-              <input className="input" value={game.uniform ?? ''} placeholder="Such as white jerseys" onChange={(e) => set({ uniform: e.target.value })} />
-            </label>
-            <label className="field grow">
-              <span className="field-label">Bring</span>
-              <input className="input" value={game.bring ?? ''} placeholder="Water, both jerseys…" onChange={(e) => set({ bring: e.target.value })} />
-            </label>
-          </div>
-          <p className="muted small">The date, start time and place are in the box at the top of the page.</p>
-        </Card>
-
-        <Card title="Keys to the game" hint="Three short points each. These print large on the bench card.">
-          <div className="gp-keys">
-            {(['offense', 'defense'] as const).map((side) => (
-              <div key={side}>
-                <span className="field-label">{side === 'offense' ? 'On offense' : 'On defense'}</span>
-                {keys[side].map((k, i) => (
-                  <input key={i} className="input" aria-label={`${side} key ${i + 1}`} value={k} placeholder={`${i + 1}.`} maxLength={120} onChange={(e) => setKey(side, i, e.target.value)} />
-                ))}
-              </div>
-            ))}
-          </div>
-          <label className="field">
-            <span className="field-label">Team focus</span>
-            <input className="input" value={keys.focus} placeholder="The one thing to remember today" maxLength={160} onChange={(e) => set({ keys: { ...keys, focus: e.target.value } })} />
-          </label>
-        </Card>
-
-        <Card title="Who is here" hint="Anyone marked out is left off the lineup." wide>
+        <Card title="Who is here" hint="Anyone marked out is left off the lineup.">
           {roster.length === 0 ? (
             <p className="muted small">
               There is nobody on the roster yet. <Link to="/teams">Add players</Link> to plan a lineup.
@@ -219,17 +194,42 @@ export default function GamePlanner({
           )}
         </Card>
 
+        <Card title="Keys to the game" hint="Three short points each. These print large on the bench card.">
+          <div className="gp-keys">
+            {(['offense', 'defense'] as const).map((side) => (
+              <div key={side}>
+                <span className="field-label">{side === 'offense' ? 'On offense' : 'On defense'}</span>
+                {keys[side].map((k, i) => (
+                  <input key={i} className="input" aria-label={`${side} key ${i + 1}`} value={k} placeholder={`${i + 1}.`} maxLength={120} onChange={(e) => setKey(side, i, e.target.value)} />
+                ))}
+              </div>
+            ))}
+          </div>
+          <label className="field">
+            <span className="field-label">Team focus</span>
+            <input className="input" value={keys.focus} placeholder="The one thing to remember today" maxLength={160} onChange={(e) => set({ keys: { ...keys, focus: e.target.value } })} />
+          </label>
+        </Card>
+
         <Card
           wide
           title="Lineup and playing time"
-          hint="Tick who is on in each stretch. The first column is your starters."
+          hint="For each stretch, choose the position each player is in. The first column is your starters."
           action={
             here.length > 0 && (
               <span className="row-actions">
-                <button type="button" className="btn small" title="Shares the stretches out so everyone plays about the same" onClick={() => set({ lineup: fillEvenly(here.map((p) => p.id), segments.length, subs.on) })}>
+                <button
+                  type="button"
+                  className="btn small"
+                  title="Shares the stretches out so everyone plays about the same, and hands out positions"
+                  onClick={() => {
+                    const even = fillEvenly(here.map((p) => p.id), segments.length, subs.on);
+                    set({ lineup: even, spots: assignSpots(even, names) });
+                  }}
+                >
                   Share time evenly
                 </button>
-                <button type="button" className="btn small" onClick={() => set({ lineup: [] })}>
+                <button type="button" className="btn small" onClick={() => set({ lineup: [], spots: [] })}>
                   Clear
                 </button>
               </span>
@@ -284,6 +284,41 @@ export default function GamePlanner({
               <input className="input gp-num" type="number" min={1} max={15} value={subs.on} onChange={(e) => setSubs({ on: Math.max(1, Math.min(15, Number(e.target.value) || 1)) })} />
             </label>
           </div>
+          <div className="gp-positions">
+            <span className="field-label">Positions</span>
+            {editingNames ? (
+              <>
+                <input
+                  className="input"
+                  autoFocus
+                  aria-label="Position names, separated by commas"
+                  value={namesText}
+                  placeholder="Such as 1, 2, 3, 4, 5"
+                  onChange={(e) => setNamesText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveNames();
+                    if (e.key === 'Escape') {
+                      setNamesText(names.join(', '));
+                      setEditingNames(false);
+                    }
+                  }}
+                />
+                <button type="button" className="btn small primary" onClick={saveNames}>
+                  Save
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="chips">
+                  {names.length === 0 ? <span className="muted small">None named yet</span> : names.map((n) => <span key={n} className="chip">{n}</span>)}
+                </span>
+                <button type="button" className="link small" onClick={() => setEditingNames(true)}>
+                  Change what they are called
+                </button>
+              </>
+            )}
+            {editingNames && <span className="muted small">Separate them with commas, in the order you want them listed. They become this team's names for every game.</span>}
+          </div>
           {here.length === 0 ? (
             <p className="muted small">Nobody is marked as here yet.</p>
           ) : (
@@ -312,11 +347,25 @@ export default function GamePlanner({
                         </th>
                         {segments.map((s, i) => {
                           const on = lineup[i].includes(p.id);
+                          const spot = spotOf(game, i, p.id);
+                          // A position chosen before the names were changed stays selectable.
+                          const offered = on && spot && !names.includes(spot) ? [...names, spot] : names;
                           return (
                             <td key={i}>
-                              <button type="button" className={`gp-cell ${on ? 'on' : ''}`} aria-pressed={on} aria-label={`${p.name}, ${s.name}`} onClick={() => flip(i, p.id)}>
-                                {on ? '●' : ''}
-                              </button>
+                              <select
+                                className={`gp-cell ${on ? 'on' : ''}`}
+                                aria-label={`${p.name}, ${s.name}`}
+                                value={!on ? '-' : spot || '*'}
+                                onChange={(e) => setCell(i, p.id, e.target.value === '-' ? null : e.target.value === '*' ? '' : e.target.value)}
+                              >
+                                <option value="-">–</option>
+                                {offered.map((n) => (
+                                  <option key={n} value={n}>
+                                    {n}
+                                  </option>
+                                ))}
+                                <option value="*">{names.length ? 'On' : '●'}</option>
+                              </select>
                             </td>
                           );
                         })}

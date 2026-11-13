@@ -71,7 +71,7 @@ const extrasOut = (row) => {
   return { links: Array.isArray(e?.links) ? e.links : [], videos: Array.isArray(e?.videos) ? e.videos : [] };
 };
 const extrasJson = (b, ownerId) => JSON.stringify({ links: cleanLinks(b.links), videos: cleanVideos(b.videos, ownerId) });
-const TEAM_COLS = 'id, sport_id, name, season, notes, calendar_url, calendar_synced_at';
+const TEAM_COLS = 'id, sport_id, name, season, notes, calendar_url, calendar_synced_at, positions';
 
 // --- Bootstrap ------------------------------------------------------------
 app.get('/api/bootstrap', (req, res) => {
@@ -115,6 +115,13 @@ app.put('/api/teams/:id', (req, res) => {
   if (!ownTeam(req, req.params.id)) return notFound(res);
   const b = req.body;
   run('UPDATE teams SET name=?, season=?, notes=? WHERE id=?', str(b.name).trim(), str(b.season), str(b.notes), id(req.params.id));
+  res.json(get(`SELECT ${TEAM_COLS} FROM teams WHERE id=?`, id(req.params.id)));
+});
+/** The names this team uses for its positions, in order. Anyone who can change plans can set them. */
+app.put('/api/teams/:id/positions', (req, res) => {
+  if (!ownTeam(req, req.params.id)) return notFound(res);
+  const names = (Array.isArray(req.body.positions) ? req.body.positions : []).map((n) => str(n).trim().slice(0, 12)).filter(Boolean).slice(0, 30);
+  run('UPDATE teams SET positions=? WHERE id=?', names.join(','), id(req.params.id));
   res.json(get(`SELECT ${TEAM_COLS} FROM teams WHERE id=?`, id(req.params.id)));
 });
 app.delete('/api/teams/:id', (req, res) => {

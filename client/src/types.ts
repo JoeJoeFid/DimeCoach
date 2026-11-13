@@ -11,6 +11,8 @@ export interface Team {
   /** Calendar subscription link (GameChanger and similar), or ''. */
   calendar_url: string;
   calendar_synced_at: string;
+  /** How the team names its positions, comma separated, or '' to use the sport's usual names. */
+  positions?: string;
 }
 /** A game, practice or other event read from the team's linked calendar. */
 export interface ScheduleEvent {
@@ -236,6 +238,10 @@ export interface GamePlan {
   subs?: Partial<GameSubs>;
   /** For each stretch of play, the ids of the players who are on. */
   lineup?: number[][];
+  /** For each stretch of play, the position each player on is playing, by player id. */
+  spots?: Record<string, string>[];
+  /** The position names used in this game. Without it, the team's, then the sport's usual ones. */
+  position_names?: string[];
   /** Baseball and softball: the batting order, and each batter's position. */
   batting?: number[];
   positions?: Record<string, string>;

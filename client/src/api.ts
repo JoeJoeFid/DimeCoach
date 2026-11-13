@@ -439,6 +439,7 @@ export const api = {
 
   createTeam: (t: Partial<Team>) => req<Team>('POST', '/teams', t),
   updateTeam: (t: Team) => req<Team>('PUT', `/teams/${t.id}`, t),
+  setTeamPositions: (teamId: number, positions: string[]) => req<Team>('PUT', `/teams/${teamId}/positions`, { positions }),
   deleteTeam: (id: number) => req('DELETE', `/teams/${id}`),
 
   setCalendar: (teamId: number, url: string) => req<{ count: number; team: Team }>('PUT', `/teams/${teamId}/calendar`, { url }),

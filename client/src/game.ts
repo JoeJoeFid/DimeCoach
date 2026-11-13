@@ -1,6 +1,6 @@
 // What a game plan holds, and the sums behind it: how a game is cut into stretches of play for
 // substituting, how much each player plays, and what can be read out of a calendar entry's title.
-import type { GamePlan, GameSubs, Player } from './types';
+import type { GamePlan, GameSubs, Player, Team } from './types';
 import type { SportKind } from './sports';
 
 /** How each sport usually thinks about substituting. The coach changes any of it for a given game. */
@@ -121,3 +121,78 @@ export function gameHasContent(g: GamePlan | undefined): boolean {
 
 /** Players who can be put in the lineup: on the roster, and not marked out. */
 export const availablePlayers = (players: Player[], g: GamePlan) => players.filter((p) => p.active && (g.availability || {})[String(p.id)] !== 'out');
+
+/** The usual names for positions in each sport. A team can replace them with its own. */
+export const DEFAULT_POSITIONS: Record<SportKind | 'other', string[]> = {
+  basketball: ['PG', 'SG', 'SF', 'PF', 'C'],
+  baseball: ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'],
+  football: ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'CB', 'S', 'K'],
+  volleyball: ['S', 'OH', 'MB', 'OPP', 'L', 'DS'],
+  other: [],
+};
+/** "1, 2, 3, 4, 5" to the names in it. */
+export const parsePositions = (text: string) =>
+  [...new Set(text.split(/[,;\n]/).map((n) => n.trim().slice(0, 12)).filter(Boolean))].slice(0, 30);
+/** The position names for a game: its own, else the team's, else the sport's. */
+export function positionsOf(game: GamePlan, team: Pick<Team, 'positions'> | null | undefined, sport: SportKind | null): string[] {
+  if (game.position_names && game.position_names.length > 0) return game.position_names;
+  const own = parsePositions(team?.positions || '');
+  return own.length > 0 ? own : DEFAULT_POSITIONS[sport ?? 'other'];
+}
+
+/** The position one player has in one stretch, or '' when none was chosen. */
+export const spotOf = (game: GamePlan, seg: number, playerId: number) => game.spots?.[seg]?.[String(playerId)] ?? '';
+
+/**
+ * Hands out positions for a whole lineup. Someone who stays on keeps the position they had; the
+ * others take what is left, in the order the positions are named.
+ */
+export function assignSpots(lineup: number[][], names: string[]): Record<string, string>[] {
+  const out: Record<string, string>[] = [];
+  lineup.forEach((on, s) => {
+    const spots: Record<string, string> = {};
+    const taken = new Set<string>();
+    const before = out[s - 1] || {};
+    for (const id of on) {
+      const had = before[String(id)];
+      if (had && !taken.has(had)) {
+        spots[String(id)] = had;
+        taken.add(had);
+      }
+    }
+    const free = names.filter((n) => !taken.has(n));
+    for (const id of on) if (!(String(id) in spots)) spots[String(id)] = free.shift() ?? '';
+    out.push(spots);
+  });
+  return out;
+}
+
+/** What changes going into one stretch of play: who comes on, who goes off, and who changes position. */
+export interface SubChange {
+  label: string;
+  name: string;
+  on: { id: number; spot: string }[];
+  off: { id: number; spot: string }[];
+  moves: { id: number; from: string; to: string }[];
+}
+/** The starters, then the changes at the start of every later stretch. Stretches where nothing changes are left out. */
+export function substitutions(game: GamePlan, segments: Segment[]): { starters: { id: number; spot: string }[]; changes: SubChange[] } {
+  const on = (s: number) => game.lineup?.[s] ?? [];
+  const starters = on(0).map((id) => ({ id, spot: spotOf(game, 0, id) }));
+  const changes: SubChange[] = [];
+  for (let s = 1; s < segments.length; s++) {
+    const was = on(s - 1);
+    const now = on(s);
+    const change: SubChange = {
+      label: segments[s].label,
+      name: segments[s].name,
+      on: now.filter((id) => !was.includes(id)).map((id) => ({ id, spot: spotOf(game, s, id) })),
+      off: was.filter((id) => !now.includes(id)).map((id) => ({ id, spot: spotOf(game, s - 1, id) })),
+      moves: now
+        .filter((id) => was.includes(id) && spotOf(game, s, id) !== spotOf(game, s - 1, id) && (spotOf(game, s, id) || spotOf(game, s - 1, id)))
+        .map((id) => ({ id, from: spotOf(game, s - 1, id), to: spotOf(game, s, id) })),
+    };
+    if (change.on.length || change.off.length || change.moves.length) changes.push(change);
+  }
+  return { starters, changes };
+}
