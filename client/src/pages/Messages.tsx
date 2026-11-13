@@ -35,6 +35,10 @@ export default function Messages() {
   const failed = (e: unknown) => setError((e as Error).message);
   useEffect(() => {
     api.messages().then(got, failed);
+    // A message that arrives while this page is open is added to the list.
+    const again = () => api.messages().then(got, failed);
+    window.addEventListener('dime:news', again);
+    return () => window.removeEventListener('dime:news', again);
   }, [got]);
 
   /** Opening a message reads it, and goes to what it is about when there is somewhere to go. */

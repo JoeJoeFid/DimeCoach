@@ -296,3 +296,25 @@ db.exec(`CREATE TABLE IF NOT EXISTS notices (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP, read_at TEXT
 );
 CREATE INDEX IF NOT EXISTS notices_user ON notices (user_id, id);`);
+
+// The coach library: things published for every coach, and the packs they are grouped into.
+// item_id is the frozen copy, kept in the library's own workspace. See server/coachLibrary.js.
+db.exec(`CREATE TABLE IF NOT EXISTS library_items (
+  id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL,                             -- 'drill' | 'play' | 'plan'
+  item_id INTEGER NOT NULL,
+  sport TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+  source_owner_id INTEGER, source_item_id INTEGER, published_by INTEGER,
+  adds INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS library_packs (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', sport TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS library_pack_items (
+  pack_id INTEGER NOT NULL REFERENCES library_packs(id) ON DELETE CASCADE,
+  item_id INTEGER NOT NULL REFERENCES library_items(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (pack_id, item_id)
+);`);

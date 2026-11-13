@@ -7,7 +7,9 @@ import { seedIfEmpty, seedSport } from './seed.js';
 import { ImportError, analyzePlan, claudeStatus, manualPrompt, parseDraft } from './ai.js';
 import { CalendarError, fetchCalendar, normalizeCalendarUrl } from './calendar.js';
 import { mountAuth, requireImport } from './auth.js';
+import { mountCoachLibrary } from './coachLibrary.js';
 import { mountCommunities } from './communities.js';
+import { mountLive } from './live.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
 import { cleanPlayIds, mountPlays } from './plays.js';
 import { mountResources } from './resources.js';
@@ -38,6 +40,8 @@ mountAuth(app);
 mountStaff(app);
 mountImages(app);
 mountCommunities(app);
+mountCoachLibrary(app);
+mountLive(app);
 mountPlays(app);
 mountResources(app);
 
@@ -200,7 +204,7 @@ app.get('/api/teams/:id/events', (req, res) => {
 });
 
 // --- Players --------------------------------------------------------------
-const PLAYER_FIELDS = ['name', 'number', 'position', 'grade', 'parent_name', 'parent_email', 'parent_phone', 'notes'];
+const PLAYER_FIELDS = ['name', 'number', 'position', 'grade', 'parent_name', 'parent_email', 'notes'];
 const insertPlayer = (ownerId, teamId, p) =>
   run(
     `INSERT INTO players (owner_id, team_id, ${PLAYER_FIELDS.join(',')}) VALUES (?,?,${PLAYER_FIELDS.map(() => '?').join(',')})`,
@@ -211,7 +215,9 @@ app.get('/api/teams/:id/players', (req, res) => {
   if (!ownTeam(req, req.params.id)) return notFound(res);
   const players = all('SELECT * FROM players WHERE team_id=? ORDER BY name COLLATE NOCASE', id(req.params.id));
   // A helper who was not given the contact details gets names, numbers and positions only.
-  if (req.staff && !req.staff.perms.contacts) for (const p of players) p.parent_name = p.parent_email = p.parent_phone = p.notes = '';
+  // Parent phone numbers are no longer kept. Any saved before stay out of what is sent.
+  for (const p of players) delete p.parent_phone;
+  if (req.staff && !req.staff.perms.contacts) for (const p of players) p.parent_name = p.parent_email = p.notes = '';
   res.json(players);
 });
 app.post('/api/teams/:id/players', (req, res) => {

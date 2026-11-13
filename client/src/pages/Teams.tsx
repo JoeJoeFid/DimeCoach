@@ -22,12 +22,11 @@ const COLUMNS: { key: keyof Player; label: string; headers: string[] }[] = [
   { key: 'grade', label: 'Grade', headers: ['grade', 'year', 'class'] },
   { key: 'parent_name', label: 'Parent name', headers: ['parent', 'parentname', 'guardian', 'guardianname'] },
   { key: 'parent_email', label: 'Parent email', headers: ['email', 'parentemail', 'guardianemail', 'emailaddress'] },
-  { key: 'parent_phone', label: 'Parent phone', headers: ['phone', 'parentphone', 'cell', 'mobile', 'phonenumber'] },
   { key: 'notes', label: 'Notes (coach only)', headers: ['notes', 'note', 'comments'] },
 ];
 const TEMPLATE =
   'data:text/csv;charset=utf-8,' +
-  encodeURIComponent('Name,Number,Position,Grade,Parent name,Parent email,Parent phone,Notes\nJordan Smith,12,PG,5,Pat Smith,pat@example.com,555-0100,\n');
+  encodeURIComponent('Name,Number,Position,Grade,Parent name,Parent email,Notes\nJordan Smith,12,PG,5,Pat Smith,pat@example.com,\n');
 
 /** Turns spreadsheet rows into players. Understands a header row in any column order. */
 function rowsToPlayers(rows: Cell[][]): NewPlayer[] {
@@ -115,7 +114,7 @@ const PERM_LABELS: [TeamPerm, string][] = [
 
 /** The parents of the players on the roster, read from the contact details kept with each player. */
 function ParentsCard({ players, canSee }: { players: Player[] | null; canSee: boolean }) {
-  const parents = (players || []).filter((p) => p.parent_name.trim() || p.parent_email.trim() || p.parent_phone.trim());
+  const parents = (players || []).filter((p) => p.parent_name.trim() || p.parent_email.trim());
   const emails = [...new Set(parents.map((p) => p.parent_email.trim()).filter(Boolean))];
   return (
     <div className="card">
@@ -132,7 +131,7 @@ function ParentsCard({ players, canSee }: { players: Player[] | null; canSee: bo
       ) : players === null ? (
         <p className="muted small">Loading…</p>
       ) : parents.length === 0 ? (
-        <p className="muted small">No parent details yet. Add a parent's name, email or phone to a player on the Team info &amp; roster tab and they are listed here.</p>
+        <p className="muted small">No parent details yet. Add a parent's name or email to a player on the Team info &amp; roster tab and they are listed here.</p>
       ) : (
         <div className="table-scroll">
           <table className="table">
@@ -141,7 +140,6 @@ function ParentsCard({ players, canSee }: { players: Player[] | null; canSee: bo
                 <th>Parent</th>
                 <th>Player</th>
                 <th>Email</th>
-                <th>Phone</th>
               </tr>
             </thead>
             <tbody>
@@ -152,7 +150,6 @@ function ParentsCard({ players, canSee }: { players: Player[] | null; canSee: bo
                   </td>
                   <td>{p.name}</td>
                   <td>{p.parent_email && <a href={`mailto:${p.parent_email}`}>{p.parent_email}</a>}</td>
-                  <td>{p.parent_phone && <a href={`tel:${p.parent_phone}`}>{p.parent_phone}</a>}</td>
                 </tr>
               ))}
             </tbody>
@@ -626,7 +623,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
             <table className="table">
               <thead>
                 <tr>
-                  {COLUMNS.slice(0, 7).map((c) => (
+                  {COLUMNS.slice(0, 6).map((c) => (
                     <th key={c.key}>{c.label}</th>
                   ))}
                 </tr>
@@ -634,7 +631,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
               <tbody>
                 {pending.slice(0, 8).map((p, i) => (
                   <tr key={i}>
-                    {COLUMNS.slice(0, 7).map((c) => (
+                    {COLUMNS.slice(0, 6).map((c) => (
                       <td key={c.key}>{String(p[c.key] ?? '')}</td>
                     ))}
                   </tr>

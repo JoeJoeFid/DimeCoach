@@ -5,6 +5,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Drill, ItemContent, Play } from '../types';
 import ItemBody from '../components/ItemBody';
+import DrillImport from '../components/DrillImport';
 import { Field, Modal, TagChip } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
@@ -23,6 +24,8 @@ export default function Library() {
   const [tagId, setTagId] = useState(0);
   const [error, setError] = useState('');
   const [fromCommunity, setFromCommunity] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState('');
   const [sharing, setSharing] = useState<Drill | null>(null);
   const [plays, setPlays] = useState<Play[]>([]);
   useEffect(() => {
@@ -75,6 +78,9 @@ export default function Library() {
           </p>
         </div>
         <div className="head-actions">
+          <button className="btn" onClick={() => setImporting(true)}>
+            Import
+          </button>
           <button className="btn" onClick={() => setFromCommunity(true)}>
             From a community
           </button>
@@ -84,6 +90,7 @@ export default function Library() {
         </div>
       </div>
       {error && !draft && <p className="error">{error}</p>}
+      {notice && <p className="banner ok">{notice}</p>}
 
       <div className="picker-filters">
         <input className="input grow search-input" type="search" aria-label="Search drills" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -153,6 +160,17 @@ export default function Library() {
           onClose={() => setFromCommunity(false)}
           onAdded={() => {
             setFromCommunity(false);
+            load();
+          }}
+        />
+      )}
+      {importing && (
+        <DrillImport
+          existing={drills || []}
+          onClose={() => setImporting(false)}
+          onDone={(n) => {
+            setImporting(false);
+            setNotice(`${n} drill${n === 1 ? ' was' : 's were'} added to your library.`);
             load();
           }}
         />

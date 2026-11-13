@@ -42,7 +42,6 @@ export interface Player {
   grade: string;
   parent_name: string;
   parent_email: string;
-  parent_phone: string;
   notes: string;
   active: number;
 }

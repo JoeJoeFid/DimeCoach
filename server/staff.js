@@ -130,6 +130,19 @@ function gate(req) {
       if (share.kind === 'plan' && !sameTeam(req.body.team_id)) return NOT_FOUND;
       return need({ drill: 'drills', play: 'plays', plan: 'plans' }[share.kind]);
     }
+    case 'coach-library': {
+      if (!write) return null;
+      // Taking a copy puts it in this team's workspace, so it needs the same permission as making one by hand.
+      if (seg[1] === 'packs' && seg[3] === 'copy') return need('drills') || need('plays');
+      if (seg[1] === 'items' && seg[3] === 'copy') {
+        const item = get('SELECT kind FROM library_items WHERE id=?', Number(seg[2]));
+        if (!item) return NOT_FOUND;
+        if (item.kind === 'plan' && !sameTeam(req.body.team_id)) return NOT_FOUND;
+        return need({ drill: 'drills', play: 'plays', plan: 'plans' }[item.kind]);
+      }
+      // Publishing and packs: the route itself lets only the system administrator through.
+      return null;
+    }
     default:
       return write ? ownerOnly('do this') : null;
   }

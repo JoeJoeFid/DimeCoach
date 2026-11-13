@@ -1,44 +1,142 @@
-import PageTitle from '../components/PageTitle';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, type CommunityDetail, type CommunityPost, type CommunityShare, type ShareKind } from '../api';
+import { api, type CommunityDetail, type CommunityPerson, type CommunityPost, type CommunityShare, type CommunityShareDetail, type ShareKind } from '../api';
 import { useApp } from '../App';
 import type { Drill, Plan, Play } from '../types';
 import { fmtDateShort } from '../util';
-import { Field, Modal } from '../components/bits';
-import { KIND_WORDS, ShareRow, sharesKind } from '../components/community';
+import { Field, Modal, MoreMenu, type MenuItem } from '../components/bits';
+import { KIND_WORDS, ShareRow, SharedPreview, sharesKind } from '../components/community';
 import { confirmDialog } from '../components/dialogs';
+import { PlayDiagram } from '../components/PlayDiagram';
 
 type Tab = 'messages' | 'library' | 'people' | 'settings';
 const KINDS: ShareKind[] = ['drill', 'play', 'plan'];
 const ROLE = { creator: 'Creator', admin: 'Admin', member: 'Member' } as const;
-const when = (iso: string) => {
-  const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z');
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-};
+const KIND_LABEL: Record<ShareKind, string> = { drill: 'Drill', play: 'Play', plan: 'Practice plan' };
+const KIND_TABS: Record<ShareKind, string> = { drill: 'Drills', play: 'Plays', plan: 'Practice plans' };
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+const stamp = (at: string) => new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`).getTime();
+/** "just now", "12 min ago", "3 days ago", then the date, from a time the database wrote in UTC. */
+function ago(at: string) {
+  const secs = Math.max(0, (Date.now() - stamp(at)) / 1000);
+  if (secs < 90) return 'just now';
+  if (secs < 3600) return `${Math.round(secs / 60)} min ago`;
+  if (secs < 86400) return `${Math.round(secs / 3600)} h ago`;
+  const days = Math.round(secs / 86400);
+  if (days < 14) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return new Date(stamp(at)).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
 
-/** One community: its messages, what members share, who is in it, and its settings. */
+const ICON = {
+  talk: 'M4 5h16v11H10l-4 3.500V16H4z',
+  library: 'M12 4 3.500 8.500 12 13l8.500-4.500zM3.500 12.500 12 17l8.500-4.500M3.500 16.500 12 21l8.500-4.500',
+  people: 'M9 11a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM2.500 20c.600-3.600 3.200-5.500 6.500-5.500s5.900 1.900 6.500 5.500M16 4.300a3.500 3.500 0 0 1 0 6.400M18 14.900c1.900.700 3.100 2.400 3.500 5.100',
+  settings: 'M12 15.500a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM12 3v2.500M12 18.500V21M3 12h2.500M18.500 12H21M5.600 5.600l1.800 1.800M16.600 16.600l1.800 1.800M5.600 18.400l1.800-1.800M16.600 7.400l1.800-1.800',
+  search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4',
+  plus: 'M12 5v14M5 12h14',
+  drill: 'M12 4l5 14H7zM5 20h14M9.500 12h5',
+  play: 'M6 6l4 4M10 6l-4 4M17 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM9 17c3 0 4.500-2 5.500-4.500',
+  plan: 'M5 6h14v14H5zM5 10h14M9 4v4M15 4v4M8.500 14h3M8.500 17h6',
+  grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
+  activity: 'M3 12h4l3-7 4 14 3-7h4',
+  trophy: 'M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 3M16 6h3a3 3 0 0 1-3 3M12 13v4M8.500 20h7',
+};
+const Svg = ({ d, size = 17 }: { d: string; size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
+/** A person's initial in a circle. The color is always the same for the same name. */
+function Avatar({ name, big }: { name: string; big?: boolean }) {
+  let n = 0;
+  for (const ch of name) n = (n * 31 + ch.charCodeAt(0)) % 360;
+  return (
+    <span className={`cm-avatar ${big ? 'big' : ''}`} style={{ '--hue': n } as React.CSSProperties} aria-hidden="true">
+      {(name.trim()[0] || '?').toUpperCase()}
+    </span>
+  );
+}
+const RoleBadge = ({ role }: { role: CommunityPerson['role'] }) => <span className={`cm-role ${role}`}>{ROLE[role]}</span>;
+
+/** The picture on a shared thing: the play as drawn, the first lines of a practice, or the kind's own sign. */
+function ShareArt({ share }: { share: CommunityShare }) {
+  const art = share.art;
+  return (
+    <span className={`cm-art ${share.kind}`}>
+      {art?.play ? (
+        <PlayDiagram play={art.play} frame={art.play.frame} />
+      ) : art?.lines?.length ? (
+        <span className="cm-art-lines">
+          {art.lines.map((l, i) => (
+            <span key={i} className={l.kind === 'break' ? 'break' : ''}>
+              <b>{l.duration_min}</b>
+              {l.title || (l.kind === 'break' ? 'Break' : 'Untitled')}
+            </span>
+          ))}
+        </span>
+      ) : art?.text ? (
+        <span className="cm-art-text">{art.text}</span>
+      ) : (
+        <span className="cm-art-sign">
+          <Svg d={ICON[share.kind]} size={44} />
+        </span>
+      )}
+      <span className="cm-art-kind">{KIND_LABEL[share.kind]}</span>
+    </span>
+  );
+}
+
+/** One community: a banner, then its discussion, what members share, who is in it, and its settings. */
 export default function CommunityPage() {
   const { id } = useParams();
   const communityId = Number(id);
   const navigate = useNavigate();
   const app = useApp();
   const [c, setC] = useState<CommunityDetail | null>(null);
+  const [posts, setPosts] = useState<CommunityPost[] | null>(null);
+  const [shares, setShares] = useState<CommunityShare[] | null>(null);
   const [tab, setTab] = useState<Tab>('messages');
+  const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [sharing, setSharing] = useState<ShareKind | 'choose' | null>(null);
+  const [preview, setPreview] = useState<CommunityShare | null>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
 
-  const load = useCallback(
-    () =>
-      api
-        .community(communityId)
-        .then(setC)
-        .catch((e) => setError((e as Error).message)),
-    [communityId],
-  );
+  const fail = (e: unknown) => {
+    setNotice('');
+    setError((e as Error).message);
+  };
+  const load = useCallback(() => api.community(communityId).then(setC).catch(fail), [communityId]);
+  const loadPosts = useCallback(() => api.communityPosts(communityId).then(setPosts).catch(fail), [communityId]);
+  const loadShares = useCallback(() => api.communityShares(communityId).then(setShares).catch(fail), [communityId]);
   useEffect(() => {
     load();
-  }, [load]);
+    loadPosts();
+    loadShares();
+    // What other people write and share shows up without a refresh: at once when the server says so,
+    // and every so often in case that was missed. Being here counts as having read it.
+    const again = () => {
+      loadPosts();
+      loadShares();
+    };
+    const arrived = () => {
+      again();
+      load();
+      api
+        .markCommunitySeen(communityId)
+        .then((n) => app.setCommunityUnread(n.unread))
+        .catch(() => {});
+    };
+    const timer = window.setInterval(again, 20000);
+    window.addEventListener('dime:news', arrived);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('dime:news', arrived);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, loadPosts, loadShares]);
   // Coming in here is what "reading" a community means: nothing in it counts as new after this.
   useEffect(() => {
     api
@@ -55,9 +153,30 @@ export default function CommunityPage() {
       await load();
       return true;
     } catch (e) {
-      setNotice('');
-      setError((e as Error).message);
+      fail(e);
       return false;
+    }
+  };
+  /** Runs something that answers with the library again. */
+  const actShares = async (fn: () => Promise<CommunityShare[]>, done = '') => {
+    try {
+      setShares(await fn());
+      setError('');
+      setNotice(done);
+      load();
+    } catch (e) {
+      fail(e);
+    }
+  };
+  const copy = async (s: CommunityShare) => {
+    try {
+      const made = await api.copyShare(s.id, s.kind === 'plan' ? { team_id: app.team?.id } : { sport_id: app.sport?.id });
+      setError('');
+      if (s.kind === 'plan') navigate(`/plans/${made.id}`);
+      else if (s.kind === 'play') navigate(`/plays/${made.id}`);
+      else setNotice(`"${s.title}" was added to your drill library.`);
+    } catch (e) {
+      fail(e);
     }
   };
 
@@ -70,57 +189,144 @@ export default function CommunityPage() {
     );
   const admin = c.role !== 'member';
   const kinds = KINDS.filter((k) => sharesKind(c, k));
+  const active = c.people.filter((p) => p.status === 'active');
+  const approved = (shares || []).filter((s) => s.status === 'approved');
+  const roleOf = (userId: number) => active.find((p) => p.id === userId)?.role;
+  const startShare = () => (kinds.length === 1 ? setSharing(kinds[0]) : setSharing('choose'));
+  /** What can be done with one shared thing, for the "..." beside it. */
+  const shareMenu = (s: CommunityShare): MenuItem[] => [
+    ...(s.status === 'pending' && admin ? [{ label: 'Approve', onSelect: () => actShares(() => api.approveShare(s.id), `"${s.title}" is now in the library.`) }] : []),
+    ...(s.mine || admin ? [{ label: s.mine ? 'Stop sharing' : s.status === 'pending' ? 'Decline' : 'Remove from the library', danger: true, onSelect: () => actShares(() => api.unshare(s.id)) }] : []),
+  ];
+  const tabs: [Tab, string, string, number][] = [
+    ['messages', 'Discussion', ICON.talk, 0],
+    ['library', 'Shared library', ICON.library, c.pending_shares],
+    ['people', 'People', ICON.people, 0],
+    ['settings', 'Settings', ICON.settings, 0],
+  ];
+  const rail = { c, active, posts: posts || [], approved, onPeople: () => setTab('people') };
 
   return (
-    <div className="page">
+    <div className="page cm">
       <Link to="/communities" className="back-link">
         ← Communities
       </Link>
-      <div className="page-head">
-        <div>
-          <PageTitle>{c.name}</PageTitle>
-          <p className="muted">
-            {c.description || 'A place to talk and share.'} · {c.members} member{c.members === 1 ? '' : 's'}
-          </p>
+      <header className="cm-hero">
+        <span className="cm-crest" aria-hidden="true">
+          {c.name
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((w) => w[0])
+            .join('')
+            .toUpperCase()}
+        </span>
+        <div className="cm-hero-text">
+          <h1>{c.name}</h1>
+          <p>{c.description || 'A place for coaches to talk and share.'}</p>
+          <span className="cm-hero-meta">
+            {active.length} member{active.length === 1 ? '' : 's'} · you are {c.role === 'member' ? 'a member' : c.role === 'admin' ? 'an admin' : 'the creator'}
+          </span>
         </div>
-        <div className="seg" role="tablist" aria-label="Sections">
-          {(
-            [
-              ['messages', 'Messages'],
-              ['library', `Shared library${c.pending_shares ? ` (${c.pending_shares})` : ''}`],
-              ['people', 'People'],
-              ['settings', 'Settings'],
-            ] as const
-          ).map(([t, label]) => (
-            <button key={t} role="tab" className={tab === t ? 'on' : ''} aria-selected={tab === t} onClick={() => setTab(t)}>
+        <div className="cm-hero-actions">
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setTab('messages');
+              window.setTimeout(() => composer.current?.focus(), 50);
+            }}
+          >
+            <Svg d={ICON.plus} size={15} /> New post
+          </button>
+          {kinds.length > 0 && (
+            <button type="button" className="btn primary" onClick={startShare}>
+              <Svg d={ICON.library} size={15} /> Share one of mine
+            </button>
+          )}
+        </div>
+      </header>
+      <div className="cm-bar">
+        <div className="cm-tabs" role="tablist" aria-label="Sections">
+          {tabs.map(([t, label, icon, count]) => (
+            <button key={t} type="button" role="tab" className={tab === t ? 'on' : ''} aria-selected={tab === t} onClick={() => setTab(t)}>
+              <Svg d={icon} />
               {label}
+              {count > 0 && <span className="cm-count">{count}</span>}
             </button>
           ))}
         </div>
+        {(tab === 'messages' || tab === 'library') && (
+          <label className="cm-search">
+            <Svg d={ICON.search} size={16} />
+            <input type="search" placeholder="Search this community" aria-label="Search this community" value={q} onChange={(e) => setQ(e.target.value)} />
+          </label>
+        )}
       </div>
       {error && <p className="error">{error}</p>}
       {notice && <p className="banner ok">{notice}</p>}
 
-      {tab === 'messages' && <Messages communityId={c.id} />}
-      {tab === 'library' && <Library c={c} kinds={kinds} admin={admin} onChanged={load} />}
+      {tab === 'messages' && (
+        <div className="cm-cols">
+          <Feed
+            c={c}
+            q={q}
+            kinds={kinds}
+            posts={posts}
+            shares={approved}
+            roleOf={roleOf}
+            composer={composer}
+            onPosts={setPosts}
+            onError={fail}
+            onShare={setSharing}
+            onPreview={setPreview}
+            onCopy={copy}
+            shareMenu={shareMenu}
+          />
+          <aside className="cm-rail">
+            <Overview {...rail} />
+            <Members {...rail} admin={admin} />
+            <Activity {...rail} />
+            <Contributors {...rail} />
+          </aside>
+        </div>
+      )}
+      {tab === 'library' && (
+        <Library
+          c={c}
+          q={q}
+          setQ={setQ}
+          kinds={kinds}
+          admin={admin}
+          shares={shares}
+          posts={posts || []}
+          active={active}
+          onShare={startShare}
+          onPreview={setPreview}
+          onCopy={copy}
+          shareMenu={shareMenu}
+          onDiscussion={() => setTab('messages')}
+          onNewCode={() => run(() => api.newJoinCode(c.id), 'There is a new join code. The old one no longer works.')}
+        />
+      )}
 
       {tab === 'people' && (
         <>
           <div className="card">
             <h2>
-              People <span className="muted">({c.people.filter((p) => p.status === 'active').length})</span>
+              People <span className="muted">({active.length})</span>
             </h2>
-            <ul className="plan-list">
+            <ul className="cm-people">
               {c.people.map((p) => (
-                <li key={p.id} className="plan-row">
-                  <div className="plan-main">
-                    <span className="plan-title">
+                <li key={p.id}>
+                  <Avatar name={p.name} big />
+                  <div className="cm-person">
+                    <span className="cm-person-name">
                       {p.name}
-                      <span className={`kind ${p.role === 'member' ? '' : 'game'}`}>{ROLE[p.role]}</span>
+                      <RoleBadge role={p.role} />
                       {p.id === app.user.id && <span className="kind">You</span>}
                       {p.status === 'invited' && <span className="kind">Invited, not joined yet</span>}
                     </span>
-                    {p.email && <span className="plan-meta">{p.email}</span>}
+                    {p.email && <span className="muted small">{p.email}</span>}
                   </div>
                   <span className="row-actions">
                     {c.role === 'creator' && p.role !== 'creator' && p.status === 'active' && (
@@ -138,7 +344,7 @@ export default function CommunityPage() {
                         className="btn small danger"
                         onClick={async () => {
                           if (p.status === 'active' && !(await confirmDialog({ title: `Remove ${p.name} from ${c.name}?`, body: 'What they shared here is removed from the library. Their messages stay.', confirmLabel: 'Remove', danger: true }))) return;
-                          run(() => api.removeMember(c.id, p.id), p.status === 'invited' ? 'Invitation withdrawn.' : `${p.name} was removed.`);
+                          run(() => api.removeMember(c.id, p.id), p.status === 'invited' ? 'Invitation withdrawn.' : `${p.name} was removed.`).then(loadShares);
                         }}
                       >
                         {p.status === 'invited' ? 'Withdraw invite' : 'Remove'}
@@ -161,8 +367,7 @@ export default function CommunityPage() {
             <div className="card">
               <h2>Settings</h2>
               <p className="muted">
-                Community admins control the settings. This community shares:{' '}
-                {kinds.length ? kinds.map((k) => KIND_WORDS[k].many).join(', ') : 'messages only'}.
+                Community admins control the settings. This community shares: {kinds.length ? kinds.map((k) => KIND_WORDS[k].many).join(', ') : 'messages only'}.
               </p>
             </div>
           )}
@@ -179,7 +384,7 @@ export default function CommunityPage() {
                       await api.deleteCommunity(c.id);
                       navigate('/communities');
                     } catch (e) {
-                      setError((e as Error).message);
+                      fail(e);
                     }
                   }}
                 >
@@ -197,7 +402,7 @@ export default function CommunityPage() {
                       await api.removeMember(c.id, app.user.id);
                       navigate('/communities');
                     } catch (e) {
-                      setError((e as Error).message);
+                      fail(e);
                     }
                   }}
                 >
@@ -208,125 +413,412 @@ export default function CommunityPage() {
           </div>
         </>
       )}
+
+      {sharing === 'choose' && (
+        <Modal title={`Share with ${c.name}`} onClose={() => setSharing(null)}>
+          <p className="muted small">What would you like to share?</p>
+          <div className="cm-choose">
+            {kinds.map((k) => (
+              <button key={k} type="button" onClick={() => setSharing(k)}>
+                <Svg d={ICON[k]} size={26} />
+                {cap(KIND_WORDS[k].one)}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+      {sharing && sharing !== 'choose' && (
+        <ShareMine
+          c={c}
+          kind={sharing}
+          shared={(shares || []).filter((s) => s.mine && s.kind === sharing)}
+          needsApproval={c.require_approval && !admin}
+          onShare={(itemId) => actShares(() => api.share(c.id, sharing, itemId))}
+          onClose={() => setSharing(null)}
+        />
+      )}
+      {preview && <PreviewModal share={preview} onClose={() => setPreview(null)} onCopy={preview.mine ? undefined : () => copy(preview)} />}
     </div>
   );
 }
 
-function Messages({ communityId }: { communityId: number }) {
-  const [posts, setPosts] = useState<CommunityPost[] | null>(null);
-  const [body, setBody] = useState('');
+/** A shared thing opened up to read, with a button to take a copy. */
+function PreviewModal({ share, onClose, onCopy }: { share: CommunityShare; onClose: () => void; onCopy?: () => void }) {
+  const [detail, setDetail] = useState<CommunityShareDetail | null>(null);
   const [error, setError] = useState('');
-  const load = useCallback(
-    () =>
-      api
-        .communityPosts(communityId)
-        .then(setPosts)
-        .catch((e) => setError((e as Error).message)),
-    [communityId],
-  );
   useEffect(() => {
-    load();
-    // New messages from others show up without a refresh.
-    const timer = window.setInterval(load, 20000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+    api.communityShare(share.id).then(setDetail, (e) => setError((e as Error).message));
+  }, [share.id]);
+  return (
+    <Modal title={share.title} onClose={onClose} wide>
+      <p className="muted small">
+        {KIND_LABEL[share.kind]} · {share.summary} · shared by {share.mine ? 'you' : share.by}
+      </p>
+      {error ? <p className="error">{error}</p> : detail ? <SharedPreview detail={detail} /> : <p className="muted">Loading…</p>}
+      <div className="modal-actions">
+        <button className="btn" onClick={onClose}>
+          Close
+        </button>
+        {onCopy && (
+          <button className="btn primary" onClick={onCopy}>
+            Add to mine
+          </button>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+type FeedEntry = { key: string; at: string; post?: CommunityPost; share?: CommunityShare };
+type FeedFilter = 'all' | 'posts' | 'shares';
+
+/** The discussion: a box to write in, then messages and newly shared things together, newest first. */
+function Feed({
+  c,
+  q,
+  kinds,
+  posts,
+  shares,
+  roleOf,
+  composer,
+  onPosts,
+  onError,
+  onShare,
+  onPreview,
+  onCopy,
+  shareMenu,
+}: {
+  c: CommunityDetail;
+  q: string;
+  kinds: ShareKind[];
+  posts: CommunityPost[] | null;
+  shares: CommunityShare[];
+  roleOf: (userId: number) => CommunityPerson['role'] | undefined;
+  composer: React.RefObject<HTMLTextAreaElement | null>;
+  onPosts: (p: CommunityPost[]) => void;
+  onError: (e: unknown) => void;
+  onShare: (k: ShareKind) => void;
+  onPreview: (s: CommunityShare) => void;
+  onCopy: (s: CommunityShare) => void;
+  shareMenu: (s: CommunityShare) => MenuItem[];
+}) {
+  const { user } = useApp();
+  const [body, setBody] = useState('');
+  const [filter, setFilter] = useState<FeedFilter>('all');
   const send = async (e: FormEvent) => {
     e.preventDefault();
+    if (!body.trim()) return;
     try {
-      setPosts(await api.postToCommunity(communityId, body));
+      onPosts(await api.postToCommunity(c.id, body));
       setBody('');
-      setError('');
     } catch (err) {
-      setError((err as Error).message);
+      onError(err);
     }
   };
+  const words = q.trim().toLowerCase();
+  const entries = useMemo(() => {
+    const all: FeedEntry[] = [
+      ...(posts || []).map((p) => ({ key: `p${p.id}`, at: p.created_at, post: p })),
+      ...shares.map((s) => ({ key: `s${s.id}`, at: s.shared_at, share: s })),
+    ];
+    return all
+      .filter((e) => filter === 'all' || (filter === 'posts' ? !!e.post : !!e.share))
+      .filter((e) => !words || (e.post ? `${e.post.body} ${e.post.by}` : `${e.share!.title} ${e.share!.by} ${e.share!.tags.map((t) => t.name).join(' ')}`).toLowerCase().includes(words))
+      .sort((a, b) => stamp(b.at) - stamp(a.at));
+  }, [posts, shares, filter, words]);
+  const chips: [FeedFilter, string][] = [
+    ['all', 'All posts'],
+    ['posts', 'Messages'],
+    ['shares', 'Shared drills, plays and plans'],
+  ];
+
   return (
-    <div className="card messages">
-      <form className="message-form" onSubmit={send}>
-        <textarea
-          className="input"
-          rows={2}
-          maxLength={4000}
-          aria-label="Message"
-          placeholder="Write to the community"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && body.trim()) send(e);
-          }}
-        />
-        <button className="btn primary" disabled={!body.trim()}>
-          Post
-        </button>
+    <div className="cm-feed">
+      <form className="card cm-compose" onSubmit={send}>
+        <div className="cm-compose-row">
+          <Avatar name={user.name} big />
+          <textarea
+            ref={composer}
+            className="input"
+            rows={body.includes('\n') || body.length > 90 ? 3 : 1}
+            maxLength={4000}
+            aria-label="Message"
+            placeholder="Ask a question, start a discussion, or share an idea…"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(e);
+            }}
+          />
+        </div>
+        <div className="cm-compose-actions">
+          {kinds.map((k) => (
+            <button key={k} type="button" className="cm-pill" onClick={() => onShare(k)}>
+              <Svg d={ICON[k]} size={15} /> Share a {KIND_WORDS[k].one}
+            </button>
+          ))}
+          <button className="btn primary" disabled={!body.trim()}>
+            Post
+          </button>
+        </div>
       </form>
-      {error && <p className="error">{error}</p>}
+
+      <div className="cm-chips" role="group" aria-label="Show">
+        {chips.map(([f, label]) => (
+          <button key={f} type="button" className={filter === f ? 'on' : ''} aria-pressed={filter === f} onClick={() => setFilter(f)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {posts === null ? (
         <p className="muted">Loading…</p>
-      ) : posts.length === 0 ? (
-        <p className="muted">No messages yet. Say hello.</p>
+      ) : entries.length === 0 ? (
+        <div className="card cm-none">{words ? 'Nothing matches that search.' : filter === 'shares' ? 'Nothing has been shared here yet.' : 'No messages yet. Say hello.'}</div>
       ) : (
-        <ul className="message-list">
-          {posts.map((p) => (
-            <li key={p.id} className={p.mine ? 'mine' : ''}>
-              <div className="message-meta">
-                <strong>{p.mine ? 'You' : p.by}</strong>
-                <span className="muted small">{when(p.created_at)}</span>
-                {p.can_delete && (
-                  <button
-                    type="button"
-                    className="link small"
-                    onClick={async () => {
-                      if (!(await confirmDialog({ title: 'Delete this message?', body: 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
-                      api.deletePost(communityId, p.id).then(setPosts, (e) => setError((e as Error).message));
-                    }}
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-              <p className="message-body">{p.body}</p>
-            </li>
-          ))}
+        <ul className="cm-posts">
+          {entries.map((e) => {
+            const by = e.post ? e.post.by : e.share!.by;
+            const byId = e.post ? e.post.by_id : e.share!.by_id;
+            const role = roleOf(byId);
+            const menu: MenuItem[] = e.post
+              ? e.post.can_delete
+                ? [
+                    {
+                      label: 'Delete this message',
+                      danger: true,
+                      onSelect: async () => {
+                        if (!(await confirmDialog({ title: 'Delete this message?', body: 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
+                        api.deletePost(c.id, e.post!.id).then(onPosts, onError);
+                      },
+                    },
+                  ]
+                : []
+              : shareMenu(e.share!);
+            return (
+              <li key={e.key} className="card cm-post">
+                <Avatar name={by} big />
+                <div className="cm-post-main">
+                  <div className="cm-post-head">
+                    <strong>{by}</strong>
+                    {role && <RoleBadge role={role} />}
+                    <span className="muted small">
+                      {ago(e.at)}
+                      {e.share && ` · shared a ${KIND_WORDS[e.share.kind].one}`}
+                    </span>
+                    <span className="cm-post-menu">
+                      <MoreMenu items={menu} />
+                    </span>
+                  </div>
+                  {e.post && <p className="message-body">{e.post.body}</p>}
+                  {e.share && (
+                    <div className="cm-embed">
+                      <button type="button" className="cm-embed-main" onClick={() => onPreview(e.share!)}>
+                        <ShareArt share={e.share} />
+                        <span className="cm-embed-text">
+                          <strong>{e.share.title}</strong>
+                          <span className="muted small">{[e.share.summary, ...e.share.tags.map((t) => t.name)].filter(Boolean).join(' · ')}</span>
+                        </span>
+                      </button>
+                      <span className="row-actions">
+                        <button type="button" className="btn small" onClick={() => onPreview(e.share!)}>
+                          View
+                        </button>
+                        {!e.share.mine && (
+                          <button type="button" className="btn small primary" onClick={() => onCopy(e.share!)}>
+                            Add to mine
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
   );
 }
 
-function Library({ c, kinds, admin, onChanged }: { c: CommunityDetail; kinds: ShareKind[]; admin: boolean; onChanged: () => void }) {
-  const { sport, team } = useApp();
-  const navigate = useNavigate();
-  const [shares, setShares] = useState<CommunityShare[] | null>(null);
-  const [kind, setKind] = useState<ShareKind>(kinds[0] ?? 'drill');
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [sharing, setSharing] = useState(false);
-  const set = (list: CommunityShare[]) => {
-    setShares(list);
-    onChanged();
-  };
-  useEffect(() => {
-    api.communityShares(c.id).then(setShares, (e) => setError((e as Error).message));
-  }, [c.id]);
-  const act = async (fn: () => Promise<CommunityShare[]>, done = '') => {
-    try {
-      set(await fn());
-      setError('');
-      setNotice(done);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-  const copy = async (s: CommunityShare) => {
-    try {
-      const made = await api.copyShare(s.id, s.kind === 'plan' ? { team_id: team?.id } : { sport_id: sport?.id });
-      setError('');
-      if (s.kind === 'plan') navigate(`/plans/${made.id}`);
-      else if (s.kind === 'play') navigate(`/plays/${made.id}`);
-      else setNotice(`"${s.title}" was added to your drill library.`);
-    } catch (e) {
-      setError((e as Error).message);
-    }
+interface RailProps {
+  c: CommunityDetail;
+  active: CommunityPerson[];
+  posts: CommunityPost[];
+  approved: CommunityShare[];
+  onPeople: () => void;
+}
+const RailCard = ({ icon, title, action, children }: { icon: string; title: ReactNode; action?: ReactNode; children: ReactNode }) => (
+  <section className="card cm-side">
+    <div className="cm-side-head">
+      <Svg d={icon} />
+      <h2>{title}</h2>
+      {action}
+    </div>
+    {children}
+  </section>
+);
+function Overview({ c, active, posts, approved }: RailProps) {
+  const tiles: [string, number, string][] = [
+    [ICON.talk, posts.length, 'Messages'],
+    [ICON.play, approved.filter((s) => s.kind !== 'plan').length, 'Drills & plays'],
+    [ICON.plan, approved.filter((s) => s.kind === 'plan').length, 'Practice plans'],
+  ];
+  return (
+    <RailCard icon={ICON.people} title="Community overview">
+      <p className="muted small">
+        <strong>{active.length}</strong> member{active.length === 1 ? '' : 's'} · started by {c.created_by_name || 'a coach'}
+      </p>
+      <div className="cm-tiles">
+        {tiles.map(([icon, n, label]) => (
+          <span key={label}>
+            <Svg d={icon} size={20} />
+            <b>{n}</b>
+            <small>{label}</small>
+          </span>
+        ))}
+      </div>
+    </RailCard>
+  );
+}
+function Members({ active, onPeople, admin }: RailProps & { admin: boolean }) {
+  return (
+    <RailCard
+      icon={ICON.people}
+      title={
+        <>
+          Members <span className="muted">({active.length})</span>
+        </>
+      }
+      action={
+        <button type="button" className="link small" onClick={onPeople}>
+          {admin ? 'Manage' : 'See all'}
+        </button>
+      }
+    >
+      <ul className="cm-members">
+        {active.slice(0, 8).map((p) => (
+          <li key={p.id}>
+            <Avatar name={p.name} />
+            <span>{p.name}</span>
+            <RoleBadge role={p.role} />
+          </li>
+        ))}
+      </ul>
+      {active.length > 8 && <p className="muted small">and {active.length - 8} more</p>}
+    </RailCard>
+  );
+}
+function Activity({ posts, approved }: RailProps) {
+  const rows = [
+    ...posts.map((p) => ({ key: `p${p.id}`, at: p.created_at, icon: ICON.talk, by: p.by, text: `wrote: ${p.body.length > 60 ? `${p.body.slice(0, 60)}…` : p.body}` })),
+    ...approved.map((s) => ({ key: `s${s.id}`, at: s.shared_at, icon: ICON[s.kind], by: s.by, text: `shared a ${KIND_WORDS[s.kind].one}: ${s.title}` })),
+  ]
+    .sort((a, b) => stamp(b.at) - stamp(a.at))
+    .slice(0, 5);
+  return (
+    <RailCard icon={ICON.activity} title="Recent activity">
+      {rows.length === 0 ? (
+        <p className="muted small">Nothing yet.</p>
+      ) : (
+        <ul className="cm-activity">
+          {rows.map((r) => (
+            <li key={r.key}>
+              <Svg d={r.icon} size={15} />
+              <span>
+                <strong>{r.by}</strong> {r.text}
+              </span>
+              <small>{ago(r.at)}</small>
+            </li>
+          ))}
+        </ul>
+      )}
+    </RailCard>
+  );
+}
+function Contributors({ active, posts, approved }: RailProps) {
+  const counts = new Map<number, number>();
+  for (const p of posts) counts.set(p.by_id, (counts.get(p.by_id) || 0) + 1);
+  for (const s of approved) counts.set(s.by_id, (counts.get(s.by_id) || 0) + 1);
+  const rows = active
+    .map((p) => ({ p, n: counts.get(p.id) || 0 }))
+    .filter((r) => r.n > 0)
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 5);
+  const most = rows[0]?.n || 1;
+  return (
+    <RailCard icon={ICON.trophy} title="Top contributors">
+      {rows.length === 0 ? (
+        <p className="muted small">Messages and shared items count here.</p>
+      ) : (
+        <ul className="cm-top">
+          {rows.map(({ p, n }) => (
+            <li key={p.id}>
+              <Avatar name={p.name} />
+              <span className="cm-top-main">
+                <span>
+                  <strong>{p.name}</strong>
+                  <small>
+                    {n} contribution{n === 1 ? '' : 's'}
+                  </small>
+                </span>
+                <span className="cm-top-bar">
+                  <span style={{ width: `${(n / most) * 100}%` }} />
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </RailCard>
+  );
+}
+
+type Sort = 'new' | 'name';
+const VIEW_KEY = 'practiceplan.communityView';
+
+/** What members have shared: kinds along the top, filters down the side, and each thing as a card. */
+function Library({
+  c,
+  q,
+  setQ,
+  kinds,
+  admin,
+  shares,
+  posts,
+  active,
+  onShare,
+  onPreview,
+  onCopy,
+  shareMenu,
+  onDiscussion,
+  onNewCode,
+}: {
+  c: CommunityDetail;
+  q: string;
+  setQ: (q: string) => void;
+  kinds: ShareKind[];
+  admin: boolean;
+  shares: CommunityShare[] | null;
+  posts: CommunityPost[];
+  active: CommunityPerson[];
+  onShare: () => void;
+  onPreview: (s: CommunityShare) => void;
+  onCopy: (s: CommunityShare) => void;
+  shareMenu: (s: CommunityShare) => MenuItem[];
+  onDiscussion: () => void;
+  onNewCode: () => void;
+}) {
+  const [kind, setKind] = useState<'all' | ShareKind>('all');
+  const [tags, setTags] = useState<string[]>([]);
+  const [mineOnly, setMineOnly] = useState(false);
+  const [sort, setSort] = useState<Sort>('new');
+  const [view, setViewState] = useState<'grid' | 'list'>(() => (localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid'));
+  const [copied, setCopied] = useState(false);
+  const setView = (v: 'grid' | 'list') => {
+    localStorage.setItem(VIEW_KEY, v);
+    setViewState(v);
   };
 
   if (kinds.length === 0)
@@ -338,94 +830,261 @@ function Library({ c, kinds, admin, onChanged }: { c: CommunityDetail; kinds: Sh
         </p>
       </div>
     );
-  const ofKind = (shares || []).filter((s) => s.kind === kind);
-  const waiting = ofKind.filter((s) => s.status === 'pending');
-  const approved = ofKind.filter((s) => s.status === 'approved');
+  const all = shares || [];
+  const waiting = all.filter((s) => s.status === 'pending');
+  const approved = all.filter((s) => s.status === 'approved');
+  const count = (k: ShareKind) => approved.filter((s) => s.kind === k).length;
+  const ofKind = approved.filter((s) => kind === 'all' || s.kind === kind);
+  // Categories on what is being looked at, most used first.
+  const tagCounts = new Map<string, number>();
+  for (const s of ofKind) for (const t of s.tags) tagCounts.set(t.name, (tagCounts.get(t.name) || 0) + 1);
+  const tagList = [...tagCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const words = q.trim().toLowerCase();
+  const shown = ofKind
+    .filter((s) => tags.length === 0 || s.tags.some((t) => tags.includes(t.name)))
+    .filter((s) => !mineOnly || s.mine)
+    .filter((s) => !words || `${s.title} ${s.by} ${s.summary} ${s.tags.map((t) => t.name).join(' ')}`.toLowerCase().includes(words))
+    .sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : stamp(b.shared_at) - stamp(a.shared_at)));
+  const filtered = tags.length > 0 || mineOnly || kind !== 'all' || !!words;
+  const clear = () => {
+    setTags([]);
+    setMineOnly(false);
+    setKind('all');
+    setQ('');
+  };
+  const flipTag = (name: string) => setTags((t) => (t.includes(name) ? t.filter((x) => x !== name) : [...t, name]));
+  const actions = (s: CommunityShare, withPreview = true) => (
+    <>
+      {withPreview && (
+        <button type="button" className="btn small" onClick={() => onPreview(s)}>
+          Preview
+        </button>
+      )}
+      {!s.mine && s.status === 'approved' && (
+        <button type="button" className="btn small primary" onClick={() => onCopy(s)}>
+          Add to mine
+        </button>
+      )}
+      <MoreMenu items={shareMenu(s)} />
+    </>
+  );
+  const card = (s: CommunityShare) => (
+    <li key={s.id} className="cm-card">
+      <button type="button" className="cm-card-art" onClick={() => onPreview(s)} aria-label={`Preview ${s.title}`}>
+        <ShareArt share={s} />
+      </button>
+      <div className="cm-card-body">
+        <h3>
+          {s.title}
+          {s.status === 'pending' && <span className="kind">Waiting for approval</span>}
+        </h3>
+        <p className="muted small">{s.summary}</p>
+        <div className="cm-card-by">
+          <Avatar name={s.by} />
+          <span>{s.mine ? 'You' : s.by}</span>
+          <small>{ago(s.shared_at)}</small>
+        </div>
+        {s.tags.length > 0 && (
+          <span className="chips">
+            {s.tags.slice(0, 3).map((t) => (
+              <span key={t.name} className="chip">
+                <span className="dot" style={{ background: t.color }} />
+                {t.name}
+              </span>
+            ))}
+            {s.tags.length > 3 && <span className="chip">+{s.tags.length - 3}</span>}
+          </span>
+        )}
+        <div className="cm-card-actions">{actions(s)}</div>
+      </div>
+    </li>
+  );
+  const kindTabs: ['all' | ShareKind, string, string, number][] = [['all', 'Everything', ICON.grid, approved.length], ...kinds.map((k) => [k, KIND_TABS[k], ICON[k], count(k)] as ['all' | ShareKind, string, string, number])];
 
   return (
-    <div className="card">
-      <div className="card-head">
-        <div className="seg" role="group" aria-label="Kind">
-          {kinds.map((k) => (
-            <button key={k} className={kind === k ? 'on' : ''} aria-pressed={kind === k} onClick={() => setKind(k)}>
-              {KIND_WORDS[k].many[0].toUpperCase() + KIND_WORDS[k].many.slice(1)}
-            </button>
-          ))}
+    <div className="cm-lib">
+      <div className="cm-lib-head">
+        <span className="cm-lib-icon">
+          <Svg d={ICON.library} size={26} />
+        </span>
+        <div className="cm-lib-title">
+          <h2>Shared library</h2>
+          <p className="muted">
+            {cap(kinds.map((k) => KIND_WORDS[k].many).join(', ').replace(/, ([^,]*)$/, ' and $1'))} shared by the coaches in {c.name}.
+          </p>
         </div>
-        <button className="btn primary" onClick={() => setSharing(true)}>
-          Share one of mine
+        {admin && c.join_code && (
+          <span className="cm-code" title="Send this code to a coach. They type it on their Communities page to join.">
+            <small>Join code</small>
+            <code>{c.join_code}</code>
+            <button
+              type="button"
+              className="link small"
+              onClick={() => {
+                navigator.clipboard?.writeText(c.join_code || '');
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1500);
+              }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+            <button
+              type="button"
+              className="link small"
+              onClick={async () => {
+                if (await confirmDialog({ title: 'Make a new join code?', body: 'The old code stops working. People already in the community are not affected.', confirmLabel: 'New code' })) onNewCode();
+              }}
+            >
+              New
+            </button>
+          </span>
+        )}
+        <button type="button" className="btn primary" onClick={onShare}>
+          <Svg d={ICON.plus} size={15} /> Share one of mine
         </button>
       </div>
-      {error && <p className="error">{error}</p>}
-      {notice && <p className="banner ok">{notice}</p>}
-      {shares === null ? (
-        <p className="muted">Loading…</p>
-      ) : (
-        <>
-          {waiting.length > 0 && (
+
+      <div className="cm-kinds" role="group" aria-label="Kind">
+        {kindTabs.map(([k, label, icon, n]) => (
+          <button key={k} type="button" className={kind === k ? 'on' : ''} aria-pressed={kind === k} onClick={() => setKind(k)}>
+            <Svg d={icon} />
+            {label}
+            <span className="cm-count">{n}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="cm-lib-cols">
+        <aside className="card cm-filters" aria-label="Filters">
+          <div className="cm-side-head">
+            <h2>Filters</h2>
+            {filtered && (
+              <button type="button" className="link small" onClick={clear}>
+                Clear all
+              </button>
+            )}
+          </div>
+          <h3>Kind</h3>
+          {kinds.map((k) => (
+            <label key={k} className="cm-check">
+              <input type="checkbox" checked={kind === k} onChange={() => setKind(kind === k ? 'all' : k)} />
+              <span>{KIND_TABS[k]}</span>
+              <small>{count(k)}</small>
+            </label>
+          ))}
+          {tagList.length > 0 && (
             <>
-              <h4>{admin ? 'Waiting for your approval' : 'Yours, waiting for an admin to approve'}</h4>
-              <ul className="share-list">
-                {waiting.map((s) => (
-                  <ShareRow
-                    key={s.id}
-                    share={s}
-                    actions={
-                      <>
-                        {admin && (
-                          <button className="btn small primary" onClick={() => act(() => api.approveShare(s.id), `"${s.title}" is now in the library.`)}>
-                            Approve
-                          </button>
-                        )}
-                        <button className="btn small danger" onClick={() => act(() => api.unshare(s.id))}>
-                          {s.mine ? 'Stop sharing' : 'Decline'}
-                        </button>
-                      </>
-                    }
-                  />
-                ))}
-              </ul>
-              <h4>In the library</h4>
+              <h3>Category</h3>
+              {tagList.slice(0, 12).map(([name, n]) => (
+                <label key={name} className="cm-check">
+                  <input type="checkbox" checked={tags.includes(name)} onChange={() => flipTag(name)} />
+                  <span>{name}</span>
+                  <small>{n}</small>
+                </label>
+              ))}
             </>
           )}
-          {approved.length === 0 ? (
-            <p className="muted">Nobody has shared a {KIND_WORDS[kind].one} here yet.</p>
+          <h3>Shared by</h3>
+          <label className="cm-check">
+            <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
+            <span>Only mine</span>
+            <small>{ofKind.filter((s) => s.mine).length}</small>
+          </label>
+        </aside>
+
+        <div className="cm-lib-main">
+          <div className="cm-lib-tools">
+            <label className="cm-search grow">
+              <Svg d={ICON.search} size={16} />
+              <input type="search" placeholder="Search the library" aria-label="Search the library" value={q} onChange={(e) => setQ(e.target.value)} />
+            </label>
+            <select className="input" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+              <option value="new">Newest first</option>
+              <option value="name">A to Z</option>
+            </select>
+            <div className="seg" role="group" aria-label="Layout">
+              <button type="button" className={view === 'grid' ? 'on' : ''} aria-pressed={view === 'grid'} aria-label="Cards" title="Cards" onClick={() => setView('grid')}>
+                <Svg d={ICON.grid} size={16} />
+              </button>
+              <button type="button" className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} aria-label="List" title="List" onClick={() => setView('list')}>
+                <Svg d={ICON.list} size={16} />
+              </button>
+            </div>
+          </div>
+
+          {shares === null ? (
+            <p className="muted">Loading…</p>
           ) : (
-            <ul className="share-list">
-              {approved.map((s) => (
-                <ShareRow
-                  key={s.id}
-                  share={s}
-                  actions={
-                    <>
-                      {!s.mine && (
-                        <button className="btn small primary" onClick={() => copy(s)}>
-                          Add to mine
-                        </button>
-                      )}
-                      {(s.mine || admin) && (
-                        <button className="btn small danger" onClick={() => act(() => api.unshare(s.id))}>
-                          {s.mine ? 'Stop sharing' : 'Remove'}
-                        </button>
-                      )}
-                    </>
-                  }
-                />
+            <>
+              {waiting.length > 0 && (
+                <section className="cm-waiting">
+                  <h3>{admin ? 'Waiting for your approval' : 'Yours, waiting for an admin to approve'}</h3>
+                  <ul className="cm-grid">{waiting.map(card)}</ul>
+                </section>
+              )}
+              {shown.length === 0 ? (
+                <div className="card cm-none">{approved.length === 0 ? 'Nobody has shared anything here yet. Be the first.' : 'Nothing matches those filters.'}</div>
+              ) : view === 'grid' ? (
+                <ul className="cm-grid">{shown.map(card)}</ul>
+              ) : (
+                <div className="card">
+                  <ul className="share-list">
+                    {shown.map((s) => (
+                      <ShareRow key={s.id} share={s} actions={actions(s, false)} />
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <aside className="cm-rail">
+          <RailCard
+            icon={ICON.talk}
+            title="Recent discussion"
+            action={
+              <button type="button" className="link small" onClick={onDiscussion}>
+                View all
+              </button>
+            }
+          >
+            {posts.length === 0 ? (
+              <p className="muted small">No messages yet.</p>
+            ) : (
+              <ul className="cm-quotes">
+                {posts.slice(0, 3).map((p) => (
+                  <li key={p.id}>
+                    <Avatar name={p.by} />
+                    <span>
+                      <strong>{p.by}</strong> <small>{ago(p.created_at)}</small>
+                      <q>{p.body.length > 110 ? `${p.body.slice(0, 110)}…` : p.body}</q>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </RailCard>
+          <RailCard
+            icon={ICON.people}
+            title={
+              <>
+                People <span className="muted">({active.length})</span>
+              </>
+            }
+          >
+            <ul className="cm-members">
+              {active.slice(0, 8).map((p) => (
+                <li key={p.id}>
+                  <Avatar name={p.name} />
+                  <span>{p.name}</span>
+                  <RoleBadge role={p.role} />
+                </li>
               ))}
             </ul>
-          )}
-        </>
-      )}
-      {sharing && (
-        <ShareMine
-          c={c}
-          kind={kind}
-          shared={(shares || []).filter((s) => s.mine && s.kind === kind)}
-          needsApproval={c.require_approval && !admin}
-          onShare={(itemId) => act(() => api.share(c.id, kind, itemId))}
-          onClose={() => setSharing(false)}
-        />
-      )}
+          </RailCard>
+        </aside>
+      </div>
     </div>
   );
 }

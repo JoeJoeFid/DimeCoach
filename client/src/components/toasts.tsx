@@ -10,6 +10,12 @@ interface Toast {
   onUndo: () => void;
   /** Called when the time runs out, or the toast is dismissed. Not called after Undo. */
   onExpire: () => void;
+  /** What the button says, when it is not "Undo". */
+  action?: string;
+  /** How long it stays, when not the usual ten seconds. */
+  seconds?: number;
+  /** What the close button is for, said aloud. */
+  closeLabel?: string;
 }
 
 // One store for the whole app, so a delete started on one page can still be undone after moving to another.
@@ -43,8 +49,13 @@ function finish(id: number, how: 'undo' | 'expire') {
 export function showUndo(t: Omit<Toast, 'id'>) {
   const id = nextId++;
   toasts = [...toasts, { ...t, id }];
-  timers.set(id, window.setTimeout(() => finish(id, 'expire'), SECONDS * 1000));
+  timers.set(id, window.setTimeout(() => finish(id, 'expire'), (t.seconds ?? SECONDS) * 1000));
   emit();
+}
+
+/** Says something new has arrived, in the same corner, with a button that goes to it. Nothing happens if it is left alone. */
+export function showNews(message: string, onOpen: () => void) {
+  showUndo({ message, onUndo: onOpen, onExpire: () => {}, action: 'Open', seconds: 8, closeLabel: 'Dismiss' });
 }
 
 /**
@@ -113,15 +124,15 @@ export function ToastHost() {
   return (
     <div className="toast-stack" role="status" aria-live="polite">
       {list.map((t) => (
-        <div key={t.id} className="toast">
+        <div key={t.id} className={`toast ${t.action ? 'news' : ''}`}>
           <span className="toast-text">{t.message}</span>
           <button type="button" className="btn small toast-undo" onClick={() => finish(t.id, 'undo')}>
-            Undo
+            {t.action ?? 'Undo'}
           </button>
-          <button type="button" className="btn ghost toast-close" aria-label="Dismiss. The delete goes ahead." title="Dismiss" onClick={() => finish(t.id, 'expire')}>
+          <button type="button" className="btn ghost toast-close" aria-label={t.closeLabel ?? 'Dismiss. The delete goes ahead.'} title="Dismiss" onClick={() => finish(t.id, 'expire')}>
             ✕
           </button>
-          <span className="toast-timer" style={{ animationDuration: `${SECONDS}s` }} aria-hidden="true" />
+          <span className="toast-timer" style={{ animationDuration: `${t.seconds ?? SECONDS}s` }} aria-hidden="true" />
         </div>
       ))}
     </div>

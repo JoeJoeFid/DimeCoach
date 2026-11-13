@@ -1,10 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { SIGNED_OUT_EVENT, api, type AuthStatus, type Bootstrap, type User } from './api';
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { sportKind } from './sports';
 import { DialogHost } from './components/dialogs';
-import { ToastHost, flushDeletes } from './components/toasts';
+import { ToastHost, flushDeletes, showNews } from './components/toasts';
 import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
 import TeamPicker from './components/TeamPicker';
@@ -12,6 +12,7 @@ import { PasswordForm, Setup, SignedOut } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import Messages from './pages/Messages';
+import CoachLibraryPage from './pages/CoachLibrary';
 import CommunityPage from './pages/Community';
 import Dashboard from './pages/Dashboard';
 import Plans from './pages/Plans';
@@ -67,6 +68,7 @@ const icons = {
   system: 'M4 6h16v5H4zM4 13h16v5H4zM7 8.500h.01M7 15.500h.01M11 8.500h6M11 15.500h6',
   community: 'M4 5h11v8H9l-3 3v-3H4zM15 9h5v8h-2v3l-3-3h-4v-2',
   messages: 'M4 6h16v12H4zM4 7.500l8 6 8-6',
+  coachLibrary: 'M5 4v16M9 4v16M13 5l5 15M5 4h4M5 20h4M3 20h18',
 };
 interface NavItem {
   to: string;
@@ -108,6 +110,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { to: '/messages', label: 'Messages', icon: icons.messages },
       { to: '/communities', label: 'Communities', icon: icons.community },
+      { to: '/coach-library', label: 'Coach library', icon: icons.coachLibrary },
     ],
   },
 ];
@@ -220,20 +223,57 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
         .catch(() => {});
   }, [user.prefs.tour_done, onChanged]);
 
-  // Unread messages: checked when the page changes and once a minute, to light up Messages in the menu.
+  // Unread messages light up Messages in the menu. The server says the moment there is something new;
+  // checking when the page changes and once a minute covers a dropped connection.
   const [communityUnread, setUnread] = useState(0);
-  const setCommunityUnread = useCallback((count?: number) => {
-    if (count !== undefined) return setUnread(count);
-    api
-      .communityNews()
-      .then((n) => setUnread(n.unread))
-      .catch(() => {});
-  }, []);
+  /** Unread messages already known about, so only one that has just arrived gets a notice in the corner. */
+  const known = useRef<Set<string> | null>(null);
+  const whereNow = useRef(location.pathname);
+  whereNow.current = location.pathname;
+  const setCommunityUnread = useCallback(
+    (count?: number) => {
+      if (count !== undefined) return setUnread(count);
+      api
+        .communityNews()
+        .then((n) => {
+          setUnread(n.unread);
+          const unread = n.items.filter((i) => i.unread);
+          const fresh = known.current ? unread.filter((i) => !known.current!.has(i.key)) : [];
+          known.current = new Set(unread.map((i) => i.key));
+          // Something that arrives in the community being looked at shows up there, so it needs no notice.
+          const elsewhere = fresh.filter((i) => whereNow.current !== '/messages' && !(i.community_id && whereNow.current === `/communities/${i.community_id}`));
+          if (elsewhere.length === 0) return;
+          const one = elsewhere[0];
+          const text =
+            elsewhere.length > 1
+              ? `${elsewhere.length} new messages`
+              : one.kind === 'notice'
+                ? one.title || 'New message'
+                : one.kind === 'invite'
+                  ? `${one.by} invited you to join ${one.community}`
+                  : one.kind === 'share'
+                    ? `${one.by} shared something in ${one.community}`
+                    : `New message from ${one.by} in ${one.community}`;
+          showNews(text, () => navigate('/messages'));
+        })
+        .catch(() => {});
+    },
+    [navigate],
+  );
   useEffect(() => {
     setCommunityUnread();
     const timer = window.setInterval(() => setCommunityUnread(), 60_000);
     return () => window.clearInterval(timer);
   }, [setCommunityUnread, location.pathname]);
+  useEffect(() => {
+    const live = new EventSource('/api/live');
+    live.addEventListener('news', () => {
+      setCommunityUnread();
+      // Pages that list messages read themselves again.
+      window.dispatchEvent(new Event('dime:news'));
+    });
+    return () => live.close();
+  }, [setCommunityUnread, user.id]);
 
   const reload = useCallback(async () => {
     try {
@@ -385,6 +425,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           <Route path="/plays/:id/print" element={<PlayPrint />} />
           <Route path="/tags" element={<Tags />} />
           <Route path="/messages" element={<Messages />} />
+          <Route path="/coach-library" element={<CoachLibraryPage />} />
           <Route path="/communities" element={<Communities />} />
           <Route path="/communities/:id" element={<CommunityPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -440,7 +481,6 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
             </div>
             {/* The team being worked on. Changing it means going back to the choosing screen. */}
             <div className="team-now">
-              <span className="side-label">Team</span>
               <strong>{state.team!.name}</strong>
               <span className="muted small">{[state.sport?.name, state.team!.season].filter(Boolean).join(' · ')}</span>
               <button
@@ -464,25 +504,14 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
               ))}
             </nav>
             <div className="side-foot">
-              {user.is_system_admin && <nav className="side-nav admin-nav">{navLink({ to: '/system', label: 'System admin', icon: icons.system })}</nav>}
-              <div className="side-user">
-                <NavLink to="/account" className="side-user-name" title="Your account">
-                  {user.name}
-                </NavLink>
-                <button className="link small" onClick={signOut}>
-                  Sign out
-                </button>
-                <button
-                  className="link small"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setTouring(true);
-                  }}
-                >
-                  Take the tour
-                </button>
-              </div>
-              <ThemeToggle />
+              <UserMenu
+                user={user}
+                onTour={() => {
+                  setMenuOpen(false);
+                  setTouring(true);
+                }}
+                onSignOut={signOut}
+              />
             </div>
           </aside>
           {/* The sport of the team being worked on: page titles show its ball beside them. */}
@@ -494,6 +523,76 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
         </div>
       )}
     </Ctx.Provider>
+  );
+}
+
+const MENU_ICONS = {
+  account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4.5 20c.8-3.6 3.8-5.5 7.5-5.5s6.700 1.900 7.500 5.500',
+  tour: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9.500 9.500a2.500 2.500 0 1 1 3.500 2.300c-.700.400-1 .900-1 1.700M12 16.500h.01',
+  signOut: 'M10 4H5v16h5M14 8l4 4-4 4M18 12H9',
+};
+/**
+ * The person signed in, at the foot of the menu. Pressing it opens a list above it with their
+ * account, the tour, the color theme and signing out.
+ */
+function UserMenu({ user, onTour, onSignOut }: { user: User; onTour: () => void; onSignOut: () => void }) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: Event) => {
+      if (e.type === 'keydown' ? (e as KeyboardEvent).key === 'Escape' : !root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('pointerdown', away);
+    window.addEventListener('keydown', away);
+    return () => {
+      window.removeEventListener('pointerdown', away);
+      window.removeEventListener('keydown', away);
+    };
+  }, [open]);
+  const item = (label: string, icon: string, run: () => void) => (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={() => {
+        setOpen(false);
+        run();
+      }}
+    >
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d={icon} />
+      </svg>
+      {label}
+    </button>
+  );
+  return (
+    <div className="user-menu" ref={root}>
+      {open && (
+        <div className="user-pop" role="menu" aria-label="Your account">
+          <span className="user-pop-email">{user.email}</span>
+          {item('Account', MENU_ICONS.account, () => navigate('/account'))}
+          {user.is_system_admin && item('System admin', icons.system, () => navigate('/system'))}
+          {item('Take the tour', MENU_ICONS.tour, onTour)}
+          <div className="user-pop-row">
+            <span>Appearance</span>
+            <ThemeToggle />
+          </div>
+          <div className="user-pop-end">{item('Sign out', MENU_ICONS.signOut, onSignOut)}</div>
+        </div>
+      )}
+      <button type="button" className="user-chip" aria-haspopup="menu" aria-expanded={open} title={user.name} onClick={() => setOpen(!open)}>
+        <span className="user-avatar" aria-hidden="true">
+          {(user.name.trim()[0] || '?').toUpperCase()}
+        </span>
+        <span className="user-chip-name">{user.name}</span>
+        <svg className="user-chip-caret" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 9.500l6 6 6-6" />
+        </svg>
+      </button>
+    </div>
   );
 }
 

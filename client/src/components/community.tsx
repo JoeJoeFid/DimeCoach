@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type Community, type CommunityShare, type CommunityShareDetail, type MyShareState, type ShareKind, type SharedDrill, type SharedPlan, type SharedPlay } from '../api';
 import { useApp } from '../App';
-import { clean, isBlankHtml, todayISO } from '../util';
+import { clean, fmtDateShort, isBlankHtml, todayISO } from '../util';
 import { Modal } from './bits';
 import PlayAnimation from './PlayAnimation';
 import { PlayDiagram } from './PlayDiagram';
@@ -70,7 +70,7 @@ function PlayPeek({ play }: { play: SharedPlay }) {
  * What someone else shared, for reading. Their notes are cleaned before they are shown, since
  * they were written in another person's account.
  */
-export function SharedPreview({ detail }: { detail: CommunityShareDetail }) {
+export function SharedPreview({ detail }: { detail: Pick<CommunityShareDetail, 'kind' | 'content'> }) {
   if (detail.kind === 'play') {
     const p = detail.content as SharedPlay;
     return (
@@ -254,8 +254,27 @@ export function CommunityPicker({ kind, onClose, onAdded }: { kind: ShareKind; o
 /** For one of your own things: tick the communities it should be shared with. */
 export function ShareDialog({ kind, itemId, title, onClose }: { kind: ShareKind; itemId: number; title: string; onClose: () => void }) {
   const words = KIND_WORDS[kind];
+  const { user } = useApp();
   const [rows, setRows] = useState<MyShareState[] | null>(null);
   const [error, setError] = useState('');
+  // The system administrator can also publish to the coach library, which every coach sees.
+  const [pub, setPub] = useState<{ id: number | null; published_at: string | null } | null>(null);
+  const [pubBusy, setPubBusy] = useState(false);
+  useEffect(() => {
+    if (user.is_system_admin) api.libraryState(kind, itemId).then(setPub, () => {});
+  }, [user.is_system_admin, kind, itemId]);
+  const publish = async (on: boolean) => {
+    setPubBusy(true);
+    try {
+      if (on) await api.publishToLibrary(kind, itemId);
+      else if (pub?.id) await api.unpublishLibraryItem(pub.id);
+      setPub(await api.libraryState(kind, itemId));
+      setError('');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setPubBusy(false);
+  };
   const load = useCallback(
     () =>
       api
@@ -280,6 +299,26 @@ export function ShareDialog({ kind, itemId, title, onClose }: { kind: ShareKind;
   return (
     <Modal title={`Share "${title}"`} onClose={onClose}>
       {error && <p className="error">{error}</p>}
+      {pub && (
+        <div className="share-public">
+          <label className="check">
+            <input type="checkbox" checked={!!pub.id} disabled={pubBusy} onChange={(e) => publish(e.target.checked)} />
+            <span>
+              <strong>Coach library</strong>
+              <span className="muted small"> · {pub.id ? `published ${fmtDateShort((pub.published_at || '').slice(0, 10))}` : 'every coach on Dime Coach can find it and take a copy'}</span>
+            </span>
+          </label>
+          {pub.id && (
+            <p className="muted small">
+              Coaches get it as it was when you published it.{' '}
+              <button type="button" className="link" disabled={pubBusy} onClick={() => publish(true)}>
+                {pubBusy ? 'Publishing…' : 'Publish it again with my latest changes'}
+              </button>
+              . To describe it or put it in a pack, go to the <Link to="/coach-library">coach library</Link>.
+            </p>
+          )}
+        </div>
+      )}
       {rows === null ? (
         <p className="muted">Loading…</p>
       ) : rows.length === 0 ? (

@@ -123,6 +123,7 @@ export interface AccountDeletion {
   plays: number;
   files: number;
   helpers: number;
+  kept_teams: string[];
   communities_passed_on: string[];
   communities_deleted: string[];
 }
@@ -201,6 +202,7 @@ export interface CommunityPost {
   body: string;
   created_at: string;
   by: string;
+  by_id: number;
   mine: boolean;
   can_delete: boolean;
 }
@@ -213,9 +215,12 @@ export interface CommunityShare {
   title: string;
   summary: string;
   by: string;
+  by_id: number;
   mine: boolean;
   item_id?: number;
   shared_at: string;
+  /** What to draw on its card: a play's first step, or the first lines of a practice. */
+  art?: { play?: Pick<Play, 'court' | 'flipped'> & { frame: Play['frames'][number] }; lines?: { kind: 'item' | 'break'; title: string; duration_min: number }[]; text?: string };
   tags: { name: string; color: string }[];
 }
 type SharedLink = { url: string; label: string };
@@ -243,6 +248,35 @@ export interface SharedPlan {
 export interface CommunityShareDetail extends CommunityShare {
   content: SharedDrill | SharedPlay | SharedPlan;
 }
+/** Something published in the coach library, for every coach to take a copy of. */
+export interface LibraryItem {
+  id: number;
+  kind: ShareKind;
+  sport: string;
+  title: string;
+  summary: string;
+  description: string;
+  tags: SharedTag[];
+  /** The packs it is in. */
+  packs: number[];
+  published_at: string;
+  /** Only sent to the system administrator. */
+  adds?: number;
+  source_item_id?: number;
+}
+export interface LibraryPack {
+  id: number;
+  name: string;
+  description: string;
+  sport: string;
+  item_ids: number[];
+}
+export interface CoachLibrary {
+  can_manage: boolean;
+  items: LibraryItem[];
+  packs: LibraryPack[];
+}
+type PackFields = { name: string; description: string; sport: string; item_ids: number[] };
 /** For one of the caller's own things: a community of theirs, and whether it is shared there. */
 export interface MyShareState {
   community_id: number;
@@ -316,6 +350,18 @@ export const api = {
   unshare: (shareId: number) => req<CommunityShare[]>('DELETE', `/community-shares/${shareId}`),
   approveShare: (shareId: number) => req<CommunityShare[]>('POST', `/community-shares/${shareId}/approve`, {}),
   myShares: (kind: ShareKind, itemId: number) => req<MyShareState[]>('GET', `/community-shares/mine?kind=${kind}&item_id=${itemId}`),
+  coachLibrary: () => req<CoachLibrary>('GET', '/coach-library'),
+  coachLibraryItem: (id: number) => req<LibraryItem & { content: SharedDrill | SharedPlay | SharedPlan }>('GET', `/coach-library/items/${id}`),
+  copyLibraryItem: (id: number, b: { sport_id?: number; team_id?: number; date?: string }) => req<{ kind: ShareKind; id: number }>('POST', `/coach-library/items/${id}/copy`, b),
+  copyLibraryPack: (id: number, b: { sport_id?: number }) => req<{ drills: number; plays: number; plans_left: number }>('POST', `/coach-library/packs/${id}/copy`, b),
+  /** System administrator only, from here to deleteLibraryPack. */
+  libraryState: (kind: ShareKind, itemId: number) => req<{ id: number | null; published_at: string | null }>('GET', `/coach-library/state?kind=${kind}&item_id=${itemId}`),
+  publishToLibrary: (kind: ShareKind, itemId: number) => req<CoachLibrary & { id: number }>('POST', '/coach-library/items', { kind, item_id: itemId }),
+  describeLibraryItem: (id: number, description: string) => req<CoachLibrary>('PUT', `/coach-library/items/${id}`, { description }),
+  unpublishLibraryItem: (id: number) => req<CoachLibrary>('DELETE', `/coach-library/items/${id}`),
+  createLibraryPack: (b: PackFields) => req<CoachLibrary>('POST', '/coach-library/packs', b),
+  updateLibraryPack: (id: number, b: Partial<PackFields>) => req<CoachLibrary>('PUT', `/coach-library/packs/${id}`, b),
+  deleteLibraryPack: (id: number) => req<CoachLibrary>('DELETE', `/coach-library/packs/${id}`),
   communityLibrary: (kind: ShareKind, community: 'all' | number) => req<CommunityShare[]>('GET', `/community-library?kind=${kind}&community=${community}`),
   communityShare: (shareId: number) => req<CommunityShareDetail>('GET', `/community-library/${shareId}`),
   copyShare: (shareId: number, b: { sport_id?: number; team_id?: number; date?: string }) => req<{ kind: ShareKind; id: number }>('POST', `/community-library/${shareId}/copy`, b),

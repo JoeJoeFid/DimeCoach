@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser, type UserActivity } from '../api';
 import { useApp } from '../App';
 import { Field, Modal, MoreMenu } from '../components/bits';
@@ -36,6 +37,7 @@ const SECTIONS = [
   ['people', 'People'],
   ['signup', 'Sign-up and email'],
   ['accessibility', 'Accessibility'],
+  ['library', 'Coach library'],
   ['storage', 'Upload space'],
   ['backup', 'Backup'],
 ];
@@ -142,13 +144,14 @@ export default function SystemAdmin() {
     const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
     const goes = [count(what.teams, 'team'), count(what.plans, 'practice and homework plan', 'practice and homework plans'), count(what.drills, 'drill'), count(what.plays, 'play'), count(what.files, 'uploaded file')].join(', ');
     const also = [
-      what.helpers > 0 && `${count(what.helpers, 'person', 'people')} helping on their teams will lose that access.`,
+      what.kept_teams.length > 0 &&
+        `Kept, because ${count(what.helpers, 'other person', 'other people')} still ${what.helpers === 1 ? 'works' : 'work'} on ${what.kept_teams.length === 1 ? 'it' : 'them'}: ${what.kept_teams.join(', ')}, with ${what.kept_teams.length === 1 ? 'its' : 'their'} practices and the drills, plays and files in the workspace.`,
       what.communities_deleted.length > 0 && `Deleted with it: the communit${what.communities_deleted.length === 1 ? 'y' : 'ies'} ${what.communities_deleted.join(', ')}, which ${what.communities_deleted.length === 1 ? 'has' : 'have'} no other members.`,
       what.communities_passed_on.length > 0 && `Handed to another member: ${what.communities_passed_on.join(', ')}.`,
     ].filter(Boolean);
     const first = await confirmDialog({
       title: `Delete ${u.name}'s account?`,
-      body: `This removes ${u.email} and everything in their workspace: ${goes}. ${also.join(' ')} To keep their work and only stop them signing in, use "Turn off" instead.`,
+      body: `This removes ${u.email} and ${what.kept_teams.length > 0 ? 'what nobody else uses' : 'everything in their workspace'}: ${goes}. ${also.join(' ')} To keep their work and only stop them signing in, use "Turn off" instead.`,
       confirmLabel: 'Continue',
       danger: true,
     });
@@ -383,6 +386,19 @@ export default function SystemAdmin() {
           </h2>
           {settings && <AccessibilityCard settings={settings} run={run} />}
 
+          <h2 className="sys-section" id="library">
+            Coach library
+          </h2>
+          <div className="card">
+            <h2>Drills, plays and practices for every coach</h2>
+            <p className="muted small">
+              What you publish to the coach library can be searched and copied by every coach. Publish from Share on one of your own drills, plays or practices, then describe
+              it and group it into packs in the library.
+            </p>
+            <Link className="btn" to="/coach-library">
+              Manage the coach library
+            </Link>
+          </div>
           <h2 className="sys-section" id="storage">
             Upload space
           </h2>

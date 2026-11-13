@@ -1,6 +1,7 @@
 // Messages from the app to one person, shown on their Messages page: "you were added to a team",
 // "your drill was approved", and the like. Sending one never gets in the way of the thing it reports.
 import { all, get, run } from './db.js';
+import { poke } from './live.js';
 
 /**
  * Leaves a message for someone. `link` is where clicking it goes, if anywhere. With a `ref`, an
@@ -12,6 +13,7 @@ export function notify(userId, { kind, ref = '', title, body = '', link = '' }) 
     const old = ref && get('SELECT id FROM notices WHERE user_id=? AND kind=? AND ref=? AND read_at IS NULL', userId, kind, ref);
     if (old) run("UPDATE notices SET title=?, body=?, link=?, created_at=datetime('now') WHERE id=?", title, body, link, old.id);
     else run('INSERT INTO notices (user_id, kind, ref, title, body, link) VALUES (?,?,?,?,?,?)', userId, kind, ref, title, body, link);
+    poke(userId);
   } catch (e) {
     console.error('Could not leave a message:', e.message);
   }

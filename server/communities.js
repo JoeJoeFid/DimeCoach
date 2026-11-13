@@ -4,6 +4,7 @@
 // a share points at the original, and "add to mine" makes a separate copy for the taker.
 import crypto from 'node:crypto';
 import { all, get, run, tx } from './db.js';
+import { poke } from './live.js';
 import { noticesFor, notify, readNotices } from './notices.js';
 
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
@@ -48,9 +49,9 @@ const linksOf = (json) => {
   const e = parse(json, {});
   return Array.isArray(e?.links) ? e.links : [];
 };
-const tagNames = (table, col, rowId) => all(`SELECT t.name, t.color FROM ${table} x JOIN tags t ON t.id=x.tag_id WHERE x.${col}=? ORDER BY t.name`, rowId);
+export const tagNames = (table, col, rowId) => all(`SELECT t.name, t.color FROM ${table} x JOIN tags t ON t.id=x.tag_id WHERE x.${col}=? ORDER BY t.name`, rowId);
 const stations = (json) => (Array.isArray(parse(json, [])) ? parse(json, []) : []).map((g) => ({ name: str(g?.name), notes_html: str(g?.notes_html, 20000), members: [] }));
-const playView = (p) => ({
+export const playView = (p) => ({
   id: p.id, name: p.name, category: p.category, labels: parse(p.labels_json, []), court: p.court, flipped: !!p.flipped,
   notes: p.notes, frames: parse(p.frames_json, [{ note: '', objects: [] }]), links: linksOf(p.attachments_json),
 });
@@ -58,12 +59,12 @@ const playsOf = (json, ownerId) =>
   (Array.isArray(parse(json, [])) ? parse(json, []) : [])
     .map((pid) => get('SELECT * FROM plays WHERE id=? AND owner_id=?', Number(pid), ownerId))
     .filter(Boolean);
-const drillView = (d) => ({
+export const drillView = (d) => ({
   name: d.name, duration_min: d.duration_min, notes_html: d.notes_html, groups: stations(d.groups_json),
   links: linksOf(d.extras_json), tags: tagNames('drill_tags', 'drill_id', d.id), plays: playsOf(d.plays_json, d.owner_id).map(playView),
 });
 const planItems = (planId) => all('SELECT * FROM plan_items WHERE plan_id=? ORDER BY position, id', planId);
-const planView = (p) => ({
+export const planView = (p) => ({
   title: p.title, kind: p.kind, is_game: !!p.is_game, start_time: p.start_time, intro_html: p.intro_html,
   items: planItems(p.id).map((it) => ({
     kind: it.kind, title: it.title, duration_min: it.duration_min, notes_html: it.notes_html, reps: it.reps,
@@ -71,13 +72,22 @@ const planView = (p) => ({
   })),
 });
 const source = (share) => get(`SELECT * FROM ${TABLE[share.kind]} WHERE id=? AND owner_id=?`, share.item_id, share.owner_id);
-const titleOf = (kind, row) => (kind === 'plan' ? row.title || 'Practice' : row.name);
-function summaryOf(kind, row) {
+export const titleOf = (kind, row) => (kind === 'plan' ? row.title || 'Practice' : row.name);
+export function summaryOf(kind, row) {
   if (kind === 'drill') return `${row.duration_min} min`;
   if (kind === 'play') return [row.category, `${parse(row.frames_json, []).length || 1} step${(parse(row.frames_json, []).length || 1) === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
   const items = planItems(row.id);
   const mins = items.reduce((n, it) => n + (it.duration_min || 0), 0);
   return `${items.filter((it) => it.kind === 'item').length} items · ${mins} min`;
+}
+/** What to draw on a shared thing's card: a play's first step, or the first lines of a practice. */
+function artOf(kind, row) {
+  const play = kind === 'play' ? row : kind === 'drill' ? playsOf(row.plays_json, row.owner_id)[0] : null;
+  if (play) return { play: { court: play.court, flipped: !!play.flipped, frame: parse(play.frames_json, [])[0] ?? { note: '', objects: [] } } };
+  if (kind === 'plan') return { lines: planItems(row.id).slice(0, 4).map((it) => ({ kind: it.kind, title: it.title, duration_min: it.duration_min })) };
+  // A drill with no play attached: the start of its notes, as plain words.
+  const words = String(row.notes_html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+  return words ? { text: words.slice(0, 180) } : {};
 }
 /** One row of a library listing. Null when the original has been deleted. */
 function shareOut(s, userId) {
@@ -85,7 +95,8 @@ function shareOut(s, userId) {
   if (!row) return null;
   return {
     id: s.id, community_id: s.community_id, community_name: s.community_name, kind: s.kind, status: s.status,
-    title: titleOf(s.kind, row), summary: summaryOf(s.kind, row), by: s.by_name, mine: s.user_id === userId, shared_at: s.created_at,
+    title: titleOf(s.kind, row), summary: summaryOf(s.kind, row), by: s.by_name, by_id: s.user_id, mine: s.user_id === userId, shared_at: s.created_at,
+    art: artOf(s.kind, row),
     // Which of their own things this is, so the sharer's lists can mark it. Not told to anyone else.
     item_id: s.user_id === userId ? s.item_id : undefined,
     tags: s.kind === 'drill' ? tagNames('drill_tags', 'drill_id', row.id) : [],
@@ -104,7 +115,7 @@ function mapTags(names, ownerId, sportId) {
   }
   return ids;
 }
-function copyPlay(p, ownerId, sportId, made) {
+export function copyPlay(p, ownerId, sportId, made) {
   if (made.has(p.id)) return made.get(p.id);
   const r = run(
     'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, notes, frames_json, attachments_json) VALUES (?,?,?,?,?,?,?,?,?,?)',
@@ -114,7 +125,7 @@ function copyPlay(p, ownerId, sportId, made) {
   made.set(p.id, Number(r.lastInsertRowid));
   return made.get(p.id);
 }
-function copyDrill(d, ownerId, sportId, made = new Map()) {
+export function copyDrill(d, ownerId, sportId, made = new Map()) {
   const r = run(
     'INSERT INTO drills (owner_id, sport_id, name, duration_min, notes_html, coach_notes_html, callout, groups_json) VALUES (?,?,?,?,?,?,?,?)',
     ownerId, sportId, d.name, d.duration_min, d.notes_html, '', '', JSON.stringify(stations(d.groups_json)),
@@ -125,7 +136,7 @@ function copyDrill(d, ownerId, sportId, made = new Map()) {
   for (const t of mapTags(tagNames('drill_tags', 'drill_id', d.id), ownerId, sportId)) run('INSERT OR IGNORE INTO drill_tags (drill_id, tag_id) VALUES (?,?)', newId, t);
   return newId;
 }
-function copyPlan(p, ownerId, team, date) {
+export function copyPlan(p, ownerId, team, date) {
   const made = new Map();
   const r = run(
     `INSERT INTO plans (owner_id, team_id, kind, title, date, start_time, location, intro_html, is_template, assigned_json, is_game)
@@ -148,6 +159,9 @@ function copyPlan(p, ownerId, team, date) {
 }
 
 const SHARE_NOUN = { drill: 'drill', play: 'play', plan: 'practice plan' };
+/** Tells everyone in a community, bar the person who did it, that there is something new to see. */
+const pokeMembers = (communityId, exceptUserId) =>
+  poke(all("SELECT user_id FROM community_members WHERE community_id=? AND status='active' AND user_id<>?", communityId, exceptUserId ?? 0).map((m) => m.user_id));
 
 export function mountCommunities(app) {
   const communityOut = (c, m) => ({
@@ -277,6 +291,7 @@ export function mountCommunities(app) {
     );
     // Turning approval off lets everything waiting through.
     if (b.require_approval === false) run("UPDATE community_shares SET status='approved' WHERE community_id=?", at.c.id);
+    pokeMembers(at.c.id, req.user.id);
     res.json(detailOut(get('SELECT * FROM communities WHERE id=?', at.c.id), at.m));
   });
   app.delete('/api/communities/:id', (req, res) => {
@@ -304,6 +319,7 @@ export function mountCommunities(app) {
     const m = membership(at.c.id, u.id);
     if (m?.status === 'active') return res.status(409).json({ error: `${u.name} is already in this community.` });
     if (!m) run("INSERT INTO community_members (community_id, user_id, role, status, invited_by) VALUES (?,?,'member','invited',?)", at.c.id, u.id, req.user.id);
+    poke(u.id);
     res.json(detailOut(at.c, at.m));
   });
   // The invited person says yes. Declining, leaving and being removed all use the delete below.
@@ -359,7 +375,7 @@ export function mountCommunities(app) {
       `SELECT p.id, p.body, p.created_at, p.user_id, u.name FROM community_posts p JOIN users u ON u.id=p.user_id
        WHERE p.community_id=? ORDER BY p.id DESC LIMIT 200`,
       c.id,
-    ).map((p) => ({ id: p.id, body: p.body, created_at: p.created_at, by: p.name, mine: p.user_id === m.user_id, can_delete: p.user_id === m.user_id || isAdminRole(m) }));
+    ).map((p) => ({ id: p.id, body: p.body, created_at: p.created_at, by: p.name, by_id: p.user_id, mine: p.user_id === m.user_id, can_delete: p.user_id === m.user_id || isAdminRole(m) }));
   app.get('/api/communities/:id/posts', (req, res) => {
     const at = enter(req, res);
     if (at) res.json(postsOut(at.c, at.m));
@@ -370,6 +386,7 @@ export function mountCommunities(app) {
     const body = str(req.body.body, 4000).trim();
     if (!body) return res.status(400).json({ error: 'Write something first.' });
     run('INSERT INTO community_posts (community_id, user_id, body) VALUES (?,?,?)', at.c.id, req.user.id, body);
+    pokeMembers(at.c.id, req.user.id);
     res.json(postsOut(at.c, at.m));
   });
   app.delete('/api/communities/:id/posts/:postId', (req, res) => {
@@ -407,6 +424,7 @@ export function mountCommunities(app) {
       'INSERT INTO community_shares (community_id, user_id, owner_id, kind, item_id, status) VALUES (?,?,?,?,?,?) ON CONFLICT(community_id, kind, item_id, owner_id) DO NOTHING',
       at.c.id, req.user.id, req.ownerId, kind, row.id, status,
     );
+    pokeMembers(at.c.id, req.user.id);
     res.json(sharesOut(at.c, at.m));
   });
   const shareAnd = (req, res) => {
@@ -424,6 +442,7 @@ export function mountCommunities(app) {
     if (!at) return;
     if (!isAdminRole(at.m)) return res.status(403).json({ error: 'Only a community admin can approve.' });
     run("UPDATE community_shares SET status='approved' WHERE id=?", at.s.id);
+    pokeMembers(at.c.id, req.user.id);
     if (at.s.status !== 'approved' && at.s.user_id !== req.user.id)
       notify(at.s.user_id, { kind: 'community', title: `Your ${SHARE_NOUN[at.s.kind] || 'item'} was approved in ${at.c.name}`, body: `${req.user.name} approved it. Everyone in the community can see it now.`, link: `/communities/${at.c.id}` });
     res.json(sharesOut(at.c, at.m));

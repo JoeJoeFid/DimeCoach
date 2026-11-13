@@ -597,23 +597,55 @@ export function mountAuth(app) {
          AND NOT EXISTS (SELECT 1 FROM memberships o WHERE o.owner_id=m.owner_id AND o.user_id<>m.user_id)`,
       userId,
     ).map((r) => r.id);
+  /** Teams in these workspaces that somebody else helps on. They, and the library they draw on, outlive the account. */
+  const sharedTeams = (owners, userId) =>
+    owners.length
+      ? all(
+          `SELECT t.id, t.name, t.owner_id FROM teams t WHERE t.owner_id IN (${owners.join(',')})
+             AND EXISTS (SELECT 1 FROM team_staff s WHERE s.team_id=t.id AND s.user_id<>?) ORDER BY t.name COLLATE NOCASE`,
+          userId,
+        )
+      : [];
+  /** Removes a whole workspace and everything in it. Returns the uploaded files to take off the disk. */
+  const wipeWorkspace = (owner) => {
+    const files = all('SELECT filename FROM images WHERE owner_id=?', owner).map((f) => f.filename);
+    const ownerTables = all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+      .map((t) => t.name)
+      .filter((t) => t !== 'owners' && all(`PRAGMA table_info("${t}")`).some((c) => c.name === 'owner_id'));
+    // Children before the things they point at. Rows hanging off these (plan items, rosters, helpers) go with them.
+    for (const t of ['community_shares', 'resources', 'plans', 'events', 'players', 'teams', 'drills', 'plays', 'tags', 'images', 'settings', 'sports'])
+      if (ownerTables.includes(t)) run(`DELETE FROM "${t}" WHERE owner_id=?`, owner);
+    // Anything added since that also belongs to a workspace.
+    for (const t of ownerTables) run(`DELETE FROM "${t}" WHERE owner_id=?`, owner);
+    run('DELETE FROM owners WHERE id=?', owner);
+    return files;
+  };
   /** What deleting an account would remove, counted, so it can be shown before anything happens. */
   const deletionOf = (u) => {
-    const owners = ownWorkspaces(u.id);
+    const all_owners = ownWorkspaces(u.id);
+    const kept = sharedTeams(all_owners, u.id);
+    // A workspace with a shared team in it stays: the helpers still use its drills, plays and files.
+    const owners = all_owners.filter((o) => !kept.some((t) => t.owner_id === o));
     const inOwners = owners.length ? `owner_id IN (${owners.join(',')})` : '0';
     const n = (sql, ...args) => get(sql, ...args).n;
+    const keptIds = kept.map((t) => t.id).join(',') || '0';
+    const keptOwners = [...new Set(kept.map((t) => t.owner_id))].join(',') || '0';
+    // In a workspace that stays, the teams nobody else helps on still go, with their plans.
+    const lone = `owner_id IN (${keptOwners}) AND id NOT IN (${keptIds})`;
     const made = all('SELECT id, name FROM communities WHERE created_by=?', u.id).map((c) => ({
       ...c,
       others: n("SELECT COUNT(*) AS n FROM community_members WHERE community_id=? AND user_id<>? AND status='active'", c.id, u.id),
     }));
     return {
-      teams: n(`SELECT COUNT(*) AS n FROM teams WHERE ${inOwners}`),
-      plans: n(`SELECT COUNT(*) AS n FROM plans WHERE ${inOwners}`),
+      teams: n(`SELECT COUNT(*) AS n FROM teams WHERE ${inOwners}`) + n(`SELECT COUNT(*) AS n FROM teams WHERE ${lone}`),
+      plans: n(`SELECT COUNT(*) AS n FROM plans WHERE ${inOwners}`) + n(`SELECT COUNT(*) AS n FROM plans WHERE team_id IN (SELECT id FROM teams WHERE ${lone})`),
       drills: n(`SELECT COUNT(*) AS n FROM drills WHERE ${inOwners}`),
       plays: n(`SELECT COUNT(*) AS n FROM plays WHERE ${inOwners}`),
       files: n(`SELECT COUNT(*) AS n FROM images WHERE ${inOwners}`),
-      /** People helping on this person's teams, who lose that access. */
-      helpers: n(`SELECT COUNT(DISTINCT s.user_id) AS n FROM team_staff s JOIN teams t ON t.id=s.team_id WHERE t.${inOwners}`),
+      /** Teams other people help on. These stay, with their practices and the drills, plays and files they use. */
+      kept_teams: kept.map((t) => t.name),
+      /** The people who keep that access. */
+      helpers: n(`SELECT COUNT(DISTINCT user_id) AS n FROM team_staff WHERE team_id IN (${keptIds}) AND user_id<>?`, u.id),
       /** Communities they started that have other members: these are handed to another member. */
       communities_passed_on: made.filter((c) => c.others > 0).map((c) => c.name),
       /** Communities they started with nobody else in them: these are deleted. */
@@ -637,10 +669,8 @@ export function mountAuth(app) {
     if (!target) return;
     if (normEmail(req.body?.confirm_email) !== target.email.toLowerCase()) return res.status(400).json({ error: 'Type the email address of the account exactly to confirm.' });
     const owners = ownWorkspaces(target.id);
-    const files = owners.length ? all(`SELECT filename FROM images WHERE owner_id IN (${owners.join(',')})`).map((f) => f.filename) : [];
-    const ownerTables = all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-      .map((t) => t.name)
-      .filter((t) => t !== 'owners' && all(`PRAGMA table_info("${t}")`).some((c) => c.name === 'owner_id'));
+    const kept = sharedTeams(owners, target.id);
+    const files = [];
     tx(() => {
       // Communities they started: pass each on to the longest-standing other member, admins first. Empty ones go.
       for (const c of all('SELECT id FROM communities WHERE created_by=?', target.id)) {
@@ -655,15 +685,44 @@ export function mountAuth(app) {
         }
       }
       for (const owner of owners) {
-        // Children before the things they point at. Rows hanging off these (plan items, rosters, helpers) go with them.
-        for (const t of ['community_shares', 'resources', 'plans', 'events', 'players', 'teams', 'drills', 'plays', 'tags', 'images', 'settings', 'sports'])
-          if (ownerTables.includes(t)) run(`DELETE FROM "${t}" WHERE owner_id=?`, owner);
-        // Anything added since that also belongs to a workspace.
-        for (const t of ownerTables) run(`DELETE FROM "${t}" WHERE owner_id=?`, owner);
-        run('DELETE FROM owners WHERE id=?', owner);
+        const shared = kept.filter((t) => t.owner_id === owner);
+        if (shared.length === 0) {
+          files.push(...wipeWorkspace(owner));
+          continue;
+        }
+        // Somebody else still works on a team here. Those teams stay, with their practices and the drills,
+        // plays, categories and files of the workspace. Teams nobody else helps on go, with everything in them.
+        run(`DELETE FROM teams WHERE owner_id=? AND id NOT IN (${shared.map((t) => t.id).join(',')})`, owner);
+        for (const t of shared) {
+          // With the owner gone somebody has to be able to run the team: a helper who already manages it,
+          // or failing that the one who has been on it longest, gets every permission.
+          const staff = all('SELECT user_id, perms_json FROM team_staff WHERE team_id=? AND user_id<>? ORDER BY created_at, user_id', t.id, target.id);
+          const perms = (s) => { try { return JSON.parse(s.perms_json) || {}; } catch { return {}; } };
+          const heir = staff.find((s) => perms(s).manage) ?? staff[0];
+          const full = { ...perms(heir), plans: true, drills: true, plays: true, resources: true, roster: true, schedule: true, contacts: true, manage: true };
+          run('UPDATE team_staff SET perms_json=? WHERE team_id=? AND user_id=?', JSON.stringify(full), t.id, heir.user_id);
+          for (const s of staff)
+            notify(s.user_id, {
+              kind: 'team',
+              title: `${target.name}'s account was removed`,
+              body:
+                s.user_id === heir.user_id
+                  ? `${t.name} and everything in it is still here, and you can now change anything on it, including who it is shared with.`
+                  : `${t.name} and everything in it is still here, and you keep the access you had.`,
+              link: '/teams',
+            });
+        }
       }
       // Sign-ins, community memberships and posts, and help given on other people's teams go with the account.
       run('DELETE FROM users WHERE id=?', target.id);
+      // A workspace kept earlier for its helpers, whose last helper has now gone, has nobody left to reach it.
+      for (const o of all(
+        `SELECT o.id FROM owners o WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.owner_id=o.id)
+           AND NOT EXISTS (SELECT 1 FROM team_staff s JOIN teams t ON t.id=s.team_id WHERE t.owner_id=o.id)
+           -- The coach library's workspace belongs to nobody on purpose.
+           AND o.id NOT IN (SELECT CAST(value AS INTEGER) FROM system_settings WHERE key='library_owner')`,
+      ))
+        files.push(...wipeWorkspace(o.id));
     });
     for (const f of files) fs.rm(path.join(path.dirname(dbPath), 'uploads', path.basename(f)), { force: true }, () => {});
     res.json(systemOut());
