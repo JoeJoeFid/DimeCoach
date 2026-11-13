@@ -8,6 +8,7 @@ import { Field, Modal, MoreMenu, type MenuItem } from '../components/bits';
 import { KIND_WORDS, ShareRow, SharedPreview, sharesKind } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { PlayDiagram } from '../components/PlayDiagram';
+import { MentionArea, MentionText } from '../components/Mentions';
 
 type Tab = 'messages' | 'library' | 'people' | 'settings';
 const KINDS: ShareKind[] = ['drill', 'play', 'plan'];
@@ -317,6 +318,7 @@ export default function CommunityPage() {
             shareReplies={shareReplies}
             shares={approved.filter((s) => !sentWithReply.has(s.id))}
             allShares={shares || []}
+            people={active.map((p) => p.name)}
             onPick={pick}
             onSend={sendPost}
             roleOf={roleOf}
@@ -579,6 +581,7 @@ function Feed({
   shareReplies,
   shares,
   allShares,
+  people,
   onPick,
   onSend,
   roleOf,
@@ -596,6 +599,7 @@ function Feed({
   shareReplies: Map<number, CommunityPost[]>;
   shares: CommunityShare[];
   allShares: CommunityShare[];
+  people: string[];
   onPick: (kind: ShareKind, done: (p: Picked) => void) => void;
   onSend: (text: string, to: { parent_id?: number; share_id?: number }, attach?: Picked | null) => Promise<boolean>;
   roleOf: (userId: number) => CommunityPerson['role'] | undefined;
@@ -641,6 +645,7 @@ function Feed({
   }, [posts, shares, filter, words]);
   const ctx: ThreadCtx = {
     kinds,
+    people,
     shares: allShares,
     roleOf,
     pick: onPick,
@@ -664,15 +669,16 @@ function Feed({
       <form className="card cm-compose" onSubmit={send}>
         <div className="cm-compose-row">
           <Avatar name={user.name} big />
-          <textarea
-            ref={composer}
+          <MentionArea
+            inputRef={composer}
+            people={people.filter((n) => n !== user.name)}
             className="input"
             rows={body.includes('\n') || body.length > 90 ? 3 : 1}
             maxLength={4000}
             aria-label="Message"
-            placeholder="Ask a question, start a discussion, or share an idea…"
+            placeholder="Ask a question, start a discussion, or share an idea. Type @ to mention someone."
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={setBody}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(e);
             }}
@@ -750,7 +756,11 @@ function Feed({
                       <MoreMenu items={menu} />
                     </span>
                   </div>
-                  {e.post?.body && <p className="message-body">{e.post.body}</p>}
+                  {e.post?.body && (
+                    <p className="message-body">
+                      <MentionText text={e.post.body} people={people} me={user.name} />
+                    </p>
+                  )}
                   {e.post?.attach_share_id &&
                     (allShares.some((s) => s.id === e.post!.attach_share_id) ? (
                       <Embed share={allShares.find((s) => s.id === e.post!.attach_share_id)!} onPreview={onPreview} onCopy={onCopy} />
@@ -805,6 +815,8 @@ interface Picked {
 /** What a thread needs from the page around it. */
 interface ThreadCtx {
   kinds: ShareKind[];
+  /** The names of everyone in the community, for "@" mentions. */
+  people: string[];
   /** Everything shared here that the reader may see, to draw what a reply has attached. */
   shares: CommunityShare[];
   roleOf: (userId: number) => CommunityPerson['role'] | undefined;
@@ -861,7 +873,8 @@ function ReplyBox({ ctx, to, onDone }: { ctx: ThreadCtx; to: { parent_id?: numbe
     <div className="cm-reply-box">
       <Avatar name={user.name} />
       <div className="cm-reply-write">
-        <textarea
+        <MentionArea
+          people={ctx.people.filter((n) => n !== user.name)}
           className="input"
           rows={2}
           maxLength={4000}
@@ -869,7 +882,7 @@ function ReplyBox({ ctx, to, onDone }: { ctx: ThreadCtx; to: { parent_id?: numbe
           aria-label="Your reply"
           placeholder="Write a reply…"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={setText}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send();
             if (e.key === 'Escape') onDone(false);
@@ -909,6 +922,7 @@ function ReplyBox({ ctx, to, onDone }: { ctx: ThreadCtx; to: { parent_id?: numbe
 
 /** One reply, the replies to it, and the box for answering it. */
 function ReplyNode({ r, depth, ctx }: { r: CommunityPost; depth: number; ctx: ThreadCtx }) {
+  const me = useApp().user.name;
   const [writing, setWriting] = useState(false);
   const role = ctx.roleOf(r.by_id);
   const kids = r.replies || [];
@@ -922,7 +936,11 @@ function ReplyNode({ r, depth, ctx }: { r: CommunityPost; depth: number; ctx: Th
           {role && <RoleBadge role={role} />}
           <span className="muted small">{ago(r.created_at)}</span>
         </div>
-        {r.body && <p className="message-body">{r.body}</p>}
+        {r.body && (
+          <p className="message-body">
+            <MentionText text={r.body} people={ctx.people} me={me} />
+          </p>
+        )}
         {share ? (
           <Embed share={share} onPreview={ctx.onPreview} onCopy={ctx.onCopy} />
         ) : (

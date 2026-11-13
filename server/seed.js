@@ -24,72 +24,101 @@ const TAG_DEFS = [
   ['Culture & mindset', '#e34948', 5],
 ];
 
+// The basketball drills every new account starts with. They are written for any team: plain names,
+// one line on how it is set up, then the points to coach. Changing these never touches drills that
+// accounts already have, because they are only copied in when a workspace or a sport is first made.
 const DRILL_DEFS = [
   {
-    name: 'Welcome & expectations',
+    name: 'Team huddle',
     dur: 5,
     tags: ['Culture & mindset'],
     notes:
-      '<ul><li><p><strong><em>"You got this" + five. Look for the signs. EFFORT.</em></strong></p></li>' +
-      '<li><p><strong>Our mantras (yesterday, too)</strong></p><ul><li><p>Were you coachable?</p></li>' +
-      '<li><p>Were you a great teammate?</p></li><li><p>Did you let your mistakes define you?</p></li>' +
-      '<li><p>Did you give it everything you got?</p></li></ul></li></ul>',
+      '<p>Bring everyone in before the first drill.</p>' +
+      ul("Say what today's practice is about, in one sentence", 'Name one thing the team is working to get better at', 'Remind players what good effort and being a good teammate look like'),
   },
   {
-    name: 'Dribble warm up',
+    name: 'Ball-handling warm-up',
     dur: 10,
     tags: ['Ball handling'],
-    notes: ul(
-      'Right/Left',
-      'Right V / left V',
-      'Right V, cross / left V, cross',
-      'Skip pocket right, cross / skip pocket left, cross',
-      'Same, between the legs instead of cross',
-    ),
+    notes:
+      '<p>Every player with a ball, baseline to half court and back. One move each trip.</p>' +
+      ul('Right hand, then left hand', 'Crossover', 'Between the legs', 'Behind the back', 'Change of speed: walk, then explode') +
+      '<p><strong>Coach:</strong> eyes up, ball below the waist.</p>',
   },
   {
-    name: 'Key Series + 10m Blast 1v1s',
-    dur: 20,
-    tags: ['1v1s', 'Shooting'],
-    notes: '<p><strong>BLAST RULE: If defense gives up middle, automatic loss</strong></p>',
-    groups: [
-      {
-        name: '',
-        notes_html: ul(
-          'Take, straight right / left',
-          'Rip, L, R, off foot layup',
-          'Jab opposite, straight take opposite',
-          'Flash to elbow, catch and shoot',
-        ),
-        members: [],
-      },
-      {
-        name: '',
-        notes_html: ul(
-          'Flash to elbow, pump, single dribble jumper',
-          'Jab, single dribble, between legs, single dribble, shoot',
-          '<strong>Skip step push out &rarr; Floater</strong>',
-          'Shoulder into coach; R&rarr;L euro',
-        ),
-        members: [],
-      },
-    ],
+    name: 'Layup lines',
+    dur: 8,
+    tags: ['Shooting'],
+    notes:
+      '<p>Two lines at half court: one shoots, one rebounds. Switch lines after each turn.</p>' +
+      ul('Right side first, then left side', 'Jump off the inside foot, finish with the outside hand', 'Use the top corner of the square on the backboard', 'Rebounders catch the ball before it hits the floor'),
   },
-  { name: 'RAM 5v5', dur: 20, tags: ['Team offense'], notes: ul('Quality ball screens &amp; rolls, we hit cutters') },
   {
     name: 'Form shooting',
     dur: 10,
     tags: ['Shooting'],
-    notes: ul('One hand, 3 feet out', 'Hold the follow through', '5 makes per spot, 5 spots'),
+    notes:
+      '<p>One ball each, or share in pairs, about three feet from the basket.</p>' +
+      ul('Shoot with one hand, elbow under the ball', 'Eyes on the rim', 'Hold the follow-through until the ball lands', 'Five makes from each of five spots, then take one step back'),
+  },
+  {
+    name: 'Partner passing',
+    dur: 8,
+    tags: ['Passing'],
+    notes:
+      '<p>Pairs facing each other, about 12 feet apart, one ball per pair.</p>' +
+      ul('Chest pass, bounce pass, overhead pass: ten of each', 'Step toward your partner on every pass', 'Receivers show a target with both hands', 'Add a second ball once the passes are crisp'),
+  },
+  {
+    name: '1-on-1 moves and finishing',
+    dur: 20,
+    tags: ['1v1s', 'Shooting'],
+    notes: '<p>Teach the moves without a defender first, then play them live. Split the team between two baskets.</p>',
+    groups: [
+      {
+        name: 'Moves from the wing',
+        notes_html: ul('Catch, rip through, drive right, then left', 'Jab step one way, drive the other', 'Shot fake, one dribble, pull-up jump shot', 'Finish every drive with the outside hand'),
+        members: [],
+      },
+      {
+        name: 'Live 1-on-1',
+        notes_html: ul('Offense starts on the wing with the ball', 'Three dribbles at most', 'Defense keeps the ball out of the middle', 'Winner stays on, the other player goes to the end of the line'),
+        members: [],
+      },
+    ],
   },
   {
     name: 'Shell drill',
     dur: 15,
     tags: ['Defense'],
-    notes: ul('Ball, deny, help positions', 'Jump to the ball on every pass', 'Close out with high hands'),
+    notes:
+      '<p>Four on four in the half court. The offense only passes at first, then plays live.</p>' +
+      ul('Three spots to know: on the ball, one pass away (deny), two passes away (help)', 'Move while the ball is in the air, on every pass', 'Close out with high hands and short steps', 'Talk: call "ball", "deny" or "help" out loud'),
   },
-  { name: 'Partner passing', dur: 8, tags: ['Passing'], notes: ul('Chest, bounce, overhead', 'Step to the pass, show a target') },
-  { name: 'Box out battle', dur: 8, tags: ['Rebounding'], notes: ul('Hit, turn, pursue', 'Loser does 5 push ups') },
+  {
+    name: 'Box-out battle',
+    dur: 8,
+    tags: ['Rebounding'],
+    notes:
+      '<p>Pairs around the lane, one on offense and one on defense. A coach shoots.</p>' +
+      ul('On the shot: find your player, make contact, turn, then go and get the ball', 'Defense scores a point for the rebound, offense scores two', 'Switch roles after three shots'),
+  },
+  {
+    name: '3-on-2, 2-on-1 fast break',
+    dur: 10,
+    tags: ['Team offense', 'Passing'],
+    notes:
+      '<p>Three attack two defenders. Whoever shoots or loses the ball gets back on defense, and the two defenders attack them the other way.</p>' +
+      ul('Ball in the middle, wide players run the lanes', 'Pass ahead to an open teammate instead of dribbling', 'Defenders: one stops the ball, one protects the basket'),
+  },
+  {
+    name: '5-on-5 half court',
+    dur: 20,
+    tags: ['Team offense'],
+    notes:
+      '<p>Run your offense against a live defense. Play to three baskets, then switch offense and defense.</p>' +
+      ul('Set solid screens and roll hard to the basket', 'Look for cutters before taking the shot', 'Stop play to fix one thing at a time, then let them play'),
+  },
 ];
 
 const BASEBALL = {
@@ -257,37 +286,36 @@ function seedDemoTeam(ownerId, { sport, tag, drill }) {
     members: g.map((n, j) => ({ player_id: pid[n], role: pos[j] })),
   }));
 
-  const W = { drill: 'Welcome & expectations' };
-  const D = { drill: 'Dribble warm up' };
-  const K = { drill: 'Key Series + 10m Blast 1v1s' };
+  const W = { drill: 'Team huddle' };
+  const D = { drill: 'Ball-handling warm-up' };
+  const K = { drill: '1-on-1 moves and finishing' };
   const loc = 'Clay Elementary';
-  addPlan(daysAgo(21), 'Practice', loc, [W, D, { drill: 'Form shooting' }, brk, { drill: 'Partner passing' }, K, { drill: 'RAM 5v5' }]);
-  addPlan(daysAgo(19), 'Practice', loc, [W, D, K, brk, { drill: 'Form shooting', dur: 15 }, { drill: 'RAM 5v5', dur: 25 }]);
-  addPlan(daysAgo(14), 'Practice', loc, [W, { ...D, dur: 15 }, { drill: 'Shell drill' }, brk, { drill: 'Form shooting' }, { drill: 'RAM 5v5' }]);
-  addPlan(daysAgo(12), 'Practice', loc, [W, D, { drill: 'Form shooting', dur: 15 }, K, brk, { drill: 'RAM 5v5' }]);
-  addPlan(daysAgo(7), 'Practice', loc, [W, D, { ...K, dur: 25 }, brk, { drill: 'Form shooting' }, { drill: 'RAM 5v5', dur: 25 }]);
-  addPlan(daysAgo(5), 'Practice', loc, [W, D, { drill: 'Form shooting', dur: 20 }, brk, K, { drill: 'RAM 5v5' }]);
+  addPlan(daysAgo(21), 'Practice', loc, [W, D, { drill: 'Form shooting' }, brk, { drill: 'Partner passing' }, K, { drill: '5-on-5 half court' }]);
+  addPlan(daysAgo(19), 'Practice', loc, [W, D, K, brk, { drill: 'Form shooting', dur: 15 }, { drill: '5-on-5 half court', dur: 25 }]);
+  addPlan(daysAgo(14), 'Practice', loc, [W, { ...D, dur: 15 }, { drill: 'Shell drill' }, brk, { drill: 'Form shooting' }, { drill: '5-on-5 half court' }]);
+  addPlan(daysAgo(12), 'Practice', loc, [W, D, { drill: 'Form shooting', dur: 15 }, K, brk, { drill: '5-on-5 half court' }]);
+  addPlan(daysAgo(7), 'Practice', loc, [W, D, { ...K, dur: 25 }, brk, { drill: 'Form shooting' }, { drill: '5-on-5 half court', dur: 25 }]);
+  addPlan(daysAgo(5), 'Practice', loc, [W, D, { drill: 'Form shooting', dur: 20 }, brk, K, { drill: '5-on-5 half court' }]);
   addPlan(daysAgo(0), 'Practice', loc, [
     W,
     D,
     { kind: 'break', title: 'Water break', dur: 10 },
     {
       ...K,
-      title: 'Key Series + 10m Blast 1v1s (1 groups)',
       coach: '<p>Watch footwork on the jab. Stop play and reset if they travel.</p>',
       playerNotes: [{ player_id: pid.Kam, note: 'Left hand finishes only today.' }],
     },
-    { drill: 'RAM 5v5', groups: squads, coach: '<p>Rotate groups every 5 minutes.</p>' },
+    { drill: '5-on-5 half court', groups: squads, coach: '<p>Rotate groups every 5 minutes.</p>' },
   ]);
 
-  addPlan('', 'Standard Tuesday', loc, [W, D, brk, { drill: 'Form shooting' }, { drill: 'RAM 5v5' }], { template: true });
+  addPlan('', 'Standard Tuesday', loc, [W, D, brk, { drill: 'Form shooting' }, { drill: '5-on-5 half court' }], { template: true });
 
   addPlan(
     daysAgo(0),
     'Weekly homework',
     '',
     [
-      { drill: 'Dribble warm up', title: 'Stationary dribbling', reps: '3 rounds, 30 seconds each move' },
+      { drill: 'Ball-handling warm-up', title: 'Stationary dribbling', reps: '3 rounds, 30 seconds each move' },
       { drill: 'Form shooting', reps: '50 makes', notes: ul('One hand, close to the hoop or a wall', 'Hold the follow through') },
       { title: 'Wall passing', dur: 5, tags: ['Passing'], reps: '3 x 25', notes: ul('Chest pass, then left and right hand push pass') },
     ],

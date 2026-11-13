@@ -5,7 +5,7 @@
 import crypto from 'node:crypto';
 import { all, get, run, tx } from './db.js';
 import { poke } from './live.js';
-import { noticesFor, notify, readNotices } from './notices.js';
+import { mentionedIn, noticesFor, notify, readNotices } from './notices.js';
 
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 const parse = (s, d) => {
@@ -445,7 +445,14 @@ export function mountCommunities(app) {
       if (!share) return res.status(404).json({ error: 'What you are replying to is no longer shared here.' });
       shareId = share.id;
     }
-    run('INSERT INTO community_posts (community_id, user_id, body, parent_id, share_id, attach_share_id) VALUES (?,?,?,?,?,?)', at.c.id, req.user.id, body, parent?.id ?? null, shareId, attach?.id ?? null);
+    const made = run('INSERT INTO community_posts (community_id, user_id, body, parent_id, share_id, attach_share_id) VALUES (?,?,?,?,?,?)', at.c.id, req.user.id, body, parent?.id ?? null, shareId, attach?.id ?? null);
+    // Anyone named with "@" gets a message of their own, on top of the community's usual "something new".
+    const members = all("SELECT u.id, u.name FROM community_members cm JOIN users u ON u.id=cm.user_id WHERE cm.community_id=? AND cm.status='active' AND u.id<>?", at.c.id, req.user.id);
+    for (const p of mentionedIn(body, members))
+      notify(p.id, {
+        kind: 'mention', ref: `community-post-${made.lastInsertRowid}`, link: `/communities/${at.c.id}`,
+        title: `${req.user.name} mentioned you in ${at.c.name}`, body: body.length > 160 ? `${body.slice(0, 160)}…` : body,
+      });
     pokeMembers(at.c.id, req.user.id);
     res.json(postsOut(at.c, at.m));
   });

@@ -19,6 +19,13 @@ export function notify(userId, { kind, ref = '', title, body = '', link = '' }) 
   }
 }
 
+/**
+ * The people named in a message with "@Their Name". `people` is who could be named there, as
+ * { id, name }. A name only counts at the start or after a space, so an email address is not a mention.
+ */
+export const mentionedIn = (body, people) =>
+  people.filter((p) => p.name && new RegExp(`(^|[\\s(])@${String(p.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w])`, 'i').test(String(body)));
+
 /** A person's recent messages from the app, in the shape the Messages page lists. */
 export const noticesFor = (userId) =>
   all('SELECT * FROM notices WHERE user_id=? ORDER BY id DESC LIMIT 60', userId).map((n) => ({

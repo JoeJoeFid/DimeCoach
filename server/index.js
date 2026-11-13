@@ -10,7 +10,7 @@ import { mountAuth, requireImport } from './auth.js';
 import { mountCoachLibrary } from './coachLibrary.js';
 import { mountCommunities } from './communities.js';
 import { mountLive } from './live.js';
-import { notify } from './notices.js';
+import { mentionedIn, notify } from './notices.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
 import { cleanPlayIds, mountPlays } from './plays.js';
 import { mountResources } from './resources.js';
@@ -548,13 +548,17 @@ app.post('/api/plans/:id/posts', (req, res) => {
   const team = get('SELECT name FROM teams WHERE id=?', plan.team_id);
   const what = plan.kind === 'homework' ? 'homework' : 'practice';
   const label = [plan.title || (what === 'homework' ? 'Homework' : 'Practice'), plan.date].filter(Boolean).join(', ');
-  for (const userId of new Set(coachesOf(plan)))
-    if (userId !== req.user.id)
-      notify(userId, {
-        kind: 'plan-post', ref: `plan-${plan.id}`, link: `/go/plan/${plan.team_id}/${plan.id}`,
-        title: `${req.user.name} ${parent ? 'replied' : 'wrote'} about a ${what} for ${team?.name ?? 'your team'}`,
-        body: `${label}: ${body.length > 140 ? `${body.slice(0, 140)}…` : body}`,
-      });
+  const coaches = [...new Set(coachesOf(plan))].filter((u) => u !== req.user.id);
+  // Someone named with "@" is told they were mentioned, not just that there is something new.
+  const named = new Set(mentionedIn(body, coaches.map((u) => ({ id: u, name: get('SELECT name FROM users WHERE id=?', u)?.name }))).map((p) => p.id));
+  for (const userId of coaches)
+    notify(userId, {
+      kind: named.has(userId) ? 'mention' : 'plan-post', ref: `plan-${plan.id}`, link: `/go/plan/${plan.team_id}/${plan.id}`,
+      title: named.has(userId)
+        ? `${req.user.name} mentioned you about a ${what} for ${team?.name ?? 'your team'}`
+        : `${req.user.name} ${parent ? 'replied' : 'wrote'} about a ${what} for ${team?.name ?? 'your team'}`,
+      body: `${label}: ${body.length > 140 ? `${body.slice(0, 140)}…` : body}`,
+    });
   res.json(planPostsOut(req, plan));
 });
 app.delete('/api/plans/:id/posts/:postId', (req, res) => {

@@ -1026,7 +1026,7 @@ function SortableRow(props: {
             className="input title"
             aria-label="Item title"
             autoFocus={props.autoFocusTitle}
-            placeholder={isBreak ? 'Break' : 'Item title, such as Dribble warm up'}
+            placeholder={isBreak ? 'Break' : 'Item title, such as Ball-handling warm-up'}
             value={item.title}
             onChange={(e) => onPatch({ title: e.target.value })}
           />

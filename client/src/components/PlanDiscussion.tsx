@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { api, type PlanCollaborator, type PlanPost } from '../api';
 import { useApp } from '../App';
 import { confirmDialog } from './dialogs';
+import { MentionArea, MentionText } from './Mentions';
 
 const stamp = (at: string) => new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`).getTime();
 function ago(at: string) {
@@ -30,7 +31,7 @@ const count = (list: PlanPost[]): number => list.reduce((n, p) => n + 1 + count(
 const MAX_INDENT = 2;
 
 /** A box to write in. Ctrl+Enter sends. */
-function Write({ placeholder, autoFocus, onSend, onCancel }: { placeholder: string; autoFocus?: boolean; onSend: (text: string) => Promise<boolean>; onCancel?: () => void }) {
+function Write({ placeholder, autoFocus, people, onSend, onCancel }: { placeholder: string; autoFocus?: boolean; /** Who can be named with "@". */ people: string[]; onSend: (text: string) => Promise<boolean>; onCancel?: () => void }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const send = async () => {
@@ -41,7 +42,8 @@ function Write({ placeholder, autoFocus, onSend, onCancel }: { placeholder: stri
   };
   return (
     <div className="pd-write">
-      <textarea
+      <MentionArea
+        people={people}
         className="input"
         rows={2}
         maxLength={4000}
@@ -49,7 +51,7 @@ function Write({ placeholder, autoFocus, onSend, onCancel }: { placeholder: stri
         aria-label={placeholder}
         placeholder={placeholder}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={setText}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send();
           if (e.key === 'Escape' && onCancel) onCancel();
@@ -69,7 +71,7 @@ function Write({ placeholder, autoFocus, onSend, onCancel }: { placeholder: stri
   );
 }
 
-function Node({ p, depth, onReply, onDelete }: { p: PlanPost; depth: number; onReply: (parent: number, text: string) => Promise<boolean>; onDelete: (p: PlanPost) => void }) {
+function Node({ p, depth, names, me, onReply, onDelete }: { p: PlanPost; depth: number; /** Everyone on the plan, and the reader's own name. */ names: string[]; me: string; onReply: (parent: number, text: string) => Promise<boolean>; onDelete: (p: PlanPost) => void }) {
   const [writing, setWriting] = useState(false);
   return (
     <li className="cm-reply pd-post">
@@ -79,7 +81,9 @@ function Node({ p, depth, onReply, onDelete }: { p: PlanPost; depth: number; onR
           <strong>{p.mine ? 'You' : p.by}</strong>
           <span className="muted small">{ago(p.created_at)}</span>
         </div>
-        <p className="message-body">{p.body}</p>
+        <p className="message-body">
+          <MentionText text={p.body} people={names} me={me} />
+        </p>
         <div className="cm-thread-bar">
           <button type="button" className="cm-reply-btn" onClick={() => setWriting(!writing)} aria-expanded={writing}>
             Reply
@@ -94,6 +98,7 @@ function Node({ p, depth, onReply, onDelete }: { p: PlanPost; depth: number; onR
           <Write
             placeholder="Write a reply…"
             autoFocus
+            people={names.filter((n) => n !== me)}
             onCancel={() => setWriting(false)}
             onSend={async (text) => {
               const ok = await onReply(p.id, text);
@@ -105,7 +110,7 @@ function Node({ p, depth, onReply, onDelete }: { p: PlanPost; depth: number; onR
         {p.replies.length > 0 && (
           <ul className={`cm-replies ${depth >= MAX_INDENT ? 'level' : ''}`}>
             {p.replies.map((r) => (
-              <Node key={r.id} p={r} depth={depth + 1} onReply={onReply} onDelete={onDelete} />
+              <Node key={r.id} p={r} depth={depth + 1} names={names} me={me} onReply={onReply} onDelete={onDelete} />
             ))}
           </ul>
         )}
@@ -160,8 +165,14 @@ export function PlanCollaborators({ planId }: { planId: number }) {
 }
 
 export default function PlanDiscussion({ planId, what }: { planId: number; /** "practice" or "homework sheet". */ what: string }) {
+  const me = useApp().user.name;
   const [posts, setPosts] = useState<PlanPost[] | null>(null);
   const [error, setError] = useState('');
+  // Everyone on the plan, so they can be named with "@".
+  const [names, setNames] = useState<string[]>([]);
+  useEffect(() => {
+    api.planCollaborators(planId).then((list) => setNames(list.map((p) => p.name)), () => {});
+  }, [planId]);
   const load = useCallback(() => api.planPosts(planId).then(setPosts, (e) => setError((e as Error).message)), [planId]);
   useEffect(() => {
     setPosts(null);
@@ -192,7 +203,7 @@ export default function PlanDiscussion({ planId, what }: { planId: number; /** "
         Discussion {total > 0 && <span className="muted">({total})</span>}
       </h2>
       {error && <p className="error">{error}</p>}
-      <Write placeholder={`Write about this ${what}…`} onSend={(text) => send(text)} />
+      <Write placeholder={`Write about this ${what}. Type @ to mention a coach.`} people={names.filter((n) => n !== me)} onSend={(text) => send(text)} />
       {posts === null ? (
         !error && <p className="muted small">Loading…</p>
       ) : posts.length === 0 ? (
@@ -200,7 +211,7 @@ export default function PlanDiscussion({ planId, what }: { planId: number; /** "
       ) : (
         <ul className="pd-list">
           {posts.map((p) => (
-            <Node key={p.id} p={p} depth={1} onReply={(parent, text) => send(text, parent)} onDelete={remove} />
+            <Node key={p.id} p={p} depth={1} names={names} me={me} onReply={(parent, text) => send(text, parent)} onDelete={remove} />
           ))}
         </ul>
       )}

@@ -160,11 +160,10 @@ export default function Library() {
       {fromCommunity && (
         <CommunityPicker
           kind="drill"
+          many
           onClose={() => setFromCommunity(false)}
-          onAdded={() => {
-            setFromCommunity(false);
-            load();
-          }}
+          // The box stays open for more. The list behind it is brought up to date each time.
+          onAdded={load}
         />
       )}
       {importing && (

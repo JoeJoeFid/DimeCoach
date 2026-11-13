@@ -179,7 +179,18 @@ export function ShareRow({ share, showCommunity, actions }: { share: CommunitySh
  * Looks through what the caller's communities share, of one kind, and adds a copy of the chosen
  * one to their own account. With more than one community they choose which to look through, or all.
  */
-export function CommunityPicker({ kind, onClose, onAdded }: { kind: ShareKind; onClose: () => void; onAdded: (id: number, title: string) => void }) {
+export function CommunityPicker({
+  kind,
+  onClose,
+  onAdded,
+  many,
+}: {
+  kind: ShareKind;
+  onClose: () => void;
+  onAdded: (id: number, title: string) => void;
+  /** Stays open after each one is added, so several can be taken in one go. Each is marked as added. */
+  many?: boolean;
+}) {
   const { sport, team } = useApp();
   const words = KIND_WORDS[kind];
   const [communities, setCommunities] = useState<Community[] | null>(null);
@@ -188,6 +199,8 @@ export function CommunityPicker({ kind, onClose, onAdded }: { kind: ShareKind; o
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
+  // What has been added since the box was opened, when it stays open for more.
+  const [added, setAdded] = useState<number[]>([]);
 
   useEffect(() => {
     api
@@ -207,6 +220,8 @@ export function CommunityPicker({ kind, onClose, onAdded }: { kind: ShareKind; o
     setBusy(s.id);
     try {
       const made = await api.copyShare(s.id, kind === 'plan' ? { team_id: team?.id, date: todayISO() } : { sport_id: sport?.id });
+      setError('');
+      if (many) setAdded((list) => [...list, s.id]);
       onAdded(made.id, s.title);
     } catch (e) {
       setError((e as Error).message);
@@ -250,9 +265,15 @@ export function CommunityPicker({ kind, onClose, onAdded }: { kind: ShareKind; o
                   share={s}
                   showCommunity={which === 'all'}
                   actions={
-                    <button type="button" className="btn small primary" disabled={busy !== null} onClick={() => add(s)}>
-                      {busy === s.id ? 'Adding…' : 'Add to mine'}
-                    </button>
+                    added.includes(s.id) ? (
+                      <span className="added-mark" role="status">
+                        ✓ Added
+                      </span>
+                    ) : (
+                      <button type="button" className="btn small primary" disabled={busy !== null} onClick={() => add(s)}>
+                        {busy === s.id ? 'Adding…' : 'Add to mine'}
+                      </button>
+                    )
                   }
                 />
               ))}
@@ -263,6 +284,18 @@ export function CommunityPicker({ kind, onClose, onAdded }: { kind: ShareKind; o
             coach notes and uploaded files are not included.
           </p>
         </>
+      )}
+      {many && (
+        <div className="modal-actions">
+          {added.length > 0 && (
+            <span className="muted small added-count">
+              {added.length} {added.length === 1 ? words.one : words.many} added
+            </span>
+          )}
+          <button type="button" className="btn primary" onClick={onClose}>
+            Done
+          </button>
+        </div>
       )}
     </Modal>
   );
