@@ -370,12 +370,22 @@ export function mountCommunities(app) {
   });
 
   // --- Messages ---------------------------------------------------------------
-  const postsOut = (c, m) =>
-    all(
-      `SELECT p.id, p.body, p.created_at, p.user_id, u.name FROM community_posts p JOIN users u ON u.id=p.user_id
-       WHERE p.community_id=? ORDER BY p.id DESC LIMIT 200`,
+  /**
+   * The newest 200 messages, newest first, each with its replies in the order they were written.
+   * After them come the replies made to shared things, which name the share they answer.
+   */
+  const postsOut = (c, m) => {
+    const rows = all(
+      `SELECT p.id, p.body, p.created_at, p.user_id, p.parent_id, p.share_id, u.name FROM community_posts p JOIN users u ON u.id=p.user_id
+       WHERE p.community_id=? AND (p.share_id IS NULL OR EXISTS (SELECT 1 FROM community_shares s WHERE s.id=p.share_id)) ORDER BY p.id`,
       c.id,
-    ).map((p) => ({ id: p.id, body: p.body, created_at: p.created_at, by: p.name, by_id: p.user_id, mine: p.user_id === m.user_id, can_delete: p.user_id === m.user_id || isAdminRole(m) }));
+    ).map((p) => ({
+      id: p.id, body: p.body, created_at: p.created_at, by: p.name, by_id: p.user_id, mine: p.user_id === m.user_id, can_delete: p.user_id === m.user_id || isAdminRole(m),
+      parent_id: p.parent_id ?? null, share_id: p.share_id ?? null,
+    }));
+    const tops = rows.filter((r) => !r.parent_id && !r.share_id).slice(-200).reverse();
+    return [...tops.map((t) => ({ ...t, replies: rows.filter((r) => r.parent_id === t.id) })), ...rows.filter((r) => r.share_id)];
+  };
   app.get('/api/communities/:id/posts', (req, res) => {
     const at = enter(req, res);
     if (at) res.json(postsOut(at.c, at.m));
@@ -385,7 +395,17 @@ export function mountCommunities(app) {
     if (!at) return;
     const body = str(req.body.body, 4000).trim();
     if (!body) return res.status(400).json({ error: 'Write something first.' });
-    run('INSERT INTO community_posts (community_id, user_id, body) VALUES (?,?,?)', at.c.id, req.user.id, body);
+    // A reply answers a message, or a shared thing. Answering a reply joins the same thread.
+    let parent = req.body.parent_id ? get('SELECT * FROM community_posts WHERE id=? AND community_id=?', Number(req.body.parent_id), at.c.id) : null;
+    if (req.body.parent_id && !parent) return res.status(404).json({ error: 'The message you are replying to has been deleted.' });
+    let shareId = parent?.share_id ?? null;
+    if (parent?.parent_id) parent = get('SELECT * FROM community_posts WHERE id=?', parent.parent_id);
+    if (req.body.share_id) {
+      const share = get('SELECT id FROM community_shares WHERE id=? AND community_id=?', Number(req.body.share_id), at.c.id);
+      if (!share) return res.status(404).json({ error: 'What you are replying to is no longer shared here.' });
+      shareId = share.id;
+    }
+    run('INSERT INTO community_posts (community_id, user_id, body, parent_id, share_id) VALUES (?,?,?,?,?)', at.c.id, req.user.id, body, shareId ? null : (parent?.id ?? null), shareId);
     pokeMembers(at.c.id, req.user.id);
     res.json(postsOut(at.c, at.m));
   });
@@ -395,7 +415,8 @@ export function mountCommunities(app) {
     const p = get('SELECT * FROM community_posts WHERE id=? AND community_id=?', Number(req.params.postId), at.c.id);
     if (!p) return res.status(404).json({ error: 'Not found' });
     if (p.user_id !== req.user.id && !isAdminRole(at.m)) return res.status(403).json({ error: 'Only the author or a community admin can delete a message.' });
-    run('DELETE FROM community_posts WHERE id=?', p.id);
+    // Its replies go with it.
+    run('DELETE FROM community_posts WHERE id=? OR parent_id=?', p.id, p.id);
     res.json(postsOut(at.c, at.m));
   });
 

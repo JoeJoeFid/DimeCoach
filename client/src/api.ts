@@ -205,6 +205,12 @@ export interface CommunityPost {
   by_id: number;
   mine: boolean;
   can_delete: boolean;
+  /** Set on a reply to a message. */
+  parent_id?: number | null;
+  /** Set on a reply to something shared. */
+  share_id?: number | null;
+  /** On a message: the replies to it, oldest first. */
+  replies?: CommunityPost[];
 }
 export interface CommunityShare {
   id: number;
@@ -343,7 +349,7 @@ export const api = {
   /** Removes someone, declines an invitation, or leaves, depending on who asks about whom. */
   removeMember: (id: number, userId: number) => req<{ ok: true }>('DELETE', `/communities/${id}/members/${userId}`),
   communityPosts: (id: number) => req<CommunityPost[]>('GET', `/communities/${id}/posts`),
-  postToCommunity: (id: number, body: string) => req<CommunityPost[]>('POST', `/communities/${id}/posts`, { body }),
+  postToCommunity: (id: number, body: string, to?: { parent_id?: number; share_id?: number }) => req<CommunityPost[]>('POST', `/communities/${id}/posts`, { body, ...to }),
   deletePost: (id: number, postId: number) => req<CommunityPost[]>('DELETE', `/communities/${id}/posts/${postId}`),
   communityShares: (id: number) => req<CommunityShare[]>('GET', `/communities/${id}/shares`),
   share: (id: number, kind: ShareKind, itemId: number) => req<CommunityShare[]>('POST', `/communities/${id}/shares`, { kind, item_id: itemId }),

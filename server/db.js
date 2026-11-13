@@ -283,6 +283,9 @@ export function tx(fn) {
   }
 }
 
+// A reply hangs off the message it answers (parent_id), or off a shared thing in the feed (share_id).
+addColumn('community_posts', 'parent_id', 'INTEGER');
+addColumn('community_posts', 'share_id', 'INTEGER');
 // When each member last looked at a community, so what has arrived since can be pointed out.
 addColumn('community_members', 'seen_at', 'TEXT');
 

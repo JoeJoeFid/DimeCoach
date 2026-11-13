@@ -9797,3 +9797,89 @@ fieldset.perm-list:disabled .check.perm {
 .imp-table tr.clash td:nth-child(2) .input {
   border-color: var(--warn);
 }
+
+/* ---------- Replies under a message: a thread, set in from the message it answers ---------- */
+.cm-thread {
+  margin-top: 8px;
+}
+.cm-thread-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cm-reply-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 10px;
+  margin-left: -10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cm-reply-btn:hover,
+.cm-reply-btn[aria-expanded='true'] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+.cm-replies {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--line-strong);
+  display: grid;
+  gap: 12px;
+}
+.cm-reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.cm-reply-main {
+  flex: 1;
+  min-width: 0;
+}
+.cm-reply .cm-post-head {
+  min-height: 26px;
+  font-size: 0.92rem;
+}
+.cm-reply .message-body {
+  margin: 1px 0 0;
+  font-size: 0.94rem;
+}
+.cm-reply-del {
+  margin-left: auto;
+  opacity: 0;
+}
+.cm-reply:hover .cm-reply-del,
+.cm-reply-del:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .cm-reply-del {
+    opacity: 1;
+  }
+}
+.cm-reply-box {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 10px;
+  margin-top: 10px;
+  padding-left: 16px;
+}
+.cm-reply-box textarea {
+  min-height: 40px;
+  resize: vertical;
+}
+.cm-reply-actions {
+  grid-column: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}

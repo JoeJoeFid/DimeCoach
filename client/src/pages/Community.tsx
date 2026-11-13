@@ -204,7 +204,12 @@ export default function CommunityPage() {
     ['people', 'People', ICON.people, 0],
     ['settings', 'Settings', ICON.settings, 0],
   ];
-  const rail = { c, active, posts: posts || [], approved, onPeople: () => setTab('people') };
+  // Messages with their replies; replies made to shared things; and every one of them flat, newest first.
+  const threads = posts ? posts.filter((p) => !p.share_id) : null;
+  const shareReplies = new Map<number, CommunityPost[]>();
+  for (const p of posts || []) if (p.share_id) shareReplies.set(p.share_id, [...(shareReplies.get(p.share_id) || []), p]);
+  const everyPost = (posts || []).flatMap((p) => [p, ...(p.replies || [])]).sort((a, b) => stamp(b.created_at) - stamp(a.created_at));
+  const rail = { c, active, posts: everyPost, approved, onPeople: () => setTab('people') };
 
   return (
     <div className="page cm">
@@ -271,7 +276,8 @@ export default function CommunityPage() {
             c={c}
             q={q}
             kinds={kinds}
-            posts={posts}
+            posts={threads}
+            shareReplies={shareReplies}
             shares={approved}
             roleOf={roleOf}
             composer={composer}
@@ -298,7 +304,7 @@ export default function CommunityPage() {
           kinds={kinds}
           admin={admin}
           shares={shares}
-          posts={posts || []}
+          posts={everyPost}
           active={active}
           onShare={startShare}
           onPreview={setPreview}
@@ -478,6 +484,7 @@ function Feed({
   q,
   kinds,
   posts,
+  shareReplies,
   shares,
   roleOf,
   composer,
@@ -492,6 +499,7 @@ function Feed({
   q: string;
   kinds: ShareKind[];
   posts: CommunityPost[] | null;
+  shareReplies: Map<number, CommunityPost[]>;
   shares: CommunityShare[];
   roleOf: (userId: number) => CommunityPerson['role'] | undefined;
   composer: React.RefObject<HTMLTextAreaElement | null>;
@@ -523,8 +531,14 @@ function Feed({
     ];
     return all
       .filter((e) => filter === 'all' || (filter === 'posts' ? !!e.post : !!e.share))
-      .filter((e) => !words || (e.post ? `${e.post.body} ${e.post.by}` : `${e.share!.title} ${e.share!.by} ${e.share!.tags.map((t) => t.name).join(' ')}`).toLowerCase().includes(words))
+      .filter((e) => {
+        if (!words) return true;
+        const replies = e.post ? e.post.replies || [] : shareReplies.get(e.share!.id) || [];
+        const own = e.post ? `${e.post.body} ${e.post.by}` : `${e.share!.title} ${e.share!.by} ${e.share!.tags.map((t) => t.name).join(' ')}`;
+        return `${own} ${replies.map((r) => `${r.body} ${r.by}`).join(' ')}`.toLowerCase().includes(words);
+      })
       .sort((a, b) => stamp(b.at) - stamp(a.at));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, shares, filter, words]);
   const chips: [FeedFilter, string][] = [
     ['all', 'All posts'],
@@ -588,7 +602,8 @@ function Feed({
                       label: 'Delete this message',
                       danger: true,
                       onSelect: async () => {
-                        if (!(await confirmDialog({ title: 'Delete this message?', body: 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
+                        const n = e.post!.replies?.length || 0;
+                        if (!(await confirmDialog({ title: 'Delete this message?', body: n ? `It is removed for everyone, along with the ${n === 1 ? 'reply' : `${n} replies`} to it.` : 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
                         api.deletePost(c.id, e.post!.id).then(onPosts, onError);
                       },
                     },
@@ -632,11 +647,133 @@ function Feed({
                       </span>
                     </div>
                   )}
+                  <Thread
+                    replies={e.post ? e.post.replies || [] : shareReplies.get(e.share!.id) || []}
+                    roleOf={roleOf}
+                    onSend={async (text) => {
+                      try {
+                        onPosts(await api.postToCommunity(c.id, text, e.post ? { parent_id: e.post.id } : { share_id: e.share!.id }));
+                        return true;
+                      } catch (err) {
+                        onError(err);
+                        return false;
+                      }
+                    }}
+                    onDelete={async (r) => {
+                      if (!(await confirmDialog({ title: 'Delete this reply?', body: 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
+                      api.deletePost(c.id, r.id).then(onPosts, onError);
+                    }}
+                  />
                 </div>
               </li>
             );
           })}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/** How many replies show before the rest are folded away. */
+const REPLIES_SHOWN = 3;
+/** The replies under a message or a shared thing, and the box for writing one. */
+function Thread({
+  replies,
+  roleOf,
+  onSend,
+  onDelete,
+}: {
+  replies: CommunityPost[];
+  roleOf: (userId: number) => CommunityPerson['role'] | undefined;
+  onSend: (text: string) => Promise<boolean>;
+  onDelete: (r: CommunityPost) => void;
+}) {
+  const { user } = useApp();
+  const [writing, setWriting] = useState(false);
+  const [all, setAll] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const hidden = all ? 0 : Math.max(0, replies.length - REPLIES_SHOWN);
+  const send = async () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    if (await onSend(text.trim())) {
+      setText('');
+      setWriting(false);
+      setAll(true);
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="cm-thread">
+      <div className="cm-thread-bar">
+        <button type="button" className="cm-reply-btn" onClick={() => setWriting(!writing)} aria-expanded={writing}>
+          <Svg d={ICON.talk} size={15} /> Reply
+        </button>
+        {replies.length > 0 && (
+          <span className="muted small">
+            {replies.length} repl{replies.length === 1 ? 'y' : 'ies'}
+          </span>
+        )}
+      </div>
+      {replies.length > 0 && (
+        <ul className="cm-replies">
+          {hidden > 0 && (
+            <li>
+              <button type="button" className="link small" onClick={() => setAll(true)}>
+                Show {hidden} earlier repl{hidden === 1 ? 'y' : 'ies'}
+              </button>
+            </li>
+          )}
+          {replies.slice(hidden).map((r) => {
+            const role = roleOf(r.by_id);
+            return (
+              <li key={r.id} className="cm-reply">
+                <Avatar name={r.by} />
+                <div className="cm-reply-main">
+                  <div className="cm-post-head">
+                    <strong>{r.by}</strong>
+                    {role && <RoleBadge role={role} />}
+                    <span className="muted small">{ago(r.created_at)}</span>
+                    {r.can_delete && (
+                      <button type="button" className="link small cm-reply-del" onClick={() => onDelete(r)}>
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                  <p className="message-body">{r.body}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {writing && (
+        <div className="cm-reply-box">
+          <Avatar name={user.name} />
+          <textarea
+            className="input"
+            rows={2}
+            maxLength={4000}
+            autoFocus
+            aria-label="Your reply"
+            placeholder="Write a reply…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send();
+              if (e.key === 'Escape') setWriting(false);
+            }}
+          />
+          <span className="cm-reply-actions">
+            <button type="button" className="btn small" onClick={() => setWriting(false)}>
+              Cancel
+            </button>
+            <button type="button" className="btn small primary" disabled={!text.trim() || busy} onClick={send}>
+              Reply
+            </button>
+          </span>
+        </div>
       )}
     </div>
   );
