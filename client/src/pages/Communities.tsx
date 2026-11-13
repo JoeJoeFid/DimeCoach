@@ -76,6 +76,13 @@ export default function Communities() {
           <p className="muted">Groups of coaches who talk to each other and, if the group allows it, share drills, plays and practice plans.</p>
         </div>
         <div className="head-actions">
+          {/* A code someone sent goes in here. */}
+          <form className="join-inline" onSubmit={join}>
+            <input className="input" aria-label="Join code" placeholder="Join with a code" value={code} onChange={(e) => setCode(e.target.value)} />
+            <button className="btn" disabled={!code.trim()}>
+              Join
+            </button>
+          </form>
           <button className="btn primary" onClick={() => setCreating(true)}>
             + New community
           </button>
@@ -115,7 +122,7 @@ export default function Communities() {
       ) : mine.length === 0 ? (
         <div className="empty">
           <h2>You are not in a community yet</h2>
-          <p>Start one for your club, league or coaching friends, or join one with a code someone sent you.</p>
+          <p>Start one for your club, league or coaching friends, or join one by typing a code someone sent you into "Join with a code" above.</p>
           <button className="btn primary" onClick={() => setCreating(true)}>
             + New community
           </button>
@@ -125,6 +132,18 @@ export default function Communities() {
           {mine.map((c) => (
             <li key={c.id}>
               <Link to={`/communities/${c.id}`} className="community-card">
+                <span className="community-pic" aria-hidden="true">
+                  {c.image ? (
+                    <img src={c.image} alt="" />
+                  ) : (
+                    c.name
+                      .split(/\s+/)
+                      .slice(0, 2)
+                      .map((w) => w[0])
+                      .join('')
+                      .toUpperCase()
+                  )}
+                </span>
                 <span className="community-name">
                   {c.name}
                   {unreadIn(c.id) > 0 && <span className="nav-badge still">{unreadIn(c.id)} new</span>}
@@ -141,17 +160,6 @@ export default function Communities() {
           ))}
         </ul>
       )}
-
-      <form className="card join-card" onSubmit={join}>
-        <h2>Join with a code</h2>
-        <p className="muted small">A community admin can give you their join code.</p>
-        <div className="join-row">
-          <input className="input" aria-label="Join code" placeholder="Such as 4F9A21C07B" value={code} onChange={(e) => setCode(e.target.value)} />
-          <button className="btn" disabled={!code.trim()}>
-            Join
-          </button>
-        </div>
-      </form>
 
       {creating && (
         <Modal title="New community" onClose={() => setCreating(false)}>

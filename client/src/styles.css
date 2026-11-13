@@ -9883,3 +9883,311 @@ fieldset.perm-list:disabled .check.perm {
   justify-content: flex-end;
   gap: 6px;
 }
+
+/* Replies to replies step in under what they answer. Past a few steps they stop stepping, so words keep their room. */
+.cm-replies .cm-replies {
+  margin-top: 10px;
+}
+.cm-replies.level {
+  padding-left: 0;
+  border-left: none;
+}
+.cm-reply .cm-thread-bar {
+  margin-top: 2px;
+}
+.cm-reply .cm-reply-btn {
+  min-height: 28px;
+  font-size: 0.8rem;
+}
+.cm-reply .cm-reply-del {
+  margin-left: 0;
+}
+.cm-reply .cm-embed {
+  margin-top: 6px;
+}
+.cm-reply .cm-embed .cm-art {
+  width: 104px;
+  height: 62px;
+}
+.cm-gone {
+  margin: 4px 0 0;
+  font-style: italic;
+}
+.cm-reply-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 8px 0 4px;
+  padding-left: 0;
+}
+.cm-thread > .cm-reply-box {
+  padding-left: 16px;
+}
+.cm-reply-write {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.cm-reply-actions {
+  grid-column: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+}
+.cm-reply-actions .cm-pill {
+  min-height: 30px;
+  padding: 3px 11px;
+  font-size: 0.8rem;
+}
+.cm-reply-send {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.cm-attached {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 0.9rem;
+}
+.cm-attached > span {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- Communities: pictures, admin jobs, joining by code, and deep threads ---------- */
+.cm-crest {
+  overflow: hidden;
+}
+.cm-crest img,
+.community-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cm-pic {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.community-card {
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: 14px;
+  align-content: start;
+}
+.community-card > * {
+  grid-column: 2;
+}
+.community-pic {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.community-name {
+  flex-wrap: wrap;
+}
+.join-inline {
+  display: flex;
+  gap: 6px;
+}
+.join-inline .input {
+  width: 170px;
+}
+.cm-powers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.cm-power-key dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 20px;
+}
+.cm-power-key dt {
+  font-weight: 650;
+}
+.cm-power-key dd {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+/* Past a few steps a reply to a reply stops stepping in: it lines up under the one before, so words keep their room. */
+.cm-replies.level {
+  margin-left: -36px;
+}
+@media (max-width: 700px) {
+  .cm-replies .cm-replies .cm-replies {
+    margin-left: -36px;
+    padding-left: 0;
+    border-left: none;
+  }
+  .join-inline {
+    flex: 1 0 100%;
+  }
+  .join-inline .input {
+    flex: 1;
+    width: auto;
+  }
+}
+
+/* ---------- The drill window: name and length, categories, notes, then four cards two by two ---------- */
+.ib-grid {
+  display: contents;
+}
+.ib-sign {
+  display: none;
+}
+.modal:has(.item-body.cards) {
+  max-width: 920px;
+}
+.modal:has(.item-body.cards) .modal-head {
+  padding: 18px 24px;
+}
+.modal:has(.item-body.cards) .modal-body {
+  padding: 20px 24px 22px;
+}
+.drill-modal-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+}
+.drill-top {
+  align-items: flex-end;
+}
+.drill-top .field:not(.grow) {
+  flex: 0 0 240px;
+}
+.drill-top .field:not(.grow) .input {
+  width: 100%;
+}
+.req {
+  color: var(--danger);
+}
+.item-body.cards {
+  margin-top: 16px;
+  padding-top: 0;
+  border-top: none;
+  gap: 18px;
+}
+.item-body.cards > section > h4 {
+  margin: 0 0 8px;
+  font-size: 0.98rem;
+}
+.item-body.cards > section > h4 .hint {
+  margin-left: 8px;
+  font-weight: 400;
+}
+.item-body.cards > section:nth-of-type(2) {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.item-body.cards .chips .chip.toggle {
+  padding: 6px 14px;
+}
+.item-body.cards .ib-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.item-body.cards .ib-grid > section {
+  position: relative;
+  padding: 16px 18px 18px 56px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.item-body.cards .ib-grid > section.full {
+  grid-column: 1 / -1;
+}
+.item-body.cards .ib-grid > section.coach-only {
+  background: var(--coach);
+  border-color: var(--coach-line);
+}
+.item-body.cards .ib-sign {
+  display: block;
+  position: absolute;
+  left: 18px;
+  top: 17px;
+  color: var(--ink-2);
+}
+.item-body.cards .ib-grid h4 {
+  margin: 0 0 12px;
+  font-size: 0.98rem;
+}
+.item-body.cards .ib-grid h4 .hint {
+  display: block;
+  margin: 3px 0 0;
+  font-weight: 400;
+  line-height: 1.35;
+}
+.item-body.cards .ib-grid .btn.small {
+  min-height: 36px;
+  padding: 6px 14px;
+}
+.modal:has(.item-body.cards) .modal-foot {
+  margin: 20px -24px -22px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--line);
+}
+.modal:has(.item-body.cards) .modal-foot .btn {
+  min-height: 42px;
+  padding: 8px 20px;
+}
+@media (max-width: 760px) {
+  .item-body.cards .ib-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .drill-top .field:not(.grow) {
+    flex: 1 1 140px;
+  }
+  .item-body.cards > section > h4 .hint {
+    display: block;
+    margin: 3px 0 0;
+  }
+}
+/* Headings in the drill window are plain words, not small capitals. */
+.item-body.cards h4 {
+  color: var(--ink);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+.item-body.cards h4 .hint {
+  color: var(--muted);
+  font-size: 0.84rem;
+  letter-spacing: 0;
+}
+
+/* A button that is only a sign: share, delete. */
+.btn.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  min-width: 36px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.btn.icon-btn.danger {
+  color: var(--danger);
+}

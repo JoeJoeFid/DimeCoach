@@ -23,9 +23,25 @@ const newCode = () => crypto.randomBytes(5).toString('hex').toUpperCase();
 // --- Who may do what ----------------------------------------------------------
 const membership = (communityId, userId) => get('SELECT * FROM community_members WHERE community_id=? AND user_id=?', communityId, userId);
 const isAdminRole = (m) => !!m && m.status === 'active' && (m.role === 'creator' || m.role === 'admin');
+// What an admin may do. The creator gives each one separately, and can do all of them.
+//   moderate: delete anyone's messages and replies, and take shared things down
+//   approve:  approve or decline what members share; their own shares need no approval
+//   settings: the name, description, picture, and what may be shared
+//   people:   invite and remove members, and see the join code
+const COMMUNITY_PERMS = ['moderate', 'approve', 'settings', 'people'];
+const POWER_WORDS = { moderate: 'remove messages and shared items', approve: 'approve what is shared', settings: 'change the settings', people: 'invite and remove people' };
+function permsOf(m) {
+  const all = (v) => Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, v]));
+  if (!m || m.status !== 'active' || m.role === 'member') return all(false);
+  if (m.role === 'creator') return all(true);
+  // An admin made before powers were separate has all of them.
+  const saved = parse(m.perms_json, {}) || {};
+  return Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, saved[p] === undefined ? true : !!saved[p]]));
+}
+const can = (m, perm) => permsOf(m)[perm];
 
 /** Loads the community and the caller's place in it. Answers the request itself when they have none. */
-function enter(req, res, { admin = false, creator = false } = {}) {
+function enter(req, res, { perm = '', creator = false } = {}) {
   const c = get('SELECT * FROM communities WHERE id=?', Number(req.params.id));
   const m = c && membership(c.id, req.user.id);
   if (!c || !m || m.status !== 'active') {
@@ -36,8 +52,8 @@ function enter(req, res, { admin = false, creator = false } = {}) {
     res.status(403).json({ error: 'Only the person who created this community can do that.' });
     return null;
   }
-  if (admin && !isAdminRole(m)) {
-    res.status(403).json({ error: 'Only a community admin can do that.' });
+  if (perm && !can(m, perm)) {
+    res.status(403).json({ error: 'You have not been given permission to do that in this community.' });
     return null;
   }
   return { c, m };
@@ -167,24 +183,24 @@ export function mountCommunities(app) {
   const communityOut = (c, m) => ({
     id: c.id, name: c.name, description: c.description,
     share_drills: !!c.share_drills, share_plays: !!c.share_plays, share_plans: !!c.share_plans, require_approval: !!c.require_approval,
-    role: m.role, status: m.status,
+    role: m.role, status: m.status, image: c.image || '', can: permsOf(m),
     members: get("SELECT COUNT(*) AS n FROM community_members WHERE community_id=? AND status='active'", c.id).n,
     created_by_name: get('SELECT name FROM users WHERE id=?', c.created_by)?.name ?? '',
   });
   const detailOut = (c, m) => {
-    const admin = isAdminRole(m);
+    const admin = can(m, 'people');
     return {
       ...communityOut(c, m),
-      // The join code and people's email addresses are for admins only.
+      // The join code and people's email addresses are for those who manage the people.
       join_code: admin ? c.join_code : undefined,
       people: all(
-        `SELECT u.id, u.name, u.email, cm.role, cm.status FROM community_members cm JOIN users u ON u.id=cm.user_id
+        `SELECT u.id, u.name, u.email, cm.role, cm.status, cm.perms_json FROM community_members cm JOIN users u ON u.id=cm.user_id
          WHERE cm.community_id=? ORDER BY CASE cm.role WHEN 'creator' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.name COLLATE NOCASE`,
         c.id,
       )
         .filter((p) => admin || p.status === 'active')
-        .map((p) => ({ id: p.id, name: p.name, email: admin ? p.email : undefined, role: p.role, status: p.status })),
-      pending_shares: admin ? get("SELECT COUNT(*) AS n FROM community_shares WHERE community_id=? AND status='pending'", c.id).n : 0,
+        .map((p) => ({ id: p.id, name: p.name, email: admin ? p.email : undefined, role: p.role, status: p.status, perms: permsOf(p) })),
+      pending_shares: can(m, 'approve') ? get("SELECT COUNT(*) AS n FROM community_shares WHERE community_id=? AND status='pending'", c.id).n : 0,
     };
   };
 
@@ -278,16 +294,23 @@ export function mountCommunities(app) {
     if (at) res.json(detailOut(at.c, at.m));
   });
   app.put('/api/communities/:id', (req, res) => {
-    const at = enter(req, res, { admin: true });
+    const at = enter(req, res, { perm: 'settings' });
     if (!at) return;
     const b = req.body;
     const name = b.name === undefined ? at.c.name : str(b.name, 80).trim();
     if (!name) return res.status(400).json({ error: 'Give the community a name.' });
     const flag = (key) => (typeof b[key] === 'boolean' ? (b[key] ? 1 : 0) : at.c[key]);
+    // The picture arrives already shrunk by the browser. Anything else is turned away.
+    let image = at.c.image || '';
+    if (b.image !== undefined) {
+      image = String(b.image || '');
+      if (image && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(image) || image.length > 400000))
+        return res.status(400).json({ error: 'That picture could not be used. Choose a JPG, PNG or WebP image.' });
+    }
     run(
-      'UPDATE communities SET name=?, description=?, share_drills=?, share_plays=?, share_plans=?, require_approval=? WHERE id=?',
+      'UPDATE communities SET name=?, description=?, share_drills=?, share_plays=?, share_plans=?, require_approval=?, image=? WHERE id=?',
       name, b.description === undefined ? at.c.description : str(b.description, 600).trim(),
-      flag('share_drills'), flag('share_plays'), flag('share_plans'), flag('require_approval'), at.c.id,
+      flag('share_drills'), flag('share_plays'), flag('share_plans'), flag('require_approval'), image, at.c.id,
     );
     // Turning approval off lets everything waiting through.
     if (b.require_approval === false) run("UPDATE community_shares SET status='approved' WHERE community_id=?", at.c.id);
@@ -297,13 +320,15 @@ export function mountCommunities(app) {
   app.delete('/api/communities/:id', (req, res) => {
     const at = enter(req, res, { creator: true });
     if (!at) return;
+    // The request must repeat the community's name, so a stray or replayed call cannot delete one.
+    if (str(req.body?.confirm, 200).trim().toLowerCase() !== at.c.name.trim().toLowerCase()) return res.status(400).json({ error: 'Type the name of the community exactly to delete it.' });
     for (const m of all("SELECT user_id FROM community_members WHERE community_id=? AND status='active' AND user_id<>?", at.c.id, req.user.id))
       notify(m.user_id, { kind: 'community', title: `${req.user.name} deleted the community ${at.c.name}`, body: 'Anything you added to your own drills, plays or practices from it is still yours.' });
     run('DELETE FROM communities WHERE id=?', at.c.id);
     res.json({ ok: true });
   });
   app.post('/api/communities/:id/code', (req, res) => {
-    const at = enter(req, res, { admin: true });
+    const at = enter(req, res, { perm: 'people' });
     if (!at) return;
     run('UPDATE communities SET join_code=? WHERE id=?', newCode(), at.c.id);
     res.json(detailOut(get('SELECT * FROM communities WHERE id=?', at.c.id), at.m));
@@ -311,7 +336,7 @@ export function mountCommunities(app) {
 
   // --- People -----------------------------------------------------------------
   app.post('/api/communities/:id/invite', (req, res) => {
-    const at = enter(req, res, { admin: true });
+    const at = enter(req, res, { perm: 'people' });
     if (!at) return;
     const email = str(req.body.email, 200).trim().toLowerCase();
     const u = email && get("SELECT id, name FROM users WHERE lower(email)=? AND status='active'", email);
@@ -339,14 +364,23 @@ export function mountCommunities(app) {
     const target = membership(at.c.id, Number(req.params.userId));
     if (!target || target.status !== 'active') return res.status(404).json({ error: 'Not found' });
     if (target.role === 'creator') return res.status(400).json({ error: 'The creator stays the creator.' });
-    if (req.body.role !== 'admin' && req.body.role !== 'member') return res.status(400).json({ error: 'Choose admin or member.' });
-    run('UPDATE community_members SET role=? WHERE community_id=? AND user_id=?', req.body.role, at.c.id, target.user_id);
-    if (req.body.role !== target.role)
+    // Either a role ("admin" gives every power, "member" none), or the powers one by one.
+    // Someone with at least one power is an admin; with none, a member.
+    let perms;
+    if (req.body.perms && typeof req.body.perms === 'object') perms = Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, req.body.perms[p] === undefined ? permsOf(target)[p] : !!req.body.perms[p]]));
+    else if (req.body.role === 'admin' || req.body.role === 'member') perms = Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, req.body.role === 'admin']));
+    else return res.status(400).json({ error: 'Choose admin or member.' });
+    const role = COMMUNITY_PERMS.some((p) => perms[p]) ? 'admin' : 'member';
+    const before = JSON.stringify(permsOf(target));
+    run('UPDATE community_members SET role=?, perms_json=? WHERE community_id=? AND user_id=?', role, JSON.stringify(perms), at.c.id, target.user_id);
+    if (before !== JSON.stringify(perms)) {
+      const powers = COMMUNITY_PERMS.filter((p) => perms[p]).map((p) => POWER_WORDS[p]);
       notify(target.user_id, {
         kind: 'community-role', ref: `community-${at.c.id}`, link: `/communities/${at.c.id}`,
-        title: req.body.role === 'admin' ? `${req.user.name} made you an admin of ${at.c.name}` : `You are no longer an admin of ${at.c.name}`,
-        body: req.body.role === 'admin' ? 'You can now invite people, approve what is shared and remove messages.' : 'You are still a member.',
+        title: role === 'member' ? `You are no longer an admin of ${at.c.name}` : target.role === 'admin' ? `${req.user.name} changed what you can do in ${at.c.name}` : `${req.user.name} made you an admin of ${at.c.name}`,
+        body: role === 'member' ? 'You are still a member.' : `You can now ${powers.length > 1 ? `${powers.slice(0, -1).join(', ')} and ${powers[powers.length - 1]}` : powers[0]}.`,
       });
+    }
     res.json(detailOut(at.c, at.m));
   });
   app.delete('/api/communities/:id/members/:userId', (req, res) => {
@@ -357,7 +391,7 @@ export function mountCommunities(app) {
     const self = target.user_id === req.user.id;
     if (target.role === 'creator') return res.status(400).json({ error: self ? 'You created this community, so you cannot leave it. You can delete it instead.' : 'The creator cannot be removed.' });
     if (!self) {
-      if (!isAdminRole(me)) return res.status(403).json({ error: 'Only a community admin can do that.' });
+      if (!can(me, 'people')) return res.status(403).json({ error: 'You have not been given permission to remove people from this community.' });
       if (target.role === 'admin' && me.role !== 'creator') return res.status(403).json({ error: 'Only the creator can remove another admin.' });
     }
     tx(() => {
@@ -371,20 +405,24 @@ export function mountCommunities(app) {
 
   // --- Messages ---------------------------------------------------------------
   /**
-   * The newest 200 messages, newest first, each with its replies in the order they were written.
-   * After them come the replies made to shared things, which name the share they answer.
+   * The newest 200 messages, newest first. Each carries the replies to it, oldest first, and each
+   * reply the replies to it in turn. After them come the replies made to shared things, which name
+   * the share they answer.
    */
   const postsOut = (c, m) => {
     const rows = all(
-      `SELECT p.id, p.body, p.created_at, p.user_id, p.parent_id, p.share_id, u.name FROM community_posts p JOIN users u ON u.id=p.user_id
+      `SELECT p.id, p.body, p.created_at, p.user_id, p.parent_id, p.share_id, p.attach_share_id, u.name FROM community_posts p JOIN users u ON u.id=p.user_id
        WHERE p.community_id=? AND (p.share_id IS NULL OR EXISTS (SELECT 1 FROM community_shares s WHERE s.id=p.share_id)) ORDER BY p.id`,
       c.id,
     ).map((p) => ({
-      id: p.id, body: p.body, created_at: p.created_at, by: p.name, by_id: p.user_id, mine: p.user_id === m.user_id, can_delete: p.user_id === m.user_id || isAdminRole(m),
-      parent_id: p.parent_id ?? null, share_id: p.share_id ?? null,
+      id: p.id, body: p.body, created_at: p.created_at, by: p.name, by_id: p.user_id, mine: p.user_id === m.user_id, can_delete: p.user_id === m.user_id || can(m, 'moderate'),
+      parent_id: p.parent_id ?? null, share_id: p.share_id ?? null, attach_share_id: p.attach_share_id ?? null,
     }));
+    const under = new Map();
+    for (const r of rows) if (r.parent_id) under.set(r.parent_id, [...(under.get(r.parent_id) ?? []), r]);
+    const tree = (r) => ({ ...r, replies: (under.get(r.id) ?? []).map(tree) });
     const tops = rows.filter((r) => !r.parent_id && !r.share_id).slice(-200).reverse();
-    return [...tops.map((t) => ({ ...t, replies: rows.filter((r) => r.parent_id === t.id) })), ...rows.filter((r) => r.share_id)];
+    return [...tops.map(tree), ...rows.filter((r) => !r.parent_id && r.share_id).map(tree)];
   };
   app.get('/api/communities/:id/posts', (req, res) => {
     const at = enter(req, res);
@@ -394,18 +432,20 @@ export function mountCommunities(app) {
     const at = enter(req, res);
     if (!at) return;
     const body = str(req.body.body, 4000).trim();
-    if (!body) return res.status(400).json({ error: 'Write something first.' });
-    // A reply answers a message, or a shared thing. Answering a reply joins the same thread.
-    let parent = req.body.parent_id ? get('SELECT * FROM community_posts WHERE id=? AND community_id=?', Number(req.body.parent_id), at.c.id) : null;
+    // Something of the writer's own, already shared here, can go with the message.
+    const attach = req.body.attach_share_id ? get('SELECT id FROM community_shares WHERE id=? AND community_id=? AND user_id=?', Number(req.body.attach_share_id), at.c.id, req.user.id) : null;
+    if (req.body.attach_share_id && !attach) return res.status(404).json({ error: 'What you attached is no longer shared here.' });
+    if (!body && !attach) return res.status(400).json({ error: 'Write something first.' });
+    // A reply answers a message, another reply, or a shared thing.
+    const parent = req.body.parent_id ? get('SELECT * FROM community_posts WHERE id=? AND community_id=?', Number(req.body.parent_id), at.c.id) : null;
     if (req.body.parent_id && !parent) return res.status(404).json({ error: 'The message you are replying to has been deleted.' });
     let shareId = parent?.share_id ?? null;
-    if (parent?.parent_id) parent = get('SELECT * FROM community_posts WHERE id=?', parent.parent_id);
     if (req.body.share_id) {
       const share = get('SELECT id FROM community_shares WHERE id=? AND community_id=?', Number(req.body.share_id), at.c.id);
       if (!share) return res.status(404).json({ error: 'What you are replying to is no longer shared here.' });
       shareId = share.id;
     }
-    run('INSERT INTO community_posts (community_id, user_id, body, parent_id, share_id) VALUES (?,?,?,?,?)', at.c.id, req.user.id, body, shareId ? null : (parent?.id ?? null), shareId);
+    run('INSERT INTO community_posts (community_id, user_id, body, parent_id, share_id, attach_share_id) VALUES (?,?,?,?,?,?)', at.c.id, req.user.id, body, parent?.id ?? null, shareId, attach?.id ?? null);
     pokeMembers(at.c.id, req.user.id);
     res.json(postsOut(at.c, at.m));
   });
@@ -414,9 +454,13 @@ export function mountCommunities(app) {
     if (!at) return;
     const p = get('SELECT * FROM community_posts WHERE id=? AND community_id=?', Number(req.params.postId), at.c.id);
     if (!p) return res.status(404).json({ error: 'Not found' });
-    if (p.user_id !== req.user.id && !isAdminRole(at.m)) return res.status(403).json({ error: 'Only the author or a community admin can delete a message.' });
-    // Its replies go with it.
-    run('DELETE FROM community_posts WHERE id=? OR parent_id=?', p.id, p.id);
+    if (p.user_id !== req.user.id && !can(at.m, 'moderate')) return res.status(403).json({ error: 'Only the author or someone who moderates this community can delete a message.' });
+    // Its replies go with it, and the replies to those.
+    run(
+      `WITH RECURSIVE thread(id) AS (SELECT ? UNION ALL SELECT c.id FROM community_posts c JOIN thread t ON c.parent_id=t.id)
+       DELETE FROM community_posts WHERE id IN (SELECT id FROM thread)`,
+      p.id,
+    );
     res.json(postsOut(at.c, at.m));
   });
 
@@ -424,7 +468,7 @@ export function mountCommunities(app) {
   /** Everything in one community's library the caller may see: approved things, their own, and for admins what is waiting. */
   const sharesOut = (c, m) =>
     all(`${SHARE_SELECT} WHERE s.community_id=? ORDER BY s.id DESC`, c.id)
-      .filter((s) => c[KIND_FLAG[s.kind]] && (s.status === 'approved' || s.user_id === m.user_id || isAdminRole(m)))
+      .filter((s) => c[KIND_FLAG[s.kind]] && (s.status === 'approved' || s.user_id === m.user_id || can(m, 'approve')))
       .map((s) => shareOut(s, m.user_id))
       .filter(Boolean);
   app.get('/api/communities/:id/shares', (req, res) => {
@@ -440,7 +484,7 @@ export function mountCommunities(app) {
     const row = get(`SELECT * FROM ${TABLE[kind]} WHERE id=? AND owner_id=?`, Number(req.body.item_id), req.ownerId);
     if (!row || (kind === 'plan' && row.is_template)) return res.status(404).json({ error: 'Not found' });
     // Admins' own shares, and every share in a community that does not ask for approval, show at once.
-    const status = !at.c.require_approval || isAdminRole(at.m) ? 'approved' : 'pending';
+    const status = !at.c.require_approval || can(at.m, 'approve') ? 'approved' : 'pending';
     run(
       'INSERT INTO community_shares (community_id, user_id, owner_id, kind, item_id, status) VALUES (?,?,?,?,?,?) ON CONFLICT(community_id, kind, item_id, owner_id) DO NOTHING',
       at.c.id, req.user.id, req.ownerId, kind, row.id, status,
@@ -461,7 +505,7 @@ export function mountCommunities(app) {
   app.post('/api/community-shares/:shareId/approve', (req, res) => {
     const at = shareAnd(req, res);
     if (!at) return;
-    if (!isAdminRole(at.m)) return res.status(403).json({ error: 'Only a community admin can approve.' });
+    if (!can(at.m, 'approve')) return res.status(403).json({ error: 'You have not been given permission to approve what is shared here.' });
     run("UPDATE community_shares SET status='approved' WHERE id=?", at.s.id);
     pokeMembers(at.c.id, req.user.id);
     if (at.s.status !== 'approved' && at.s.user_id !== req.user.id)
@@ -471,7 +515,9 @@ export function mountCommunities(app) {
   app.delete('/api/community-shares/:shareId', (req, res) => {
     const at = shareAnd(req, res);
     if (!at) return;
-    if (at.s.user_id !== req.user.id && !isAdminRole(at.m)) return res.status(403).json({ error: 'Only the person who shared it or a community admin can remove it.' });
+    // Declining something that is waiting goes with approving. Taking down something already shared is moderating.
+    if (at.s.user_id !== req.user.id && !can(at.m, at.s.status === 'pending' ? 'approve' : 'moderate'))
+      return res.status(403).json({ error: 'Only the person who shared it, or someone given that job in this community, can remove it.' });
     run('DELETE FROM community_shares WHERE id=?', at.s.id);
     if (at.s.user_id !== req.user.id)
       notify(at.s.user_id, {
@@ -505,7 +551,7 @@ export function mountCommunities(app) {
     const c = s && get('SELECT * FROM communities WHERE id=?', s.community_id);
     const m = c && membership(c.id, req.user.id);
     if (!s || !m || m.status !== 'active' || !c[KIND_FLAG[s.kind]]) return null;
-    if (s.status !== 'approved' && s.user_id !== req.user.id && !isAdminRole(m)) return null;
+    if (s.status !== 'approved' && s.user_id !== req.user.id && !can(m, 'approve')) return null;
     return s;
   };
   app.get('/api/community-library', (req, res) => {

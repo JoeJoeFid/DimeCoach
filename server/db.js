@@ -286,6 +286,12 @@ export function tx(fn) {
 // A reply hangs off the message it answers (parent_id), or off a shared thing in the feed (share_id).
 addColumn('community_posts', 'parent_id', 'INTEGER');
 addColumn('community_posts', 'share_id', 'INTEGER');
+// Something the writer shared along with the message: a variation of the drill being discussed, say.
+addColumn('community_posts', 'attach_share_id', 'INTEGER');
+// What an admin of a community may do, each power given separately by its creator. See server/communities.js.
+addColumn('community_members', 'perms_json', "TEXT DEFAULT '{}'");
+// A small picture for the community, kept as a data URL: the browser shrinks it before sending.
+addColumn('communities', 'image', "TEXT DEFAULT ''");
 // When each member last looked at a community, so what has arrived since can be pointed out.
 addColumn('community_members', 'seen_at', 'TEXT');
 

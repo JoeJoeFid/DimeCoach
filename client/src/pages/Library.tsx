@@ -10,6 +10,7 @@ import { Field, Modal, TagChip } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 import { htmlPreview } from '../util';
+import SportIcon from '../components/SportIcon';
 
 type Draft = ItemContent & { id?: number };
 const resourceLabel = (n: number) => (n > 0 ? `${n} resource${n === 1 ? '' : 's'}` : '');
@@ -137,15 +138,17 @@ export default function Library() {
                       .join(' · ')}
                   </span>
                 </button>
+                {/* Clicking the drill itself opens it to edit. */}
                 <span className="row-actions">
-                  <button className="btn small" onClick={() => setSharing(d)}>
-                    Share
+                  <button type="button" className="btn small icon-btn" aria-label={`Share ${d.name}`} title="Share" onClick={() => setSharing(d)}>
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 15V4M8 7.500l4-4 4 4M5 12v7h14v-7" />
+                    </svg>
                   </button>
-                  <button className="btn small" onClick={() => setDraft(toDraft(d))}>
-                    Edit
-                  </button>
-                  <button className="btn small danger" onClick={() => remove(d)}>
-                    Delete
+                  <button type="button" className="btn small icon-btn danger" aria-label={`Delete ${d.name}`} title="Delete" onClick={() => remove(d)}>
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4.500 7h15M9.500 7V4.500h5V7M6.500 7l1 12.500h9l1-12.500M10 11v5M14 11v5" />
+                    </svg>
                   </button>
                 </span>
               </li>
@@ -177,13 +180,36 @@ export default function Library() {
       )}
       {sharing && <ShareDialog kind="drill" itemId={sharing.id} title={sharing.name} onClose={() => setSharing(null)} />}
       {draft && (
-        <Modal title={draft.id ? 'Edit drill' : 'New drill'} onClose={() => setDraft(null)} wide>
+        <Modal
+          title={
+            <span className="drill-modal-title">
+              <SportIcon sport={sport?.name} size={24} />
+              {draft.id ? 'Edit drill' : 'New drill'}
+            </span>
+          }
+          label={draft.id ? 'Edit drill' : 'New drill'}
+          onClose={() => setDraft(null)}
+          wide
+        >
           {error && <p className="error">{error}</p>}
-          <div className="fields">
-            <Field label="Name" grow>
-              <input className="input" autoFocus value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+          <div className="fields drill-top">
+            <Field
+              label={
+                <>
+                  Name <span className="req">*</span>
+                </>
+              }
+              grow
+            >
+              <input className="input" autoFocus required value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
             </Field>
-            <Field label="Default minutes">
+            <Field
+              label={
+                <>
+                  Default minutes <span className="req">*</span>
+                </>
+              }
+            >
               <input
                 className="input"
                 type="number"
@@ -194,7 +220,7 @@ export default function Library() {
               />
             </Field>
           </div>
-          <ItemBody value={draft} onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))} tags={sportTags} plays={plays.filter((p) => p.sport_id === sport?.id)} />
+          <ItemBody cards value={draft} onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))} tags={sportTags} plays={plays.filter((p) => p.sport_id === sport?.id)} />
           <div className="modal-foot">
             <button className="btn" onClick={() => setDraft(null)}>
               Cancel

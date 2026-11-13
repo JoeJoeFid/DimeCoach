@@ -181,9 +181,16 @@ export interface Community {
   /** The caller's place in it. */
   role: 'creator' | 'admin' | 'member';
   status: 'active' | 'invited';
+  /** A small picture, as a data URL, or empty. */
+  image: string;
+  /** What the caller may do here beyond taking part. The creator may do all of it. */
+  can: CommunityPowers;
   members: number;
   created_by_name: string;
 }
+/** The jobs a community's creator can hand to an admin, each on its own. */
+export type CommunityPower = 'moderate' | 'approve' | 'settings' | 'people';
+export type CommunityPowers = Record<CommunityPower, boolean>;
 export interface CommunityPerson {
   id: number;
   name: string;
@@ -191,6 +198,7 @@ export interface CommunityPerson {
   email?: string;
   role: 'creator' | 'admin' | 'member';
   status: 'active' | 'invited';
+  perms: CommunityPowers;
 }
 export interface CommunityDetail extends Community {
   join_code?: string;
@@ -209,8 +217,10 @@ export interface CommunityPost {
   parent_id?: number | null;
   /** Set on a reply to something shared. */
   share_id?: number | null;
-  /** On a message: the replies to it, oldest first. */
+  /** The replies to it, oldest first. Replies carry their own in the same way. */
   replies?: CommunityPost[];
+  /** Something the writer shared along with it. */
+  attach_share_id?: number | null;
 }
 export interface CommunityShare {
   id: number;
@@ -339,9 +349,11 @@ export const api = {
   createCommunity: (b: { name: string; description: string }) => req<CommunityDetail>('POST', '/communities', b),
   joinCommunity: (code: string) => req<Community>('POST', '/communities/join', { code }),
   community: (id: number) => req<CommunityDetail>('GET', `/communities/${id}`),
-  updateCommunity: (id: number, b: Partial<Pick<Community, 'name' | 'description' | 'share_drills' | 'share_plays' | 'share_plans' | 'require_approval'>>) =>
+  updateCommunity: (id: number, b: Partial<Pick<Community, 'name' | 'description' | 'share_drills' | 'share_plays' | 'share_plans' | 'require_approval' | 'image'>>) =>
     req<CommunityDetail>('PUT', `/communities/${id}`, b),
-  deleteCommunity: (id: number) => req<{ ok: true }>('DELETE', `/communities/${id}`),
+  /** `confirm` is the community's name, typed out. */
+  deleteCommunity: (id: number, confirm: string) => req<{ ok: true }>('DELETE', `/communities/${id}`, { confirm }),
+  setMemberPowers: (id: number, userId: number, perms: Partial<CommunityPowers>) => req<CommunityDetail>('PUT', `/communities/${id}/members/${userId}`, { perms }),
   newJoinCode: (id: number) => req<CommunityDetail>('POST', `/communities/${id}/code`, {}),
   inviteToCommunity: (id: number, email: string) => req<CommunityDetail>('POST', `/communities/${id}/invite`, { email }),
   acceptInvite: (id: number) => req<{ ok: true }>('POST', `/communities/${id}/accept`, {}),
@@ -349,7 +361,8 @@ export const api = {
   /** Removes someone, declines an invitation, or leaves, depending on who asks about whom. */
   removeMember: (id: number, userId: number) => req<{ ok: true }>('DELETE', `/communities/${id}/members/${userId}`),
   communityPosts: (id: number) => req<CommunityPost[]>('GET', `/communities/${id}/posts`),
-  postToCommunity: (id: number, body: string, to?: { parent_id?: number; share_id?: number }) => req<CommunityPost[]>('POST', `/communities/${id}/posts`, { body, ...to }),
+  postToCommunity: (id: number, body: string, to?: { parent_id?: number; share_id?: number; attach_share_id?: number }) =>
+    req<CommunityPost[]>('POST', `/communities/${id}/posts`, { body, ...to }),
   deletePost: (id: number, postId: number) => req<CommunityPost[]>('DELETE', `/communities/${id}/posts/${postId}`),
   communityShares: (id: number) => req<CommunityShare[]>('GET', `/communities/${id}/shares`),
   share: (id: number, kind: ShareKind, itemId: number) => req<CommunityShare[]>('POST', `/communities/${id}/shares`, { kind, item_id: itemId }),

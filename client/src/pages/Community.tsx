@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, type CommunityDetail, type CommunityPerson, type CommunityPost, type CommunityShare, type CommunityShareDetail, type ShareKind } from '../api';
+import { api, type CommunityDetail, type CommunityPerson, type CommunityPower, type CommunityPost, type CommunityShare, type CommunityShareDetail, type ShareKind } from '../api';
 import { useApp } from '../App';
 import type { Drill, Plan, Play } from '../types';
 import { fmtDateShort } from '../util';
 import { Field, Modal, MoreMenu, type MenuItem } from '../components/bits';
 import { KIND_WORDS, ShareRow, SharedPreview, sharesKind } from '../components/community';
-import { confirmDialog } from '../components/dialogs';
+import { confirmDialog, promptDialog } from '../components/dialogs';
 import { PlayDiagram } from '../components/PlayDiagram';
 
 type Tab = 'messages' | 'library' | 'people' | 'settings';
@@ -15,6 +15,20 @@ const ROLE = { creator: 'Creator', admin: 'Admin', member: 'Member' } as const;
 const KIND_LABEL: Record<ShareKind, string> = { drill: 'Drill', play: 'Play', plan: 'Practice plan' };
 const KIND_TABS: Record<ShareKind, string> = { drill: 'Drills', play: 'Plays', plan: 'Practice plans' };
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+/** The jobs a creator can give an admin, in the order they are offered. */
+const POWERS: [CommunityPower, string, string][] = [
+  ['moderate', 'Moderate', 'Delete anyone’s messages and replies, and take shared things down'],
+  ['approve', 'Approve', 'Approve or decline what members share. Their own shares need no approval'],
+  ['settings', 'Settings', 'Change the name, description, picture and what may be shared'],
+  ['people', 'People', 'Invite and remove members, and see the join code'],
+];
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
 const stamp = (at: string) => new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`).getTime();
 /** "just now", "12 min ago", "3 days ago", then the date, from a time the database wrote in UTC. */
 function ago(at: string) {
@@ -102,6 +116,8 @@ export default function CommunityPage() {
   const [notice, setNotice] = useState('');
   const [sharing, setSharing] = useState<ShareKind | 'choose' | null>(null);
   const [preview, setPreview] = useState<CommunityShare | null>(null);
+  // Set while the picker was opened from a reply: what is chosen is shared and handed to that reply.
+  const [attachTo, setAttachTo] = useState<{ done: (s: CommunityShare) => void } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
 
   const fail = (e: unknown) => {
@@ -187,16 +203,23 @@ export default function CommunityPage() {
         <Link to="/communities">Back to communities</Link>
       </div>
     );
-  const admin = c.role !== 'member';
+  const may = c.can;
   const kinds = KINDS.filter((k) => sharesKind(c, k));
   const active = c.people.filter((p) => p.status === 'active');
   const approved = (shares || []).filter((s) => s.status === 'approved');
   const roleOf = (userId: number) => active.find((p) => p.id === userId)?.role;
-  const startShare = () => (kinds.length === 1 ? setSharing(kinds[0]) : setSharing('choose'));
+  const startShare = () => {
+    setAttachTo(null);
+    setSharing(kinds.length === 1 ? kinds[0] : 'choose');
+  };
+  const pick = (kind: ShareKind, done: (s: CommunityShare) => void) => {
+    setAttachTo({ done });
+    setSharing(kind);
+  };
   /** What can be done with one shared thing, for the "..." beside it. */
   const shareMenu = (s: CommunityShare): MenuItem[] => [
-    ...(s.status === 'pending' && admin ? [{ label: 'Approve', onSelect: () => actShares(() => api.approveShare(s.id), `"${s.title}" is now in the library.`) }] : []),
-    ...(s.mine || admin ? [{ label: s.mine ? 'Stop sharing' : s.status === 'pending' ? 'Decline' : 'Remove from the library', danger: true, onSelect: () => actShares(() => api.unshare(s.id)) }] : []),
+    ...(s.status === 'pending' && may.approve ? [{ label: 'Approve', onSelect: () => actShares(() => api.approveShare(s.id), `"${s.title}" is now in the library.`) }] : []),
+    ...(s.mine || (s.status === 'pending' ? may.approve : may.moderate) ? [{ label: s.mine ? 'Stop sharing' : s.status === 'pending' ? 'Decline' : 'Remove from the library', danger: true, onSelect: () => actShares(() => api.unshare(s.id)) }] : []),
   ];
   const tabs: [Tab, string, string, number][] = [
     ['messages', 'Discussion', ICON.talk, 0],
@@ -208,7 +231,9 @@ export default function CommunityPage() {
   const threads = posts ? posts.filter((p) => !p.share_id) : null;
   const shareReplies = new Map<number, CommunityPost[]>();
   for (const p of posts || []) if (p.share_id) shareReplies.set(p.share_id, [...(shareReplies.get(p.share_id) || []), p]);
-  const everyPost = (posts || []).flatMap((p) => [p, ...(p.replies || [])]).sort((a, b) => stamp(b.created_at) - stamp(a.created_at));
+  const everyPost = flatten(posts || []).sort((a, b) => stamp(b.created_at) - stamp(a.created_at));
+  // Something sent along with a reply shows there, not as an entry of its own in the feed.
+  const sentWithReply = new Set(everyPost.map((p) => p.attach_share_id).filter(Boolean));
   const rail = { c, active, posts: everyPost, approved, onPeople: () => setTab('people') };
 
   return (
@@ -218,12 +243,7 @@ export default function CommunityPage() {
       </Link>
       <header className="cm-hero">
         <span className="cm-crest" aria-hidden="true">
-          {c.name
-            .split(/\s+/)
-            .slice(0, 2)
-            .map((w) => w[0])
-            .join('')
-            .toUpperCase()}
+          {c.image ? <img src={c.image} alt="" /> : initials(c.name)}
         </span>
         <div className="cm-hero-text">
           <h1>{c.name}</h1>
@@ -278,19 +298,24 @@ export default function CommunityPage() {
             kinds={kinds}
             posts={threads}
             shareReplies={shareReplies}
-            shares={approved}
+            shares={approved.filter((s) => !sentWithReply.has(s.id))}
+            allShares={shares || []}
+            onPick={pick}
             roleOf={roleOf}
             composer={composer}
             onPosts={setPosts}
             onError={fail}
-            onShare={setSharing}
+            onShare={(k) => {
+              setAttachTo(null);
+              setSharing(k);
+            }}
             onPreview={setPreview}
             onCopy={copy}
             shareMenu={shareMenu}
           />
           <aside className="cm-rail">
             <Overview {...rail} />
-            <Members {...rail} admin={admin} />
+            <Members {...rail} admin={may.people} />
             <Activity {...rail} />
             <Contributors {...rail} />
           </aside>
@@ -302,7 +327,7 @@ export default function CommunityPage() {
           q={q}
           setQ={setQ}
           kinds={kinds}
-          admin={admin}
+          admin={may.approve}
           shares={shares}
           posts={everyPost}
           active={active}
@@ -333,19 +358,35 @@ export default function CommunityPage() {
                       {p.status === 'invited' && <span className="kind">Invited, not joined yet</span>}
                     </span>
                     {p.email && <span className="muted small">{p.email}</span>}
+                    {/* The creator hands out jobs one by one. Anyone with at least one is an admin. */}
+                    {c.role === 'creator' && p.role !== 'creator' && p.status === 'active' && (
+                      <span className="cm-powers" role="group" aria-label={`What ${p.name} may do`}>
+                        {POWERS.map(([key, label, hint]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            className={`chip toggle perm-chip ${p.perms[key] ? 'on' : ''}`}
+                            aria-pressed={p.perms[key]}
+                            title={hint}
+                            onClick={() => run(() => api.setMemberPowers(c.id, p.id, { [key]: !p.perms[key] }))}
+                          >
+                            <span aria-hidden="true">{p.perms[key] ? '✓' : '–'}</span>
+                            {label}
+                          </button>
+                        ))}
+                      </span>
+                    )}
+                    {c.role !== 'creator' && p.role === 'admin' && (
+                      <span className="muted small">
+                        Can:{' '}
+                        {POWERS.filter(([key]) => p.perms[key])
+                          .map(([, label]) => label.toLowerCase())
+                          .join(', ')}
+                      </span>
+                    )}
                   </div>
                   <span className="row-actions">
-                    {c.role === 'creator' && p.role !== 'creator' && p.status === 'active' && (
-                      <button
-                        className="btn small"
-                        onClick={() =>
-                          run(() => api.setMemberRole(c.id, p.id, p.role === 'admin' ? 'member' : 'admin'), p.role === 'admin' ? `${p.name} is no longer an admin.` : `${p.name} is now an admin of this community.`)
-                        }
-                      >
-                        {p.role === 'admin' ? 'Remove admin' : 'Make admin'}
-                      </button>
-                    )}
-                    {admin && p.id !== app.user.id && p.role !== 'creator' && (p.role !== 'admin' || c.role === 'creator') && (
+                    {may.people && p.id !== app.user.id && p.role !== 'creator' && (p.role !== 'admin' || c.role === 'creator') && (
                       <button
                         className="btn small danger"
                         onClick={async () => {
@@ -361,13 +402,27 @@ export default function CommunityPage() {
               ))}
             </ul>
           </div>
-          {admin && <Invite c={c} run={run} />}
+          {c.role === 'creator' && (
+            <div className="card cm-power-key">
+              <h2>What admins can do</h2>
+              <p className="muted small">Turn on any of these for a person above and they become an admin with just those jobs. Only you can delete the community or change who is an admin.</p>
+              <dl>
+                {POWERS.map(([key, label, hint]) => (
+                  <div key={key}>
+                    <dt>{label}</dt>
+                    <dd>{hint}.</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+          {may.people && <Invite c={c} run={run} />}
         </>
       )}
 
       {tab === 'settings' && (
         <>
-          {admin ? (
+          {may.settings ? (
             <Settings c={c} run={run} />
           ) : (
             <div className="card">
@@ -385,9 +440,22 @@ export default function CommunityPage() {
                 <button
                   className="btn danger"
                   onClick={async () => {
-                    if (!(await confirmDialog({ title: `Delete ${c.name}?`, body: 'This cannot be undone.', confirmLabel: 'Delete community', danger: true }))) return;
+                    const others = active.length - 1;
+                    if (
+                      !(await confirmDialog({
+                        title: `Delete ${c.name}?`,
+                        body: `Its messages and shared library are removed for ${others > 0 ? `you and the ${others === 1 ? 'other member' : `${others} other members`}` : 'good'}. This cannot be undone.`,
+                        confirmLabel: 'Continue',
+                        danger: true,
+                      }))
+                    )
+                      return;
+                    // The last step is typed, so it cannot be clicked through.
+                    const typed = await promptDialog({ title: 'Type the name of the community to delete it', body: `To delete it for good, type: ${c.name}`, confirmLabel: 'Delete community' });
+                    if (typed === null) return;
+                    if (typed.trim().toLowerCase() !== c.name.trim().toLowerCase()) return fail(new Error('That did not match the name of the community, so nothing was deleted.'));
                     try {
-                      await api.deleteCommunity(c.id);
+                      await api.deleteCommunity(c.id, typed);
                       navigate('/communities');
                     } catch (e) {
                       fail(e);
@@ -437,10 +505,26 @@ export default function CommunityPage() {
         <ShareMine
           c={c}
           kind={sharing}
-          shared={(shares || []).filter((s) => s.mine && s.kind === sharing)}
-          needsApproval={c.require_approval && !admin}
-          onShare={(itemId) => actShares(() => api.share(c.id, sharing, itemId))}
-          onClose={() => setSharing(null)}
+          shared={attachTo ? [] : (shares || []).filter((s) => s.mine && s.kind === sharing)}
+          needsApproval={c.require_approval && !may.approve}
+          onShare={async (itemId) => {
+            if (!attachTo) return actShares(() => api.share(c.id, sharing, itemId));
+            // Chosen for a reply: share it here if it is not already, and hand it to the reply.
+            try {
+              const list = await api.share(c.id, sharing, itemId);
+              setShares(list);
+              const made = list.find((x) => x.mine && x.kind === sharing && x.item_id === itemId);
+              if (made) attachTo.done(made);
+              setAttachTo(null);
+              setSharing(null);
+            } catch (e) {
+              fail(e);
+            }
+          }}
+          onClose={() => {
+            setAttachTo(null);
+            setSharing(null);
+          }}
         />
       )}
       {preview && <PreviewModal share={preview} onClose={() => setPreview(null)} onCopy={preview.mine ? undefined : () => copy(preview)} />}
@@ -486,6 +570,8 @@ function Feed({
   posts,
   shareReplies,
   shares,
+  allShares,
+  onPick,
   roleOf,
   composer,
   onPosts,
@@ -501,6 +587,8 @@ function Feed({
   posts: CommunityPost[] | null;
   shareReplies: Map<number, CommunityPost[]>;
   shares: CommunityShare[];
+  allShares: CommunityShare[];
+  onPick: (kind: ShareKind, done: (s: CommunityShare) => void) => void;
   roleOf: (userId: number) => CommunityPerson['role'] | undefined;
   composer: React.RefObject<HTMLTextAreaElement | null>;
   onPosts: (p: CommunityPost[]) => void;
@@ -535,11 +623,33 @@ function Feed({
         if (!words) return true;
         const replies = e.post ? e.post.replies || [] : shareReplies.get(e.share!.id) || [];
         const own = e.post ? `${e.post.body} ${e.post.by}` : `${e.share!.title} ${e.share!.by} ${e.share!.tags.map((t) => t.name).join(' ')}`;
-        return `${own} ${replies.map((r) => `${r.body} ${r.by}`).join(' ')}`.toLowerCase().includes(words);
+        return `${own} ${flatten(replies).map((r) => `${r.body} ${r.by}`).join(' ')}`.toLowerCase().includes(words);
       })
       .sort((a, b) => stamp(b.at) - stamp(a.at));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posts, shares, filter, words]);
+  const ctx: ThreadCtx = {
+    kinds,
+    shares: allShares,
+    roleOf,
+    pick: onPick,
+    onPreview,
+    onCopy,
+    send: async (text, to, attach) => {
+      try {
+        onPosts(await api.postToCommunity(c.id, text, { ...to, attach_share_id: attach }));
+        return true;
+      } catch (err) {
+        onError(err);
+        return false;
+      }
+    },
+    del: async (r) => {
+      const n = countReplies(r.replies || []);
+      if (!(await confirmDialog({ title: 'Delete this reply?', body: n ? `It is removed for everyone, along with the ${n === 1 ? 'reply' : `${n} replies`} to it.` : 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
+      api.deletePost(c.id, r.id).then(onPosts, onError);
+    },
+  };
   const chips: [FeedFilter, string][] = [
     ['all', 'All posts'],
     ['posts', 'Messages'],
@@ -602,7 +712,7 @@ function Feed({
                       label: 'Delete this message',
                       danger: true,
                       onSelect: async () => {
-                        const n = e.post!.replies?.length || 0;
+                        const n = countReplies(e.post!.replies || []);
                         if (!(await confirmDialog({ title: 'Delete this message?', body: n ? `It is removed for everyone, along with the ${n === 1 ? 'reply' : `${n} replies`} to it.` : 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
                         api.deletePost(c.id, e.post!.id).then(onPosts, onError);
                       },
@@ -647,23 +757,7 @@ function Feed({
                       </span>
                     </div>
                   )}
-                  <Thread
-                    replies={e.post ? e.post.replies || [] : shareReplies.get(e.share!.id) || []}
-                    roleOf={roleOf}
-                    onSend={async (text) => {
-                      try {
-                        onPosts(await api.postToCommunity(c.id, text, e.post ? { parent_id: e.post.id } : { share_id: e.share!.id }));
-                        return true;
-                      } catch (err) {
-                        onError(err);
-                        return false;
-                      }
-                    }}
-                    onDelete={async (r) => {
-                      if (!(await confirmDialog({ title: 'Delete this reply?', body: 'It is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
-                      api.deletePost(c.id, r.id).then(onPosts, onError);
-                    }}
-                  />
+                  <Thread replies={e.post ? e.post.replies || [] : shareReplies.get(e.share!.id) || []} to={e.post ? { parent_id: e.post.id } : { share_id: e.share!.id }} ctx={ctx} />
                 </div>
               </li>
             );
@@ -676,104 +770,201 @@ function Feed({
 
 /** How many replies show before the rest are folded away. */
 const REPLIES_SHOWN = 3;
-/** The replies under a message or a shared thing, and the box for writing one. */
-function Thread({
-  replies,
-  roleOf,
-  onSend,
-  onDelete,
-}: {
-  replies: CommunityPost[];
+/** Replies set in under what they answer, up to this many steps. Deeper ones line up with the last step. */
+const MAX_INDENT = 3;
+const countReplies = (list: CommunityPost[]): number => list.reduce((n, r) => n + 1 + countReplies(r.replies || []), 0);
+const flatten = (list: CommunityPost[]): CommunityPost[] => list.flatMap((r) => [r, ...flatten(r.replies || [])]);
+
+/** What a thread needs from the page around it. */
+interface ThreadCtx {
+  kinds: ShareKind[];
+  /** Everything shared here that the reader may see, to draw what a reply has attached. */
+  shares: CommunityShare[];
   roleOf: (userId: number) => CommunityPerson['role'] | undefined;
-  onSend: (text: string) => Promise<boolean>;
-  onDelete: (r: CommunityPost) => void;
-}) {
+  /** Opens the list of the reader's own drills, plays or practices, and hands back the one they choose, shared. */
+  pick: (kind: ShareKind, done: (s: CommunityShare) => void) => void;
+  send: (text: string, to: { parent_id?: number; share_id?: number }, attach?: number) => Promise<boolean>;
+  del: (r: CommunityPost) => void;
+  onPreview: (s: CommunityShare) => void;
+  onCopy: (s: CommunityShare) => void;
+}
+
+/** A shared drill, play or practice shown inside a message. */
+function Embed({ share, onPreview, onCopy }: { share: CommunityShare; onPreview: (s: CommunityShare) => void; onCopy: (s: CommunityShare) => void }) {
+  return (
+    <div className="cm-embed">
+      <button type="button" className="cm-embed-main" onClick={() => onPreview(share)}>
+        <ShareArt share={share} />
+        <span className="cm-embed-text">
+          <strong>{share.title}</strong>
+          <span className="muted small">
+            {[cap(KIND_WORDS[share.kind].one), share.summary, ...share.tags.map((t) => t.name), share.status === 'pending' ? 'waiting for approval' : ''].filter(Boolean).join(' · ')}
+          </span>
+        </span>
+      </button>
+      <span className="row-actions">
+        <button type="button" className="btn small" onClick={() => onPreview(share)}>
+          View
+        </button>
+        {!share.mine && (
+          <button type="button" className="btn small primary" onClick={() => onCopy(share)}>
+            Add to mine
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** The box for writing a reply, with the same "share a drill, play or practice" choices as a new post. */
+function ReplyBox({ ctx, to, onDone }: { ctx: ThreadCtx; to: { parent_id?: number; share_id?: number }; onDone: (sent: boolean) => void }) {
   const { user } = useApp();
+  const [text, setText] = useState('');
+  const [attached, setAttached] = useState<CommunityShare | null>(null);
+  const [busy, setBusy] = useState(false);
+  const ready = !!text.trim() || !!attached;
+  const send = async () => {
+    if (!ready || busy) return;
+    setBusy(true);
+    const ok = await ctx.send(text.trim(), to, attached?.id);
+    setBusy(false);
+    if (ok) onDone(true);
+  };
+  return (
+    <div className="cm-reply-box">
+      <Avatar name={user.name} />
+      <div className="cm-reply-write">
+        <textarea
+          className="input"
+          rows={2}
+          maxLength={4000}
+          autoFocus
+          aria-label="Your reply"
+          placeholder="Write a reply…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send();
+            if (e.key === 'Escape') onDone(false);
+          }}
+        />
+        {attached && (
+          <div className="cm-attached">
+            <Svg d={ICON[attached.kind]} size={15} />
+            <span>
+              <strong>{attached.title}</strong> <span className="muted small">{KIND_WORDS[attached.kind].one} · goes with this reply</span>
+            </span>
+            <button type="button" className="link small" onClick={() => setAttached(null)}>
+              Take off
+            </button>
+          </div>
+        )}
+        <div className="cm-reply-actions">
+          {!attached &&
+            ctx.kinds.map((k) => (
+              <button key={k} type="button" className="cm-pill" onClick={() => ctx.pick(k, setAttached)}>
+                <Svg d={ICON[k]} size={14} /> Share a {KIND_WORDS[k].one}
+              </button>
+            ))}
+          <span className="cm-reply-send">
+            <button type="button" className="btn small" onClick={() => onDone(false)}>
+              Cancel
+            </button>
+            <button type="button" className="btn small primary" disabled={!ready || busy} onClick={send}>
+              Reply
+            </button>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One reply, the replies to it, and the box for answering it. */
+function ReplyNode({ r, depth, ctx }: { r: CommunityPost; depth: number; ctx: ThreadCtx }) {
+  const [writing, setWriting] = useState(false);
+  const role = ctx.roleOf(r.by_id);
+  const kids = r.replies || [];
+  const share = r.attach_share_id ? ctx.shares.find((s) => s.id === r.attach_share_id) : undefined;
+  return (
+    <li className="cm-reply">
+      <Avatar name={r.by} />
+      <div className="cm-reply-main">
+        <div className="cm-post-head">
+          <strong>{r.by}</strong>
+          {role && <RoleBadge role={role} />}
+          <span className="muted small">{ago(r.created_at)}</span>
+        </div>
+        {r.body && <p className="message-body">{r.body}</p>}
+        {share ? (
+          <Embed share={share} onPreview={ctx.onPreview} onCopy={ctx.onCopy} />
+        ) : (
+          r.attach_share_id && <p className="muted small cm-gone">Something was shared with this reply. It is waiting for an admin to approve it, or is no longer shared.</p>
+        )}
+        <div className="cm-thread-bar">
+          <button type="button" className="cm-reply-btn" onClick={() => setWriting(!writing)} aria-expanded={writing}>
+            <Svg d={ICON.talk} size={14} /> Reply
+          </button>
+          {r.can_delete && (
+            <button type="button" className="link small cm-reply-del" onClick={() => ctx.del(r)}>
+              Delete
+            </button>
+          )}
+        </div>
+        {writing && <ReplyBox ctx={ctx} to={{ parent_id: r.id }} onDone={() => setWriting(false)} />}
+        {kids.length > 0 && (
+          <ul className={`cm-replies ${depth >= MAX_INDENT ? 'level' : ''}`}>
+            {kids.map((k) => (
+              <ReplyNode key={k.id} r={k} depth={depth + 1} ctx={ctx} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** The replies under a message or a shared thing, and the box for writing one. */
+function Thread({ replies, to, ctx }: { replies: CommunityPost[]; to: { parent_id?: number; share_id?: number }; ctx: ThreadCtx }) {
   const [writing, setWriting] = useState(false);
   const [all, setAll] = useState(false);
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
   const hidden = all ? 0 : Math.max(0, replies.length - REPLIES_SHOWN);
-  const send = async () => {
-    if (!text.trim() || busy) return;
-    setBusy(true);
-    if (await onSend(text.trim())) {
-      setText('');
-      setWriting(false);
-      setAll(true);
-    }
-    setBusy(false);
-  };
+  const total = countReplies(replies);
   return (
     <div className="cm-thread">
       <div className="cm-thread-bar">
         <button type="button" className="cm-reply-btn" onClick={() => setWriting(!writing)} aria-expanded={writing}>
           <Svg d={ICON.talk} size={15} /> Reply
         </button>
-        {replies.length > 0 && (
-          <span className="muted small">
-            {replies.length} repl{replies.length === 1 ? 'y' : 'ies'}
+        {total > 0 && (
+          <span className="muted small cm-thread-count">
+            {total} repl{total === 1 ? 'y' : 'ies'}
           </span>
         )}
       </div>
+      {writing && (
+        <ReplyBox
+          ctx={ctx}
+          to={to}
+          onDone={(sent) => {
+            setWriting(false);
+            if (sent) setAll(true);
+          }}
+        />
+      )}
       {replies.length > 0 && (
         <ul className="cm-replies">
           {hidden > 0 && (
             <li>
-              <button type="button" className="link small" onClick={() => setAll(true)}>
+              <button type="button" className="link small cm-earlier" onClick={() => setAll(true)}>
                 Show {hidden} earlier repl{hidden === 1 ? 'y' : 'ies'}
               </button>
             </li>
           )}
-          {replies.slice(hidden).map((r) => {
-            const role = roleOf(r.by_id);
-            return (
-              <li key={r.id} className="cm-reply">
-                <Avatar name={r.by} />
-                <div className="cm-reply-main">
-                  <div className="cm-post-head">
-                    <strong>{r.by}</strong>
-                    {role && <RoleBadge role={role} />}
-                    <span className="muted small">{ago(r.created_at)}</span>
-                    {r.can_delete && (
-                      <button type="button" className="link small cm-reply-del" onClick={() => onDelete(r)}>
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                  <p className="message-body">{r.body}</p>
-                </div>
-              </li>
-            );
-          })}
+          {replies.slice(hidden).map((r) => (
+            <ReplyNode key={r.id} r={r} depth={1} ctx={ctx} />
+          ))}
         </ul>
-      )}
-      {writing && (
-        <div className="cm-reply-box">
-          <Avatar name={user.name} />
-          <textarea
-            className="input"
-            rows={2}
-            maxLength={4000}
-            autoFocus
-            aria-label="Your reply"
-            placeholder="Write a reply…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send();
-              if (e.key === 'Escape') setWriting(false);
-            }}
-          />
-          <span className="cm-reply-actions">
-            <button type="button" className="btn small" onClick={() => setWriting(false)}>
-              Cancel
-            </button>
-            <button type="button" className="btn small primary" disabled={!text.trim() || busy} onClick={send}>
-              Reply
-            </button>
-          </span>
-        </div>
       )}
     </div>
   );
@@ -963,7 +1154,7 @@ function Library({
       <div className="card">
         <h2>Shared library</h2>
         <p className="muted">
-          This community is for messages only right now. {admin ? 'Turn on sharing of drills, plays or practice plans under Settings.' : 'Its admins can turn on sharing of drills, plays or practice plans.'}
+          This community is for messages only right now. {c.can.settings ? 'Turn on sharing of drills, plays or practice plans under Settings.' : 'Its admins can turn on sharing of drills, plays or practice plans.'}
         </p>
       </div>
     );
@@ -1050,7 +1241,7 @@ function Library({
             {cap(kinds.map((k) => KIND_WORDS[k].many).join(', ').replace(/, ([^,]*)$/, ' and $1'))} shared by the coaches in {c.name}.
           </p>
         </div>
-        {admin && c.join_code && (
+        {c.join_code && (
           <span className="cm-code" title="Send this code to a coach. They type it on their Communities page to join.">
             <small>Join code</small>
             <code>{c.join_code}</code>
@@ -1362,8 +1553,46 @@ function Settings({ c, run }: { c: CommunityDetail; run: (fn: () => Promise<unkn
       </span>
     </label>
   );
+  const [picError, setPicError] = useState('');
+  const picInput = useRef<HTMLInputElement>(null);
+  /** Shrinks the chosen picture to a small square before it is sent, so it stays quick to load everywhere it shows. */
+  const choosePicture = async (file?: File) => {
+    if (!file) return;
+    try {
+      const bitmap = await createImageBitmap(file);
+      const size = 256;
+      const side = Math.min(bitmap.width, bitmap.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      canvas.getContext('2d')!.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
+      setPicError('');
+      await run(() => api.updateCommunity(c.id, { image: canvas.toDataURL('image/jpeg', 0.86) }), 'The picture was saved.');
+    } catch {
+      setPicError('That file could not be read as a picture. Choose a JPG or PNG image.');
+    }
+    if (picInput.current) picInput.current.value = '';
+  };
   return (
     <>
+      <div className="card">
+        <h2>Picture</h2>
+        <p className="muted small">Shown on the community's banner and in everyone's list of communities. The middle of the picture is used, as a square.</p>
+        {picError && <p className="error">{picError}</p>}
+        <div className="cm-pic">
+          <span className="cm-crest" aria-hidden="true">
+            {c.image ? <img src={c.image} alt="" /> : initials(c.name)}
+          </span>
+          <input ref={picInput} type="file" accept="image/*" hidden onChange={(e) => choosePicture(e.target.files?.[0])} />
+          <button type="button" className="btn" onClick={() => picInput.current?.click()}>
+            {c.image ? 'Change picture' : 'Upload a picture'}
+          </button>
+          {c.image && (
+            <button type="button" className="btn" onClick={() => run(() => api.updateCommunity(c.id, { image: '' }), 'The picture was removed.')}>
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
       <div className="card">
         <h2>About</h2>
         <form

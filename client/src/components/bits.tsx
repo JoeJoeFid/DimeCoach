@@ -34,7 +34,7 @@ export function TagPicker({ tags, value, onChange }: { tags: Tag[]; value: numbe
   );
 }
 
-export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({ title, onClose, children, wide, label }: { title: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean; /** Said aloud, when the title is more than words. */ label?: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -42,7 +42,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   }, [onClose]);
   return (
     <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={label ?? (typeof title === 'string' ? title : undefined)}>
         <div className="modal-head">
           <h2>{title}</h2>
           <button type="button" className="btn ghost" onClick={onClose} aria-label="Close">
@@ -55,7 +55,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   );
 }
 
-export function Field({ label, children, grow }: { label: string; children: ReactNode; grow?: boolean }) {
+export function Field({ label, children, grow }: { label: ReactNode; children: ReactNode; grow?: boolean }) {
   return (
     <label className={`field ${grow ? 'grow' : ''}`}>
       <span className="field-label">{label}</span>
