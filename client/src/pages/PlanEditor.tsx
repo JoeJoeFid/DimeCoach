@@ -704,7 +704,6 @@ export default function PlanEditor() {
             {plan.items.length === 0 ? (
               <div className={`empty ${incoming && dropAt !== null ? 'drop-here' : ''}`}>
                 <h2>Nothing scheduled yet</h2>
-                <p>Start from a {sheet} you have already built, drag a drill in from the left, or add your first item. Each item starts when the one before it ends.</p>
                 <button className="btn primary start-from" onClick={() => setStarting(true)}>
                   Start from a previous {sheet}
                 </button>
