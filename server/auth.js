@@ -11,6 +11,8 @@ import { all, db, dbPath, get, run, tx } from './db.js';
 import { createWorkspace } from './seed.js';
 import { mailerStatus, sendMail } from './mailer.js';
 import { notify } from './notices.js';
+import { isActive, markActive } from './live.js';
+import { recentActivity, trackActivity } from './activity.js';
 import { MAX_CAP_MB, capMbFor, defaultCapMb, parseCapMb, usageOf } from './quota.js';
 
 const COOKIE = 'pp_session';
@@ -381,6 +383,14 @@ export function mountAuth(app) {
     if (!membership) return res.status(403).json({ error: 'This account has no workspace. Contact the administrator.' });
     req.user = user;
     req.ownerId = membership.owner_id;
+    // An open page says "still here" when its person has clicked or typed. Nothing is written for it.
+    if (req.method === 'POST' && req.path === '/live/active') {
+      markActive(user.id);
+      return res.json({ ok: true });
+    }
+    // Saving, posting and the like are things done. Reading is not: pages read on their own.
+    if (req.method !== 'GET') markActive(user.id);
+    trackActivity(req, res);
     touchLogin(req, user.id);
     next();
   });
@@ -486,6 +496,9 @@ export function mountAuth(app) {
 
   // --- The system administrator: everyone's accounts and upload space -------------
   const systemOnly = (req, res, next) => (isSystemAdmin(req.user) ? next() : res.status(403).json({ error: 'Only the system administrator can do this.' }));
+  /** "active": signed in and did something in the last five minutes. "inactive": signed in, nothing lately. "out": not signed in. */
+  const presenceOf = (userId) =>
+    get('SELECT 1 AS n FROM sessions WHERE user_id=? AND expires_at > ? LIMIT 1', userId, new Date().toISOString()) ? (isActive(userId) ? 'active' : 'inactive') : 'out';
   const systemUserOut = (u) => {
     const owner = get("SELECT owner_id FROM memberships WHERE user_id=? ORDER BY role='owner' DESC, owner_id LIMIT 1", u.id);
     const used = owner ? usageOf(owner.owner_id) : { bytes: 0, files: 0 };
@@ -493,6 +506,7 @@ export function mountAuth(app) {
     return {
       ...adminUserOut(u),
       sign_ins: seen.n, active_seconds: seen.secs, last_seen_at: seen.last,
+      presence: presenceOf(u.id),
       used_bytes: used.bytes, files: used.files,
       /** This person's own cap, or null when the default applies. */
       upload_cap_mb: u.upload_cap_mb === null || u.upload_cap_mb === undefined ? null : Number(u.upload_cap_mb),
@@ -541,6 +555,8 @@ export function mountAuth(app) {
         ).map((t) => ({ id: t.id, name: t.name, season: t.season, sport: t.sport, role: t.title || 'Helper' })),
       ],
       logins,
+      /** What they have made, changed, shared or deleted lately, newest first. */
+      recent: recentActivity(u.id),
       sign_ins: totals.n, active_seconds: totals.secs, longest_seconds: totals.longest || 0,
       sign_ins_30d: count('SELECT COUNT(*) AS n FROM logins WHERE user_id=? AND started_at > ?', u.id, new Date(Date.now() - 30 * 86400_000).toISOString()),
       days_active_30d: count('SELECT COUNT(DISTINCT substr(last_seen_at, 1, 10)) AS n FROM logins WHERE user_id=? AND last_seen_at > ?', u.id, new Date(Date.now() - 30 * 86400_000).toISOString()),
@@ -557,6 +573,8 @@ export function mountAuth(app) {
     });
   });
   app.get('/api/system', systemOnly, (_req, res) => res.json(systemOut()));
+  // Just who is active, for keeping the list fresh while the page is open.
+  app.get('/api/system/presence', systemOnly, (_req, res) => res.json(Object.fromEntries(all('SELECT id FROM users').map((u) => [u.id, presenceOf(u.id)]))));
   app.put('/api/system/settings', systemOnly, (req, res) => {
     const cap = parseCapMb(req.body.default_cap_mb);
     if (cap === undefined || cap === null) return res.status(400).json({ error: 'Enter the default upload space in MB, 0 or more.' });

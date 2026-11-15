@@ -11820,3 +11820,131 @@ select.gp-cell.dup {
     display: none;
   }
 }
+
+/* ---------- System admin: who is using the app right now ---------- */
+.presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.presence::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.presence.active {
+  color: var(--ink);
+}
+.presence.active::before {
+  background: var(--good);
+}
+.presence.inactive::before {
+  background: var(--warn, #d9a441);
+}
+.presence.out {
+  font-weight: 400;
+}
+
+/* ---------- System admin: what one person has done lately ---------- */
+.activity-recent {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.activity-recent li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  font-size: 0.9rem;
+}
+.activity-recent li + li {
+  border-top: 1px solid var(--line);
+}
+.activity-recent span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.activity-recent time {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* ---------- Help: how to do the common things, with a search box ---------- */
+.page.help {
+  max-width: 860px;
+}
+.help-search {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 12px 14px;
+  font-size: 1rem;
+}
+.help-group > h2 {
+  margin: 26px 0 8px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.help-topic {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.help-topic + .help-topic {
+  margin-top: 6px;
+}
+.help-topic summary {
+  padding: 12px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 12px;
+}
+.help-topic summary:hover {
+  background: var(--surface-3);
+}
+.help-topic[open] summary {
+  border-radius: 12px 12px 0 0;
+}
+.help-topic ol {
+  margin: 4px 0 0;
+  padding: 0 18px 0 38px;
+  display: grid;
+  gap: 6px;
+  line-height: 1.5;
+}
+.help-tip {
+  margin: 12px 14px 0;
+  padding: 9px 12px;
+  border-left: 3px solid var(--accent-edge, var(--line-strong));
+  background: var(--surface-3);
+  border-radius: 0 8px 8px 0;
+  font-size: 0.92rem;
+  color: var(--ink-2);
+}
+.help-topic .btn {
+  margin: 12px 14px 0;
+}
+.help-topic[open] {
+  padding-bottom: 14px;
+}
+@media (max-width: 760px) {
+  .help-topic ol {
+    padding-left: 32px;
+  }
+}

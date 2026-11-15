@@ -75,6 +75,19 @@ export default function SystemAdmin() {
   useEffect(() => {
     load();
   }, [load]);
+  // Who is active is read again every half minute while this page is in view.
+  useEffect(() => {
+    const timer = window.setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const now = await api.systemPresence();
+        setState((s) => (s ? { ...s, users: s.users.map((u) => ({ ...u, presence: now[u.id] ?? u.presence })) } : s));
+      } catch {
+        /* the next round will try again */
+      }
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const run = async (fn: () => Promise<SystemState | unknown>, done = '') => {
     try {
@@ -296,6 +309,7 @@ export default function SystemAdmin() {
                   <tr>
                     <th>Person</th>
                     <th>Status</th>
+                    <th>Now</th>
                     <th>Last active</th>
                     <th className="num">Sign-ins</th>
                     <th className="num">Time in the app</th>
@@ -325,9 +339,14 @@ export default function SystemAdmin() {
                         {u.must_change_password && u.status === 'active' && <span className="muted small"> · has not set own password</span>}
                       </td>
                       <td>
-                        {fmtAgo(u.last_seen_at ?? u.last_login_at)}
-                        {u.last_seen_at && Date.now() - asDate(u.last_seen_at).getTime() < 300_000 && <span className="online-dot" title="Using Dime Coach right now" />}
+                        <span
+                          className={`presence ${u.presence}`}
+                          title={u.presence === 'active' ? 'Signed in, and did something in the last 5 minutes' : u.presence === 'inactive' ? 'Signed in, but has not done anything for over 5 minutes' : 'Not signed in'}
+                        >
+                          {u.presence === 'active' ? 'Active' : u.presence === 'inactive' ? 'Inactive' : 'Logged out'}
+                        </span>
                       </td>
+                      <td>{fmtAgo(u.last_seen_at ?? u.last_login_at)}</td>
                       <td className="num">{u.sign_ins}</td>
                       <td className="num">{fmtSpan(u.active_seconds)}</td>
                       <td>
@@ -560,6 +579,19 @@ function ActivityModal({ person, onClose }: { person: SystemUser; onClose: () =>
               {built.last_plan_edit ? fmtAgo(built.last_plan_edit).toLowerCase() : 'never'}
             </span>
           </p>
+          <h3>Recent activity</h3>
+          {data.recent.length === 0 ? (
+            <p className="muted">Nothing recorded yet. This list starts from when it was switched on.</p>
+          ) : (
+            <ol className="activity-recent">
+              {data.recent.map((r) => (
+                <li key={r.id}>
+                  <span>{r.text}</span>
+                  <time title={fmtMoment(r.at)}>{fmtAgo(r.at)}</time>
+                </li>
+              ))}
+            </ol>
+          )}
           <h3>Teams</h3>
           {data.teams.length === 0 ? (
             <p className="muted">No teams yet.</p>

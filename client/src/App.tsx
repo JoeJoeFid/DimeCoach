@@ -26,6 +26,7 @@ import Playbook from './pages/Playbook';
 import Resources from './pages/Resources';
 import PlayEditor from './pages/PlayEditor';
 import PlayPrint from './pages/PlayPrint';
+import Help from './pages/Help';
 
 /** Where to go once the team has been switched: set by a message that points at a plan on another team. */
 const AFTER_KEY = 'practiceplan.afterSwitch';
@@ -276,6 +277,22 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     });
     return () => live.close();
   }, [setCommunityUnread, user.id]);
+  // Clicking or typing counts as being active. The server is told at most once a minute,
+  // and not at all while the page just sits open.
+  useEffect(() => {
+    let told = 0;
+    const did = () => {
+      if (Date.now() - told < 60_000) return;
+      told = Date.now();
+      api.stillHere().catch(() => {});
+    };
+    window.addEventListener('pointerdown', did, { passive: true });
+    window.addEventListener('keydown', did, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', did);
+      window.removeEventListener('keydown', did);
+    };
+  }, [user.id]);
 
   const reload = useCallback(async () => {
     try {
@@ -416,6 +433,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     <Routes>
       <Route path="/teams" element={<Teams />} />
       <Route path="/account" element={<Account onChanged={onChanged} />} />
+      <Route path="/help" element={<Help />} />
       {/* The old Administration page was folded into System admin. An old link to it lands there. */}
       {user.is_system_admin && <Route path="/admin" element={<Navigate to="/system" replace />} />}
       {user.is_system_admin && <Route path="/system" element={<SystemAdmin />} />}
@@ -566,6 +584,7 @@ const MENU_ICONS = {
   account: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4.5 20c.8-3.6 3.8-5.5 7.5-5.5s6.700 1.900 7.500 5.500',
   tour: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9.500 9.500a2.500 2.500 0 1 1 3.500 2.300c-.700.400-1 .900-1 1.700M12 16.500h.01',
   signOut: 'M10 4H5v16h5M14 8l4 4-4 4M18 12H9',
+  help: 'M5 4.500h9.500a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3ZM5 17a3 3 0 0 1 3-3h9.500M9 8.500h5',
 };
 /**
  * The person signed in, at the foot of the menu. Pressing it opens a list above it with their
@@ -611,6 +630,7 @@ function UserMenu({ user, onTour, onSignOut }: { user: User; onTour: () => void;
           <span className="user-pop-email">{user.email}</span>
           {item('Account', MENU_ICONS.account, () => navigate('/account'))}
           {user.is_system_admin && item('System admin', icons.system, () => navigate('/system'))}
+          {item('Help', MENU_ICONS.help, () => navigate('/help'))}
           {item('Take the tour', MENU_ICONS.tour, onTour)}
           <div className="user-pop-row">
             <span>Appearance</span>

@@ -307,6 +307,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS notices (
 CREATE INDEX IF NOT EXISTS notices_user ON notices (user_id, id);`);
 
 // Coaches talking about one practice. A reply names the message it answers.
+// What each person has done lately, in words, for the system administrator.
+db.exec(`CREATE TABLE IF NOT EXISTS activity (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL, key TEXT DEFAULT '', at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS activity_user ON activity(user_id, at);`);
 db.exec(`CREATE TABLE IF NOT EXISTS plan_posts (
   id INTEGER PRIMARY KEY,
   plan_id INTEGER NOT NULL REFERENCES plans(id) ON DELETE CASCADE,

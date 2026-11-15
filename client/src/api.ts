@@ -87,6 +87,8 @@ export interface SystemUser extends AdminUser {
   /** The cap in force for them, in MB. */
   cap_mb: number;
   /** How many times they have signed in, and the seconds they have spent using the app. */
+  /** Signed in and did something in the last five minutes, signed in but idle, or not signed in. */
+  presence: 'active' | 'inactive' | 'out';
   sign_ins: number;
   active_seconds: number;
   /** The last time they did anything, or null if never. */
@@ -108,6 +110,8 @@ export interface UserActivity {
   /** Teams they own or help with. `role` is "Owner" or their title on the team. */
   teams: { id: number; name: string; season: string; sport: string; role: string }[];
   logins: SignIn[];
+  /** What they have made, changed, shared or deleted lately, newest first. */
+  recent: { id: number; text: string; at: string }[];
   sign_ins: number;
   active_seconds: number;
   longest_seconds: number;
@@ -353,6 +357,9 @@ export const api = {
     req<AdminUser>('PUT', `/admin/users/${id}`, b),
   adminSettings: () => req<AdminSettings>('GET', '/admin/settings'),
   system: () => req<SystemState>('GET', '/system'),
+  systemPresence: () => req<Record<string, 'active' | 'inactive' | 'out'>>('GET', '/system/presence'),
+  /** Says this person has just clicked or typed, so they count as active. */
+  stillHere: () => req<{ ok: boolean }>('POST', '/live/active'),
   systemDeletion: (id: number) => req<AccountDeletion>('GET', `/system/users/${id}/deletion`),
   systemDeleteUser: (id: number, confirmEmail: string) => req<SystemState>('DELETE', `/system/users/${id}`, { confirm_email: confirmEmail }),
   systemUserActivity: (id: number) => req<UserActivity>('GET', `/system/users/${id}/activity`),

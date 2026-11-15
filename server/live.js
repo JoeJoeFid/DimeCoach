@@ -8,6 +8,15 @@ export function poke(userIds) {
   for (const id of new Set([userIds].flat())) for (const res of streams.get(Number(id)) ?? []) res.write('event: news\ndata: {}\n\n');
 }
 
+// --- Who is using the app right now ---
+// When each person last did something: saved, posted, or clicked or typed in an open page.
+// Kept in memory only, so it costs nothing to keep and starts again empty when the server does.
+const lastDid = new Map();
+/** After this long with nothing done, a signed-in person counts as inactive. */
+const ACTIVE_MS = 5 * 60_000;
+export const markActive = (userId) => lastDid.set(Number(userId), Date.now());
+export const isActive = (userId) => Date.now() - (lastDid.get(Number(userId)) ?? 0) < ACTIVE_MS;
+
 export function mountLive(app) {
   app.get('/api/live', (req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
