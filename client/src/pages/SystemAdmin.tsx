@@ -234,7 +234,7 @@ export default function SystemAdmin() {
               <div className="label">Active</div>
             </div>
             <div className="sys-tile">
-              <div className="value">{state.online_now}</div>
+              <div className="value">{users.filter((u) => u.presence === 'active').length}</div>
               <div className="label">Using it right now</div>
             </div>
             <div className="sys-tile">

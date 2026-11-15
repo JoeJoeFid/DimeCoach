@@ -12078,3 +12078,32 @@ img.res-thumb.link-shot {
   gap: 10px 14px;
   margin: 18px 0 12px;
 }
+
+/* ---------- The logo: a D with a play drawn inside it. Dark green on light, white on dark. ---------- */
+:root {
+  --logo-color: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='30 44 994 850'%3E%3Cpath fill='%230F2B21' d='M260 48H650C868 48 1020 222 1020 460C1020 680 840 890 640 890H95Q34 890 44 830L186 108Q198 48 260 48Z'/%3E%3Cg fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke-width='80' d='M350 212L506 368M506 212L350 368'/%3E%3Cpath stroke-width='72' stroke-linecap='butt' d='M522 668C660 650 748 540 778 350'/%3E%3Cpath stroke-width='72' d='M692 370L800 292L848 398'/%3E%3C/g%3E%3Ccircle cx='358' cy='655' r='103' fill='none' stroke='%2384F545' stroke-width='77'/%3E%3C/svg%3E");
+  --logo-white: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='30 44 994 850'%3E%3Cpath fill='%23fff' d='M260 48H650C868 48 1020 222 1020 460C1020 680 840 890 640 890H95Q34 890 44 830L186 108Q198 48 260 48Z'/%3E%3Cg fill='none' stroke='%230F2B21' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke-width='80' d='M350 212L506 368M506 212L350 368'/%3E%3Cpath stroke-width='72' stroke-linecap='butt' d='M522 668C660 650 748 540 778 350'/%3E%3Cpath stroke-width='72' d='M692 370L800 292L848 398'/%3E%3C/g%3E%3Ccircle cx='358' cy='655' r='103' fill='none' stroke='%2384F545' stroke-width='77'/%3E%3C/svg%3E");
+  --logo: var(--logo-color);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --logo: var(--logo-white);
+  }
+}
+:root[data-theme='dark'] {
+  --logo: var(--logo-white);
+}
+.brand-mark,
+.hero-brand .brand-mark {
+  flex: none;
+  width: 30px;
+  height: 26px;
+  border-radius: 0;
+  background: var(--logo) center / contain no-repeat;
+}
+/* The landing panel is dark in both themes. */
+.hero-brand .brand-mark {
+  width: 36px;
+  height: 31px;
+  background-image: var(--logo-white);
+}
