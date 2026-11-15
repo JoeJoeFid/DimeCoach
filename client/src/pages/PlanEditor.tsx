@@ -33,6 +33,11 @@ const centreOnPointer: Modifier = ({ activatorEvent, activeNodeRect, overlayNode
   };
 };
 const COMPACT_KEY = 'practiceplan.planCompact';
+/**
+ * A screen with a pointer and room to spare. On a phone, putting the cursor in a search box
+ * brings up the keyboard over half the screen, so there the box waits to be tapped.
+ */
+const roomyScreen = () => window.matchMedia('(hover: hover) and (min-width: 761px)').matches;
 
 // Things dragged in from the side list are not in the plan yet. Their ids say what to make:
 // "new:custom", "new:break", or "new:drill:<id>".
@@ -1329,7 +1334,7 @@ function PreviousPlanPicker({ current, tags, onPick, onClose }: { current: Plan;
     <Modal title={`Start from a previous ${noun}`} onClose={onClose} wide>
       {error && <p className="error">{error}</p>}
       <div className="picker-filters">
-        <input className="input grow" autoFocus placeholder="Search by date, title or an item in it" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input grow" autoFocus={roomyScreen()} placeholder="Search by date, title or an item in it" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {plans === null ? (
         <p className="muted">Loading…</p>
@@ -1447,7 +1452,7 @@ function DrillPicker({
   return (
     <Modal title="Choose a drill" onClose={onClose} wide>
       <div className="picker-filters">
-        <input className="input grow" autoFocus placeholder="Search drills by name or notes" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input grow" autoFocus={roomyScreen()} placeholder="Search drills by name or notes" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {usedTags.length > 0 && (
         <div className="chips category-filter" role="group" aria-label="Filter by category">
