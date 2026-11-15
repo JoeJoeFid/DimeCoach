@@ -28,6 +28,12 @@ const nowMinutes = () => {
   return d.getHours() * 60 + d.getMinutes();
 };
 
+const HeadIcon = ({ d }: { d: string }) => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
+
 export default function Dashboard() {
   const { team, sportTags, sport, can } = useApp();
   const [plans, setPlans] = useState<Plan[] | null>(null);
@@ -172,33 +178,36 @@ export default function Dashboard() {
         <div className="head-actions">
           {can('manage') && (
             <Link className="btn" to="/teams?tab=people">
+              <HeadIcon d="M9 11.500a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM2.500 20c.600-3.300 3.200-5 6.500-5s5.900 1.700 6.500 5M19 8v6M16 11h6" />
               Invite coaches
             </Link>
           )}
           {/* Straight into a new one, not the list of them. */}
           <Link className="btn primary" to="/practices?new=1">
+            <HeadIcon d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M12 12.500v5M9.500 15h5" />
             Add practice or game
           </Link>
         </div>
       </div>
 
-      <PracticeTimeline
-        plans={plans || []}
-        tags={sportTags}
-        lead={
-          <label className="period">
-            <span className="field-label">Track over</span>
-            <select className="input" value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
-              {PERIODS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        }
-        onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))}
-      />
+      <PracticeTimeline plans={plans || []} tags={sportTags} onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))} />
+
+      {/* What the numbers below cover, and the way to the full calendar. */}
+      <div className="dash-controls">
+        <label className="period">
+          <span className="field-label">Track over</span>
+          <select className="input" value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
+            {PERIODS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Link className="tl-cal-link" to="/practices?view=calendar">
+          View calendar <span aria-hidden="true">→</span>
+        </Link>
+      </div>
 
       {fresh ? (
         <section className="start-steps" aria-label="Getting started">
