@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, type CommunityDetail, type CommunityPerson, type CommunityPower, type CommunityPost, type CommunityShare, type CommunityShareDetail, type ShareKind } from '../api';
 import { useApp } from '../App';
 import type { Drill, Plan, Play } from '../types';
-import { fmtDateShort } from '../util';
+import { fmtDateShort, roomyScreen } from '../util';
 import { Field, Modal, MoreMenu, type MenuItem } from '../components/bits';
 import { KIND_WORDS, ShareRow, SharedPreview, sharesKind } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
@@ -1569,7 +1569,7 @@ function ShareMine({
         {needsApproval ? 'An admin approves each one before others see it. ' : ''}Members can take their own copy. Your coach-only notes, player notes and uploaded files stay private.
       </p>
       <div className="picker-filters">
-        <input className="input grow" autoFocus placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input grow" autoFocus={roomyScreen()} placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {items === null ? (
         <p className="muted">Loading…</p>

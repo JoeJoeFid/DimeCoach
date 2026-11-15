@@ -5,6 +5,11 @@ import type { Item, Plan } from './types';
 /** Notes are stored as HTML. Always pass them through here before rendering. */
 export const clean = (html: string) => ({ __html: DOMPurify.sanitize(html || '') });
 
+/**
+ * A screen with a pointer and room to spare. On a phone, putting the cursor in a box brings up
+ * the keyboard over half the screen, so there the box waits to be tapped.
+ */
+export const roomyScreen = () => window.matchMedia('(hover: hover) and (min-width: 761px)').matches;
 export const isBlankHtml = (html: string) => !html || html.replace(/<[^>]*>/g, '').trim() === '';
 
 export const todayISO = () => {

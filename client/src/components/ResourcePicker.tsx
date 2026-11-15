@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { Resource } from '../types';
 import { Modal } from './bits';
+import { roomyScreen } from '../util';
 
 export const fileUrl = (r: Resource) => `/api/${r.kind === 'video' ? 'videos' : 'images'}/${r.file_id}`;
 export const hostOf = (url: string) => {
@@ -55,7 +56,7 @@ export function ResourcePicker(props: {
     <Modal title="Choose from your resources" onClose={props.onClose} wide>
       {error && <p className="error">{error}</p>}
       <div className="picker-filters">
-        <input className="input grow" autoFocus placeholder="Search by name, address, or where it is used" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input grow" autoFocus={roomyScreen()} placeholder="Search by name, address, or where it is used" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="seg" role="group" aria-label="Kind of resource">
           <button className={kind === 'all' ? 'on' : ''} aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
             All

@@ -9,7 +9,7 @@ import DrillImport from '../components/DrillImport';
 import { Field, Modal, TagChip } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
-import { htmlPreview } from '../util';
+import { htmlPreview, roomyScreen } from '../util';
 import SportIcon from '../components/SportIcon';
 
 type Draft = ItemContent & { id?: number };
@@ -200,7 +200,7 @@ export default function Library() {
               }
               grow
             >
-              <input className="input" autoFocus required value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+              <input className="input" autoFocus={roomyScreen()} required value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
             </Field>
             <Field
               label={

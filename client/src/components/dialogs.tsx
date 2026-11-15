@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { roomyScreen } from '../util';
 
 interface ConfirmOptions {
   title: string;
@@ -43,7 +44,7 @@ export function DialogHost() {
     };
   }, []);
   useEffect(() => {
-    if (req) focusRef.current?.focus();
+    if (req && (req.kind !== 'prompt' || roomyScreen())) focusRef.current?.focus();
   }, [req]);
   if (!req) return null;
 

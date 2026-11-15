@@ -6,7 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
 import { useApp } from '../App';
 import type { Drill, ImportDraft, Item, Plan, Play, Player, Tag, Team } from '../types';
-import { blankItem, clean, fmtClock, fmtDateShort, parseClock, fmtDuration, htmlPreview, isBlankHtml, planMinutes, schedule, slotGroups, slotLabel, type Slot } from '../util';
+import { blankItem, clean, fmtClock, fmtDateShort, parseClock, fmtDuration, htmlPreview, isBlankHtml, planMinutes, roomyScreen, schedule, slotGroups, slotLabel, type Slot } from '../util';
 import ItemBody from '../components/ItemBody';
 import { Field, Modal, MoreMenu, TagChip, type MenuItem } from '../components/bits';
 import { CommunityPicker, ShareDialog } from '../components/community';
@@ -33,11 +33,6 @@ const centreOnPointer: Modifier = ({ activatorEvent, activeNodeRect, overlayNode
   };
 };
 const COMPACT_KEY = 'practiceplan.planCompact';
-/**
- * A screen with a pointer and room to spare. On a phone, putting the cursor in a search box
- * brings up the keyboard over half the screen, so there the box waits to be tapped.
- */
-const roomyScreen = () => window.matchMedia('(hover: hover) and (min-width: 761px)').matches;
 
 // Things dragged in from the side list are not in the plan yet. Their ids say what to make:
 // "new:custom", "new:break", or "new:drill:<id>".

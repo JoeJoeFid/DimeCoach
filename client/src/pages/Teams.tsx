@@ -7,7 +7,7 @@ import type { Player, StaffMember, Team, TeamPerm } from '../types';
 import { Field, Modal } from '../components/bits';
 import SportIcon from '../components/SportIcon';
 import PageTitle from '../components/PageTitle';
-import { fmtSynced } from '../util';
+import { fmtSynced, roomyScreen } from '../util';
 import { SPORT_CHOICES, sportKind, surfaceWord } from '../sports';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
@@ -361,11 +361,11 @@ export function NewTeam({ onClose, onCreated }: { onClose: () => void; onCreated
       <div className="fields stack">
         {other && (
           <Field label="Sport name">
-            <input className="input" autoFocus placeholder="Soccer" value={newSport} onChange={(e) => setNewSport(e.target.value)} />
+            <input className="input" autoFocus={roomyScreen()} placeholder="Soccer" value={newSport} onChange={(e) => setNewSport(e.target.value)} />
           </Field>
         )}
         <Field label="Team name">
-          <input className="input" autoFocus={!other} placeholder="5th grade boys" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="input" autoFocus={!other && roomyScreen()} placeholder="5th grade boys" value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="Season or year">
           <input className="input" placeholder="2026-27" value={season} onChange={(e) => setSeason(e.target.value)} />

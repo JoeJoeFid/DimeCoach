@@ -9,6 +9,7 @@ import AccessibilityCard from '../components/AccessibilityCard';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 import { SpaceMeter, fmtSpace } from '../components/SpaceMeter';
+import { roomyScreen } from '../util';
 
 const fmtWhen = (iso: string | null) =>
   iso ? new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Never';
@@ -481,7 +482,7 @@ function PasswordModal({ person, onClose, onSave }: { person: SystemUser; onClos
           {person.email} is signed out everywhere and signs in with this password from now on. Nobody is emailed: pass it to them yourself.
         </p>
         <Field label="New password (at least 10 characters)">
-          <input className="input" autoFocus required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
+          <input className="input" autoFocus={roomyScreen()} required minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
         </Field>
         <label className="check">
           <input type="checkbox" checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} />

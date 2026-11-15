@@ -6,7 +6,7 @@ import { useApp } from '../App';
 import { Modal } from '../components/bits';
 import { KIND_WORDS, SharedPreview } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
-import { fmtDateShort, todayISO } from '../util';
+import { fmtDateShort, todayISO, roomyScreen } from '../util';
 
 const KIND_LABEL: Record<ShareKind, string> = { drill: 'Drill', play: 'Play', plan: 'Practice' };
 type Show = 'all' | ShareKind;
@@ -347,7 +347,7 @@ function PackEditor({
     <Modal title={pack ? `Edit "${pack.name}"` : 'New pack'} onClose={onClose} wide>
       <label className="field">
         <span className="field-label">Name</span>
-        <input className="input" value={name} maxLength={80} autoFocus onChange={(e) => setName(e.target.value)} placeholder="Youth starter pack" />
+        <input className="input" value={name} maxLength={80} autoFocus={roomyScreen()} onChange={(e) => setName(e.target.value)} placeholder="Youth starter pack" />
       </label>
       <label className="field">
         <span className="field-label">What it is for</span>

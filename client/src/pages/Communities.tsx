@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, type Community, type CommunityNews } from '../api';
 import { useApp } from '../App';
 import { Field, Modal } from '../components/bits';
+import { roomyScreen } from '../util';
 
 const ROLE = { creator: 'Creator', admin: 'Admin', member: 'Member' } as const;
 
@@ -165,7 +166,7 @@ export default function Communities() {
         <Modal title="New community" onClose={() => setCreating(false)}>
           <form className="fields stack" onSubmit={create}>
             <Field label="Name">
-              <input className="input" autoFocus required maxLength={80} placeholder="Such as Altoona youth coaches" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+              <input className="input" autoFocus={roomyScreen()} required maxLength={80} placeholder="Such as Altoona youth coaches" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
             </Field>
             <Field label="What it is for">
               <textarea className="input" rows={2} maxLength={600} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
