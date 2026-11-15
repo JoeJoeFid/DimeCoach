@@ -6,7 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
 import { useApp } from '../App';
 import type { Drill, ImportDraft, Item, Plan, Play, Player, Tag, Team } from '../types';
-import { blankItem, fmtClock, fmtDateShort, parseClock, fmtDuration, htmlPreview, isBlankHtml, planMinutes, schedule, slotGroups, slotLabel, type Slot } from '../util';
+import { blankItem, clean, fmtClock, fmtDateShort, parseClock, fmtDuration, htmlPreview, isBlankHtml, planMinutes, schedule, slotGroups, slotLabel, type Slot } from '../util';
 import ItemBody from '../components/ItemBody';
 import { Field, Modal, MoreMenu, TagChip, type MenuItem } from '../components/bits';
 import { CommunityPicker, ShareDialog } from '../components/community';
@@ -429,12 +429,10 @@ export default function PlanEditor() {
         <button type="button" className="btn" onClick={() => addCustom(index)}>
           Custom item
         </button>
-        <span className="muted small grow">
-          A drill comes with its notes, categories and resources. A custom item starts blank.{' '}
-          <button type="button" className="link" onClick={() => setCommunityAt(index)}>
-            Or take one from a community
-          </button>
-        </span>
+        <button type="button" className="btn" onClick={() => setCommunityAt(index)}>
+          From a community
+        </button>
+        <span className="grow" />
         <button type="button" className="btn ghost" aria-label="Cancel new item" onClick={() => setChoosingAt(null)}>
           ✕
         </button>
@@ -1288,6 +1286,28 @@ function PreviousPlanPicker({ current, tags, onPick, onClose }: { current: Plan;
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const noun = current.kind === 'homework' ? 'homework sheet' : 'practice';
+  const viewNoun = current.kind === 'homework' ? 'sheet' : 'practice';
+  // With a pointer and room for it, a summary pops up beside the row the pointer is over.
+  // On a phone or a narrow window each row has a "View" button that opens the summary under it.
+  const [peek, setPeek] = useState<{ plan: Plan; left: number; top: number } | null>(null);
+  const [open, setOpen] = useState(0);
+  const peekRef = useRef<HTMLDivElement>(null);
+  const showPeek = (plan: Plan) => (ev: { currentTarget: HTMLElement }) => {
+    if (!window.matchMedia('(hover: hover) and (min-width: 761px)').matches) return;
+    const row = ev.currentTarget.getBoundingClientRect();
+    const box = ev.currentTarget.closest('.modal')?.getBoundingClientRect() ?? row;
+    // Beside the box when there is room, otherwise over the right-hand end of the list.
+    const left =
+      box.right + 10 + PREV_PEEK_WIDTH <= window.innerWidth - 8 ? box.right + 10 : box.left - 10 - PREV_PEEK_WIDTH >= 8 ? box.left - 10 - PREV_PEEK_WIDTH : row.right - PREV_PEEK_WIDTH - 8;
+    setPeek({ plan, left, top: row.top });
+  };
+  // Once it is drawn its height is known: keep the whole of it on the screen.
+  useLayoutEffect(() => {
+    const el = peekRef.current;
+    if (!el || !peek) return;
+    const top = Math.max(8, Math.min(peek.top, window.innerHeight - el.offsetHeight - 8));
+    el.style.top = `${top}px`;
+  }, [peek]);
   useEffect(() => {
     (async () => {
       try {
@@ -1316,40 +1336,88 @@ function PreviousPlanPicker({ current, tags, onPick, onClose }: { current: Plan;
       ) : shown.length === 0 ? (
         <p className="muted">{plans.length === 0 ? `There is no earlier ${noun} to start from yet.` : 'Nothing matches.'}</p>
       ) : (
-        <ul className="picker drill-picker">
+        <ul className="picker prev-picker">
           {shown.map((p) => {
             const mins = planMinutes(p, tagIds);
+            const count = p.items.filter((i) => i.kind === 'item').length;
             return (
-              <li key={p.id}>
-                <button type="button" onClick={() => onPick(p)}>
-                  <span className="picker-top">
-                    <span className="picker-name">{p.is_template ? p.title || 'Template' : fmtDateShort(p.date)}</span>
-                    {p.is_template ? <span className="kind">Template</span> : <span>{p.title}</span>}
-                    {p.is_game && <span className="kind game">Game</span>}
-                    <span className="muted small">
-                      {[p.location, fmtDuration(mins.work + mins.breaks), `${p.items.filter((i) => i.kind === 'item').length} items`].filter(Boolean).join(' · ')}
+              <li key={p.id} className={open === p.id ? 'open' : ''}>
+                <div className="prev-row">
+                  <button
+                    type="button"
+                    className="prev-pick"
+                    onClick={() => onPick(p)}
+                    onMouseEnter={showPeek(p)}
+                    onMouseLeave={() => setPeek(null)}
+                    onFocus={showPeek(p)}
+                    onBlur={() => setPeek(null)}
+                  >
+                    <span className="picker-name">{p.is_template ? 'Template' : fmtDateShort(p.date)}</span>
+                    <span className="prev-title">
+                      {p.title || (p.is_template ? 'Untitled' : noun === 'practice' ? 'Practice' : 'Homework')}
+                      {p.is_game && <span className="kind game">Game</span>}
                     </span>
-                    <span className="chips">
-                      {tags
-                        .filter((t) => mins.byTag.has(t.id))
-                        .map((t) => (
-                          <TagChip key={t.id} tag={t} />
-                        ))}
-                    </span>
-                  </span>
-                  <span className="picker-notes muted small">
-                    {p.items
-                      .filter((i) => i.kind === 'item')
-                      .map((i) => i.title || 'Untitled')
-                      .join(' · ')}
-                  </span>
-                </button>
+                    <span className="prev-meta muted small">{[fmtDuration(mins.work + mins.breaks), `${count} ${count === 1 ? 'item' : 'items'}`].join(' · ')}</span>
+                  </button>
+                  <button type="button" className="btn small prev-view" aria-expanded={open === p.id} onClick={() => setOpen(open === p.id ? 0 : p.id)}>
+                    {open === p.id ? 'Hide' : `View ${viewNoun}`}
+                  </button>
+                </div>
+                {open === p.id && (
+                  <div className="prev-inline">
+                    <PlanSummary plan={p} tags={tags} />
+                    <button type="button" className="btn primary small" onClick={() => onPick(p)}>
+                      Start from this {viewNoun}
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}
         </ul>
       )}
+      {peek && (
+        <div className="cal-peek prev-peek" role="tooltip" ref={peekRef} style={{ left: peek.left, top: peek.top, width: PREV_PEEK_WIDTH }}>
+          <PlanSummary plan={peek.plan} tags={tags} />
+        </div>
+      )}
     </Modal>
+  );
+}
+
+const PREV_PEEK_WIDTH = 330;
+/** How many items a practice's summary lists before saying how many more there are. */
+const SUMMARY_ITEMS = 12;
+
+/** What is in a practice at a glance: when and where it was, its items, and where the time went. */
+function PlanSummary({ plan, tags }: { plan: Plan; tags: Tag[] }) {
+  const slots = schedule(plan.start_time, plan.items);
+  const mins = planMinutes(plan, new Set(tags.map((t) => t.id)));
+  const start = plan.start_time ? fmtClock(parseClock(plan.start_time)) : '';
+  const end = start && slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : '';
+  return (
+    <>
+      <strong className="cal-peek-title">{plan.title || (plan.is_template ? 'Template' : 'Practice')}</strong>
+      <p className="cal-peek-when">
+        {[plan.is_template ? 'Template' : fmtDateShort(plan.date), start && (end ? `${start} to ${end}` : start), fmtDuration(mins.work + mins.breaks)].filter(Boolean).join(' · ')}
+      </p>
+      {plan.location && <p className="cal-peek-where">{plan.location}</p>}
+      <ol className={`cal-peek-items ${start ? '' : 'untimed'}`}>
+        {plan.items.slice(0, SUMMARY_ITEMS).map((it, i) => (
+          <li key={i} className={it.kind === 'break' ? 'break' : ''}>
+            {start && <time>{fmtClock(slots[i].start)}</time>}
+            <span>{it.title || (it.kind === 'break' ? 'Break' : 'Untitled')}</span>
+            <small>{it.duration_min} min</small>
+          </li>
+        ))}
+      </ol>
+      {plan.items.length > SUMMARY_ITEMS && <p className="cal-peek-more">and {plan.items.length - SUMMARY_ITEMS} more</p>}
+      {[...mins.byTag.keys()].some((k) => k !== 0) && (
+        <div className="cal-peek-cats">
+          <CategoryRows mins={mins} tags={tags} empty="" />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1368,6 +1436,8 @@ function DrillPicker({
 }) {
   const [q, setQ] = useState('');
   const [tagId, setTagId] = useState(0);
+  // On a phone each drill is one short line. "Details" opens the rest of it under the line.
+  const [open, setOpen] = useState(0);
   const text = q.trim().toLowerCase();
   const shown = drills.filter(
     (d) => (!text || `${d.name} ${htmlPreview(d.notes_html)}`.toLowerCase().includes(text)) && (tagId === 0 || d.tag_ids.includes(tagId)),
@@ -1401,26 +1471,50 @@ function DrillPicker({
           {shown.map((d) => {
             const resources = (d.images || []).length + (d.videos || []).length + (d.links || []).length;
             const preview = htmlPreview(d.notes_html);
+            const mine = tags.filter((t) => d.tag_ids.includes(t.id));
+            const extras = [resources > 0 && `${resources} resource${resources === 1 ? '' : 's'}`, (d.play_ids || []).length > 0 && `${d.play_ids.length} play${d.play_ids.length === 1 ? '' : 's'}`].filter(Boolean);
             return (
-              <li key={d.id}>
-                <button type="button" onClick={() => onPick(d)}>
-                  <span className="picker-top">
-                    <span className="picker-name">{d.name}</span>
-                    <span className="muted small">
-                      {[`${d.duration_min} min`, resources > 0 && `${resources} resource${resources === 1 ? '' : 's'}`, (d.play_ids || []).length > 0 && `${d.play_ids.length} play${d.play_ids.length === 1 ? '' : 's'}`]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </span>
-                    <span className="chips">
-                      {tags
-                        .filter((t) => d.tag_ids.includes(t.id))
-                        .map((t) => (
+              <li key={d.id} className={open === d.id ? 'open' : ''}>
+                <div className="dp-row">
+                  <button type="button" className="dp-pick" onClick={() => onPick(d)}>
+                    <span className="picker-top">
+                      <span className="picker-name">{d.name}</span>
+                      <span className="muted small dp-meta">{[`${d.duration_min} min`, ...extras].join(' · ')}</span>
+                      <span className="chips dp-chips">
+                        {mine.map((t) => (
                           <TagChip key={t.id} tag={t} />
                         ))}
+                      </span>
+                      {/* On a phone: the minutes, and a dot for each category. */}
+                      <span className="dp-brief muted small">
+                        {d.duration_min} min
+                        {mine.map((t) => (
+                          <span key={t.id} className="dot" style={{ background: t.color }} title={t.name} />
+                        ))}
+                      </span>
                     </span>
-                  </span>
-                  {preview && <span className="picker-notes muted small">{preview}</span>}
-                </button>
+                    {preview && <span className="picker-notes muted small">{preview}</span>}
+                  </button>
+                  <button type="button" className="btn small dp-view" aria-expanded={open === d.id} onClick={() => setOpen(open === d.id ? 0 : d.id)}>
+                    {open === d.id ? 'Hide' : 'Details'}
+                  </button>
+                </div>
+                {open === d.id && (
+                  <div className="dp-inline">
+                    {mine.length > 0 && (
+                      <span className="chips">
+                        {mine.map((t) => (
+                          <TagChip key={t.id} tag={t} />
+                        ))}
+                      </span>
+                    )}
+                    <p className="muted small">{[`${d.duration_min} min`, ...extras].join(' · ')}</p>
+                    {isBlankHtml(d.notes_html) ? <p className="muted small">No notes on this drill.</p> : <div className="rich dp-notes" dangerouslySetInnerHTML={clean(d.notes_html)} />}
+                    <button type="button" className="btn primary small" onClick={() => onPick(d)}>
+                      Add this drill
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}

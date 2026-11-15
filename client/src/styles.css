@@ -11639,3 +11639,184 @@ select.gp-cell.dup {
   width: auto;
   min-width: 190px;
 }
+
+/* ---------- Start from a previous practice: one short line each, with a summary on hover ---------- */
+.prev-picker li {
+  border-bottom: 1px solid var(--line);
+}
+.prev-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.picker .prev-pick {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: nowrap;
+  padding: 7px 10px;
+  font-size: 0.92rem;
+}
+.prev-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prev-title .kind {
+  margin-left: 8px;
+}
+.prev-meta {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.picker .prev-view {
+  display: none;
+  width: auto;
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+.prev-inline {
+  display: none;
+}
+.cal-peek-items.untimed li {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+@media (hover: none), (max-width: 760px) {
+  .picker .prev-pick {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+    padding: 8px 6px;
+  }
+  .prev-meta {
+    display: none;
+  }
+  .picker .prev-view {
+    display: inline-flex;
+  }
+  .prev-inline {
+    display: grid;
+    gap: 6px;
+    margin: 2px 6px 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-2, var(--surface-3));
+    font-size: 0.88rem;
+  }
+  .prev-inline p {
+    margin: 0;
+  }
+  .prev-inline .btn {
+    justify-self: start;
+    width: auto;
+    margin-top: 6px;
+  }
+}
+
+/* ---------- Choose a drill: on a phone, one short line each with "Details" for the rest ---------- */
+.dp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.picker .dp-pick {
+  flex: 1;
+  min-width: 0;
+}
+.picker .dp-view,
+.dp-inline,
+.dp-brief {
+  display: none;
+}
+@media (hover: none), (max-width: 760px) {
+  .modal .category-filter {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+  }
+  .modal .category-filter .chip {
+    flex: none;
+  }
+  .drill-picker li {
+    border-bottom: 1px solid var(--line);
+  }
+  .drill-picker .dp-pick,
+  .drill-picker .dp-pick:hover {
+    border-color: transparent;
+    padding: 9px 4px;
+  }
+  .dp-pick .picker-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .dp-pick .picker-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dp-pick .dp-meta,
+  .dp-pick .dp-chips,
+  .dp-pick .picker-notes {
+    display: none;
+  }
+  .dp-brief {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .dp-brief .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .dp-brief .dot:first-of-type {
+    margin-left: 4px;
+  }
+  .picker .dp-view {
+    display: inline-flex;
+    width: auto;
+    flex: none;
+    padding: 4px 10px;
+    border: 1px solid var(--line-strong);
+    white-space: nowrap;
+  }
+  .dp-inline {
+    display: grid;
+    gap: 8px;
+    margin: 2px 4px 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-2, var(--surface-3));
+    font-size: 0.9rem;
+  }
+  .dp-inline p {
+    margin: 0;
+  }
+  .dp-notes {
+    overflow-wrap: anywhere;
+  }
+  .dp-notes > :first-child {
+    margin-top: 0;
+  }
+  .dp-notes > :last-child {
+    margin-bottom: 0;
+  }
+  .dp-inline .btn {
+    justify-self: start;
+    width: auto;
+  }
+  .modal .modal-foot .muted.grow {
+    display: none;
+  }
+}
