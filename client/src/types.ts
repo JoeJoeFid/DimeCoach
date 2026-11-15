@@ -317,6 +317,27 @@ export interface TeamAccess {
   title: string;
   perms: TeamPerms;
 }
+/** An invitation to a team that its person has not taken up yet. */
+export interface TeamInvite {
+  id: number;
+  email: string;
+  title: string;
+  invited_at: string;
+  invited_by: string;
+  /** The emailed link has run out. Sending it again makes a new one. */
+  expired: boolean;
+}
+/** What an invitation link says before it is accepted. */
+export interface InviteInfo {
+  email: string;
+  team: string;
+  sport: string;
+  season: string;
+  inviter: string;
+  title: string;
+  /** The invited address already has an account, so there is nothing to create. */
+  has_account: boolean;
+}
 /** Someone a team is shared with, as its owner sees them. */
 export interface StaffMember {
   user_id: number;

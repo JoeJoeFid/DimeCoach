@@ -35,10 +35,13 @@ async function viaResend({ to, subject, text }) {
 /**
  * Records the message and sends it. Resolves to { ok, error }: callers that do not need to know
  * the outcome (a confirmation link, say) can ignore the promise, and a failure is logged here.
+ * `secret` is a code inside the text that must not be kept in the outbox.
  */
-export async function sendMail({ to, subject, text }) {
+export async function sendMail({ to, subject, text, secret = '' }) {
   const kind = transport();
-  const id = run('INSERT INTO outbox (to_email, subject, body) VALUES (?,?,?)', to, subject, text).lastInsertRowid;
+  // A link that signs someone in or changes a password is sent, but not written down here.
+  const kept = secret ? text.split(secret).join('[code not kept]') : text;
+  const id = run('INSERT INTO outbox (to_email, subject, body) VALUES (?,?,?)', to, subject, kept).lastInsertRowid;
   if (kind === 'none') return { ok: false, error: 'No email service is connected.' };
   if (kind === 'log') {
     console.log(`\n--- email to ${to} ---\nSubject: ${subject}\n\n${text}\n--- end ---\n`);

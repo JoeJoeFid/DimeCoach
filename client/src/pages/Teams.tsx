@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import Papa from 'papaparse';
 import { api } from '../api';
 import { useApp } from '../App';
-import type { Player, StaffMember, Team, TeamPerm } from '../types';
+import type { Player, StaffMember, Team, TeamInvite, TeamPerm } from '../types';
 import { Field, Modal } from '../components/bits';
 import SportIcon from '../components/SportIcon';
 import PageTitle from '../components/PageTitle';
@@ -164,6 +164,9 @@ function ParentsCard({ players, canSee }: { players: Player[] | null; canSee: bo
 function StaffCard({ team }: { team: Team }) {
   const { user: me } = useApp();
   const [staff, setStaff] = useState<StaffMember[] | null>(null);
+  // People invited by email who have not made their account yet.
+  const [invites, setInvites] = useState<TeamInvite[]>([]);
+  const [note, setNote] = useState('');
   const [email, setEmail] = useState('');
   const [title, setTitle] = useState('Assistant coach');
   const [error, setError] = useState('');
@@ -183,7 +186,36 @@ function StaffCard({ team }: { team: Team }) {
   }, []);
   useEffect(() => {
     run(() => api.staff(team.id));
+    api.invites(team.id).then(setInvites, () => {});
   }, [run, team.id]);
+  const invite = async (fn: () => Promise<TeamInvite[]>, done: string) => {
+    setBusy(true);
+    setNote('');
+    try {
+      setInvites(await fn());
+      setError('');
+      setNote(done);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const share = () => {
+    const to = email.trim();
+    setNote('');
+    run(
+      () => api.addStaff(team.id, { email: to, title }),
+      () => {
+        setEmail('');
+        // Someone with no account yet shows up as an invitation instead.
+        api.invites(team.id).then((list) => {
+          setInvites(list);
+          if (list.some((i) => i.email === to.toLowerCase())) setNote(`Invitation emailed to ${to}. They join the team once they have created their account.`);
+        }, () => {});
+      },
+    );
+  };
 
   const setPerm = (m: StaffMember, perm: TeamPerm, on: boolean) => {
     const perms = { ...m.perms, [perm]: on };
@@ -215,10 +247,10 @@ function StaffCard({ team }: { team: Team }) {
       className="add-row staff-add"
       onSubmit={(e) => {
         e.preventDefault();
-        if (email.trim()) run(() => api.addStaff(team.id, { email: email.trim(), title }), () => setEmail(''));
+        if (email.trim()) share();
       }}
     >
-      <input className="input grow" type="email" aria-label="Email of the person to add" placeholder="Their Dime Coach email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input className="input grow" type="email" aria-label="Email of the person to add" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} />
       <input className="input" aria-label="Their title" placeholder="Title, such as Assistant coach" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} />
       <button className="btn primary" disabled={busy || !email.trim()}>
         Share team
@@ -232,8 +264,36 @@ function StaffCard({ team }: { team: Team }) {
         <h2>Coaches and helpers {staff && staff.length > 0 && <span className="muted">({staff.length})</span>}</h2>
       </div>
       {add}
-      <p className="muted small">They need a Dime Coach account. Manage team covers renaming, deleting and sharing the team.</p>
+      <p className="muted small">
+        If they already have a Dime Coach account, use the exact email they sign in with. Anyone else is emailed an invitation to create an account. Manage team covers renaming, deleting and
+        sharing the team.
+      </p>
       {error && <p className="error">{error}</p>}
+      {note && <p className="notice">{note}</p>}
+
+      {invites.length > 0 && (
+        <ul className="staff-list compact invite-list" aria-label="Invitations waiting">
+          {invites.map((i) => (
+            <li key={i.id} className="staff-row invite-row">
+              <div className="staff-top">
+                <span className="staff-who">
+                  <strong>{i.email}</strong>
+                  <span className="kind">{i.expired ? 'Invitation expired' : 'Invited'}</span>
+                  <span className="muted small">
+                    {i.title} · {i.expired ? 'send it again to give them a new link' : 'waiting for them to create an account'}
+                  </span>
+                </span>
+                <button className="btn small" disabled={busy} onClick={() => invite(() => api.resendInvite(team.id, i.id), `Invitation sent to ${i.email} again.`)}>
+                  Send again
+                </button>
+                <button className="btn small danger" disabled={busy} onClick={() => invite(() => api.cancelInvite(team.id, i.id), `Invitation to ${i.email} cancelled.`)}>
+                  Cancel
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {staff && staff.length > 0 && (
         <ul className="staff-list compact">

@@ -1,4 +1,4 @@
-import type { Drill, ImportDraft, Item, Plan, PlanKind, PlanSummary, Play, Player, Resource, ScheduleEvent, SharedTeam, Sport, StaffMember, Tag, Team, TeamAccess, TeamPerms } from './types';
+import type { Drill, ImportDraft, InviteInfo, Item, Plan, PlanKind, PlanSummary, Play, Player, Resource, ScheduleEvent, SharedTeam, Sport, StaffMember, Tag, Team, TeamAccess, TeamInvite, TeamPerms } from './types';
 
 /** Fired when the server says the session is gone, so the app can show the sign-in screen. */
 export const SIGNED_OUT_EVENT = 'practiceplan:signed-out';
@@ -70,6 +70,8 @@ export interface AuthStatus {
   registration_open: boolean;
   /** 'open' lets people straight in. 'verify' sends a confirmation link first. */
   registration_mode: 'closed' | 'open' | 'verify';
+  /** Whether a forgotten password can be replaced through a link sent by email. */
+  password_reset: boolean;
   user: User | null;
 }
 export interface AdminUser extends User {
@@ -348,7 +350,13 @@ export const api = {
   logout: () => req('POST', '/auth/logout', {}),
   register: (b: { name: string; email: string; password: string }) => req<{ ok: true; user?: User }>('POST', '/auth/register', b),
   confirm: (token: string) => req('POST', '/auth/confirm', { token }),
+  forgotPassword: (email: string) => req<{ ok: true; minutes: number }>('POST', '/auth/forgot', { email }),
+  resetCheck: (token: string) => req<{ ok: true; email: string }>('GET', `/auth/reset?token=${encodeURIComponent(token)}`),
+  resetPassword: (token: string, password: string) => req<{ user: User }>('POST', '/auth/reset', { token, password }),
+  inviteInfo: (token: string) => req<InviteInfo>('GET', `/auth/invite?token=${encodeURIComponent(token)}`),
+  acceptTeamInvite: (b: { token: string; name?: string; password?: string }) => req<{ ok: true; existing?: boolean; user?: User }>('POST', '/auth/invite/accept', b),
   savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
+  setName: (name: string) => req<{ user: User }>('PUT', '/auth/profile', { name }),
   changePassword: (current: string, next: string) => req<{ user: User }>('POST', '/auth/password', { current, next }),
 
   adminUsers: () => req<AdminUser[]>('GET', '/admin/users'),
@@ -441,6 +449,9 @@ export const api = {
   addStaff: (teamId: number, b: { email: string; title: string; perms?: Partial<TeamPerms> }) => req<StaffMember[]>('POST', `/teams/${teamId}/staff`, b),
   updateStaff: (teamId: number, userId: number, b: { title?: string; perms?: Partial<TeamPerms> }) => req<StaffMember[]>('PUT', `/teams/${teamId}/staff/${userId}`, b),
   removeStaff: (teamId: number, userId: number) => req<StaffMember[]>('DELETE', `/teams/${teamId}/staff/${userId}`),
+  invites: (teamId: number) => req<TeamInvite[]>('GET', `/teams/${teamId}/invites`),
+  resendInvite: (teamId: number, id: number) => req<TeamInvite[]>('POST', `/teams/${teamId}/invites/${id}/resend`, {}),
+  cancelInvite: (teamId: number, id: number) => req<TeamInvite[]>('DELETE', `/teams/${teamId}/invites/${id}`),
 
   createSport: (name: string) => req<Sport>('POST', '/sports', { name }),
 

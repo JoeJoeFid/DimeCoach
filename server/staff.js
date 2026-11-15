@@ -1,6 +1,7 @@
 // Sharing a team with other coaches.
 //
-// A team's owner adds people who already have accounts and says what each may change. Someone
+// A team's owner adds people by email and says what each may change. Someone with no account
+// yet is sent an invitation (server/invites.js) and joins once they have made one. Someone
 // added this way can "open" the shared team: a cookie names it, and from then on their requests
 // run inside the owner's workspace, limited to that one team and to the permissions they were
 // given. Everything else in this file is the gate that enforces those limits in one place, so
@@ -8,6 +9,8 @@
 import { all, get, run } from './db.js';
 import { isSystemAdmin } from './auth.js';
 import { notify } from './notices.js';
+import { mailerStatus } from './mailer.js';
+import { cancelInvite, inviteToTeam, mailAdded, pendingInvites, resendInvite, tooManyInvites } from './invites.js';
 
 const COOKIE = 'pp_team';
 const str = (v) => (v == null ? '' : String(v));
@@ -80,7 +83,7 @@ function gate(req) {
       if (!seg[1]) return write ? ownerOnly('add teams') : null;
       if (!sameTeam(seg[1])) return NOT_FOUND;
       // Who the team is shared with, and renaming or deleting it, need the "manage this team" permission.
-      if (seg[2] === 'staff') return perms.manage ? null : { status: 403, error: `${ownerName} has not given you permission to manage who this team is shared with.` };
+      if (seg[2] === 'staff' || seg[2] === 'invites') return perms.manage ? null : { status: 403, error: `${ownerName} has not given you permission to manage who this team is shared with.` };
       if (!write) return null;
       if (seg[2] === 'calendar' || seg[2] === 'events') return need('schedule');
       // Position names are part of planning games.
@@ -228,31 +231,63 @@ export function mountStaff(app) {
     if (!team) return res.status(404).json({ error: 'Not found' });
     res.json(staffOf(team.id));
   });
-  app.post('/api/teams/:id/staff', (req, res) => {
+  app.post('/api/teams/:id/staff', async (req, res) => {
     const team = ownTeam(req);
     if (!team) return res.status(404).json({ error: 'Not found' });
     const email = str(req.body.email).trim().toLowerCase();
-    if (!email) return res.status(400).json({ error: 'Enter the email they sign in to Dime Coach with.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return res.status(400).json({ error: 'Enter their email address.' });
     if (email === str(req.user.email).toLowerCase()) return res.status(400).json({ error: req.staff ? 'This team is already shared with you.' : 'This is your own team already.' });
-    const person = get("SELECT id FROM users WHERE lower(email)=? AND status='active'", email);
+    const person = get("SELECT id, name, email FROM users WHERE lower(email)=? AND status='active'", email);
+    const title = str(req.body.title).trim().slice(0, 60) || 'Assistant coach';
     if (person && get("SELECT 1 AS ok FROM memberships WHERE user_id=? AND owner_id=? AND role='owner'", person.id, team.owner_id))
       return res.status(400).json({ error: 'That is the owner of this team.' });
-    if (!person)
-      return res.status(404).json({
-        error: isSystemAdmin(req.user)
-          ? 'Nobody has an account with that email yet. Add them under System admin first, then share the team.'
-          : 'Nobody has an account with that email yet. Ask the administrator to add them, then share the team.',
-      });
+    if (!person) {
+      // Nobody has this address yet: they are invited by email, and join once they have made an account.
+      if (get("SELECT 1 AS ok FROM users WHERE lower(email)=? AND status='disabled'", email)) return res.status(400).json({ error: 'The account with that email has been turned off.' });
+      if (!mailerStatus().configured)
+        return res.status(400).json({
+          error: isSystemAdmin(req.user)
+            ? 'Nobody has an account with that email yet, and no email service is connected to invite them. Add them under System admin first, then share the team.'
+            : 'Nobody has an account with that email yet, and invitations by email are not set up. Ask the administrator to add them, then share the team.',
+        });
+      if (tooManyInvites(req.user.id)) return res.status(429).json({ error: 'That is a lot of invitations. Wait an hour before sending more.' });
+      const r = await inviteToTeam(req, team, email, title, JSON.stringify(cleanPerms(req.body.perms)));
+      if (!r.ok) return res.status(502).json({ error: `The invitation was not sent. ${r.error}` });
+      return res.json(staffOf(team.id));
+    }
     if (get('SELECT 1 AS ok FROM team_staff WHERE team_id=? AND user_id=?', team.id, person.id))
       return res.status(409).json({ error: 'This team is already shared with them.' });
-    const title = str(req.body.title).trim().slice(0, 60) || 'Assistant coach';
     run('INSERT INTO team_staff (team_id, user_id, title, perms_json, added_by) VALUES (?,?,?,?,?)', team.id, person.id, title, JSON.stringify(cleanPerms(req.body.perms)), req.user.id);
     notify(person.id, {
       kind: 'team',
       title: `${req.user.name} added you to ${team.name}`,
       body: `You are on the team as ${title}. To open it, use "Switch team" and choose ${team.name}.`,
     });
+    mailAdded(req, person, team, title);
     res.json(staffOf(team.id));
+  });
+
+  // Invitations sent to people who have not made an account yet.
+  app.get('/api/teams/:id/invites', (req, res) => {
+    const team = ownTeam(req);
+    if (!team) return res.status(404).json({ error: 'Not found' });
+    res.json(pendingInvites(team.id));
+  });
+  app.post('/api/teams/:id/invites/:inviteId/resend', async (req, res) => {
+    const team = ownTeam(req);
+    if (!team) return res.status(404).json({ error: 'Not found' });
+    if (!mailerStatus().configured) return res.status(400).json({ error: 'No email service is connected, so the invitation cannot be sent.' });
+    if (tooManyInvites(req.user.id)) return res.status(429).json({ error: 'That is a lot of invitations. Wait an hour before sending more.' });
+    const r = await resendInvite(req, team.id, Number(req.params.inviteId));
+    if (!r) return res.status(404).json({ error: 'Not found' });
+    if (!r.ok) return res.status(502).json({ error: `The invitation was not sent. ${r.error}` });
+    res.json(pendingInvites(team.id));
+  });
+  app.delete('/api/teams/:id/invites/:inviteId', (req, res) => {
+    const team = ownTeam(req);
+    if (!team) return res.status(404).json({ error: 'Not found' });
+    cancelInvite(team.id, Number(req.params.inviteId));
+    res.json(pendingInvites(team.id));
   });
   app.put('/api/teams/:id/staff/:userId', (req, res) => {
     const team = ownTeam(req);

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, Route, Routes, useSearchParams } from 'react-router-dom';
+import { Link, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, type User } from '../api';
+import type { InviteInfo } from '../types';
 import { ThemeToggle } from '../theme';
 import { Field } from '../components/bits';
 import AuthHero from '../components/AuthHero';
@@ -187,7 +188,7 @@ function Restore({ onDone, onBack }: { onDone: () => void; onBack: () => void })
   );
 }
 
-function Login({ registrationOpen, onSignedIn }: { registrationOpen: boolean; onSignedIn: () => void }) {
+function Login({ registrationOpen, canReset, onSignedIn }: { registrationOpen: boolean; /** Whether a password link can be emailed. */ canReset: boolean; onSignedIn: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { busy, error, submit } = useSubmit(async () => {
@@ -208,14 +209,234 @@ function Login({ registrationOpen, onSignedIn }: { registrationOpen: boolean; on
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
-      <p className="muted small auth-foot">
-        {registrationOpen ? (
-          <>
-            New here? <Link to="/register">Create an account</Link>
-          </>
+      <p className="muted small auth-foot">{canReset ? <Link to="/forgot">Forgot your password?</Link> : 'Forgot your password? Ask the administrator to reset it.'}</p>
+      {registrationOpen && (
+        <p className="muted small auth-foot">
+          New here? <Link to="/register">Create an account</Link>
+        </p>
+      )}
+    </AuthShell>
+  );
+}
+
+/** Asks for a link to choose a new password. The answer is the same whether or not the address has an account. */
+function Forgot({ canReset }: { canReset: boolean }) {
+  const [email, setEmail] = useState('');
+  const [minutes, setMinutes] = useState(0);
+  const { busy, error, submit } = useSubmit(async () => {
+    setMinutes((await api.forgotPassword(email)).minutes);
+  });
+  const back = (
+    <p className="muted small auth-foot">
+      <Link to="/">Back to sign in</Link>
+    </p>
+  );
+  if (!canReset)
+    return (
+      <AuthShell title="Forgot your password?" lead="Password links by email are not set up on this site. Ask the administrator to reset your password.">
+        {back}
+      </AuthShell>
+    );
+  if (minutes)
+    return (
+      <AuthShell title="Check your email" lead={`If there is an account for ${email}, we sent it a link to choose a new password. The link works once, for ${minutes} minutes.`}>
+        <p className="muted small">Nothing there? Look in your spam folder, and check the address is the one you sign in with.</p>
+        {back}
+      </AuthShell>
+    );
+  return (
+    <AuthShell title="Forgot your password?" lead="Enter the email you sign in with and we will send you a link to choose a new one.">
+      <form className="fields stack" onSubmit={submit}>
+        {error && <p className="error">{error}</p>}
+        <Field label="Email">
+          <input className="input" type="email" autoFocus required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
+        </Field>
+        <button className="btn primary" disabled={busy}>
+          {busy ? 'Sending…' : 'Email me a link'}
+        </button>
+      </form>
+      {back}
+    </AuthShell>
+  );
+}
+
+/** Where the emailed password link lands: choose a new password and you are signed in. */
+function Reset({ onSignedIn }: { onSignedIn: () => void }) {
+  const [params] = useSearchParams();
+  const token = params.get('token') || '';
+  const navigate = useNavigate();
+  const [email, setEmail] = useState<string | null>(null);
+  const [bad, setBad] = useState('');
+  const [password, setPassword] = useState('');
+  useEffect(() => {
+    let alive = true;
+    api
+      .resetCheck(token)
+      .then((r) => alive && setEmail(r.email))
+      .catch((e) => alive && setBad((e as Error).message));
+    return () => {
+      alive = false;
+    };
+  }, [token]);
+  const { busy, error, submit } = useSubmit(async () => {
+    await api.resetPassword(token, password);
+    navigate('/', { replace: true });
+    onSignedIn();
+  });
+  if (bad)
+    return (
+      <AuthShell title="That link did not work" lead={bad}>
+        <Link className="btn primary" to="/forgot">
+          Get a new link
+        </Link>
+        <p className="muted small auth-foot">
+          <Link to="/">Back to sign in</Link>
+        </p>
+      </AuthShell>
+    );
+  if (email === null) return <AuthShell title="Checking your link…">{null}</AuthShell>;
+  return (
+    <AuthShell title="Choose a new password" lead={`For ${email}. Saving it signs you in here and signs you out everywhere else.`}>
+      <form className="fields stack" onSubmit={submit}>
+        {error && <p className="error">{error}</p>}
+        {/* Lets a password manager file the new password under the right account. */}
+        <input type="email" value={email} readOnly hidden autoComplete="username" />
+        <Field label={`New password (at least ${MIN_PASSWORD} characters)`}>
+          <input className="input" type="password" autoFocus required minLength={MIN_PASSWORD} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+        </Field>
+        <button className="btn primary" disabled={busy}>
+          {busy ? 'Saving…' : 'Save and sign in'}
+        </button>
+      </form>
+    </AuthShell>
+  );
+}
+
+/**
+ * Where an emailed invitation to a team lands. Someone new makes their account here and goes
+ * straight to choosing a team. Someone who already has one gets the team added to it.
+ */
+export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is signed in on this browser already, if anyone. */ signedInAs?: User | null; onSignedIn: () => void; onSignOut?: () => void }) {
+  const [params] = useSearchParams();
+  const token = params.get('token') || '';
+  const navigate = useNavigate();
+  const [info, setInfo] = useState<InviteInfo | null>(null);
+  const [bad, setBad] = useState('');
+  const [added, setAdded] = useState(false);
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const mine = !!signedInAs && !!info && signedInAs.email.toLowerCase() === info.email.toLowerCase();
+  useEffect(() => {
+    let alive = true;
+    api
+      .inviteInfo(token)
+      .then((r) => alive && setInfo(r))
+      .catch((e) => alive && setBad((e as Error).message));
+    return () => {
+      alive = false;
+    };
+  }, [token]);
+  // Nothing to create when the address has an account: opening the link puts the team on it.
+  const existing = !!info && info.has_account && (!signedInAs || mine);
+  useEffect(() => {
+    if (!existing || added) return;
+    let alive = true;
+    api
+      .acceptTeamInvite({ token })
+      .then(() => alive && setAdded(true))
+      .catch((e) => alive && setBad((e as Error).message));
+    return () => {
+      alive = false;
+    };
+  }, [existing, added, token]);
+  const { busy, error, submit } = useSubmit(async () => {
+    await api.acceptTeamInvite({ token, name, password });
+    navigate('/', { replace: true });
+    onSignedIn();
+  });
+  const enter = () => {
+    navigate('/', { replace: true });
+    onSignedIn();
+  };
+
+  if (bad)
+    return (
+      <AuthShell title="That invitation did not work" lead={bad}>
+        {signedInAs ? (
+          <button type="button" className="btn primary" onClick={enter}>
+            Go to Dime Coach
+          </button>
         ) : (
-          'Forgot your password? Ask the administrator to reset it.'
+          <p className="muted small auth-foot">
+            <Link to="/">Back to sign in</Link>
+          </p>
         )}
+      </AuthShell>
+    );
+  if (!info) return <AuthShell title="Opening your invitation…">{null}</AuthShell>;
+  const what = [info.sport, info.season].filter(Boolean).join(' · ');
+  const card = (
+    <div className="invite-team">
+      <strong>{info.team}</strong>
+      {what && <span className="muted small">{what}</span>}
+      <span className="muted small">
+        Invited by {info.inviter} · you join as {info.title}
+      </span>
+    </div>
+  );
+  if (signedInAs && !mine)
+    return (
+      <AuthShell title={`${info.inviter} invited you to a team`} lead={`This invitation is for ${info.email}, and you are signed in as ${signedInAs.email}. Sign out to accept it.`}>
+        {card}
+        <button type="button" className="btn primary" onClick={onSignOut}>
+          Sign out and continue
+        </button>
+        <p className="muted small auth-foot">
+          <button type="button" className="link" onClick={enter}>
+            Stay signed in as {signedInAs.name}
+          </button>
+        </p>
+      </AuthShell>
+    );
+  if (existing)
+    return (
+      <AuthShell
+        title={added ? `${info.team} is on your account` : 'Adding the team…'}
+        lead={added ? (signedInAs ? 'You will find it under "Shared with you" when choosing a team.' : `You already have a Dime Coach account for ${info.email}. Sign in and you will find the team under "Shared with you".`) : undefined}
+      >
+        {card}
+        {added &&
+          (signedInAs ? (
+            <button type="button" className="btn primary" onClick={enter}>
+              Choose a team
+            </button>
+          ) : (
+            <Link className="btn primary" to="/">
+              Sign in
+            </Link>
+          ))}
+      </AuthShell>
+    );
+  return (
+    <AuthShell title={`${info.inviter} invited you to a team`} lead="Create your Dime Coach account to join it.">
+      {card}
+      <form className="fields stack" onSubmit={submit}>
+        {error && <p className="error">{error}</p>}
+        <Field label="Email">
+          <input className="input" type="email" value={info.email} readOnly autoComplete="username" />
+        </Field>
+        <Field label="Your name">
+          <input className="input" autoFocus required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+        </Field>
+        <Field label={`Password (at least ${MIN_PASSWORD} characters)`}>
+          <input className="input" type="password" required minLength={MIN_PASSWORD} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+        </Field>
+        <button className="btn primary" disabled={busy}>
+          {busy ? 'Creating…' : 'Create account and join'}
+        </button>
+      </form>
+      <p className="muted small auth-foot">
+        Already have an account under another email? Ask {info.inviter} to invite that address instead.
       </p>
     </AuthShell>
   );
@@ -318,12 +539,15 @@ function InviteOnly() {
 }
 
 /** Everything a signed-out visitor can reach. */
-export function SignedOut({ registrationOpen, confirmEmail, onSignedIn }: { registrationOpen: boolean; confirmEmail: boolean; onSignedIn: () => void }) {
+export function SignedOut({ registrationOpen, confirmEmail, canReset, onSignedIn }: { registrationOpen: boolean; confirmEmail: boolean; canReset: boolean; onSignedIn: () => void }) {
   return (
     <Routes>
       <Route path="/confirm" element={<Confirm />} />
+      <Route path="/forgot" element={<Forgot canReset={canReset} />} />
+      <Route path="/reset" element={<Reset onSignedIn={onSignedIn} />} />
+      <Route path="/join" element={<Join onSignedIn={onSignedIn} />} />
       <Route path="/register" element={registrationOpen ? <Register confirm={confirmEmail} onSignedIn={onSignedIn} /> : <InviteOnly />} />
-      <Route path="*" element={<Login registrationOpen={registrationOpen} onSignedIn={onSignedIn} />} />
+      <Route path="*" element={<Login registrationOpen={registrationOpen} canReset={canReset} onSignedIn={onSignedIn} />} />
     </Routes>
   );
 }

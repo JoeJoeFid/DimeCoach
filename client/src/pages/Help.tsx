@@ -153,8 +153,8 @@ const TOPICS: Topic[] = [
   {
     group: 'Working with other coaches',
     title: 'Share a team with an assistant coach',
-    steps: ['Open "Team & roster" and go to "Coaches & helpers".', 'Add the coach by the email address they use for Dime Coach.', 'Choose what they may change: practices, drills, plays, resources.'],
-    tip: 'They need a Dime Coach account first. Each practice shows its collaborators beside the discussion.',
+    steps: ['Open "Team & roster" and go to "Coaches & helpers".', 'Add the coach by their email address.', 'Choose what they may change: practices, drills, plays, resources.'],
+    tip: 'Someone without a Dime Coach account is emailed an invitation, and joins the team once they have created one. Until then they are listed as "Invited", where you can send the invitation again or cancel it.',
     go: ['/teams', 'Team & roster'],
     words: 'invite helper staff permissions access collaborate add coach',
   },
@@ -191,7 +191,14 @@ const TOPICS: Topic[] = [
     title: 'Change your password or your details',
     steps: ['Press your name at the bottom of the menu.', 'Choose "Account".', 'Change your details or your password there.'],
     go: ['/account', 'Account'],
-    words: 'email name profile sign in login forgot',
+    words: 'email name profile sign in login',
+  },
+  {
+    group: 'Your account',
+    title: 'Get back in when you forget your password',
+    steps: ['On the sign-in page, press "Forgot your password?".', 'Enter the email you sign in with.', 'Open the link in the email and choose a new password. You are signed in straight away.'],
+    tip: 'The link works once, for an hour. Choosing a new password signs you out on every other device.',
+    words: 'forgot forgotten reset lost locked out recover email link',
   },
   {
     group: 'Your account',

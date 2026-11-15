@@ -12038,3 +12038,34 @@ img.res-thumb.link-shot {
   background: #000;
   object-fit: cover;
 }
+
+/* The team an emailed invitation is for, on the page where it is accepted. */
+.invite-team {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  margin: 0 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, transparent);
+}
+.invite-team strong {
+  font-size: 1.05rem;
+}
+/* Invitations not yet taken up, above the people already on the team. */
+.invite-list .invite-row {
+  padding: 10px 0;
+}
+.invite-row .staff-who strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* "Track over" and "View calendar" sit together, above the next one up. */
+.tl-head {
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}

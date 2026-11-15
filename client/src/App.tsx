@@ -8,7 +8,7 @@ import { ToastHost, flushDeletes, showNews } from './components/toasts';
 import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
 import TeamPicker from './components/TeamPicker';
-import { PasswordForm, Setup, SignedOut } from './pages/Auth';
+import { Join, PasswordForm, Setup, SignedOut } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import Messages from './pages/Messages';
@@ -124,6 +124,7 @@ export default function App() {
   const [error, setError] = useState('');
   // Set by signing in, and cleared once a team is picked: coming back to an open session skips the question.
   const [justSignedIn, setJustSignedIn] = useState(false);
+  const { pathname } = useLocation();
 
   const refresh = useCallback(async () => {
     try {
@@ -161,10 +162,23 @@ export default function App() {
       <SignedOut
         registrationOpen={auth.registration_open}
         confirmEmail={auth.registration_mode === 'verify'}
+        canReset={auth.password_reset}
         onSignedIn={() => {
           setJustSignedIn(true);
           refresh();
         }}
+      />
+    );
+  // An invitation link opened on a browser where someone is already signed in.
+  else if (pathname === '/join')
+    view = (
+      <Join
+        signedInAs={auth.user}
+        onSignedIn={() => {
+          setJustSignedIn(true);
+          refresh();
+        }}
+        onSignOut={() => api.logout().catch(() => {}).then(refresh)}
       />
     );
   else if (auth.user.must_change_password) view = <PasswordForm forced onDone={refresh} />;
@@ -696,6 +710,20 @@ function SharedBar() {
 
 function Account({ onChanged }: { onChanged: () => void }) {
   const { user } = useApp();
+  const [name, setName] = useState(user.name);
+  const [state, setState] = useState<{ busy?: boolean; error?: string; saved?: boolean }>({});
+  useEffect(() => setName(user.name), [user.name]);
+  const saveName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setState({ busy: true });
+    try {
+      await api.setName(name);
+      setState({ saved: true });
+      onChanged();
+    } catch (err) {
+      setState({ error: (err as Error).message });
+    }
+  };
   return (
     <div className="page editor">
       <div className="page-head">
@@ -705,6 +733,31 @@ function Account({ onChanged }: { onChanged: () => void }) {
             {user.name} · {user.email}
           </p>
         </div>
+      </div>
+      <div className="card account-card">
+        <h2>Your name</h2>
+        <form className="fields stack" onSubmit={saveName}>
+          <label className="field">
+            <span>Name</span>
+            <input
+              className="input"
+              required
+              maxLength={80}
+              autoComplete="name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setState({});
+              }}
+            />
+          </label>
+          <p className="muted small">This is the name other coaches see on your posts, shared teams and messages.</p>
+          {state.error && <p className="error">{state.error}</p>}
+          {state.saved && <p className="notice">Name saved.</p>}
+          <button className="btn primary" type="submit" disabled={state.busy || !name.trim() || name.trim() === user.name}>
+            {state.busy ? 'Saving…' : 'Save name'}
+          </button>
+        </form>
       </div>
       <div className="card account-card">
         <h2>Change password</h2>

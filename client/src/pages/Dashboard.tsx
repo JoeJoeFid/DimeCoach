@@ -29,7 +29,7 @@ const nowMinutes = () => {
 };
 
 export default function Dashboard() {
-  const { team, sportTags, sport } = useApp();
+  const { team, sportTags, sport, can } = useApp();
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [homeworkCount, setHomeworkCount] = useState(0);
   const [error, setError] = useState('');
@@ -170,6 +170,22 @@ export default function Dashboard() {
           <PageTitle>Dashboard</PageTitle>
         </div>
         <div className="head-actions">
+          {can('manage') && (
+            <Link className="btn" to="/teams?tab=people">
+              Invite coaches
+            </Link>
+          )}
+          {/* Straight into a new one, not the list of them. */}
+          <Link className="btn primary" to="/practices?new=1">
+            Add practice or game
+          </Link>
+        </div>
+      </div>
+
+      <PracticeTimeline
+        plans={plans || []}
+        tags={sportTags}
+        lead={
           <label className="period">
             <span className="field-label">Track over</span>
             <select className="input" value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
@@ -180,14 +196,9 @@ export default function Dashboard() {
               ))}
             </select>
           </label>
-          {/* Straight into a new practice, not the list of them. */}
-          <Link className="btn primary" to="/practices?new=1">
-            Plan a practice
-          </Link>
-        </div>
-      </div>
-
-      <PracticeTimeline plans={plans || []} tags={sportTags} onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))} />
+        }
+        onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))}
+      />
 
       {fresh ? (
         <section className="start-steps" aria-label="Getting started">

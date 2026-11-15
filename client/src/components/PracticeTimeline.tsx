@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../App';
@@ -26,7 +26,7 @@ const relative = (date: string, today: string) => {
  * stays large on the left. Beside it are smaller cards for everything else, starting with what
  * follows it: the arrows move those back and forward in time.
  */
-export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Plan[]; tags: Tag[]; /** Called after a plan was changed here, so the page reads its plans again. */ onChanged: () => void }) {
+export default function PracticeTimeline({ plans, tags, lead, onChanged }: { plans: Plan[]; tags: Tag[]; /** Shown beside "View calendar", above the next one up. */ lead?: ReactNode; /** Called after a plan was changed here, so the page reads its plans again. */ onChanged: () => void }) {
   const app = useApp();
   const team = app.team!;
   const navigate = useNavigate();
@@ -187,6 +187,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
     <section className="timeline" aria-label="Practice timeline">
       {error && <p className="error">{error}</p>}
       <div className="tl-head">
+        {lead}
         <Link className="tl-cal-link" to="/practices?view=calendar">
           View calendar <span aria-hidden="true">→</span>
         </Link>

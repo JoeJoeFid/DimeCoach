@@ -11,6 +11,7 @@ import { all, db, dbPath, get, run, tx } from './db.js';
 import { createWorkspace } from './seed.js';
 import { mailerStatus, sendMail } from './mailer.js';
 import { notify } from './notices.js';
+import { RESET_MINUTES, claimInvites, clearResets, inviteByToken, mailReset, resetByToken } from './invites.js';
 import { isActive, markActive } from './live.js';
 import { recentActivity, trackActivity } from './activity.js';
 import { MAX_CAP_MB, capMbFor, defaultCapMb, parseCapMb, usageOf } from './quota.js';
@@ -179,6 +180,17 @@ function tooManySignups(ip) {
 }
 const userCount = () => get('SELECT COUNT(*) AS n FROM users').n;
 
+// Asking for a password link: a few times an hour from one place, and for one address.
+const resetAsks = new Map();
+const RESET_ASK_LIMIT = 5;
+function tooManyResetAsks(key) {
+  const recent = (resetAsks.get(key) || []).filter((t) => Date.now() - t < SIGNUP_WINDOW_MS);
+  resetAsks.set(key, recent);
+  if (recent.length >= RESET_ASK_LIMIT) return true;
+  recent.push(Date.now());
+  return false;
+}
+
 /** Creates an active user with a workspace of their own. Call inside a transaction. */
 function createUser({ email, name, password, isAdmin = false, canImport = false, mustChange = false, ownerId = null }) {
   const r = run(
@@ -218,7 +230,7 @@ export function mountAuth(app) {
 
   app.get('/api/auth/status', (req, res) => {
     const user = currentUser(req);
-    res.json({ setup_needed: userCount() === 0, registration_open: registrationOpen(), registration_mode: registrationOpen() ? registrationMode() : 'closed', user: user ? userOut(user) : null });
+    res.json({ setup_needed: userCount() === 0, registration_open: registrationOpen(), registration_mode: registrationOpen() ? registrationMode() : 'closed', password_reset: mailerStatus().configured, user: user ? userOut(user) : null });
   });
 
   // First run: create the administrator, who takes over the data already on this install.
@@ -371,8 +383,84 @@ export function mountAuth(app) {
       run("UPDATE users SET status='active', confirm_token_hash=NULL, confirm_expires_at=NULL WHERE id=?", user.id);
       const workspace = createWorkspace(`${user.name}'s workspace`);
       run("INSERT INTO memberships (user_id, owner_id, role) VALUES (?,?,'owner')", user.id, workspace);
+      // The address is now known to be theirs, so teams it was invited to are theirs to open.
+      claimInvites(user.id, user.email);
     });
     res.json({ ok: true });
+  });
+
+  // --- A forgotten password: a link by email, which lets its holder choose a new one ---
+  app.post('/api/auth/forgot', (req, res) => {
+    const email = normEmail(req.body.email);
+    if (!validEmail(email)) return res.status(400).json({ error: 'Enter the email address you sign in with.' });
+    if (!mailerStatus().configured) return res.status(503).json({ error: 'Password links by email are not set up on this site. Ask the administrator to reset your password.' });
+    if (tooManyResetAsks(`ip|${req.ip}`) || tooManyResetAsks(`to|${email}`)) return res.status(429).json({ error: 'Too many requests. Wait an hour and try again.' });
+    const user = get("SELECT * FROM users WHERE email=? AND status='active'", email);
+    if (user) mailReset(req, user);
+    // The same answer whether or not there is such an account, so addresses cannot be probed.
+    res.json({ ok: true, minutes: RESET_MINUTES });
+  });
+  const BAD_RESET = 'This link is not valid any more. Links work once, for an hour. Ask for a new one.';
+  app.get('/api/auth/reset', (req, res) => {
+    const user = resetByToken(str(req.query.token));
+    if (!user) return res.status(400).json({ error: BAD_RESET });
+    res.json({ ok: true, email: user.email });
+  });
+  app.post('/api/auth/reset', (req, res) => {
+    const user = resetByToken(str(req.body.token));
+    if (!user) return res.status(400).json({ error: BAD_RESET });
+    const problem = passwordProblem(req.body.password);
+    if (problem) return res.status(400).json({ error: problem });
+    tx(() => {
+      run('UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?', hashPassword(str(req.body.password)), user.id);
+      clearResets(user.id);
+      // Whoever knew the old password is signed out everywhere.
+      endSessions(user.id);
+    });
+    for (const key of failures.keys()) if (key.endsWith(`|${user.email}`)) failures.delete(key);
+    notify(user.id, { kind: 'account', title: 'Your password was changed', body: 'It was changed with a link sent to your email. If that was not you, change it again and tell the administrator.', link: '/account' });
+    startSession(req, res, user.id);
+    res.json({ user: userOut(get('SELECT * FROM users WHERE id=?', user.id)) });
+  });
+
+  // --- An invitation to a team, for someone with no account yet ---
+  const BAD_INVITE = 'This invitation is not valid any more. Ask the person who invited you to send it again.';
+  app.get('/api/auth/invite', (req, res) => {
+    const inv = inviteByToken(str(req.query.token));
+    if (!inv) return res.status(400).json({ error: BAD_INVITE });
+    const existing = get('SELECT status FROM users WHERE email=?', inv.email);
+    res.json({ email: inv.email, team: inv.team, sport: inv.sport || '', season: inv.season || '', inviter: inv.inviter || 'A coach', title: inv.title, has_account: !!existing && existing.status !== 'pending' });
+  });
+  // Opening the link shows the address is theirs, so the account needs no further confirming,
+  // and it is made whether or not sign-up is open to everyone.
+  app.post('/api/auth/invite/accept', (req, res) => {
+    const inv = inviteByToken(str(req.body.token));
+    if (!inv) return res.status(400).json({ error: BAD_INVITE });
+    const existing = get('SELECT * FROM users WHERE email=?', inv.email);
+    if (existing && existing.status !== 'pending') {
+      if (existing.status !== 'active') return res.status(403).json({ error: 'This account has been turned off. Contact the administrator.' });
+      // They already have an account: the team is added to it, and they sign in as usual.
+      tx(() => claimInvites(existing.id, existing.email));
+      return res.json({ ok: true, existing: true });
+    }
+    const name = str(req.body.name).trim().replace(/\s+/g, ' ');
+    if (!name) return res.status(400).json({ error: 'Enter your name.' });
+    if (name.length > 80) return res.status(400).json({ error: 'Keep your name under 80 characters.' });
+    const problem = passwordProblem(req.body.password);
+    if (problem) return res.status(400).json({ error: problem });
+    const userId = tx(() => {
+      let id;
+      if (existing) {
+        // Someone who started signing up and never confirmed: this finishes it.
+        run("UPDATE users SET name=?, password_hash=?, status='active', confirm_token_hash=NULL, confirm_expires_at=NULL WHERE id=?", name, hashPassword(str(req.body.password)), existing.id);
+        run("INSERT INTO memberships (user_id, owner_id, role) VALUES (?,?,'owner')", existing.id, createWorkspace(`${name}'s workspace`));
+        id = existing.id;
+      } else id = createUser({ email: inv.email, name, password: str(req.body.password) });
+      claimInvites(id, inv.email);
+      return id;
+    });
+    startSession(req, res, userId);
+    res.json({ ok: true, user: userOut(get('SELECT * FROM users WHERE id=?', userId)) });
   });
 
   // --- Everything below this line needs a signed-in user ---------------------
@@ -403,6 +491,15 @@ export function mountAuth(app) {
     run('UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?', hashPassword(str(req.body.next)), req.user.id);
     // Sign out every other device, keep this one.
     endSessions(req.user.id, sha256(readCookie(req, COOKIE)));
+    res.json({ user: userOut(get('SELECT * FROM users WHERE id=?', req.user.id)) });
+  });
+
+  // A person's own name, as other coaches see it.
+  app.put('/api/auth/profile', (req, res) => {
+    const name = str(req.body.name).trim().replace(/\s+/g, ' ');
+    if (!name) return res.status(400).json({ error: 'Enter your name.' });
+    if (name.length > 80) return res.status(400).json({ error: 'Keep your name under 80 characters.' });
+    run('UPDATE users SET name=? WHERE id=?', name, req.user.id);
     res.json({ user: userOut(get('SELECT * FROM users WHERE id=?', req.user.id)) });
   });
 
@@ -449,7 +546,12 @@ export function mountAuth(app) {
     if (problem) return res.status(400).json({ error: problem });
     if (get('SELECT id FROM users WHERE email=?', email)) return res.status(409).json({ error: 'Someone already has an account with that email.' });
     // The administrator picks a starting password; the person must replace it at first sign-in.
-    const userId = tx(() => createUser({ email, name, password: str(req.body.password), canImport: !!req.body.can_import, mustChange: true }));
+    const userId = tx(() => {
+      const id = createUser({ email, name, password: str(req.body.password), canImport: !!req.body.can_import, mustChange: true });
+      // Teams this address was invited to are waiting for it.
+      claimInvites(id, email);
+      return id;
+    });
     res.json(adminUserOut(get('SELECT * FROM users WHERE id=?', userId)));
   });
 

@@ -50,6 +50,7 @@ function describe(method, parts, body) {
       const team = `team${q(a ? row('teams', 'name', a)?.name : body.name)}`;
       if (!b) return `${verb('Created', 'Edited', 'Deleted')} ${team}`;
       if (b === 'players') return parts[3] === 'import' ? `Uploaded a roster to ${team}` : `Added a player to ${team}`;
+      if (b === 'invites') return gone ? `Cancelled an invitation to ${team}` : `Sent an invitation to ${team} again`;
       if (b === 'staff') return `${verb('Added a coach to', 'Changed a coach on', 'Removed a coach from')} ${team}`;
       if (b === 'calendar') return parts[3] === 'sync' ? `Synced the calendar of ${team}` : `Changed the calendar link of ${team}`;
       if (b === 'positions') return `Changed position names on ${team}`;
@@ -90,7 +91,7 @@ function describe(method, parts, body) {
     case 'ai':
       return a === 'import-plan' ? 'Imported a plan with AI' : null;
     case 'auth':
-      return a === 'password' ? 'Changed their password' : null;
+      return a === 'password' ? 'Changed their password' : a === 'profile' ? 'Changed their name' : null;
     case 'admin':
       return a === 'users' ? (made ? 'Created an account' : 'Changed an account') : a === 'settings' ? 'Changed sign-up settings' : null;
     case 'system':
