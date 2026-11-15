@@ -162,6 +162,8 @@ export interface Resource {
   /** Set when it was saved to Resources directly; null when it only exists on a drill, play or practice. */
   resource_id: number | null;
   created_at: string;
+  /** Links only: 'ok' when a small preview picture is kept, 'none' when the page offers none, null when nobody has looked yet. */
+  thumb?: 'ok' | 'none' | null;
   uses: { type: 'drill' | 'play' | 'practice'; id: number; name: string }[];
 }
 /** The shared shape of a practice item and a library drill. */

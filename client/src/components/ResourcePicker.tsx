@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { Resource } from '../types';
 import { Modal } from './bits';
 import { roomyScreen } from '../util';
+import { makeThumb, thumbUrl } from '../linkThumb';
 
 export const fileUrl = (r: Resource) => `/api/${r.kind === 'video' ? 'videos' : 'images'}/${r.file_id}`;
 export const hostOf = (url: string) => {
@@ -23,6 +24,19 @@ const KINDS: { id: Resource['kind']; label: string }[] = [
 
 /** A small preview of a resource: the picture, the first frame of the video, or the site name of a link. */
 export function ResourceThumb({ resource }: { resource: Resource }) {
+  // A link shows its preview picture when there is one: kept already, or found and shrunk now.
+  const isLink = resource.kind === 'link';
+  const [picture, setPicture] = useState<string | null>(isLink && resource.thumb === 'ok' ? thumbUrl(resource.url) : null);
+  useEffect(() => {
+    if (!isLink || resource.thumb === 'none') return setPicture(null);
+    if (resource.thumb === 'ok') return setPicture(thumbUrl(resource.url));
+    let live = true;
+    makeThumb(resource.url).then((data) => live && setPicture(data));
+    return () => {
+      live = false;
+    };
+  }, [isLink, resource.url, resource.thumb]);
+  if (isLink && picture) return <img className="res-thumb link-shot" src={picture} alt="" loading="lazy" onError={() => setPicture(null)} />;
   if (resource.kind === 'image') return <img className="res-thumb" src={fileUrl(resource)} alt="" loading="lazy" />;
   if (resource.kind === 'video') return <video className="res-thumb" src={fileUrl(resource)} preload="metadata" muted />;
   return (

@@ -26,6 +26,8 @@ const USE_LABEL = { drill: 'Drill', play: 'Play', practice: 'Practice' } as cons
  * Every link, picture and video in the workspace: the ones saved here directly, and the ones
  * attached to drills, plays and practice items.
  */
+const COMPACT_KEY = 'practiceplan.resourcesCompact';
+
 export default function Resources() {
   const [resources, setResources] = useState<Resource[] | null>(null);
   const [error, setError] = useState('');
@@ -57,6 +59,12 @@ export default function Resources() {
       setError((e as Error).message);
       return false;
     }
+  };
+  // Cards with a large preview, or one short line each. The choice is remembered on this device.
+  const [compact, setCompact] = useState(() => localStorage.getItem(COMPACT_KEY) === '1');
+  const chooseCompact = (on: boolean) => {
+    setCompact(on);
+    localStorage.setItem(COMPACT_KEY, on ? '1' : '0');
   };
   const titleFromFile = (f: File) => f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
 
@@ -181,6 +189,14 @@ export default function Resources() {
             </button>
           ))}
         </div>
+        <div className="seg" role="group" aria-label="Layout">
+          <button className={compact ? '' : 'on'} aria-pressed={!compact} onClick={() => chooseCompact(false)}>
+            Cards
+          </button>
+          <button className={compact ? 'on' : ''} aria-pressed={compact} onClick={() => chooseCompact(true)}>
+            Compact
+          </button>
+        </div>
       </div>
 
       {resources === null ? (
@@ -196,7 +212,7 @@ export default function Resources() {
       ) : shown.length === 0 ? (
         <p className="muted">Nothing matches.</p>
       ) : (
-        <div className="res-grid">
+        <div className={`res-grid ${compact ? 'compact' : ''}`}>
           {shown.map((r) => (
             <ResourceCard key={r.key} resource={r} onView={() => setViewing(r)} onRename={(title) => run(() => api.renameResource(r.resource_id!, title))} onRemove={() => remove(r)} />
           ))}

@@ -389,7 +389,7 @@ export function mountAuth(app) {
       return res.json({ ok: true });
     }
     // Saving, posting and the like are things done. Reading is not: pages read on their own.
-    if (req.method !== 'GET') markActive(user.id);
+    if (req.method !== 'GET' && req.path !== '/resources/thumb') markActive(user.id);
     trackActivity(req, res);
     touchLogin(req, user.id);
     next();

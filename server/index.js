@@ -14,6 +14,7 @@ import { mentionedIn, notify } from './notices.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
 import { cleanPlayIds, mountPlays } from './plays.js';
 import { mountResources } from './resources.js';
+import { mountLinkThumbs } from './linkThumbs.js';
 import { mountStaff, staffBootstrap } from './staff.js';
 
 seedIfEmpty();
@@ -44,6 +45,7 @@ mountCommunities(app);
 mountCoachLibrary(app);
 mountLive(app);
 mountPlays(app);
+mountLinkThumbs(app);
 mountResources(app);
 
 const id = (v) => Number(v);

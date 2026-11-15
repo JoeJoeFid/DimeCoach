@@ -61,7 +61,8 @@ function describe(method, parts, body) {
     case 'shared-teams':
       return 'Left a shared team';
     case 'resources':
-      return `${verb('Added', 'Edited', 'Removed')} a resource`;
+      // A link's preview picture is kept without anyone asking.
+      return a === 'thumb' ? null : `${verb('Added', 'Edited', 'Removed')} a resource`;
     case 'images':
       return 'Uploaded an image';
     case 'videos':

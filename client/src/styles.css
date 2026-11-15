@@ -11948,3 +11948,93 @@ select.gp-cell.dup {
     padding-left: 32px;
   }
 }
+
+/* ---------- Resources: compact mode, one short line each ---------- */
+.playbook-filters {
+  flex-wrap: wrap;
+}
+.res-grid.compact {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.res-grid.compact .res-card {
+  flex-direction: row;
+  align-items: center;
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+}
+.res-grid.compact .res-preview {
+  flex: none;
+  width: 72px;
+  height: 48px;
+  border-bottom: none;
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+}
+.res-grid.compact .res-thumb.site {
+  font-size: 0;
+  gap: 0;
+  padding: 0;
+}
+.res-grid.compact .res-play {
+  font-size: 1rem;
+}
+.res-grid.compact .res-info {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 4px 10px 4px 12px;
+}
+.res-grid.compact .res-title {
+  flex: 2 1 0;
+  min-width: 0;
+  width: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.res-grid.compact .res-url {
+  flex: 2 1 0;
+  min-width: 0;
+}
+.res-grid.compact .res-uses,
+.res-grid.compact .res-info > span.muted {
+  flex: 2 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Only the first place it is used, and how many more. */
+.res-grid.compact .res-uses {
+  flex-direction: row;
+  gap: 10px;
+}
+.res-grid.compact .res-uses li:nth-child(n + 2):not(.muted) {
+  display: none;
+}
+.res-grid.compact .res-uses li {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.res-grid.compact .res-actions {
+  flex: none;
+  margin: 0;
+  padding: 0;
+}
+@media (max-width: 760px) {
+  .res-grid.compact .res-url,
+  .res-grid.compact .res-uses,
+  .res-grid.compact .res-info > span.muted {
+    display: none;
+  }
+  .res-grid.compact .res-preview {
+    width: 56px;
+  }
+}
+
+/* ---------- Resources: a link's preview picture ---------- */
+img.res-thumb.link-shot {
+  background: #000;
+  object-fit: cover;
+}

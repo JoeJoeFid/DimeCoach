@@ -6,6 +6,7 @@
 // The same link (by address) or file (by id) appears once, with a note of everywhere it is used.
 import { all, get, run } from './db.js';
 import { cleanLinks, deleteUpload } from './images.js';
+import { thumbStates } from './linkThumbs.js';
 
 const parse = (s, d) => {
   try {
@@ -74,7 +75,10 @@ function resourceList(ownerId) {
     if (!e.uses.some((u) => u.type === a.use.type && u.id === a.use.id && u.name === a.use.name)) e.uses.push(a.use);
   }
   const out = [];
+  const thumbs = thumbStates(ownerId);
   for (const e of byKey.values()) {
+    // Whether a small preview picture is kept for this link: 'ok', 'none', or null when nobody has looked yet.
+    if (e.kind === 'link') e.thumb = thumbs.get(e.url) ?? null;
     if (e.kind !== 'link') {
       // Skip references to files that no longer exist or belong to someone else.
       const f = get('SELECT mime, created_at FROM images WHERE id=? AND owner_id=?', e.file_id, ownerId);
