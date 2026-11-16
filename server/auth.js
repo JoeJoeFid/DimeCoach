@@ -12,6 +12,7 @@ import { createWorkspace } from './seed.js';
 import { mailerStatus, sendMail } from './mailer.js';
 import { notify } from './notices.js';
 import { RESET_MINUTES, claimInvites, clearResets, inviteByToken, mailReset, resetByToken } from './invites.js';
+import { claimOrgInvites, orgInviteByToken } from './orgs.js';
 import { isActive, markActive } from './live.js';
 import { recentActivity, trackActivity } from './activity.js';
 import { MAX_CAP_MB, capMbFor, defaultCapMb, parseCapMb, usageOf } from './quota.js';
@@ -209,6 +210,11 @@ function mailSystemInvite(req, user) {
   });
 }
 const userCount = () => get('SELECT COUNT(*) AS n FROM users').n;
+/** Everything waiting for an address that is now known to belong to this person: teams shared with it, and organizations it was invited to. */
+function claimAll(userId, email) {
+  const joined = claimInvites(userId, email);
+  return joined + claimOrgInvites(userId, email);
+}
 
 // Asking for a password link: a few times an hour from one place, and for one address.
 const resetAsks = new Map();
@@ -414,7 +420,7 @@ export function mountAuth(app) {
       const workspace = createWorkspace(`${user.name}'s workspace`);
       run("INSERT INTO memberships (user_id, owner_id, role) VALUES (?,?,'owner')", user.id, workspace);
       // The address is now known to be theirs, so teams it was invited to are theirs to open.
-      claimInvites(user.id, user.email);
+      claimAll(user.id, user.email);
     });
     res.json({ ok: true });
   });
@@ -475,7 +481,7 @@ export function mountAuth(app) {
       run("UPDATE users SET name=?, password_hash=?, status='active', must_change_password=0, confirm_token_hash=NULL, confirm_expires_at=NULL WHERE id=?", name, hashPassword(str(req.body.password)), u.id);
       run("INSERT INTO memberships (user_id, owner_id, role) VALUES (?,?,'owner')", u.id, createWorkspace(`${name}'s workspace`));
       // Opening the link shows the address is theirs, so teams it was invited to are theirs to open.
-      claimInvites(u.id, u.email);
+      claimAll(u.id, u.email);
     });
     startSession(req, res, u.id);
     res.json({ ok: true, user: userOut(get('SELECT * FROM users WHERE id=?', u.id)) });
@@ -484,21 +490,21 @@ export function mountAuth(app) {
   // --- An invitation to a team, for someone with no account yet ---
   const BAD_INVITE = 'This invitation is not valid any more. Ask the person who invited you to send it again.';
   app.get('/api/auth/invite', (req, res) => {
-    const inv = inviteByToken(str(req.query.token));
+    const inv = inviteByToken(str(req.query.token)) || orgInviteByToken(str(req.query.token));
     if (!inv) return res.status(400).json({ error: BAD_INVITE });
     const existing = get('SELECT status FROM users WHERE email=?', inv.email);
-    res.json({ email: inv.email, team: inv.team, sport: inv.sport || '', season: inv.season || '', inviter: inv.inviter || 'A coach', title: inv.title, has_account: !!existing && !unfinished(existing) });
+    res.json({ email: inv.email, team: inv.team, community: inv.community || '', name: inv.name || '', sport: inv.sport || '', season: inv.season || '', inviter: inv.inviter || 'A coach', title: inv.title, has_account: !!existing && !unfinished(existing) });
   });
   // Opening the link shows the address is theirs, so the account needs no further confirming,
   // and it is made whether or not sign-up is open to everyone.
   app.post('/api/auth/invite/accept', (req, res) => {
-    const inv = inviteByToken(str(req.body.token));
+    const inv = inviteByToken(str(req.body.token)) || orgInviteByToken(str(req.body.token));
     if (!inv) return res.status(400).json({ error: BAD_INVITE });
     const existing = get('SELECT * FROM users WHERE email=?', inv.email);
     if (existing && !unfinished(existing)) {
       if (existing.status !== 'active') return res.status(403).json({ error: 'This account has been turned off. Contact the administrator.' });
       // They already have an account: the team is added to it, and they sign in as usual.
-      tx(() => claimInvites(existing.id, existing.email));
+      tx(() => claimAll(existing.id, existing.email));
       return res.json({ ok: true, existing: true });
     }
     const name = str(req.body.name).trim().replace(/\s+/g, ' ');
@@ -514,7 +520,7 @@ export function mountAuth(app) {
         run("INSERT INTO memberships (user_id, owner_id, role) VALUES (?,?,'owner')", existing.id, createWorkspace(`${name}'s workspace`));
         id = existing.id;
       } else id = createUser({ email: inv.email, name, password: str(req.body.password) });
-      claimInvites(id, inv.email);
+      claimAll(id, inv.email);
       return id;
     });
     startSession(req, res, userId);
@@ -611,7 +617,7 @@ export function mountAuth(app) {
     const userId = tx(() => {
       const id = createUser({ email, name, password: str(req.body.password), canImport: !!req.body.can_import, mustChange: true });
       // Teams this address was invited to are waiting for it.
-      claimInvites(id, email);
+      claimAll(id, email);
       return id;
     });
     res.json(adminUserOut(get('SELECT * FROM users WHERE id=?', userId)));
@@ -933,7 +939,8 @@ export function mountAuth(app) {
       for (const o of all(
         `SELECT o.id FROM owners o WHERE NOT EXISTS (SELECT 1 FROM memberships m WHERE m.owner_id=o.id)
            AND NOT EXISTS (SELECT 1 FROM team_staff s JOIN teams t ON t.id=s.team_id WHERE t.owner_id=o.id)
-           -- The coach library's workspace belongs to nobody on purpose.
+           -- An organization's workspace belongs to the organization, and the coach library's to nobody on purpose.
+           AND o.id NOT IN (SELECT owner_id FROM communities WHERE owner_id IS NOT NULL)
            AND o.id NOT IN (SELECT CAST(value AS INTEGER) FROM system_settings WHERE key='library_owner')`,
       ))
         files.push(...wipeWorkspace(o.id));

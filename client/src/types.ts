@@ -11,6 +11,8 @@ export interface Team {
   /** Calendar subscription link (GameChanger and similar), or ''. */
   calendar_url: string;
   calendar_synced_at: string;
+  /** Set when the team belongs to an organization, which puts its league games on the team's calendar. */
+  community_id?: number | null;
   /** How the team names its positions, comma separated, or '' to use the sport's usual names. */
   positions?: string;
   /** Each player's first, second and third choice of position, as JSON by player id. */
@@ -26,6 +28,8 @@ export interface ScheduleEvent {
   end_time: string;
   location: string;
   notes: string;
+  /** A league game set by the team's organization, not read from a linked calendar. */
+  official?: number | boolean;
 }
 export interface Tag {
   id: number;
@@ -312,6 +316,8 @@ export interface SharedTeam {
 export interface TeamAccess {
   /** True when this is the system administrator looking in, not someone the team was shared with. */
   system?: boolean;
+  /** Set when the team belongs to an organization. `admin` when the caller is in as one of its admins, not as a coach. */
+  org?: { id: number; name: string; admin: boolean; lapsed: boolean } | null;
   team_id: number;
   owner_name: string;
   title: string;
@@ -330,7 +336,12 @@ export interface TeamInvite {
 /** What an invitation link says before it is accepted. */
 export interface InviteInfo {
   email: string;
+  /** The team invited to. Empty when an organization invited the person without naming a team. */
   team: string;
+  /** The organization that sent the invitation, when one did. */
+  community?: string;
+  /** The name the inviter typed, to start the form with. */
+  name?: string;
   sport: string;
   season: string;
   inviter: string;

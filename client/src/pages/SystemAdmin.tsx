@@ -6,6 +6,7 @@ import { Field, Modal, MoreMenu } from '../components/bits';
 import RegistrationCard from '../components/RegistrationCard';
 import SportIcon from '../components/SportIcon';
 import AccessibilityCard from '../components/AccessibilityCard';
+import CommunityPlans from '../components/CommunityPlans';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 import { SpaceMeter, fmtSpace } from '../components/SpaceMeter';
@@ -445,6 +446,11 @@ export default function SystemAdmin() {
             Accessibility
           </h2>
           {settings && <AccessibilityCard settings={settings} run={run} />}
+
+          <h2 className="sys-section" id="organizations">
+            Organizations
+          </h2>
+          <CommunityPlans />
 
           <h2 className="sys-section" id="library">
             Coach library

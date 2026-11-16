@@ -14,6 +14,7 @@ import Communities from './pages/Communities';
 import Messages from './pages/Messages';
 import CoachLibraryPage from './pages/CoachLibrary';
 import CommunityPage from './pages/Community';
+import OrgPublic from './pages/OrgPublic';
 import Dashboard from './pages/Dashboard';
 import Plans from './pages/Plans';
 import PlanEditor from './pages/PlanEditor';
@@ -156,7 +157,14 @@ export default function App() {
   if (!auth) return <div className="page muted">Loading…</div>;
 
   let view;
-  if (auth.setup_needed) view = <Setup onDone={refresh} />;
+  // An organization's public schedule is for anyone, signed in or not.
+  if (/^\/o\/[^/]+\/?$/.test(pathname))
+    view = (
+      <Routes>
+        <Route path="/o/:slug" element={<OrgPublic />} />
+      </Routes>
+    );
+  else if (auth.setup_needed) view = <Setup onDone={refresh} />;
   else if (!auth.user)
     view = (
       <SignedOut
@@ -689,6 +697,17 @@ function SharedBar() {
         {access.system ? (
           <>
             You are looking at <strong>{app.team?.name}</strong>, {access.owner_name}'s team, as the system administrator
+          </>
+        ) : access.org ? (
+          <>
+            <strong>{app.team?.name}</strong> is a team of {access.org.name}
+            {access.title ? ` · you are here as ${access.title.toLowerCase()}` : ''}
+            {access.org.lapsed && (
+              <>
+                {' '}
+                · <strong>Read only:</strong> the organization's plan has ended.
+              </>
+            )}
           </>
         ) : (
           <>

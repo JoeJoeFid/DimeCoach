@@ -410,7 +410,12 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
     let alive = true;
     api
       .inviteInfo(token)
-      .then((r) => alive && setInfo(r))
+      .then((r) => {
+        if (!alive) return;
+        setInfo(r);
+        // An organization's admin typed the person's name when inviting them: the form starts with it.
+        if (r.name) setName(r.name);
+      })
       .catch((e) => alive && setBad((e as Error).message));
     return () => {
       alive = false;
@@ -457,7 +462,8 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
   const what = [info.sport, info.season].filter(Boolean).join(' · ');
   const card = (
     <div className="invite-team">
-      <strong>{info.team}</strong>
+      <strong>{info.team || info.community}</strong>
+      {info.team && info.community && <span className="muted small">{info.community}</span>}
       {what && <span className="muted small">{what}</span>}
       <span className="muted small">
         Invited by {info.inviter} · you join as {info.title}
@@ -466,7 +472,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
   );
   if (signedInAs && !mine)
     return (
-      <AuthShell title={`${info.inviter} invited you to a team`} lead={`This invitation is for ${info.email}, and you are signed in as ${signedInAs.email}. Sign out to accept it.`}>
+      <AuthShell title={`${info.inviter} invited you to ${info.community || 'a team'}`} lead={`This invitation is for ${info.email}, and you are signed in as ${signedInAs.email}. Sign out to accept it.`}>
         {card}
         <button type="button" className="btn primary" onClick={onSignOut}>
           Sign out and continue
@@ -481,8 +487,18 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
   if (existing)
     return (
       <AuthShell
-        title={added ? `${info.team} is on your account` : 'Adding the team…'}
-        lead={added ? (signedInAs ? 'You will find it under "Shared with you" when choosing a team.' : `You already have a Dime Coach account for ${info.email}. Sign in and you will find the team under "Shared with you".`) : undefined}
+        title={added ? `${info.team || info.community} is on your account` : 'Adding it to your account…'}
+        lead={
+          !added
+            ? undefined
+            : !info.team
+              ? signedInAs
+                ? `You will find ${info.community} under Communities.`
+                : `You already have a Dime Coach account for ${info.email}. Sign in and you will find ${info.community} under Communities.`
+              : signedInAs
+                ? 'You will find it under "Shared with you" when choosing a team.'
+                : `You already have a Dime Coach account for ${info.email}. Sign in and you will find the team under "Shared with you".`
+        }
       >
         {card}
         {added &&
@@ -498,7 +514,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
       </AuthShell>
     );
   return (
-    <AuthShell title={`${info.inviter} invited you to a team`} lead="Create your Dime Coach account to join it.">
+    <AuthShell title={`${info.inviter} invited you to ${info.community || 'a team'}`} lead="Create your Dime Coach account to join it.">
       {card}
       <form className="fields stack" onSubmit={submit}>
         {error && <p className="error">{error}</p>}

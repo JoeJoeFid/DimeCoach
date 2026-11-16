@@ -194,6 +194,37 @@ const TOPICS: Topic[] = [
     words: 'email name profile sign in login',
   },
   {
+    group: 'Organizations',
+    title: 'Run a club or league office as an organization',
+    steps: [
+      'Start a community under Communities, and ask the Dime Coach administrator to put it on the organization plan with the number of coach seats you need.',
+      'Open the community. Under "People", add your coaches by email. Each coach or assistant uses one seat.',
+      'Under "Leagues & teams", start a season, add a league for each sport and age group, and add its teams.',
+      'Use "Assign a coach" on each team, then "Build the schedule" on the league.',
+      'Use "Announcements" to write to everyone, or only to some coaches.',
+    ],
+    tip: 'The organization owns its teams, so a team and its roster stay when a coach moves on. What the coach wrote is copied to their own account at that moment.',
+    words: 'organization club league office enterprise seats quota coaches teams schedule season announcement admin',
+  },
+  {
+    group: 'Organizations',
+    title: 'Coach a team that belongs to an organization',
+    steps: [
+      'Use "Switch team" and choose the team under "Shared with you". It says which organization it is from.',
+      'Plan practices as usual. League games set by the organization are already in "Practices & games", marked "League game".',
+      'Drills and plays are shared by every team in the organization: you can use all of them and change the ones you added.',
+    ],
+    tip: 'If you are taken off the team or leave, your drills, plays and practices are copied to your own account. The roster stays with the organization.',
+    words: 'organization coach assigned league game shared drills keep copy leave moved',
+  },
+  {
+    group: 'Organizations',
+    title: 'Give parents a public schedule',
+    steps: ['In the organization, open "Settings".', 'Under "Public schedule page", choose a web address and your color, and save.', 'Turn on "Show the page to anyone with the link", then share the link.'],
+    tip: 'The page shows teams, game times, results and standings. It never shows coaches, rosters or players. Each team has a calendar link parents can subscribe to.',
+    words: 'public page parents schedule standings results calendar feed subscribe link website',
+  },
+  {
     group: 'Your account',
     title: 'Get back in when you forget your password',
     steps: ['On the sign-in page, press "Forgot your password?".', 'Enter the email you sign in with.', 'Open the link in the email and choose a new password. You are signed in straight away.'],

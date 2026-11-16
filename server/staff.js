@@ -11,6 +11,7 @@ import { isSystemAdmin } from './auth.js';
 import { notify } from './notices.js';
 import { mailerStatus } from './mailer.js';
 import { cancelInvite, inviteToTeam, mailAdded, pendingInvites, resendInvite, tooManyInvites } from './invites.js';
+import { orgAccess, orgOfTeam, orgStaffLeaving, stampAuthor, workspaceSports } from './orgs.js';
 
 const COOKIE = 'pp_team';
 const str = (v) => (v == null ? '' : String(v));
@@ -45,7 +46,8 @@ const permsOf = (row) => {
   }
 };
 
-const OWNER_NAME = `(SELECT u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.owner_id=t.owner_id AND m.role='owner' ORDER BY u.id LIMIT 1)`;
+// A team that belongs to an organization has no one person as its owner: the organization's name stands in.
+const OWNER_NAME = `COALESCE((SELECT u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.owner_id=t.owner_id AND m.role='owner' ORDER BY u.id LIMIT 1), (SELECT c.name FROM communities c WHERE c.id=t.community_id))`;
 
 function readCookie(req, name) {
   for (const part of str(req.headers.cookie).split(';')) {
@@ -70,6 +72,18 @@ function gate(req) {
   const need = (perm) =>
     perms[perm] ? null : { status: 403, error: `You can look at ${AREA[perm]} for this team, but ${ownerName} has not given you permission to change ${['plans', 'drills', 'resources'].includes(perm) ? 'them' : 'it'}.` };
   const sameTeam = (v) => Number(v) === teamId;
+  // A team that belongs to an organization (server/orgs.js). Its admins, and the system administrator, are not held to the rules for coaches.
+  const org = req.staff.org;
+  const coach = org && !req.staff.orgAdmin && !req.staff.system;
+  if (org && write && org.lapsed && !['workspace', 'shared-teams', 'messages', 'communities'].includes(seg[0])) return { status: 403, error: org.lapsedMessage };
+  // Every team in the organization uses the same drills and plays, so a coach changes only the ones they added.
+  const ownOnly = (table, what) => {
+    if (!coach || !write || !seg[1]) return null;
+    const row = get(`SELECT created_by FROM ${table} WHERE id=?`, Number(seg[1]));
+    return !row || row.created_by === req.user.id
+      ? null
+      : { status: 403, error: `This ${what} is shared by every team in ${org.name}. You can use it, but only the person who added it or an admin of ${org.name} can change it.` };
+  };
 
   switch (seg[0]) {
     case 'bootstrap':
@@ -82,6 +96,8 @@ function gate(req) {
     case 'teams':
       if (!seg[1]) return write ? ownerOnly('add teams') : null;
       if (!sameTeam(seg[1])) return NOT_FOUND;
+      if (org && write && (seg[2] === 'staff' || seg[2] === 'invites')) return { status: 403, error: `The coaches of this team are assigned by ${org.name}, under "Leagues & teams" in the organization.` };
+      if (org && req.method === 'DELETE' && !seg[2]) return { status: 403, error: `This team belongs to ${org.name}. It is deleted under "Leagues & teams" in the organization.` };
       // Who the team is shared with, and renaming or deleting it, need the "manage this team" permission.
       if (seg[2] === 'staff' || seg[2] === 'invites') return perms.manage ? null : { status: 403, error: `${ownerName} has not given you permission to manage who this team is shared with.` };
       if (!write) return null;
@@ -96,10 +112,12 @@ function gate(req) {
       return p && sameTeam(p.team_id) ? need('roster') : NOT_FOUND;
     }
     case 'tags':
-    case 'drills':
+      if (coach && write) return { status: 403, error: `Categories are shared by every team in ${org.name}, so they are set by its admins.` };
       return write ? need('drills') : null;
+    case 'drills':
+      return write ? need('drills') || ownOnly('drills', 'drill') : null;
     case 'plays':
-      return write ? need('plays') : null;
+      return write ? need('plays') || ownOnly('plays', 'play') : null;
     case 'resources':
       return write ? need('resources') : null;
     case 'images':
@@ -164,7 +182,7 @@ export function staffBootstrap(req) {
          FROM team_staff s JOIN teams t ON t.id=s.team_id WHERE s.user_id=? ORDER BY t.name COLLATE NOCASE`,
       req.user.id,
     ).map((r) => ({ id: r.id, name: r.name, season: r.season, sport: r.sport, title: r.title, owner_name: r.owner_name || 'The owner', perms: permsOf(r) })),
-    access: req.staff ? { team_id: req.staff.teamId, owner_name: req.staff.ownerName, title: req.staff.title, perms: req.staff.perms, system: !!req.staff.system } : null,
+    access: req.staff ? { team_id: req.staff.teamId, owner_name: req.staff.ownerName, title: req.staff.title, perms: req.staff.perms, system: !!req.staff.system, org: req.staff.org ? { id: req.staff.org.id, name: req.staff.org.name, admin: !!req.staff.orgAdmin, lapsed: req.staff.org.lapsed } : null } : null,
   };
 }
 
@@ -181,10 +199,16 @@ export function mountStaff(app) {
         req.homeOwnerId = req.ownerId;
         req.ownerId = row.owner_id;
         req.staff = { teamId, perms: permsOf(row), title: row.title, ownerName: row.owner_name || 'the owner' };
-      } else if (isSystemAdmin(req.user)) {
-        // The system administrator can open any team to help with it, with nothing held back.
+      } else {
         const team = get(`SELECT t.id, t.owner_id, ${OWNER_NAME} AS owner_name FROM teams t WHERE t.id=?`, teamId);
-        if (team && team.owner_id !== req.ownerId) {
+        // An admin who runs an organization's leagues can open any of its teams.
+        const admin = team && orgAccess(req.user, teamId);
+        if (admin) {
+          req.homeOwnerId = req.ownerId;
+          req.ownerId = team.owner_id;
+          req.staff = { teamId, perms: cleanPerms(admin.perms, {}), title: admin.title, ownerName: team.owner_name || 'the organization', orgAdmin: true };
+        } else if (team && isSystemAdmin(req.user) && team.owner_id !== req.ownerId) {
+          // The system administrator can open any team to help with it, with nothing held back.
           req.homeOwnerId = req.ownerId;
           req.ownerId = team.owner_id;
           req.staff = { teamId, perms: cleanPerms(Object.fromEntries(PERMS.map((p) => [p, true]))), title: 'System administrator', ownerName: team.owner_name || 'the owner', system: true };
@@ -192,15 +216,21 @@ export function mountStaff(app) {
       }
     }
     if (!req.staff) return next();
+    const org = orgOfTeam(req.staff.teamId);
+    if (org) req.staff.org = org;
+    // Where the organization keeps coaches to their own sports, the other sports' drills, plays and categories are left out.
+    if (org && !req.staff.orgAdmin && !req.staff.system) req.sportIds = workspaceSports(req.staff.teamId, req.user.id);
     const refused = gate(req);
     if (refused) return res.status(refused.status).json({ error: refused.error });
+    // In an organization's workspace many people add things, so each new drill, play and plan is marked with who made it.
+    if (org && req.method === 'POST') stampAuthor(req, res);
     next();
   });
 
   // --- For the person a team was shared with ---
   app.post('/api/workspace', (req, res) => {
     const teamId = Number(req.body.team_id) || 0;
-    const allowed = get('SELECT 1 AS ok FROM team_staff WHERE team_id=? AND user_id=?', teamId, req.user.id) || (isSystemAdmin(req.user) && get('SELECT 1 AS ok FROM teams WHERE id=?', teamId));
+    const allowed = get('SELECT 1 AS ok FROM team_staff WHERE team_id=? AND user_id=?', teamId, req.user.id) || orgAccess(req.user, teamId) || (isSystemAdmin(req.user) && get('SELECT 1 AS ok FROM teams WHERE id=?', teamId));
     if (teamId && !allowed) return res.status(404).json({ error: 'That team is not shared with you any more.' });
     setTeamCookie(req, res, teamId);
     res.json({ ok: true });
@@ -212,6 +242,8 @@ export function mountStaff(app) {
       Number(req.params.teamId), req.user.id,
     );
     if (left) notify(left.owner_user, { kind: 'team', title: `${req.user.name} left ${left.name}`, body: 'They no longer have access to the team.', link: '/teams?tab=people' });
+    // Leaving an organization's team: what they wrote there is copied to their own account first.
+    if (left) orgStaffLeaving(Number(req.params.teamId), req.user.id);
     run('DELETE FROM team_staff WHERE team_id=? AND user_id=?', Number(req.params.teamId), req.user.id);
     if (req.staff?.teamId === Number(req.params.teamId)) setTeamCookie(req, res, 0);
     res.json({ ok: true });

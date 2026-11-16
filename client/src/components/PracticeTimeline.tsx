@@ -40,7 +40,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
 
   useEffect(() => {
     setEvents([]);
-    if (!team.calendar_url) return;
+    if (!team.calendar_url && !team.community_id) return;
     let alive = true;
     // The events as they were when the calendar was last read. It is read again only from the Practices page, when asked.
     api
@@ -51,7 +51,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
       alive = false;
     };
     // Only when the team or its link changes, not on every sync timestamp update.
-  }, [team.id, team.calendar_url]);
+  }, [team.id, team.calendar_url, team.community_id]);
 
   // Blank plans left behind for today or earlier get no card, so "next up" is the next real event.
   const entries = useMemo(() => withoutDuplicateBlanks(buildSchedule(plans, events).filter((e) => !isStrayBlank(e, today))), [plans, events, today]);

@@ -74,6 +74,8 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const noun = kind === 'practice' ? 'practice' : 'homework sheet';
   const teamId = team!.id;
   const hasCalendar = kind === 'practice' && !!team!.calendar_url;
+  // A team that belongs to an organization has its league games on its calendar, linked or not.
+  const hasEvents = hasCalendar || (kind === 'practice' && !!team!.community_id);
   /** Whether any practice or game has been made here yet. */
   const built = (plans || []).some((p) => !p.is_template);
 
@@ -82,7 +84,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       const [p, t, ev] = await Promise.all([
         api.plansFull(teamId, kind),
         api.plans(teamId, kind, true),
-        hasCalendar ? api.events(teamId, '2000-01-01') : Promise.resolve([]),
+        hasEvents ? api.events(teamId, '2000-01-01') : Promise.resolve([]),
       ]);
       setPlans(p);
       setTemplates(t);
@@ -91,7 +93,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [teamId, kind, hasCalendar]);
+  }, [teamId, kind, hasCalendar, hasEvents]);
 
   const sync = useCallback(async () => {
     setSyncing(true);
@@ -265,6 +267,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           ) : (
             <span className="ps-title">{e.title}</span>
           )}
+          {!!e.event?.official && <span className="kind league" title="Set by your organization. It changes there, not here.">League game</span>}
           <span className="ps-meta">
             {when && (
               <span>

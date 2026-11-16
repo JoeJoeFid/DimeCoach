@@ -196,9 +196,176 @@ export interface Community {
   can: CommunityPowers;
   members: number;
   created_by_name: string;
+  /** A plain community of coaches is a "group". An "organization" also runs leagues, teams and schedules. */
+  plan: 'group' | 'organization';
+  /** Null for a group. */
+  org: OrgSummary | null;
 }
-/** The jobs a community's creator can hand to an admin, each on its own. */
-export type CommunityPower = 'moderate' | 'approve' | 'settings' | 'people';
+/** Where an organization stands on its plan, and how it presents itself. */
+export interface OrgSummary {
+  /** How many coaches and assistants it may have, and how many of those places are taken. */
+  seats: number;
+  seats_used: number;
+  /** The last day of the plan as YYYY-MM-DD, or '' when it has no end. */
+  expires: string;
+  /** The plan has ended: everything can be read, nothing on the organization's side can be changed. */
+  lapsed: boolean;
+  brand_color: string;
+  public_on: boolean;
+  public_slug: string;
+  /** 'sport' keeps each coach to the drills, plays and practices of the sports they coach. 'all' shows everything to everyone. */
+  library_scope: 'all' | 'sport';
+}
+export interface OrgCoach {
+  user_id: number;
+  name: string;
+  title: string;
+  head: boolean;
+}
+export interface OrgTeam {
+  id: number;
+  name: string;
+  league_id: number | null;
+  sport: string;
+  players: number;
+  coaches: OrgCoach[];
+  /** The caller coaches it. */
+  mine: boolean;
+  can_open: boolean;
+}
+export interface OrgCheck {
+  requirement_id: number;
+  done_on: string;
+  expires_on: string;
+  note: string;
+  state: 'ok' | 'due' | 'expired' | 'missing';
+}
+export interface OrgPerson {
+  id: number;
+  name: string;
+  email?: string;
+  role: 'creator' | 'admin' | 'member';
+  /** Holds a coach seat. */
+  coach: boolean;
+  last_active_at?: string | null;
+  teams: { id: number; name: string; title: string }[];
+  compliance: OrgCheck[];
+}
+export interface OrgInvite {
+  id: number;
+  email: string;
+  name: string;
+  coach: boolean;
+  team: string;
+  title: string;
+  invited_by: string;
+  invited_at: string;
+  expired: boolean;
+}
+export interface OrgLeague {
+  id: number;
+  season_id: number;
+  name: string;
+  sport: string;
+  age_group: string;
+}
+/** Everything about an organization the caller may see. People, invitations and requirements are empty for those who do not manage them. */
+export interface Org {
+  plan: 'organization';
+  org: OrgSummary;
+  can: CommunityPowers;
+  seasons: { id: number; name: string; archived: boolean }[];
+  leagues: OrgLeague[];
+  teams: OrgTeam[];
+  venues: { id: number; name: string; address: string }[];
+  requirements: { id: number; name: string }[];
+  people: OrgPerson[];
+  invites: OrgInvite[];
+}
+export interface OrgGame {
+  id: number;
+  league_id: number;
+  date: string;
+  start_time: string;
+  duration_min: number;
+  home_team_id: number;
+  away_team_id: number;
+  home: string;
+  away: string;
+  venue_id: number | null;
+  venue: string;
+  status: 'scheduled' | 'final' | 'postponed' | 'cancelled';
+  home_score: number | null;
+  away_score: number | null;
+  notes: string;
+  /** Double bookings of a team or a venue, in words. */
+  warnings: string[];
+}
+export interface OrgStanding {
+  team_id: number;
+  team: string;
+  played: number;
+  won: number;
+  lost: number;
+  tied: number;
+  points_for: number;
+  points_against: number;
+}
+export interface OrgGames {
+  games: OrgGame[];
+  /** By league id. */
+  standings: Record<number, OrgStanding[]>;
+}
+/** Who an announcement goes to. */
+export interface OrgAudience {
+  kind: 'all' | 'coaches' | 'head' | 'admins' | 'leagues' | 'teams' | 'sport' | 'age' | 'people';
+  ids?: number[];
+  value?: string;
+}
+export interface OrgAnnouncement {
+  id: number;
+  title: string;
+  body: string;
+  by: string;
+  at: string;
+  audience: string;
+  pinned: boolean;
+  emailed: boolean;
+  to_me: boolean;
+  unread: boolean;
+  can_manage: boolean;
+  /** Only for the sender and those who can announce. */
+  sent_to?: number;
+  seen_by?: number;
+}
+/** A community as the system administrator sees it, with the plan it is on. */
+export interface CommunityPlanRow {
+  id: number;
+  name: string;
+  creator: string;
+  creator_email: string;
+  members: number;
+  teams: number;
+  plan: 'group' | 'organization';
+  seats: number;
+  seats_used: number;
+  expires: string;
+  lapsed: boolean;
+}
+/** What an organization publishes for anyone to see. */
+export interface PublicOrg {
+  name: string;
+  description: string;
+  image: string;
+  color: string;
+  seasons: {
+    id: number;
+    name: string;
+    leagues: (Omit<OrgLeague, 'season_id'> & { teams: { id: number; name: string }[]; games: Omit<OrgGame, 'warnings' | 'notes'>[]; standings: OrgStanding[] })[];
+  }[];
+}
+/** The jobs a community's creator can hand to an admin, each on its own. The last three only matter in an organization. */
+export type CommunityPower = 'moderate' | 'approve' | 'settings' | 'people' | 'announce' | 'leagues' | 'rosters';
 export type CommunityPowers = Record<CommunityPower, boolean>;
 export interface CommunityPerson {
   id: number;
@@ -439,6 +606,53 @@ export const api = {
   communityLibrary: (kind: ShareKind, community: 'all' | number) => req<CommunityShare[]>('GET', `/community-library?kind=${kind}&community=${community}`),
   communityShare: (shareId: number) => req<CommunityShareDetail>('GET', `/community-library/${shareId}`),
   copyShare: (shareId: number, b: { sport_id?: number; team_id?: number; date?: string }) => req<{ kind: ShareKind; id: number }>('POST', `/community-library/${shareId}/copy`, b),
+
+  // --- Organizations: a community that runs leagues, teams and schedules ---
+  org: (id: number) => req<Org>('GET', `/communities/${id}/org`),
+  orgAddPerson: (id: number, b: { email: string; name: string; coach: boolean; team_id?: number; title?: string }) =>
+    req<Org & { result: { added?: boolean; invited?: boolean; name: string } }>('POST', `/communities/${id}/org/people`, b),
+  orgAddPeople: (id: number, lines: string, coach: boolean) => req<Org & { results: { line: string; ok: boolean; error: string; invited: boolean }[] }>('POST', `/communities/${id}/org/people/bulk`, { lines, coach }),
+  orgSetCoach: (id: number, userId: number, coach: boolean) => req<Org>('PUT', `/communities/${id}/org/people/${userId}`, { coach }),
+  orgResendInvite: (id: number, inviteId: number) => req<Org>('POST', `/communities/${id}/org/invites/${inviteId}/resend`, {}),
+  orgCancelInvite: (id: number, inviteId: number) => req<Org>('DELETE', `/communities/${id}/org/invites/${inviteId}`),
+  orgAddRequirement: (id: number, name: string) => req<Org>('POST', `/communities/${id}/org/requirements`, { name }),
+  orgRemoveRequirement: (id: number, reqId: number) => req<Org>('DELETE', `/communities/${id}/org/requirements/${reqId}`),
+  orgSetCheck: (id: number, userId: number, reqId: number, b: { done_on: string; expires_on: string; note: string }) => req<Org>('PUT', `/communities/${id}/org/compliance/${userId}/${reqId}`, b),
+  orgAddSeason: (id: number, name: string) => req<Org>('POST', `/communities/${id}/org/seasons`, { name }),
+  orgUpdateSeason: (id: number, seasonId: number, b: { name?: string; archived?: boolean }) => req<Org>('PUT', `/communities/${id}/org/seasons/${seasonId}`, b),
+  orgDeleteSeason: (id: number, seasonId: number) => req<Org>('DELETE', `/communities/${id}/org/seasons/${seasonId}`),
+  orgRollover: (id: number, seasonId: number, b: { name: string; keep_coaches: boolean; archive: boolean }) => req<Org>('POST', `/communities/${id}/org/seasons/${seasonId}/rollover`, b),
+  orgAddLeague: (id: number, b: { season_id: number; name: string; sport: string; age_group: string }) => req<Org>('POST', `/communities/${id}/org/leagues`, b),
+  orgUpdateLeague: (id: number, leagueId: number, b: { name: string; age_group: string }) => req<Org>('PUT', `/communities/${id}/org/leagues/${leagueId}`, b),
+  orgDeleteLeague: (id: number, leagueId: number) => req<Org>('DELETE', `/communities/${id}/org/leagues/${leagueId}`),
+  orgAddVenue: (id: number, b: { name: string; address: string }) => req<Org>('POST', `/communities/${id}/org/venues`, b),
+  orgDeleteVenue: (id: number, venueId: number) => req<Org>('DELETE', `/communities/${id}/org/venues/${venueId}`),
+  /** `name` may hold several names, one to a line. */
+  orgAddTeams: (id: number, leagueId: number, name: string) => req<Org>('POST', `/communities/${id}/org/teams`, { league_id: leagueId, name }),
+  orgRenameTeam: (id: number, teamId: number, name: string) => req<Org>('PUT', `/communities/${id}/org/teams/${teamId}`, { name }),
+  /** `confirm` is the team's name, typed out. */
+  orgDeleteTeam: (id: number, teamId: number, confirm: string) => req<Org>('DELETE', `/communities/${id}/org/teams/${teamId}`, { confirm }),
+  orgAssignCoach: (id: number, teamId: number, userId: number, title: string) => req<Org>('POST', `/communities/${id}/org/teams/${teamId}/coaches`, { user_id: userId, title }),
+  orgUnassignCoach: (id: number, teamId: number, userId: number) => req<Org>('DELETE', `/communities/${id}/org/teams/${teamId}/coaches/${userId}`),
+  orgGames: (id: number) => req<OrgGames>('GET', `/communities/${id}/org/games`),
+  orgAddGame: (id: number, b: Partial<OrgGame>) => req<OrgGames>('POST', `/communities/${id}/org/games`, b),
+  orgUpdateGame: (id: number, gameId: number, b: Partial<OrgGame>) => req<OrgGames>('PUT', `/communities/${id}/org/games/${gameId}`, b),
+  orgDeleteGame: (id: number, gameId: number) => req<OrgGames>('DELETE', `/communities/${id}/org/games/${gameId}`),
+  orgBuildSchedule: (id: number, leagueId: number, b: { start_date: string; every_days: number; times: string[]; venue_ids: number[]; duration_min: number; rounds: number; replace: boolean }) =>
+    req<OrgGames>('POST', `/communities/${id}/org/leagues/${leagueId}/generate`, b),
+  orgAnnouncements: (id: number) => req<OrgAnnouncement[]>('GET', `/communities/${id}/org/announcements`),
+  orgAnnouncementsRead: (id: number) => req<OrgAnnouncement[]>('POST', `/communities/${id}/org/announcements/read`, {}),
+  orgAudience: (id: number, audience: OrgAudience) => req<{ count: number; text: string }>('POST', `/communities/${id}/org/announcements/audience`, { audience }),
+  orgAnnounce: (id: number, b: { title: string; body: string; audience: OrgAudience; pinned: boolean; email: boolean }) => req<OrgAnnouncement[]>('POST', `/communities/${id}/org/announcements`, b),
+  orgPinAnnouncement: (id: number, announcementId: number, pinned: boolean) => req<OrgAnnouncement[]>('PUT', `/communities/${id}/org/announcements/${announcementId}`, { pinned }),
+  orgDeleteAnnouncement: (id: number, announcementId: number) => req<OrgAnnouncement[]>('DELETE', `/communities/${id}/org/announcements/${announcementId}`),
+  orgAudit: (id: number) => req<{ id: number; by: string; text: string; at: string }[]>('GET', `/communities/${id}/org/audit`),
+  orgSetLibrary: (id: number, scope: 'all' | 'sport') => req<Org>('PUT', `/communities/${id}/org/library`, { scope }),
+  orgSetPublic: (id: number, b: { public_slug?: string; public_on?: boolean; brand_color?: string }) => req<Org>('PUT', `/communities/${id}/org/public`, b),
+  publicOrg: (slug: string) => req<PublicOrg>('GET', `/public/orgs/${encodeURIComponent(slug)}`),
+  /** For the system administrator: every community and the plan it is on. */
+  communityPlans: () => req<CommunityPlanRow[]>('GET', '/system/communities'),
+  setCommunityPlan: (id: number, b: { plan?: 'group' | 'organization'; seats?: number; expires?: string }) => req<CommunityPlanRow[]>('PUT', `/system/communities/${id}`, b),
   adminSetSettings: (b: { registration_mode?: AdminSettings['registration_mode']; keyboard_access?: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
   adminTestEmail: () => req<{ ok: true; to: string }>('POST', '/admin/test-email'),
 

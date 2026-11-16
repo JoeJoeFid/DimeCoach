@@ -9,6 +9,7 @@ import { CalendarError, fetchCalendar, normalizeCalendarUrl } from './calendar.j
 import { mountAuth, requireImport } from './auth.js';
 import { mountCoachLibrary } from './coachLibrary.js';
 import { mountCommunities } from './communities.js';
+import { mountOrgPublic, mountOrgs } from './orgs.js';
 import { mountLive } from './live.js';
 import { mentionedIn, notify } from './notices.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
@@ -38,10 +39,13 @@ app.disable('x-powered-by');
 // Sign-in routes come first. After mountAuth, every /api request has req.user and
 // req.ownerId (that user's workspace), and every query below scopes by req.ownerId. mountStaff
 // swaps in the owner's workspace when someone is working in a team shared with them.
+// An organization's public schedule page is open to anyone, so it comes before sign-in.
+mountOrgPublic(app);
 mountAuth(app);
 mountStaff(app);
 mountImages(app);
 mountCommunities(app);
+mountOrgs(app);
 mountCoachLibrary(app);
 mountLive(app);
 mountPlays(app);
@@ -73,14 +77,14 @@ const extrasOut = (row) => {
   return { links: Array.isArray(e?.links) ? e.links : [], videos: Array.isArray(e?.videos) ? e.videos : [] };
 };
 const extrasJson = (b, ownerId) => JSON.stringify({ links: cleanLinks(b.links), videos: cleanVideos(b.videos, ownerId) });
-const TEAM_COLS = 'id, sport_id, name, season, notes, calendar_url, calendar_synced_at, positions, position_prefs';
+const TEAM_COLS = 'id, sport_id, name, season, notes, calendar_url, calendar_synced_at, positions, position_prefs, community_id';
 
 // --- Bootstrap ------------------------------------------------------------
 app.get('/api/bootstrap', (req, res) => {
   res.json({
-    sports: all('SELECT id, name FROM sports WHERE owner_id=? ORDER BY name', req.ownerId),
+    sports: all('SELECT id, name FROM sports WHERE owner_id=? ORDER BY name', req.ownerId).filter((s) => !req.sportIds || req.sportIds.has(s.id)),
     teams: all(`SELECT ${TEAM_COLS} FROM teams WHERE owner_id=? ORDER BY id DESC`, req.ownerId).filter((t) => !req.staff || t.id === req.staff.teamId),
-    tags: all('SELECT * FROM tags WHERE owner_id=? ORDER BY name', req.ownerId).map(tagOut),
+    tags: all('SELECT * FROM tags WHERE owner_id=? ORDER BY name', req.ownerId).filter((t) => !req.sportIds || req.sportIds.has(t.sport_id)).map(tagOut),
     // Turned on by an administrator for sites where people work without a mouse: adds buttons for
     // things that are otherwise done by dragging.
     keyboard_access: get("SELECT value FROM system_settings WHERE key='keyboard_access'")?.value === '1',
@@ -150,7 +154,8 @@ const calendarFail = (res, e) => {
 async function syncCalendar(team) {
   const events = await fetchCalendar(team.calendar_url);
   tx(() => {
-    run('DELETE FROM events WHERE team_id=?', team.id);
+    // Games set by the team's league are not from this calendar, and stay.
+    run("DELETE FROM events WHERE team_id=? AND uid NOT LIKE 'league-%'", team.id);
     for (const ev of events)
       run(
         'INSERT INTO events (owner_id, team_id, uid, kind, title, date, start_time, end_time, location, notes) VALUES (?,?,?,?,?,?,?,?,?,?)',
@@ -188,7 +193,7 @@ app.put('/api/teams/:id/calendar', async (req, res) => {
     if (!url) {
       tx(() => {
         run("UPDATE teams SET calendar_url='', calendar_synced_at='' WHERE id=?", team.id);
-        run('DELETE FROM events WHERE team_id=?', team.id);
+        run("DELETE FROM events WHERE team_id=? AND uid NOT LIKE 'league-%'", team.id);
       });
       return res.json({ count: 0, team: get(`SELECT ${TEAM_COLS} FROM teams WHERE id=?`, team.id) });
     }
@@ -216,7 +221,7 @@ app.get('/api/teams/:id/events', (req, res) => {
   const from = /^\d{4}-\d{2}-\d{2}$/.test(str(req.query.from)) ? str(req.query.from) : '0000-00-00';
   res.json(
     all(
-      'SELECT id, kind, title, date, start_time, end_time, location, notes FROM events WHERE team_id=? AND date>=? ORDER BY date, start_time, id',
+      "SELECT id, kind, title, date, start_time, end_time, location, notes, uid LIKE 'league-%' AS official FROM events WHERE team_id=? AND date>=? ORDER BY date, start_time, id",
       id(req.params.id), from,
     ),
   );
@@ -326,7 +331,7 @@ const stripMembers = (groups) =>
   (Array.isArray(groups) ? groups : []).map((g) => ({ name: str(g.name), notes_html: str(g.notes_html), members: [] }));
 
 app.get('/api/drills', (req, res) => {
-  res.json(all('SELECT * FROM drills WHERE owner_id=? ORDER BY name COLLATE NOCASE', req.ownerId).map(drillOut));
+  res.json(all('SELECT * FROM drills WHERE owner_id=? ORDER BY name COLLATE NOCASE', req.ownerId).filter((d) => !req.sportIds || req.sportIds.has(d.sport_id)).map(drillOut));
 });
 app.post('/api/drills', (req, res) => {
   const b = req.body;

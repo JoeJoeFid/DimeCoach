@@ -66,7 +66,7 @@ export default function GamePlanner({
       let title = plan.title;
       let notes = '';
       try {
-        if (team?.calendar_url && plan.date) {
+        if ((team?.calendar_url || team?.community_id) && plan.date) {
           const ev = (await api.events(team.id, plan.date)).filter((e) => e.date === plan.date);
           const hit = ev.find((e) => e.title === plan.title) ?? ev.find((e) => e.kind === 'game');
           if (hit) {

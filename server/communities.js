@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { all, get, run, tx } from './db.js';
 import { poke } from './live.js';
 import { mentionedIn, noticesFor, notify, readNotices } from './notices.js';
+import { isOrg, librarySports, orgMemberLeaving, orgSummary } from './orgs.js';
 
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 const parse = (s, d) => {
@@ -21,27 +22,36 @@ const KIND_FLAG = { drill: 'share_drills', play: 'share_plays', plan: 'share_pla
 const newCode = () => crypto.randomBytes(5).toString('hex').toUpperCase();
 
 // --- Who may do what ----------------------------------------------------------
-const membership = (communityId, userId) => get('SELECT * FROM community_members WHERE community_id=? AND user_id=?', communityId, userId);
+export const membership = (communityId, userId) => get('SELECT * FROM community_members WHERE community_id=? AND user_id=?', communityId, userId);
 const isAdminRole = (m) => !!m && m.status === 'active' && (m.role === 'creator' || m.role === 'admin');
 // What an admin may do. The creator gives each one separately, and can do all of them.
 //   moderate: delete anyone's messages and replies, and take shared things down
 //   approve:  approve or decline what members share; their own shares need no approval
 //   settings: the name, description, picture, and what may be shared
 //   people:   invite and remove members, and see the join code
-const COMMUNITY_PERMS = ['moderate', 'approve', 'settings', 'people'];
-const POWER_WORDS = { moderate: 'remove messages and shared items', approve: 'approve what is shared', settings: 'change the settings', people: 'invite and remove people' };
-function permsOf(m) {
+// And in an organization (server/orgs.js):
+//   announce: send announcements
+//   leagues:  set up seasons, leagues, teams and schedules, and assign coaches
+//   rosters:  see players' parents and contact details when opening a team
+const COMMUNITY_PERMS = ['moderate', 'approve', 'settings', 'people', 'announce', 'leagues', 'rosters'];
+const POWER_WORDS = {
+  moderate: 'remove messages and shared items', approve: 'approve what is shared', settings: 'change the settings', people: 'invite and remove people',
+  announce: 'send announcements', leagues: 'manage leagues, teams and schedules', rosters: "see players' contact details",
+};
+// Players are children, so seeing their families' details is never given along with the rest: it is turned on by itself.
+const GIVEN_WITH_ADMIN = (p) => p !== 'rosters';
+export function permsOf(m) {
   const all = (v) => Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, v]));
   if (!m || m.status !== 'active' || m.role === 'member') return all(false);
   if (m.role === 'creator') return all(true);
   // An admin made before powers were separate has all of them.
   const saved = parse(m.perms_json, {}) || {};
-  return Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, saved[p] === undefined ? true : !!saved[p]]));
+  return Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, saved[p] === undefined ? GIVEN_WITH_ADMIN(p) : !!saved[p]]));
 }
-const can = (m, perm) => permsOf(m)[perm];
+export const can = (m, perm) => permsOf(m)[perm];
 
 /** Loads the community and the caller's place in it. Answers the request itself when they have none. */
-function enter(req, res, { perm = '', creator = false } = {}) {
+export function enter(req, res, { perm = '', creator = false } = {}) {
   const c = get('SELECT * FROM communities WHERE id=?', Number(req.params.id));
   const m = c && membership(c.id, req.user.id);
   if (!c || !m || m.status !== 'active') {
@@ -118,6 +128,21 @@ function shareOut(s, userId) {
     tags: s.kind === 'drill' ? tagNames('drill_tags', 'drill_id', row.id) : [],
   };
 }
+/** The sport a shared thing belongs to, in lower case: a drill's or play's own, a practice's by its team. */
+function sportOfShare(s) {
+  const row = source(s);
+  if (!row) return '';
+  const sportId = s.kind === 'plan' ? get('SELECT sport_id FROM teams WHERE id=?', row.team_id)?.sport_id : row.sport_id;
+  return String(get('SELECT name FROM sports WHERE id=?', sportId)?.name ?? '').toLowerCase();
+}
+/**
+ * Builds the test for which shares one person sees in a community. An organization can keep each
+ * coach to the sports they coach; what a person shared themselves they always see.
+ */
+function sportFilter(c, userId) {
+  const sports = librarySports(c, userId);
+  return (s) => !sports || s.user_id === userId || sports.has(sportOfShare(s));
+}
 const SHARE_SELECT = `SELECT s.*, u.name AS by_name, c.name AS community_name FROM community_shares s
   JOIN users u ON u.id=s.user_id JOIN communities c ON c.id=s.community_id`;
 
@@ -184,6 +209,7 @@ export function mountCommunities(app) {
     id: c.id, name: c.name, description: c.description,
     share_drills: !!c.share_drills, share_plays: !!c.share_plays, share_plans: !!c.share_plans, require_approval: !!c.require_approval,
     role: m.role, status: m.status, image: c.image || '', can: permsOf(m),
+    ...orgSummary(c),
     members: get("SELECT COUNT(*) AS n FROM community_members WHERE community_id=? AND status='active'", c.id).n,
     created_by_name: get('SELECT name FROM users WHERE id=?', c.created_by)?.name ?? '',
   });
@@ -255,8 +281,9 @@ export function mountCommunities(app) {
         c.id, userId,
       ))
         items.push({ ...base, key: `post-${p.id}`, kind: 'post', at: p.created_at, by: p.name, text: p.body.length > 180 ? `${p.body.slice(0, 180)}…` : p.body, unread: p.created_at > c.seen });
+      const inSport = sportFilter(c, userId);
       for (const sh of all(`${SHARE_SELECT} WHERE s.community_id=? AND s.status='approved' AND s.user_id<>? ORDER BY s.id DESC LIMIT 25`, c.id, userId)) {
-        if (!c[KIND_FLAG[sh.kind]]) continue;
+        if (!c[KIND_FLAG[sh.kind]] || !inSport(sh)) continue;
         const row = source(sh);
         if (row) items.push({ ...base, key: `share-${sh.id}`, kind: 'share', share_kind: sh.kind, at: sh.created_at, by: sh.by_name, text: titleOf(sh.kind, row), unread: sh.created_at > c.seen });
       }
@@ -322,6 +349,9 @@ export function mountCommunities(app) {
     if (!at) return;
     // The request must repeat the community's name, so a stray or replayed call cannot delete one.
     if (str(req.body?.confirm, 200).trim().toLowerCase() !== at.c.name.trim().toLowerCase()) return res.status(400).json({ error: 'Type the name of the community exactly to delete it.' });
+    // An organization's teams, rosters and practices live with it. They are removed one by one, on purpose, before it can go.
+    if (isOrg(at.c) && get('SELECT 1 AS ok FROM teams WHERE community_id=?', at.c.id))
+      return res.status(400).json({ error: 'This organization still has teams. Delete its teams under Leagues & teams first: their coaches keep a copy of what they wrote.' });
     for (const m of all("SELECT user_id FROM community_members WHERE community_id=? AND status='active' AND user_id<>?", at.c.id, req.user.id))
       notify(m.user_id, { kind: 'community', title: `${req.user.name} deleted the community ${at.c.name}`, body: 'Anything you added to your own drills, plays or practices from it is still yours.' });
     run('DELETE FROM communities WHERE id=?', at.c.id);
@@ -368,7 +398,7 @@ export function mountCommunities(app) {
     // Someone with at least one power is an admin; with none, a member.
     let perms;
     if (req.body.perms && typeof req.body.perms === 'object') perms = Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, req.body.perms[p] === undefined ? permsOf(target)[p] : !!req.body.perms[p]]));
-    else if (req.body.role === 'admin' || req.body.role === 'member') perms = Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, req.body.role === 'admin']));
+    else if (req.body.role === 'admin' || req.body.role === 'member') perms = Object.fromEntries(COMMUNITY_PERMS.map((p) => [p, req.body.role === 'admin' && GIVEN_WITH_ADMIN(p)]));
     else return res.status(400).json({ error: 'Choose admin or member.' });
     const role = COMMUNITY_PERMS.some((p) => perms[p]) ? 'admin' : 'member';
     const before = JSON.stringify(permsOf(target));
@@ -394,6 +424,8 @@ export function mountCommunities(app) {
       if (!can(me, 'people')) return res.status(403).json({ error: 'You have not been given permission to remove people from this community.' });
       if (target.role === 'admin' && me.role !== 'creator') return res.status(403).json({ error: 'Only the creator can remove another admin.' });
     }
+    // In an organization they also come off its teams. What they wrote there is copied to their own account first.
+    if (isOrg(c)) orgMemberLeaving(c, target.user_id);
     tx(() => {
       // What they shared goes with them. Their messages stay, as part of the conversation.
       run('DELETE FROM community_shares WHERE community_id=? AND user_id=?', c.id, target.user_id);
@@ -500,6 +532,7 @@ export function mountCommunities(app) {
   const sharesOut = (c, m) =>
     all(`${SHARE_SELECT} WHERE s.community_id=? ORDER BY s.id DESC`, c.id)
       .filter((s) => c[KIND_FLAG[s.kind]] && (s.status === 'approved' || s.user_id === m.user_id || can(m, 'approve')))
+      .filter(sportFilter(c, m.user_id))
       .map((s) => shareOut(s, m.user_id))
       .filter(Boolean);
   app.get('/api/communities/:id/shares', (req, res) => {
@@ -597,9 +630,13 @@ export function mountCommunities(app) {
     // Something shared with several of the caller's communities is listed once.
     const seen = new Set();
     const out = [];
+    const filters = new Map();
     for (const s of rows) {
       const key = `${s.owner_id}:${s.item_id}`;
       if (seen.has(key)) continue;
+      // An organization may keep a coach to the sports they coach.
+      if (!filters.has(s.community_id)) filters.set(s.community_id, sportFilter(get('SELECT * FROM communities WHERE id=?', s.community_id), req.user.id));
+      if (!filters.get(s.community_id)(s)) continue;
       const row = shareOut(s, req.user.id);
       if (!row) continue;
       seen.add(key);

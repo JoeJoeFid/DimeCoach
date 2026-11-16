@@ -32,7 +32,9 @@ export function spaceFor(req) {
   // In a team shared with them, a helper's uploads land in the owner's space and count against the owner's cap.
   const holder =
     (req.staff && get("SELECT u.* FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.owner_id=? AND m.role='owner' ORDER BY u.id LIMIT 1", req.ownerId)) || req.user;
-  const cap = capMbFor(holder) * MB;
+  // An organization's teams share one space, sized by how many coaches it has seats for.
+  const org = req.staff && get('SELECT seats FROM communities WHERE owner_id=?', req.ownerId);
+  const cap = (org ? Math.max(1, org.seats || 0) * defaultCapMb() : capMbFor(holder)) * MB;
   return { used_bytes: used.bytes, files: used.files, cap_bytes: cap, left_bytes: Math.max(0, cap - used.bytes) };
 }
 

@@ -112,7 +112,7 @@ export function mountPlays(app) {
   const own = (req) => get('SELECT * FROM plays WHERE id=? AND owner_id=?', Number(req.params.id), req.ownerId);
 
   app.get('/api/plays', (req, res) => {
-    res.json(all('SELECT * FROM plays WHERE owner_id=? ORDER BY name COLLATE NOCASE, id', req.ownerId).map(playOut));
+    res.json(all('SELECT * FROM plays WHERE owner_id=? ORDER BY name COLLATE NOCASE, id', req.ownerId).filter((p) => !req.sportIds || req.sportIds.has(p.sport_id)).map(playOut));
   });
   app.get('/api/plays/:id', (req, res) => {
     const p = own(req);

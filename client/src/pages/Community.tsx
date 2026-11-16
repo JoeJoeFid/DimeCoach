@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, type CommunityDetail, type CommunityPerson, type CommunityPower, type CommunityPost, type CommunityShare, type CommunityShareDetail, type ShareKind } from '../api';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { api, type Org, type CommunityDetail, type CommunityPerson, type CommunityPower, type CommunityPost, type CommunityShare, type CommunityShareDetail, type ShareKind } from '../api';
 import { useApp } from '../App';
 import type { Drill, Plan, Play } from '../types';
 import { fmtDateShort, roomyScreen } from '../util';
@@ -9,8 +9,10 @@ import { KIND_WORDS, ShareRow, SharedPreview, sharesKind } from '../components/c
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { PlayDiagram } from '../components/PlayDiagram';
 import { EditBox, EditedMark, MentionArea, MentionText } from '../components/Mentions';
+import { LapsedBanner, OrgAnnouncements, OrgLibrarySettings, OrgLog, OrgPeople, OrgPublicSettings, OrgTeams, PinnedAnnouncements, SeatMeter } from './OrgPanels';
 
-type Tab = 'messages' | 'library' | 'people' | 'settings';
+type Tab = 'messages' | 'announcements' | 'teams' | 'library' | 'people' | 'log' | 'settings';
+const TABS: Tab[] = ['messages', 'announcements', 'teams', 'library', 'people', 'log', 'settings'];
 const KINDS: ShareKind[] = ['drill', 'play', 'plan'];
 const ROLE = { creator: 'Creator', admin: 'Admin', member: 'Member' } as const;
 const KIND_LABEL: Record<ShareKind, string> = { drill: 'Drill', play: 'Play', plan: 'Practice plan' };
@@ -22,6 +24,12 @@ const POWERS: [CommunityPower, string, string][] = [
   ['approve', 'Approve', 'Approve or decline what members share. Their own shares need no approval'],
   ['settings', 'Settings', 'Change the name, description, picture and what may be shared'],
   ['people', 'People', 'Invite and remove members, and see the join code'],
+];
+/** More jobs, in a community that is an organization. */
+const ORG_POWERS: [CommunityPower, string, string][] = [
+  ['announce', 'Announce', 'Send announcements to everyone or to some'],
+  ['leagues', 'Leagues', 'Set up seasons, leagues and teams, assign coaches, build schedules, and open any team'],
+  ['rosters', 'Player details', 'See players’ parents and contact details when opening a team. Off unless you turn it on'],
 ];
 const initials = (name: string) =>
   name
@@ -43,6 +51,8 @@ function ago(at: string) {
 }
 
 const ICON = {
+  megaphone: 'M4 10v4h3l8 4V6l-8 4zM18 9.500a3.500 3.500 0 0 1 0 5M7.500 14l1 5h2.500l-1-4',
+  log: 'M6 4h12v16H6zM9 8h6M9 12h6M9 16h3',
   talk: 'M4 5h16v11H10l-4 3.500V16H4z',
   library: 'M12 4 3.500 8.500 12 13l8.500-4.500zM3.500 12.500 12 17l8.500-4.500M3.500 16.500 12 21l8.500-4.500',
   people: 'M9 11a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM2.500 20c.600-3.600 3.200-5.500 6.500-5.500s5.900 1.900 6.500 5.500M16 4.300a3.500 3.500 0 0 1 0 6.400M18 14.900c1.900.700 3.100 2.400 3.500 5.100',
@@ -111,7 +121,15 @@ export default function CommunityPage() {
   const [c, setC] = useState<CommunityDetail | null>(null);
   const [posts, setPosts] = useState<CommunityPost[] | null>(null);
   const [shares, setShares] = useState<CommunityShare[] | null>(null);
-  const [tab, setTab] = useState<Tab>('messages');
+  const [params] = useSearchParams();
+  const asked = params.get('tab') as Tab | null;
+  const [tab, setTab] = useState<Tab>(asked && TABS.includes(asked) ? asked : 'messages');
+  // A message that points at a section opens it, also when this page is already showing.
+  useEffect(() => {
+    if (asked && TABS.includes(asked)) setTab(asked);
+  }, [asked]);
+  /** The organization side, for a community on that plan. */
+  const [org, setOrg] = useState<Org | null>(null);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -125,7 +143,29 @@ export default function CommunityPage() {
     setNotice('');
     setError((e as Error).message);
   };
-  const load = useCallback(() => api.community(communityId).then(setC).catch(fail), [communityId]);
+  const load = useCallback(
+    () =>
+      api
+        .community(communityId)
+        .then((d) => {
+          setC(d);
+          if (d.plan === 'organization') return api.org(communityId).then(setOrg);
+        })
+        .catch(fail),
+    [communityId],
+  );
+  /** Runs something that answers with the organization again. */
+  const actOrg = async (fn: () => Promise<Org>, done = '') => {
+    try {
+      setOrg(await fn());
+      setError('');
+      setNotice(done);
+      return true;
+    } catch (e) {
+      fail(e);
+      return false;
+    }
+  };
   const loadPosts = useCallback(() => api.communityPosts(communityId).then(setPosts).catch(fail), [communityId]);
   const loadShares = useCallback(() => api.communityShares(communityId).then(setShares).catch(fail), [communityId]);
   useEffect(() => {
@@ -205,6 +245,9 @@ export default function CommunityPage() {
       </div>
     );
   const may = c.can;
+  const isOrg = c.plan === 'organization';
+  const powers = isOrg ? [...POWERS, ...ORG_POWERS] : POWERS;
+  const orgProps = org ? { c, org, act: actOrg, fail, say: (m: string) => (setError(''), setNotice(m)) } : null;
   const kinds = KINDS.filter((k) => sharesKind(c, k));
   const active = c.people.filter((p) => p.status === 'active');
   const approved = (shares || []).filter((s) => s.status === 'approved');
@@ -241,8 +284,10 @@ export default function CommunityPage() {
   ];
   const tabs: [Tab, string, string, number][] = [
     ['messages', 'Discussion', ICON.talk, 0],
+    ...((isOrg ? [['announcements', 'Announcements', ICON.megaphone, 0], ['teams', 'Leagues & teams', ICON.trophy, 0]] : []) as [Tab, string, string, number][]),
     ['library', 'Shared library', ICON.library, c.pending_shares],
     ['people', 'People', ICON.people, 0],
+    ...((isOrg && c.role !== 'member' ? [['log', 'Activity log', ICON.log, 0]] : []) as [Tab, string, string, number][]),
     ['settings', 'Settings', ICON.settings, 0],
   ];
   // Messages with their replies; replies made to shared things; and every one of them flat, newest first.
@@ -267,8 +312,10 @@ export default function CommunityPage() {
           <h1>{c.name}</h1>
           <p>{c.description || 'A place for coaches to talk and share.'}</p>
           <span className="cm-hero-meta">
+            {isOrg && <span className="kind game">Organization</span>}
             {active.length} member{active.length === 1 ? '' : 's'} · you are {c.role === 'member' ? 'a member' : c.role === 'admin' ? 'an admin' : 'the creator'}
           </span>
+          {isOrg && c.role !== 'member' && <SeatMeter org={org ?? c} />}
         </div>
         <div className="cm-hero-actions">
           <button
@@ -307,6 +354,11 @@ export default function CommunityPage() {
       </div>
       {error && <p className="error">{error}</p>}
       {notice && <p className="banner ok">{notice}</p>}
+      <LapsedBanner c={c} />
+      {tab === 'messages' && isOrg && <PinnedAnnouncements c={c} onOpen={() => setTab('announcements')} />}
+      {tab === 'announcements' && orgProps && <OrgAnnouncements {...orgProps} />}
+      {tab === 'teams' && orgProps && <OrgTeams {...orgProps} />}
+      {tab === 'log' && orgProps && <OrgLog c={c} fail={fail} />}
 
       {tab === 'messages' && (
         <div className="cm-cols">
@@ -358,6 +410,7 @@ export default function CommunityPage() {
 
       {tab === 'people' && (
         <>
+          {orgProps && may.people && <OrgPeople {...orgProps} />}
           <div className="card">
             <h2>
               People <span className="muted">({active.length})</span>
@@ -377,7 +430,7 @@ export default function CommunityPage() {
                     {/* The creator hands out jobs one by one. Anyone with at least one is an admin. */}
                     {c.role === 'creator' && p.role !== 'creator' && p.status === 'active' && (
                       <span className="cm-powers" role="group" aria-label={`What ${p.name} may do`}>
-                        {POWERS.map(([key, label, hint]) => (
+                        {powers.map(([key, label, hint]) => (
                           <button
                             key={key}
                             type="button"
@@ -395,7 +448,7 @@ export default function CommunityPage() {
                     {c.role !== 'creator' && p.role === 'admin' && (
                       <span className="muted small">
                         Can:{' '}
-                        {POWERS.filter(([key]) => p.perms[key])
+                        {powers.filter(([key]) => p.perms[key])
                           .map(([, label]) => label.toLowerCase())
                           .join(', ')}
                       </span>
@@ -423,7 +476,7 @@ export default function CommunityPage() {
               <h2>What admins can do</h2>
               <p className="muted small">Turn on any of these for a person above and they become an admin with just those jobs. Only you can delete the community or change who is an admin.</p>
               <dl>
-                {POWERS.map(([key, label, hint]) => (
+                {powers.map(([key, label, hint]) => (
                   <div key={key}>
                     <dt>{label}</dt>
                     <dd>{hint}.</dd>
@@ -439,7 +492,11 @@ export default function CommunityPage() {
       {tab === 'settings' && (
         <>
           {may.settings ? (
-            <Settings c={c} run={run} />
+            <>
+              <Settings c={c} run={run} />
+              {orgProps && <OrgLibrarySettings {...orgProps} />}
+              {orgProps && <OrgPublicSettings {...orgProps} />}
+            </>
           ) : (
             <div className="card">
               <h2>Settings</h2>
@@ -1609,12 +1666,14 @@ function Invite({ c, run }: { c: CommunityDetail; run: (fn: () => Promise<unknow
   const [email, setEmail] = useState('');
   return (
     <div className="card">
-      <h2>Invite people</h2>
+      <h2>{c.plan === 'organization' ? 'Join code for members' : 'Invite people'}</h2>
       <p className="muted small">
-        People need a Dime Coach account first. Invite them by the email they sign in with and they will see the invitation on their Communities
-        page. Or send them the join code to type in there.
+        {c.plan === 'organization'
+          ? 'Anyone with a Dime Coach account who types this code on their Communities page joins as a member, with no coach seat. Coaches are added above.'
+          : 'People need a Dime Coach account first. Invite them by the email they sign in with and they will see the invitation on their Communities page. Or send them the join code to type in there.'}
       </p>
       <form
+        hidden={c.plan === 'organization'}
         className="join-row"
         onSubmit={async (e) => {
           e.preventDefault();
