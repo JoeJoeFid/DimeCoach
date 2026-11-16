@@ -166,6 +166,8 @@ export default function Dashboard() {
   // Nothing planned at all, as opposed to nothing in the chosen period. Empty shells from a calendar do not count.
   const fresh = !(plans || []).some((p) => !p.is_template && !p.is_game && p.items.some((i) => i.kind === 'item'));
   const kind = sportKind(sport?.name) ?? 'basketball';
+  // The calendar offer leads for a first-timer who has not linked one and is allowed to.
+  const linkFirst = !!team && !team.calendar_url && can('schedule');
   const withTargets = stats.rows.filter((r) => r.gap !== null);
   const onTarget = withTargets.filter((r) => Math.abs(r.gap!) <= ON_TARGET_WITHIN).length;
 
@@ -179,7 +181,7 @@ export default function Dashboard() {
           {can('manage') && (
             <Link className="btn" to="/teams?tab=people">
               <HeadIcon d="M9 11.500a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM2.500 20c.600-3.300 3.200-5 6.500-5s5.900 1.700 6.500 5M19 8v6M16 11h6" />
-              Invite coaches
+              Invite coaches, parents, etc.
             </Link>
           )}
           {/* Straight into a new one, not the list of them. */}
@@ -210,8 +212,26 @@ export default function Dashboard() {
       </div>
 
       {fresh ? (
+        <>
+          {/* Someone whose season is already in a team app can bring it in before planning anything. */}
+          {linkFirst && (
+            <section className="start-cal" aria-label="Bring in your schedule">
+              <span className="start-cal-art" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="1.700" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M8.500 14.500l2.300 2.300 4.700-4.700" />
+                </svg>
+              </span>
+              <div>
+                <h2>Already have your schedule in a team app?</h2>
+                <p>Link your GameChanger, TeamSnap, SportsEngine or Google calendar, and your games and practices show up here, ready to plan. It takes about a minute.</p>
+              </div>
+              <Link className="btn primary" to="/teams?tab=schedule">
+                Link your team calendar
+              </Link>
+            </section>
+          )}
         <section className="start-steps" aria-label="Getting started">
-          <h2>Three easy steps to your first practice</h2>
+          <h2>{linkFirst ? 'Or, three easy steps to your first practice' : 'Three easy steps to your first practice'}</h2>
           <ol>
             <li>
               <DrillArt sport={kind} />
@@ -251,6 +271,7 @@ export default function Dashboard() {
             </li>
           </ol>
         </section>
+        </>
       ) : n === 0 ? (
         <div className="empty">
           <h2>No practices {period === 'season' ? 'yet' : phrase}</h2>

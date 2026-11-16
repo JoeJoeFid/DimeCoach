@@ -12199,3 +12199,42 @@ img.res-thumb.link-shot {
   width: 15px;
   height: 15px;
 }
+
+/* ---------- A first-timer's dashboard: the calendar offer, ahead of the three steps ---------- */
+.start-cal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px 18px;
+  align-items: center;
+  margin: 0 0 22px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.start-cal-art {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.start-cal h2 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+.start-cal p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 70ch;
+}
+@media (max-width: 760px) {
+  .start-cal {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .start-cal .btn {
+    grid-column: 1 / -1;
+  }
+}
