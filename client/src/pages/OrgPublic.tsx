@@ -229,7 +229,11 @@ export default function OrgPublic() {
           </>
         )}
         <p className="pub-foot muted small">
-          Schedule by <a href="/">Dime Coach</a>
+          Schedule by{' '}
+          <a href="/" className="pub-brand">
+            <span className="brand-mark" aria-hidden="true" />
+            Dime Coach
+          </a>
         </p>
       </main>
     </div>

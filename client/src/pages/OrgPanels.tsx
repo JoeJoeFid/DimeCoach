@@ -8,6 +8,7 @@ import { SPORT_CHOICES } from '../sports';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Field, Modal, MoreMenu, type MenuItem } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
+import SportIcon from '../components/SportIcon';
 
 export interface OrgPanelProps {
   c: CommunityDetail;
@@ -420,8 +421,14 @@ export function OrgTeams({ c, org, act, fail, say }: OrgPanelProps) {
   const [building, setBuilding] = useState<OrgLeague | null>(null);
   const [addLeague, setAddLeague] = useState(false);
   const [rolling, setRolling] = useState(false);
+  /** The league being looked at in full. With none, the page is the overview of all of them. */
+  const [openId, setOpenId] = useState(0);
   const season = org.seasons.find((s) => s.id === seasonId) ?? org.seasons[0] ?? null;
-  const leagues = season ? org.leagues.filter((l) => l.season_id === season.id) : [];
+  const leagues = season
+    ? org.leagues.filter((l) => l.season_id === season.id).sort((a, b) => a.sport.localeCompare(b.sport) || a.name.localeCompare(b.name, undefined, { numeric: true }))
+    : [];
+  const open = leagues.find((l) => l.id === openId) ?? null;
+  const sports = [...new Set(leagues.map((l) => l.sport))];
 
   useEffect(() => {
     api.orgGames(c.id).then(setGames).catch(fail);
@@ -509,26 +516,52 @@ export function OrgTeams({ c, org, act, fail, say }: OrgPanelProps) {
           <p className="muted">{manage ? 'No leagues in this season yet. Add one for each sport and age group, such as "Boys 12 and under".' : 'No leagues in this season yet.'}</p>
         </div>
       )}
-      {leagues.map((l) => (
-        <LeagueCard
-          key={l.id}
-          c={c}
-          org={org}
-          league={l}
-          manage={manage}
-          teams={org.teams.filter((t) => t.league_id === l.id)}
-          games={(games?.games ?? []).filter((g) => g.league_id === l.id)}
-          standings={games?.standings[l.id] ?? []}
-          act={act}
-          actGames={actGames}
-          onCoach={setCoachFor}
-          onGame={(game) => setEditing({ league: l, game })}
-          onBuild={() => setBuilding(l)}
-          openTeam={(t) => app.openTeam(true, t.id)}
-        />
-      ))}
-
-      {(manage || org.venues.length > 0) && <Venues c={c} org={org} act={act} manage={manage} />}
+      {/* The overview: every league of the season as a small card, grouped by sport. Choosing one opens it in full. */}
+      {!open &&
+        sports.map((sport) => (
+          <section key={sport} className="org-sport" aria-label={sport}>
+            {sports.length > 1 && (
+              <h2 className="org-sport-head">
+                <SportIcon sport={sport} size={20} /> {sport}
+                <span className="muted small">
+                  {plural(leagues.filter((l) => l.sport === sport).length, 'league')} · {plural(org.teams.filter((t) => leagues.some((l) => l.sport === sport && l.id === t.league_id)).length, 'team')}
+                </span>
+              </h2>
+            )}
+            <ul className="org-league-grid">
+              {leagues
+                .filter((l) => l.sport === sport)
+                .map((l) => (
+                  <li key={l.id}>
+                    <LeagueSummary league={l} manage={manage} showSport={sports.length === 1} teams={org.teams.filter((t) => t.league_id === l.id)} games={(games?.games ?? []).filter((g) => g.league_id === l.id)} onOpen={() => setOpenId(l.id)} />
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ))}
+      {open && (
+        <>
+          <button type="button" className="back-link org-back" onClick={() => setOpenId(0)}>
+            ← All leagues in {season?.name}
+          </button>
+          <LeagueCard
+            key={open.id}
+            c={c}
+            org={org}
+            league={open}
+            manage={manage}
+            teams={org.teams.filter((t) => t.league_id === open.id)}
+            games={(games?.games ?? []).filter((g) => g.league_id === open.id)}
+            standings={games?.standings[open.id] ?? []}
+            act={act}
+            actGames={actGames}
+            onCoach={setCoachFor}
+            onGame={(game) => setEditing({ league: open, game })}
+            onBuild={() => setBuilding(open)}
+            openTeam={(t) => app.openTeam(true, t.id)}
+          />
+        </>
+      )}
 
       {addLeague && season && <LeagueModal c={c} seasonId={season.id} act={act} onClose={() => setAddLeague(false)} />}
       {rolling && season && <RolloverModal c={c} season={season} act={act} onClose={() => setRolling(false)} />}
@@ -558,6 +591,50 @@ export function OrgTeams({ c, org, act, fail, say }: OrgPanelProps) {
         />
       )}
     </>
+  );
+}
+
+/** One league on the overview: what it is, how many teams and games, its teams with their head coaches, and what needs attention. */
+function LeagueSummary({ league, teams, games, manage, showSport, onOpen }: { league: OrgLeague; teams: OrgTeam[]; games: OrgGame[]; manage: boolean; showSport: boolean; onOpen: () => void }) {
+  const today = todayISO();
+  const next = games.find((g) => g.date >= today && g.status === 'scheduled');
+  const uncoached = teams.filter((t) => t.coaches.length === 0).length;
+  const clashes = games.filter((g) => g.warnings.length > 0).length;
+  const mine = teams.some((t) => t.mine);
+  return (
+    <button type="button" className={`org-league-tile ${mine ? 'mine' : ''}`} onClick={onOpen}>
+      <span className="org-tile-head">
+        <strong>{league.name}</strong>
+        {mine && <span className="kind">Your team</span>}
+      </span>
+      <span className="muted small">{[showSport && league.sport, league.age_group, plural(teams.length, 'team'), games.length ? plural(games.length, 'game') : 'no schedule yet'].filter(Boolean).join(' · ')}</span>
+      {teams.length > 0 && (
+        <span className="org-tile-teams">
+          {teams.map((t) => {
+            const head = t.coaches.find((s) => s.head) ?? t.coaches[0];
+            return (
+              <span key={t.id} className={t.mine ? 'mine' : ''}>
+                <span>{t.name}</span>
+                <span className={head ? 'muted' : 'org-tile-none'}>{head ? head.name : 'No coach'}</span>
+              </span>
+            );
+          })}
+        </span>
+      )}
+      <span className="org-tile-foot">
+        {next ? (
+          <span className="muted small">
+            Next: {fmtDateShort(next.date)}
+            {next.start_time ? `, ${clock(next.start_time)}` : ''}
+          </span>
+        ) : (
+          <span />
+        )}
+        {manage && uncoached > 0 && <span className="org-note warn">{plural(uncoached, 'team')} without a coach</span>}
+        {manage && clashes > 0 && <span className="org-note warn">{plural(clashes, 'double booking')}</span>}
+        <span className="org-tile-go">Open →</span>
+      </span>
+    </button>
   );
 }
 
@@ -876,13 +953,16 @@ function ScoreButton({ game, save }: { game: OrgGame; save: (home: number, away:
   );
 }
 
-function Venues({ c, org, act, manage }: Pick<OrgPanelProps, 'c' | 'org' | 'act'> & { manage: boolean }) {
+/** The "Fields & gyms" tab: the places games are played. */
+export function OrgVenues({ c, org, act }: OrgPanelProps) {
+  const manage = org.can.leagues && !org.org.lapsed;
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   return (
     <div className="card org-card">
       <h2>Fields and gyms</h2>
       <p className="muted small">Where games are played. Putting games in a named place lets Dime Coach point out when two are booked there at the same time.</p>
+      {org.venues.length === 0 && !manage && <p className="muted">{c.name} has not listed its fields and gyms yet.</p>}
       {org.venues.length > 0 && (
         <ul className="org-rows">
           {org.venues.map((v) => (
@@ -1211,7 +1291,7 @@ function BuildModal({
             </div>
           </div>
         ) : (
-          <p className="muted small">No fields or gyms have been added, so the games will have no place named. You can add them below the leagues and set each game's place later.</p>
+          <p className="muted small">No fields or gyms have been added, so the games will have no place named. You can add them on the "Fields & gyms" tab and set each game's place later.</p>
         )}
         {hasGames && (
           <label className="check">

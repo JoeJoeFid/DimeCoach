@@ -12985,3 +12985,133 @@ span.org-note {
   flex-direction: column;
   gap: 2px;
 }
+
+/* "Schedule by Dime Coach" under a public page, with the mark beside the name. */
+.pub-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+  font-weight: 650;
+}
+.pub-brand .brand-mark {
+  width: 22px;
+  height: 19px;
+}
+
+/* The overview of an organization's leagues: one small card each, grouped by sport. */
+.org-sport {
+  margin-bottom: 20px;
+}
+.org-sport-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+}
+.org-sport-head .muted {
+  margin-left: 4px;
+  font-weight: 400;
+}
+.org-league-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.org-league-grid > li {
+  display: flex;
+}
+.org-league-tile {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.org-league-tile:hover {
+  border-color: var(--muted);
+  transform: translateY(-1px);
+}
+.org-league-tile.mine {
+  border-color: var(--accent-edge);
+}
+.org-tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 1.05rem;
+}
+.org-tile-teams {
+  display: grid;
+  gap: 1px;
+  margin-top: 2px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  font-size: 0.88rem;
+}
+.org-tile-teams > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+.org-tile-teams > span > span:first-child {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-tile-teams > span > span:last-child {
+  flex: none;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-tile-teams > span.mine > span:first-child::after {
+  content: ' ●';
+  color: var(--accent-edge);
+  font-size: 0.7em;
+}
+.org-tile-none {
+  color: var(--warn);
+  font-weight: 600;
+}
+.org-tile-foot {
+  margin-top: auto;
+  padding-top: 6px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.org-tile-foot > :first-child {
+  flex: 1;
+}
+.org-tile-go {
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+.org-back {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}

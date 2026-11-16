@@ -9,10 +9,10 @@ import { KIND_WORDS, ShareRow, SharedPreview, sharesKind } from '../components/c
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { PlayDiagram } from '../components/PlayDiagram';
 import { EditBox, EditedMark, MentionArea, MentionText } from '../components/Mentions';
-import { LapsedBanner, OrgAnnouncements, OrgLibrarySettings, OrgLog, OrgPeople, OrgPublicSettings, OrgTeams, PinnedAnnouncements, SeatMeter } from './OrgPanels';
+import { LapsedBanner, OrgAnnouncements, OrgLibrarySettings, OrgLog, OrgVenues, OrgPeople, OrgPublicSettings, OrgTeams, PinnedAnnouncements, SeatMeter } from './OrgPanels';
 
-type Tab = 'messages' | 'announcements' | 'teams' | 'library' | 'people' | 'log' | 'settings';
-const TABS: Tab[] = ['messages', 'announcements', 'teams', 'library', 'people', 'log', 'settings'];
+type Tab = 'messages' | 'announcements' | 'teams' | 'venues' | 'library' | 'people' | 'log' | 'settings';
+const TABS: Tab[] = ['messages', 'announcements', 'teams', 'venues', 'library', 'people', 'log', 'settings'];
 const KINDS: ShareKind[] = ['drill', 'play', 'plan'];
 const ROLE = { creator: 'Creator', admin: 'Admin', member: 'Member' } as const;
 const KIND_LABEL: Record<ShareKind, string> = { drill: 'Drill', play: 'Play', plan: 'Practice plan' };
@@ -51,6 +51,7 @@ function ago(at: string) {
 }
 
 const ICON = {
+  place: 'M12 21s-6.500-5.800-6.500-11a6.500 6.500 0 0 1 13 0c0 5.200-6.500 11-6.500 11ZM12 12.500a2.500 2.500 0 1 0 0-5 2.500 2.500 0 0 0 0 5Z',
   megaphone: 'M4 10v4h3l8 4V6l-8 4zM18 9.500a3.500 3.500 0 0 1 0 5M7.500 14l1 5h2.500l-1-4',
   log: 'M6 4h12v16H6zM9 8h6M9 12h6M9 16h3',
   talk: 'M4 5h16v11H10l-4 3.500V16H4z',
@@ -284,7 +285,7 @@ export default function CommunityPage() {
   ];
   const tabs: [Tab, string, string, number][] = [
     ['messages', 'Discussion', ICON.talk, 0],
-    ...((isOrg ? [['announcements', 'Announcements', ICON.megaphone, 0], ['teams', 'Leagues & teams', ICON.trophy, 0]] : []) as [Tab, string, string, number][]),
+    ...((isOrg ? [['announcements', 'Announcements', ICON.megaphone, 0], ['teams', 'Leagues & teams', ICON.trophy, 0], ['venues', 'Fields & gyms', ICON.place, 0]] : []) as [Tab, string, string, number][]),
     ['library', 'Shared library', ICON.library, c.pending_shares],
     ['people', 'People', ICON.people, 0],
     ...((isOrg && c.role !== 'member' ? [['log', 'Activity log', ICON.log, 0]] : []) as [Tab, string, string, number][]),
@@ -358,6 +359,7 @@ export default function CommunityPage() {
       {tab === 'messages' && isOrg && <PinnedAnnouncements c={c} onOpen={() => setTab('announcements')} />}
       {tab === 'announcements' && orgProps && <OrgAnnouncements {...orgProps} />}
       {tab === 'teams' && orgProps && <OrgTeams {...orgProps} />}
+      {tab === 'venues' && orgProps && <OrgVenues {...orgProps} />}
       {tab === 'log' && orgProps && <OrgLog c={c} fail={fail} />}
 
       {tab === 'messages' && (
