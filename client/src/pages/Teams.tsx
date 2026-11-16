@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Papa from 'papaparse';
 import { api } from '../api';
@@ -736,9 +736,86 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
   );
 }
 
+const CAL_ICONS = {
+  phone: 'M7 3.500h10a1.500 1.500 0 0 1 1.500 1.500v14a1.500 1.500 0 0 1-1.500 1.500H7A1.500 1.500 0 0 1 5.500 19V5A1.500 1.500 0 0 1 7 3.500ZM10.500 17.500h3',
+  screen: 'M4 5h16v11H4ZM9 20h6M12 16v4',
+  team: 'M9 11.500a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM2.500 20c.600-3.300 3.200-5 6.500-5s5.900 1.700 6.500 5M16 4.700a3.500 3.500 0 0 1 0 6.600M18 15.300c1.900.700 3.100 2.300 3.500 4.700',
+  gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12 3v2.500M12 18.500V21M3 12h2.500M18.500 12H21M5.600 5.600l1.800 1.800M16.600 16.600l1.800 1.800M5.600 18.400l1.800-1.800M16.600 7.400l1.800-1.800',
+  calendar: 'M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7',
+  link: 'M10 14a4 4 0 0 0 5.700 0l3-3a4 4 0 0 0-5.700-5.700l-1 1M14 10a4 4 0 0 0-5.700 0l-3 3a4 4 0 0 0 5.700 5.700l1-1',
+  paste: 'M9 4.500h6v3H9ZM9 6H6.500v14.500h11V6H15M12 11v6M9.500 14.500 12 17l2.500-2.500',
+  info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v5.500M12 7.700v.200',
+  lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6Z',
+};
+type CalAppId = 'gamechanger' | 'teamsnap' | 'sportsengine' | 'google';
+/** Where each team app keeps its calendar link. The last step, pasting it here, is the same for all of them. */
+const CAL_APPS: { id: CalAppId; name: string; badge: string; color: string; /** Recognises a link from this app. */ match: RegExp; steps: [keyof typeof CAL_ICONS, ReactNode][]; notes: string[] }[] = [
+  {
+    id: 'gamechanger',
+    name: 'GameChanger',
+    badge: 'GC',
+    color: '#1f8a4c',
+    match: /gc\.com|gamechanger/i,
+    steps: [
+      ['phone', <>In the <strong>GameChanger</strong> app, open the team.</>],
+      ['gear', <>Tap the <strong>gear</strong> icon.</>],
+      ['calendar', <>Tap <strong>Schedule Sync</strong>, then <strong>Sync Schedule to Your Calendar</strong>.</>],
+      ['link', <><strong>Copy</strong> the calendar link.</>],
+    ],
+    notes: [],
+  },
+  {
+    id: 'teamsnap',
+    name: 'TeamSnap',
+    badge: 'TS',
+    color: '#f26a21',
+    match: /teamsnap/i,
+    steps: [
+      ['screen', <>Sign in at <strong>teamsnap.com</strong> in a web browser. The link is not offered in the phone app.</>],
+      ['team', <>Open the team.</>],
+      ['calendar', <>Open the <strong>Schedule</strong> tab, then <strong>Settings</strong>.</>],
+      ['gear', <>Click <strong>Sync Calendar / Export</strong>.</>],
+      ['link', <><strong>Copy</strong> the calendar link shown there.</>],
+    ],
+    notes: [],
+  },
+  {
+    id: 'sportsengine',
+    name: 'SportsEngine',
+    badge: 'SE',
+    color: '#0b5cab',
+    match: /sportsengine|sportngin/i,
+    steps: [
+      ['screen', <>Open your team's page on the <strong>SportsEngine website</strong> in a web browser.</>],
+      ['calendar', <>Go to its <strong>calendar</strong> or event list.</>],
+      ['gear', <>Click the <strong>iCal</strong> icon, or <strong>Subscribe to iCal Feed</strong>.</>],
+      ['link', <><strong>Copy</strong> the iCal feed link.</>],
+    ],
+    notes: ['The iCal option only appears once the calendar has events on it.', 'A change made in SportsEngine can take up to a day to reach its calendar link.'],
+  },
+  {
+    id: 'google',
+    name: 'Google Calendar',
+    badge: 'G',
+    color: '#4285f4',
+    match: /google\.com/i,
+    steps: [
+      ['screen', <>Open <strong>calendar.google.com</strong> on a computer.</>],
+      ['gear', <>Click the <strong>gear</strong> at the top right, then <strong>Settings</strong>.</>],
+      ['calendar', <>Under <strong>Settings for my calendars</strong>, click the team's calendar.</>],
+      ['team', <>Click <strong>Integrate calendar</strong>.</>],
+      ['link', <><strong>Copy</strong> the <strong>Secret address in iCal format</strong>.</>],
+    ],
+    notes: ['Anyone with the secret address can read that calendar, so use one that holds only the team schedule.'],
+  },
+];
+
 function CalendarCard({ team }: { team: Team }) {
   const app = useApp();
   const [url, setUrl] = useState(team.calendar_url);
+  // Which app's steps are showing. A linked calendar's address usually says which app it came from.
+  const [appId, setAppId] = useState<CalAppId>(() => CAL_APPS.find((x) => x.match.test(team.calendar_url))?.id ?? 'gamechanger');
+  const calApp = CAL_APPS.find((x) => x.id === appId)!;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -762,50 +839,44 @@ function CalendarCard({ team }: { team: Team }) {
   return (
     <div className="card" data-tour="calendar">
       <div className="card-head">
-        <h2>Schedule from GameChanger</h2>
+        <h2>Schedule from your team app</h2>
         {team.calendar_url && <span className="muted small">Last synced {fmtSynced(team.calendar_synced_at)}</span>}
       </div>
-      <p className="muted small">Link the team's calendar to show its games and practices on your dashboard.</p>
-      <ol className="cal-steps">
+      <p className="muted small">Link the team's calendar to show its games and practices on your dashboard. Choose the app your team uses:</p>
+      <div className="cal-apps" role="group" aria-label="The app your team uses">
+        {CAL_APPS.map((x) => (
+          <button key={x.id} type="button" className={`cal-app ${x.id === appId ? 'on' : ''}`} aria-pressed={x.id === appId} onClick={() => setAppId(x.id)}>
+            <span className="cal-app-badge" style={{ background: x.color }} aria-hidden="true">
+              {x.badge}
+            </span>
+            {x.name}
+          </button>
+        ))}
+      </div>
+      <ol className="cal-steps" aria-label={`Steps for ${calApp.name}`}>
+        {calApp.steps.map(([icon, text], i) => (
+          <li key={i}>
+            <CalIcon d={CAL_ICONS[icon]} />
+            <span>{text}</span>
+          </li>
+        ))}
         <li>
-          <CalIcon d="M7 3.500h10a1.500 1.500 0 0 1 1.500 1.500v14a1.500 1.500 0 0 1-1.500 1.500H7A1.500 1.500 0 0 1 5.500 19V5A1.500 1.500 0 0 1 7 3.500ZM10.500 17.500h3" />
-          <span>
-            In the <strong>GameChanger</strong> app, open the team.
-          </span>
-        </li>
-        <li>
-          <CalIcon d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12 3v2.500M12 18.500V21M3 12h2.500M18.500 12H21M5.600 5.600l1.800 1.800M16.600 16.600l1.800 1.800M5.600 18.400l1.800-1.800M16.600 7.400l1.800-1.800" />
-          <span>
-            Tap the <strong>gear</strong> icon.
-          </span>
-        </li>
-        <li>
-          <CalIcon d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7" />
-          <span>
-            Tap <strong>Schedule Sync</strong>, then <strong>Sync Schedule to Your Calendar</strong>.
-          </span>
-        </li>
-        <li>
-          <CalIcon d="M10 14a4 4 0 0 0 5.700 0l3-3a4 4 0 0 0-5.700-5.700l-1 1M14 10a4 4 0 0 0-5.700 0l-3 3a4 4 0 0 0 5.700 5.700l1-1" />
-          <span>
-            <strong>Copy</strong> the calendar link.
-          </span>
-        </li>
-        <li>
-          <CalIcon d="M9 4.500h6v3H9ZM9 6H6.500v14.500h11V6H15M12 11v6M9.500 14.500 12 17l2.500-2.500" />
+          <CalIcon d={CAL_ICONS.paste} />
           <span>
             <strong>Paste</strong> it in the box below and save it.
           </span>
         </li>
       </ol>
       <ul className="cal-notes muted small">
+        {calApp.notes.map((n) => (
+          <li key={n}>
+            <CalIcon d={CAL_ICONS.info} />
+            {n}
+          </li>
+        ))}
         <li>
-          <CalIcon d="M5 12.500l4.500 4.500L19 7.500" />
-          Links from TeamSnap, SportsEngine and Google Calendar work the same way.
-        </li>
-        <li>
-          <CalIcon d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6Z" />
-          The schedule is read-only here. Changes still happen in GameChanger.
+          <CalIcon d={CAL_ICONS.lock} />
+          The schedule is read-only here. Changes still happen in {calApp.name}.
         </li>
       </ul>
       {error && <p className="error">{error}</p>}
