@@ -34,6 +34,35 @@ function fmtAgo(iso: string | null) {
   const days = Math.round(secs / 86400);
   return days < 60 ? `${days} day${days === 1 ? '' : 's'} ago` : fmtWhen(iso);
 }
+/**
+ * "Now" only for someone who is active this minute. An open page that nobody is touching keeps
+ * in contact with the server, and that does not count.
+ */
+function lastActive(u: SystemUser) {
+  if (u.status === 'invited' || u.status === 'pending') return 'Never';
+  if (u.presence === 'active') return 'Now';
+  const ago = fmtAgo(u.last_active_at ?? u.last_login_at);
+  return ago === 'Now' ? 'A few minutes ago' : ago;
+}
+/** One status for each person: what state the account is in, and for a working account whether they are here now. */
+function StatusCell({ u }: { u: SystemUser }) {
+  const pill = (cls: string, text: string, title: string, note = '') => (
+    <span className="status-cell">
+      <span className={`presence ${cls}`} title={title}>
+        {text}
+      </span>
+      {note && <span className="muted small">{note}</span>}
+    </span>
+  );
+  if (u.status === 'disabled') return pill('off', 'Turned off', 'The account is turned off and cannot sign in');
+  if (u.status === 'invited') return pill('waiting', 'Invited', 'Sent an invitation by email and has not chosen a password yet', 'has not finished setting up');
+  if (u.status === 'pending') return pill('waiting', 'Signing up', 'Signed up and has not opened the confirmation email yet', 'email not confirmed');
+  const note = u.must_change_password ? 'still on the starting password' : '';
+  if (u.presence === 'active') return pill('active', 'Active', 'Signed in, and did something in the last 5 minutes', note);
+  if (u.presence === 'inactive') return pill('inactive', 'Inactive', 'Signed in, but has not done anything for over 5 minutes', note);
+  if (u.sign_ins === 0) return pill('out', 'Never signed in', 'Has an account and has not signed in yet', note);
+  return pill('out', 'Logged out', 'Not signed in', note);
+}
 const SECTIONS = [
   ['people', 'People'],
   ['signup', 'Sign-up and email'],
@@ -62,6 +91,10 @@ export default function SystemAdmin() {
   const [defaultCap, setDefaultCap] = useState<string | null>(null);
   const blank = { name: '', email: '', password: '', can_import: false, cap: '' };
   const [draft, setDraft] = useState(blank);
+  /** How a person is added: an emailed invitation, or an account made here with a starting password. */
+  const [adding, setAdding] = useState<'invite' | 'password'>('invite');
+  const canEmail = !!settings?.mailer.configured;
+  const inviting = adding === 'invite' && canEmail;
 
   const load = useCallback(async () => {
     try {
@@ -106,14 +139,17 @@ export default function SystemAdmin() {
     const d = draft;
     run(
       async () => {
-        const made = await api.adminCreateUser({ name: d.name, email: d.email, password: d.password, can_import: d.can_import });
+        const made = inviting ? await api.adminInvite({ name: d.name, email: d.email, can_import: d.can_import }) : await api.adminCreateUser({ name: d.name, email: d.email, password: d.password, can_import: d.can_import });
         // The account exists from here on, so clear the form even if a follow-up setting fails.
         setDraft(blank);
         if (d.cap.trim() !== '') await api.systemUpdateUser(made.id, { upload_cap_mb: Number(d.cap) });
       },
-      `Account created for ${d.email}. Give them the starting password yourself. They will be asked to replace it when they first sign in.`,
+      inviting
+        ? `Invitation emailed to ${d.email}. They are listed as invited until they choose a password.`
+        : `Account created for ${d.email}. Give them the starting password yourself. They will be asked to replace it when they first sign in.`,
     );
   };
+  const resendInvite = (u: SystemUser) => run(() => api.adminResendInvite(u.id), `Invitation sent to ${u.email} again.`);
   const saveCap = (u: SystemUser) => {
     const typed = caps[u.id];
     if (typed === undefined) return;
@@ -264,9 +300,20 @@ export default function SystemAdmin() {
           </h2>
           <div className="card">
             <h2>Add a person</h2>
+            <div className="seg add-how" role="group" aria-label="How to add them">
+              <button type="button" className={inviting ? 'on' : ''} aria-pressed={inviting} disabled={!canEmail} onClick={() => setAdding('invite')}>
+                Email an invitation
+              </button>
+              <button type="button" className={inviting ? '' : 'on'} aria-pressed={!inviting} onClick={() => setAdding('password')}>
+                Set a starting password
+              </button>
+            </div>
             <p className="muted small">
-              You pick a starting password and pass it along yourself. They must replace it when they first sign in. Each person gets a
-              workspace of their own. Plan import runs Claude on the computer hosting Dime Coach, so allow it only for people you want using that.
+              {inviting
+                ? 'They get an email with a link, choose their own password, and start as any new person does, by making their first team.'
+                : 'You pick a starting password and pass it along yourself. They must replace it when they first sign in.'}{' '}
+              {!canEmail && 'Invitations by email need an email service, and none is connected. '}
+              Each person gets a workspace of their own. Plan import runs Claude on the computer hosting Dime Coach, so allow it only for people you want using that.
             </p>
             <form className="fields" onSubmit={create}>
               <Field label="Name" grow>
@@ -275,9 +322,11 @@ export default function SystemAdmin() {
               <Field label="Email" grow>
                 <input className="input" type="email" required value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
               </Field>
-              <Field label="Starting password" grow>
-                <input className="input" required minLength={10} value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} autoComplete="off" />
-              </Field>
+              {!inviting && (
+                <Field label="Starting password" grow>
+                  <input className="input" required minLength={10} value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} autoComplete="off" />
+                </Field>
+              )}
               <Field label="Upload space (MB)">
                 <input
                   className="input"
@@ -294,7 +343,7 @@ export default function SystemAdmin() {
                 <input type="checkbox" checked={draft.can_import} onChange={(e) => setDraft({ ...draft, can_import: e.target.checked })} />
                 Allow plan import
               </label>
-              <button className="btn primary">Create account</button>
+              <button className="btn primary">{inviting ? 'Send invitation' : 'Create account'}</button>
             </form>
           </div>
           <div className="card">
@@ -309,7 +358,6 @@ export default function SystemAdmin() {
                   <tr>
                     <th>Person</th>
                     <th>Status</th>
-                    <th>Now</th>
                     <th>Last active</th>
                     <th className="num">Sign-ins</th>
                     <th className="num">Time in the app</th>
@@ -335,18 +383,9 @@ export default function SystemAdmin() {
                         </span>
                       </td>
                       <td>
-                        {u.status === 'active' ? 'Active' : u.status === 'pending' ? 'Awaiting email confirmation' : 'Turned off'}
-                        {u.must_change_password && u.status === 'active' && <span className="muted small"> · has not set own password</span>}
+                        <StatusCell u={u} />
                       </td>
-                      <td>
-                        <span
-                          className={`presence ${u.presence}`}
-                          title={u.presence === 'active' ? 'Signed in, and did something in the last 5 minutes' : u.presence === 'inactive' ? 'Signed in, but has not done anything for over 5 minutes' : 'Not signed in'}
-                        >
-                          {u.presence === 'active' ? 'Active' : u.presence === 'inactive' ? 'Inactive' : 'Logged out'}
-                        </span>
-                      </td>
-                      <td>{fmtAgo(u.last_seen_at ?? u.last_login_at)}</td>
+                      <td>{lastActive(u)}</td>
                       <td className="num">{u.sign_ins}</td>
                       <td className="num">{fmtSpan(u.active_seconds)}</td>
                       <td>
@@ -375,9 +414,10 @@ export default function SystemAdmin() {
                           label={`Options for ${u.name}`}
                           items={[
                             { label: 'Details', onSelect: () => setViewing(u) },
-                            ...(u.id !== me.id ? [{ label: 'Set password', onSelect: () => setPasswordFor(u) }] : []),
+                            ...(u.status === 'invited' && canEmail ? [{ label: 'Send invitation again', onSelect: () => resendInvite(u) }] : []),
+                            ...(u.id !== me.id && u.status !== 'invited' ? [{ label: 'Set password', onSelect: () => setPasswordFor(u) }] : []),
                             { label: u.can_import ? 'Stop plan import' : 'Allow plan import', onSelect: () => setImport(u, !u.can_import) },
-                            ...(!u.is_system_admin && u.status !== 'pending'
+                            ...(!u.is_system_admin && u.status !== 'pending' && u.status !== 'invited'
                               ? [{ label: u.status === 'active' ? 'Turn off account' : 'Turn on account', onSelect: () => setStatus(u, u.status === 'active' ? 'disabled' : 'active') }]
                               : []),
                             ...(!u.is_system_admin && u.id !== me.id ? [{ label: 'Delete account', onSelect: () => deleteAccount(u), danger: true }] : []),
@@ -561,7 +601,7 @@ function ActivityModal({ person, onClose }: { person: SystemUser; onClose: () =>
               [fmtSpan(data.longest_seconds), 'Longest sign-in'],
               [String(data.sign_ins_30d), 'Sign-ins in 30 days'],
               [String(data.days_active_30d), 'Days active in 30'],
-              [fmtAgo(data.user.last_seen_at ?? data.user.last_login_at), 'Last active'],
+              [lastActive(data.user), 'Last active'],
               [fmtWhen(data.user.created_at), 'Account created'],
             ].map(([value, label]) => (
               <div className="sys-tile" key={label}>

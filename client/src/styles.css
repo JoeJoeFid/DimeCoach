@@ -12107,3 +12107,46 @@ img.res-thumb.link-shot {
   height: 31px;
   background-image: var(--logo-white);
 }
+
+/* One status per person on the system page: the mark, and a short note under it when there is one. */
+.status-cell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.presence.waiting {
+  color: var(--ink);
+}
+.presence.waiting::before {
+  background: #4a8fe0;
+}
+.presence.off::before {
+  background: var(--danger, #c0392b);
+}
+.add-how {
+  margin: 4px 0 10px;
+}
+
+/* ---------- The short introduction to drawing a play ---------- */
+.play-intro {
+  text-align: center;
+}
+.play-intro-art {
+  display: block;
+  width: min(240px, 100%);
+  height: auto;
+  margin: 4px auto 12px;
+  color: var(--ink);
+}
+.play-intro-count {
+  margin: 0 0 4px;
+}
+.play-intro h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+.play-intro p {
+  margin: 0 auto;
+  max-width: 44ch;
+}

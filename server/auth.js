@@ -64,6 +64,7 @@ function startSession(req, res, userId) {
   run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?,?,?)', sha256(token), userId, expires);
   run('INSERT INTO logins (user_id, token_hash, started_at, last_seen_at, ip, agent) VALUES (?,?,?,?,?,?)', userId, sha256(token), now, now, str(req.ip), agentOf(req));
   run('UPDATE users SET last_login_at=? WHERE id=?', now, userId);
+  noteAction(userId);
   setSessionCookie(req, res, token, SESSION_DAYS * 86400);
 }
 // --- Sign-in history: when each person signed in, and how long they spent in the app ---
@@ -122,6 +123,8 @@ function prefsOf(u) {
   const prefs = HEX.test(String(stored.heat_color)) ? { heat_color: String(stored.heat_color).toLowerCase() } : {};
   // Set once the welcome tour has been finished or skipped, so it is not shown again.
   if (stored.tour_done === true) prefs.tour_done = true;
+  // Set once the introduction to drawing plays has been seen.
+  if (stored.play_intro_done === true) prefs.play_intro_done = true;
   return prefs;
 }
 /**
@@ -177,6 +180,33 @@ function tooManySignups(ip) {
   const recent = (signups.get(ip) || []).filter((t) => Date.now() - t < SIGNUP_WINDOW_MS);
   signups.set(ip, recent);
   return recent.length >= SIGNUP_LIMIT;
+}
+// "Last active" is the last thing a person did, not the last time their open page asked for news.
+// It is kept in memory for the Active / Inactive mark, and written down at most once a minute.
+const actionSaved = new Map();
+function noteAction(userId) {
+  markActive(userId);
+  if (Date.now() - (actionSaved.get(userId) || 0) < 60_000) return;
+  actionSaved.set(userId, Date.now());
+  run('UPDATE users SET last_action_at=? WHERE id=?', new Date().toISOString(), userId);
+}
+/** An account that exists but whose person has not finished making it: no password of their own, no workspace. */
+const unfinished = (u) => u.status === 'pending' || u.status === 'invited';
+const SYSTEM_INVITE_DAYS = 14;
+/** Emails an invited person the link for finishing their account, with a fresh code each time. */
+function mailSystemInvite(req, user) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  run('UPDATE users SET confirm_token_hash=?, confirm_expires_at=? WHERE id=?', sha256(token), new Date(Date.now() + SYSTEM_INVITE_DAYS * 86400_000).toISOString(), user.id);
+  const base = String(process.env.PP_PUBLIC_URL || `${req.protocol}://${req.headers.host}`).replace(/\/+$/, '');
+  return sendMail({
+    to: user.email,
+    subject: `${req.user.name} invited you to Dime Coach`,
+    text:
+      `Hi ${user.name},\n\n${req.user.name} invited you to Dime Coach, where coaches plan practices, keep drills and draw plays.\n\n` +
+      `Choose a password to finish setting up your account:\n\n${base}/welcome?token=${token}\n\n` +
+      `The link works for ${SYSTEM_INVITE_DAYS} days. If you were not expecting this, ignore this message and nothing will happen.`,
+    secret: token,
+  });
 }
 const userCount = () => get('SELECT COUNT(*) AS n FROM users').n;
 
@@ -423,13 +453,41 @@ export function mountAuth(app) {
     res.json({ user: userOut(get('SELECT * FROM users WHERE id=?', user.id)) });
   });
 
+  // --- An invitation to Dime Coach itself, from the administrator: the person chooses a password and is in ---
+  const BAD_WELCOME = 'This invitation is not valid any more. Ask the administrator to send it again.';
+  const invitedBy = (token) => {
+    const u = token ? get("SELECT * FROM users WHERE confirm_token_hash=? AND status='invited'", sha256(token)) : null;
+    return u && u.confirm_expires_at > new Date().toISOString() ? u : null;
+  };
+  app.get('/api/auth/welcome', (req, res) => {
+    const u = invitedBy(str(req.query.token));
+    if (!u) return res.status(400).json({ error: BAD_WELCOME });
+    res.json({ name: u.name, email: u.email });
+  });
+  app.post('/api/auth/welcome', (req, res) => {
+    const u = invitedBy(str(req.body.token));
+    if (!u) return res.status(400).json({ error: BAD_WELCOME });
+    const name = str(req.body.name).trim().replace(/\s+/g, ' ') || u.name;
+    if (name.length > 80) return res.status(400).json({ error: 'Keep your name under 80 characters.' });
+    const problem = passwordProblem(req.body.password);
+    if (problem) return res.status(400).json({ error: problem });
+    tx(() => {
+      run("UPDATE users SET name=?, password_hash=?, status='active', must_change_password=0, confirm_token_hash=NULL, confirm_expires_at=NULL WHERE id=?", name, hashPassword(str(req.body.password)), u.id);
+      run("INSERT INTO memberships (user_id, owner_id, role) VALUES (?,?,'owner')", u.id, createWorkspace(`${name}'s workspace`));
+      // Opening the link shows the address is theirs, so teams it was invited to are theirs to open.
+      claimInvites(u.id, u.email);
+    });
+    startSession(req, res, u.id);
+    res.json({ ok: true, user: userOut(get('SELECT * FROM users WHERE id=?', u.id)) });
+  });
+
   // --- An invitation to a team, for someone with no account yet ---
   const BAD_INVITE = 'This invitation is not valid any more. Ask the person who invited you to send it again.';
   app.get('/api/auth/invite', (req, res) => {
     const inv = inviteByToken(str(req.query.token));
     if (!inv) return res.status(400).json({ error: BAD_INVITE });
     const existing = get('SELECT status FROM users WHERE email=?', inv.email);
-    res.json({ email: inv.email, team: inv.team, sport: inv.sport || '', season: inv.season || '', inviter: inv.inviter || 'A coach', title: inv.title, has_account: !!existing && existing.status !== 'pending' });
+    res.json({ email: inv.email, team: inv.team, sport: inv.sport || '', season: inv.season || '', inviter: inv.inviter || 'A coach', title: inv.title, has_account: !!existing && !unfinished(existing) });
   });
   // Opening the link shows the address is theirs, so the account needs no further confirming,
   // and it is made whether or not sign-up is open to everyone.
@@ -437,7 +495,7 @@ export function mountAuth(app) {
     const inv = inviteByToken(str(req.body.token));
     if (!inv) return res.status(400).json({ error: BAD_INVITE });
     const existing = get('SELECT * FROM users WHERE email=?', inv.email);
-    if (existing && existing.status !== 'pending') {
+    if (existing && !unfinished(existing)) {
       if (existing.status !== 'active') return res.status(403).json({ error: 'This account has been turned off. Contact the administrator.' });
       // They already have an account: the team is added to it, and they sign in as usual.
       tx(() => claimInvites(existing.id, existing.email));
@@ -451,7 +509,7 @@ export function mountAuth(app) {
     const userId = tx(() => {
       let id;
       if (existing) {
-        // Someone who started signing up and never confirmed: this finishes it.
+        // Someone who started signing up, or was invited by the administrator, and never finished: this finishes it.
         run("UPDATE users SET name=?, password_hash=?, status='active', confirm_token_hash=NULL, confirm_expires_at=NULL WHERE id=?", name, hashPassword(str(req.body.password)), existing.id);
         run("INSERT INTO memberships (user_id, owner_id, role) VALUES (?,?,'owner')", existing.id, createWorkspace(`${name}'s workspace`));
         id = existing.id;
@@ -473,11 +531,11 @@ export function mountAuth(app) {
     req.ownerId = membership.owner_id;
     // An open page says "still here" when its person has clicked or typed. Nothing is written for it.
     if (req.method === 'POST' && req.path === '/live/active') {
-      markActive(user.id);
+      noteAction(user.id);
       return res.json({ ok: true });
     }
     // Saving, posting and the like are things done. Reading is not: pages read on their own.
-    if (req.method !== 'GET' && req.path !== '/resources/thumb') markActive(user.id);
+    if (req.method !== 'GET' && req.path !== '/resources/thumb') noteAction(user.id);
     trackActivity(req, res);
     touchLogin(req, user.id);
     next();
@@ -514,6 +572,10 @@ export function mountAuth(app) {
     if ('tour_done' in req.body) {
       if (req.body.tour_done === true) prefs.tour_done = true;
       else delete prefs.tour_done;
+    }
+    if ('play_intro_done' in req.body) {
+      if (req.body.play_intro_done === true) prefs.play_intro_done = true;
+      else delete prefs.play_intro_done;
     }
     run('UPDATE users SET prefs_json=? WHERE id=?', JSON.stringify(prefs), req.user.id);
     res.json({ user: userOut(get('SELECT * FROM users WHERE id=?', req.user.id)) });
@@ -555,6 +617,36 @@ export function mountAuth(app) {
     res.json(adminUserOut(get('SELECT * FROM users WHERE id=?', userId)));
   });
 
+  // Invites someone by email instead: they choose their own password from the link, and until
+  // then the account is only a name and an address.
+  app.post('/api/admin/invites', admin, async (req, res) => {
+    const email = normEmail(req.body.email);
+    const name = str(req.body.name).trim().replace(/\s+/g, ' ');
+    if (!name) return res.status(400).json({ error: 'Enter a name.' });
+    if (name.length > 80) return res.status(400).json({ error: 'Keep the name under 80 characters.' });
+    if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+    if (!mailerStatus().configured) return res.status(400).json({ error: 'No email service is connected, so an invitation cannot be sent. Create the account with a starting password instead.' });
+    const existing = get('SELECT * FROM users WHERE email=?', email);
+    if (existing && existing.status !== 'invited') return res.status(409).json({ error: existing.status === 'pending' ? 'That person has started signing up and has a confirmation email waiting.' : 'Someone already has an account with that email.' });
+    // Nobody can sign in with this: the password is random and thrown away.
+    const id = existing ? existing.id : Number(run("INSERT INTO users (email, name, password_hash, can_import, status) VALUES (?,?,?,?,'invited')", email, name, hashPassword(crypto.randomBytes(32).toString('base64url')), req.body.can_import ? 1 : 0).lastInsertRowid);
+    if (existing) run('UPDATE users SET name=? WHERE id=?', name, id);
+    const r = await mailSystemInvite(req, get('SELECT * FROM users WHERE id=?', id));
+    if (!r.ok) {
+      if (!existing) run('DELETE FROM users WHERE id=?', id);
+      return res.status(502).json({ error: `The invitation was not sent. ${r.error}` });
+    }
+    res.json(adminUserOut(get('SELECT * FROM users WHERE id=?', id)));
+  });
+  app.post('/api/admin/invites/:id/resend', admin, async (req, res) => {
+    const target = get("SELECT * FROM users WHERE id=? AND status='invited'", Number(req.params.id));
+    if (!target) return res.status(404).json({ error: 'Not found' });
+    if (!mailerStatus().configured) return res.status(400).json({ error: 'No email service is connected, so the invitation cannot be sent.' });
+    const r = await mailSystemInvite(req, target);
+    if (!r.ok) return res.status(502).json({ error: `The invitation was not sent. ${r.error}` });
+    res.json({ ok: true });
+  });
+
   app.put('/api/admin/users/:id', admin, (req, res) => {
     const target = get('SELECT * FROM users WHERE id=?', Number(req.params.id));
     if (!target) return res.status(404).json({ error: 'Not found' });
@@ -584,7 +676,7 @@ export function mountAuth(app) {
           });
       }
       if (typeof b.is_admin === 'boolean') run('UPDATE users SET is_admin=? WHERE id=?', b.is_admin ? 1 : 0, target.id);
-      if ((b.status === 'active' || b.status === 'disabled') && target.status !== 'pending') {
+      if ((b.status === 'active' || b.status === 'disabled') && !unfinished(target)) {
         run('UPDATE users SET status=? WHERE id=?', b.status, target.id);
         if (b.status === 'disabled') endSessions(target.id);
       }
@@ -608,6 +700,8 @@ export function mountAuth(app) {
     return {
       ...adminUserOut(u),
       sign_ins: seen.n, active_seconds: seen.secs, last_seen_at: seen.last,
+      /** The last thing they did. Before this was kept, the last time their page was open stands in. */
+      last_active_at: u.last_action_at || seen.last || u.last_login_at || null,
       presence: presenceOf(u.id),
       used_bytes: used.bytes, files: used.files,
       /** This person's own cap, or null when the default applies. */

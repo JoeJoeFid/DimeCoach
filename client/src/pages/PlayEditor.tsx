@@ -32,6 +32,7 @@ import { ShareDialog } from '../components/community';
 import { beatsOf, describeLine, ordinal, sequenceOf, withOrder, withSequence, type SequenceItem } from '../playAnimation';
 import { HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, sources, targets, withEnd } from '../playLogic';
 import Attachments from '../components/Attachments';
+import PlayIntro from '../components/PlayIntro';
 import { Field, Modal } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater } from '../components/toasts';
@@ -858,6 +859,8 @@ export default function PlayEditor() {
 
   return (
     <div className="page play-editor">
+      {/* For someone who lands on a play before ever seeing the playbook. */}
+      <PlayIntro />
       <div className="crumbs">
         <Link to="/playbook">← Playbook</Link>
         <span className={`save-state ${saveState}`} role="status">

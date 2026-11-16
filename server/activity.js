@@ -93,7 +93,7 @@ function describe(method, parts, body) {
     case 'auth':
       return a === 'password' ? 'Changed their password' : a === 'profile' ? 'Changed their name' : null;
     case 'admin':
-      return a === 'users' ? (made ? 'Created an account' : 'Changed an account') : a === 'settings' ? 'Changed sign-up settings' : null;
+      return a === 'users' ? (made ? 'Created an account' : 'Changed an account') : a === 'invites' ? 'Invited someone to Dime Coach' : a === 'settings' ? 'Changed sign-up settings' : null;
     case 'system':
       return a === 'users' ? (gone ? 'Deleted an account' : 'Changed an account') : a === 'settings' ? 'Changed upload space settings' : null;
     default:

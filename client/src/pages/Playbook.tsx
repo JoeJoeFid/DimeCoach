@@ -8,6 +8,7 @@ import { useApp } from '../App';
 import type { Play } from '../types';
 import { PlayDiagram } from '../components/PlayDiagram';
 import { playBuilderSupports } from '../util';
+import PlayIntro from '../components/PlayIntro';
 
 const resourceLabel = (n: number) => (n > 0 ? `${n} resource${n === 1 ? '' : 's'}` : '');
 
@@ -18,6 +19,7 @@ export default function Playbook() {
   const [plays, setPlays] = useState<Play[] | null>(null);
   const [error, setError] = useState('');
   const [fromCommunity, setFromCommunity] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [label, setLabel] = useState('');
@@ -81,6 +83,9 @@ export default function Playbook() {
           <p className="muted">Diagram your {sport!.name.toLowerCase()} plays step by step. Attach them to practice items, or print them on their own.</p>
         </div>
         <div className="head-actions">
+          <button className="btn ghost" onClick={() => setShowIntro(true)}>
+            How it works
+          </button>
           <button className="btn" onClick={() => setFromCommunity(true)}>
             From a community
           </button>
@@ -89,6 +94,8 @@ export default function Playbook() {
           </button>
         </div>
       </div>
+      {/* Shown by itself the first time, and again when asked for. */}
+      {showIntro ? <PlayIntro force onClose={() => setShowIntro(false)} /> : <PlayIntro />}
       {error && <p className="error">{error}</p>}
       {fromCommunity && <CommunityPicker kind="play" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plays/${id}`)} />}
 

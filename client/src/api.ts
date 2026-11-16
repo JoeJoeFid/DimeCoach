@@ -62,7 +62,7 @@ export interface User {
   is_system_admin: boolean;
   must_change_password: boolean;
   /** Personal display preferences, saved with the account. */
-  prefs: { heat_color?: string; /** True once the welcome tour has been finished or skipped. */ tour_done?: boolean };
+  prefs: { heat_color?: string; /** True once the welcome tour has been finished or skipped. */ tour_done?: boolean; /** True once the introduction to drawing plays has been seen. */ play_intro_done?: boolean };
 }
 export interface AuthStatus {
   /** True on a fresh install with no accounts yet. */
@@ -75,7 +75,8 @@ export interface AuthStatus {
   user: User | null;
 }
 export interface AdminUser extends User {
-  status: 'pending' | 'active' | 'disabled';
+  /** 'invited': asked in by the administrator, and has not chosen a password yet. 'pending': signed up, email not confirmed. */
+  status: 'invited' | 'pending' | 'active' | 'disabled';
   created_at: string;
   last_login_at: string | null;
   teams: number;
@@ -93,8 +94,10 @@ export interface SystemUser extends AdminUser {
   presence: 'active' | 'inactive' | 'out';
   sign_ins: number;
   active_seconds: number;
-  /** The last time they did anything, or null if never. */
+  /** The last time their open page was in touch, or null if never. */
   last_seen_at: string | null;
+  /** The last time they clicked, typed or saved, or null if never. */
+  last_active_at: string | null;
 }
 /** One sign-in: when it began, when the person was last seen in it, and how it ended. */
 export interface SignIn {
@@ -353,14 +356,18 @@ export const api = {
   forgotPassword: (email: string) => req<{ ok: true; minutes: number }>('POST', '/auth/forgot', { email }),
   resetCheck: (token: string) => req<{ ok: true; email: string }>('GET', `/auth/reset?token=${encodeURIComponent(token)}`),
   resetPassword: (token: string, password: string) => req<{ user: User }>('POST', '/auth/reset', { token, password }),
+  welcomeInfo: (token: string) => req<{ name: string; email: string }>('GET', `/auth/welcome?token=${encodeURIComponent(token)}`),
+  acceptWelcome: (b: { token: string; name: string; password: string }) => req<{ ok: true; user: User }>('POST', '/auth/welcome', b),
   inviteInfo: (token: string) => req<InviteInfo>('GET', `/auth/invite?token=${encodeURIComponent(token)}`),
   acceptTeamInvite: (b: { token: string; name?: string; password?: string }) => req<{ ok: true; existing?: boolean; user?: User }>('POST', '/auth/invite/accept', b),
-  savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
+  savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean; play_intro_done?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
   setName: (name: string) => req<{ user: User }>('PUT', '/auth/profile', { name }),
   changePassword: (current: string, next: string) => req<{ user: User }>('POST', '/auth/password', { current, next }),
 
   adminUsers: () => req<AdminUser[]>('GET', '/admin/users'),
   adminCreateUser: (b: { name: string; email: string; password: string; can_import: boolean }) => req<AdminUser>('POST', '/admin/users', b),
+  adminInvite: (b: { name: string; email: string; can_import: boolean }) => req<AdminUser>('POST', '/admin/invites', b),
+  adminResendInvite: (id: number) => req<{ ok: true }>('POST', `/admin/invites/${id}/resend`, {}),
   adminUpdateUser: (id: number, b: { can_import?: boolean; status?: 'active' | 'disabled'; password?: string }) =>
     req<AdminUser>('PUT', `/admin/users/${id}`, b),
   adminSettings: () => req<AdminSettings>('GET', '/admin/settings'),

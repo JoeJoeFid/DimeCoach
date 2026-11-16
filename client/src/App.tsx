@@ -8,7 +8,7 @@ import { ToastHost, flushDeletes, showNews } from './components/toasts';
 import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
 import TeamPicker from './components/TeamPicker';
-import { Join, PasswordForm, Setup, SignedOut } from './pages/Auth';
+import { Join, PasswordForm, Setup, SignedOut, Welcome } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import Messages from './pages/Messages';
@@ -170,9 +170,10 @@ export default function App() {
       />
     );
   // An invitation link opened on a browser where someone is already signed in.
-  else if (pathname === '/join')
+  else if (pathname === '/join' || pathname === '/welcome') {
+    const Page = pathname === '/join' ? Join : Welcome;
     view = (
-      <Join
+      <Page
         signedInAs={auth.user}
         onSignedIn={() => {
           setJustSignedIn(true);
@@ -181,6 +182,7 @@ export default function App() {
         onSignOut={() => api.logout().catch(() => {}).then(refresh)}
       />
     );
+  }
   else if (auth.user.must_change_password) view = <PasswordForm forced onDone={refresh} />;
   else view = <SignedIn key={auth.user.id} user={auth.user} onChanged={refresh} choosingTeam={justSignedIn} onTeamChosen={() => setJustSignedIn(false)} />;
   return (

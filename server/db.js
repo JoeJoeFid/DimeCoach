@@ -233,6 +233,8 @@ function addColumn(table, column, ddl) {
   if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 }
 addColumn('teams', 'calendar_url', "TEXT DEFAULT ''");
+// The last time a person clicked, typed or saved, written down at most once a minute.
+addColumn('users', 'last_action_at', 'TEXT');
 addColumn('teams', 'calendar_synced_at', "TEXT DEFAULT ''");
 // A game-day plan. It is built like a practice but kept out of the dashboard's category totals.
 addColumn('plans', 'is_game', 'INTEGER DEFAULT 0');

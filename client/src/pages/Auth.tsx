@@ -312,6 +312,86 @@ function Reset({ onSignedIn }: { onSignedIn: () => void }) {
   );
 }
 
+/** Where the administrator's emailed invitation lands: choose a password and the account is ready. */
+export function Welcome({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is signed in on this browser already, if anyone. */ signedInAs?: User | null; onSignedIn: () => void; onSignOut?: () => void }) {
+  const [params] = useSearchParams();
+  const token = params.get('token') || '';
+  const navigate = useNavigate();
+  const [email, setEmail] = useState<string | null>(null);
+  const [bad, setBad] = useState('');
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  useEffect(() => {
+    let alive = true;
+    api
+      .welcomeInfo(token)
+      .then((r) => {
+        if (!alive) return;
+        setEmail(r.email);
+        setName(r.name);
+      })
+      .catch((e) => alive && setBad((e as Error).message));
+    return () => {
+      alive = false;
+    };
+  }, [token]);
+  const enter = () => {
+    navigate('/', { replace: true });
+    onSignedIn();
+  };
+  const { busy, error, submit } = useSubmit(async () => {
+    await api.acceptWelcome({ token, name, password });
+    enter();
+  });
+  if (bad)
+    return (
+      <AuthShell title="That invitation did not work" lead={bad}>
+        {signedInAs ? (
+          <button type="button" className="btn primary" onClick={enter}>
+            Go to Dime Coach
+          </button>
+        ) : (
+          <p className="muted small auth-foot">
+            <Link to="/">Back to sign in</Link>
+          </p>
+        )}
+      </AuthShell>
+    );
+  if (email === null) return <AuthShell title="Opening your invitation…">{null}</AuthShell>;
+  if (signedInAs)
+    return (
+      <AuthShell title="You are invited to Dime Coach" lead={`This invitation is for ${email}, and you are signed in as ${signedInAs.email}. Sign out to accept it.`}>
+        <button type="button" className="btn primary" onClick={onSignOut}>
+          Sign out and continue
+        </button>
+        <p className="muted small auth-foot">
+          <button type="button" className="link" onClick={enter}>
+            Stay signed in as {signedInAs.name}
+          </button>
+        </p>
+      </AuthShell>
+    );
+  return (
+    <AuthShell title="Welcome to Dime Coach" lead="You have been invited. Choose a password to finish setting up your account.">
+      <form className="fields stack" onSubmit={submit}>
+        {error && <p className="error">{error}</p>}
+        <Field label="Email">
+          <input className="input" type="email" value={email} readOnly autoComplete="username" />
+        </Field>
+        <Field label="Your name">
+          <input className="input" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+        </Field>
+        <Field label={`Password (at least ${MIN_PASSWORD} characters)`}>
+          <input className="input" type="password" autoFocus required minLength={MIN_PASSWORD} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+        </Field>
+        <button className="btn primary" disabled={busy}>
+          {busy ? 'Creating…' : 'Create account'}
+        </button>
+      </form>
+    </AuthShell>
+  );
+}
+
 /**
  * Where an emailed invitation to a team lands. Someone new makes their account here and goes
  * straight to choosing a team. Someone who already has one gets the team added to it.
@@ -546,6 +626,7 @@ export function SignedOut({ registrationOpen, confirmEmail, canReset, onSignedIn
       <Route path="/forgot" element={<Forgot canReset={canReset} />} />
       <Route path="/reset" element={<Reset onSignedIn={onSignedIn} />} />
       <Route path="/join" element={<Join onSignedIn={onSignedIn} />} />
+      <Route path="/welcome" element={<Welcome onSignedIn={onSignedIn} />} />
       <Route path="/register" element={registrationOpen ? <Register confirm={confirmEmail} onSignedIn={onSignedIn} /> : <InviteOnly />} />
       <Route path="*" element={<Login registrationOpen={registrationOpen} canReset={canReset} onSignedIn={onSignedIn} />} />
     </Routes>
