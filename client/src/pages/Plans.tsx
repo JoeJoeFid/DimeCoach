@@ -74,6 +74,8 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const noun = kind === 'practice' ? 'practice' : 'homework sheet';
   const teamId = team!.id;
   const hasCalendar = kind === 'practice' && !!team!.calendar_url;
+  /** Whether any practice or game has been made here yet. */
+  const built = (plans || []).some((p) => !p.is_template);
 
   const load = useCallback(async () => {
     try {
@@ -407,18 +409,32 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           </button>
         </div>
       )}
-      {kind === 'practice' && (
-        <p className="muted small list-note">
-          {!hasCalendar && (
-            <>
-              Use GameChanger, TeamSnap or another team app? <Link to="/teams?tab=schedule">Link the team's calendar</Link> to see upcoming games and
-              practices in this list.
-            </>
+      {/* The calendar offer, for a team with no calendar linked. It shrinks to one line once a practice has been built. */}
+      {kind === 'practice' && !hasCalendar && plans !== null && (
+        <section className={`start-cal ${built ? 'compact' : ''}`} aria-label="Bring in your schedule">
+          <span className="start-cal-art" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width={built ? 18 : 30} height={built ? 18 : 30} fill="none" stroke="currentColor" strokeWidth="1.700" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M8.500 14.500l2.300 2.300 4.700-4.700" />
+            </svg>
+          </span>
+          {built ? (
+            <p>
+              <strong>Use GameChanger, TeamSnap or another team app?</strong> Link its calendar to see upcoming games and practices in this list.
+            </p>
+          ) : (
+            <div>
+              <h2>Already have your schedule in a team app?</h2>
+              <p>Link your GameChanger, TeamSnap, SportsEngine or Google calendar to see upcoming games and practices in this list, ready to plan.</p>
+            </div>
           )}
-          {next && !calendar && (
-            <>
-              {!hasCalendar && ' · '}
-              <button
+          <Link className={`btn ${built ? 'small' : 'primary'}`} to="/teams?tab=schedule">
+            Link your team calendar
+          </Link>
+        </section>
+      )}
+      {kind === 'practice' && next && !calendar && (
+        <p className="muted small list-note">
+          <button
                 className="link"
                 onClick={() => {
                   // The next one may be filtered out: show it, then bring it to the middle.
@@ -427,9 +443,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
                 }}
               >
                 Jump to next up
-              </button>
-            </>
-          )}
+          </button>
         </p>
       )}
 

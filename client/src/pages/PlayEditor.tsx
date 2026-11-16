@@ -1253,7 +1253,7 @@ export default function PlayEditor() {
             {snapAt && <circle className="snap-ring" cx={snapAt.x} cy={snapAt.y} r={snapAt.id.startsWith('basket') ? 1.7 : 2.2} />}
             {frame.objects.filter(isMark).map((o) => (
               <g key={o.id} onPointerDown={(e) => onObjectDown(e, o)}>
-                <MarkShape mark={o} selected={isSelected(o.id)} />
+                <MarkShape mark={o} selected={isSelected(o.id)} court={play.court} />
               </g>
             ))}
             {/* With more than one group of movement, each line wears its place in the order. */}

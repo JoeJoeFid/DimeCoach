@@ -12281,3 +12281,33 @@ img.res-thumb.link-shot {
   font-weight: 800;
   letter-spacing: -0.02em;
 }
+
+/* The same offer as one quiet line, once there are practices to look at. */
+.start-cal.compact {
+  gap: 10px 12px;
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+.start-cal.compact .start-cal-art {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+.start-cal.compact p {
+  font-size: 0.88rem;
+  max-width: none;
+}
+.start-cal.compact p strong {
+  color: var(--ink);
+}
+
+/* The landing page's plays: an arrow where a run, cut or dribble ends, and a bar where a screen is set. */
+.hero-lines path.head {
+  fill: rgba(245, 245, 240, 0.6);
+  stroke: none;
+}
+.hero-lines path.bar {
+  stroke: rgba(245, 245, 240, 0.6);
+  stroke-width: 0.4;
+}

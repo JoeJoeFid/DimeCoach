@@ -64,10 +64,10 @@ export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Pla
           </g>
         ))}
         {shot.marks.map((m) => (
-          <MarkShape key={m.id} mark={m} />
+          <MarkShape key={m.id} mark={m} court={play.court} />
         ))}
         {shot.flying.map((p, i) => (
-          <MarkShape key={`fly${i}`} mark={{ id: `fly${i}`, type: 'ball', x: p[0], y: p[1], label: '' }} />
+          <MarkShape key={`fly${i}`} mark={{ id: `fly${i}`, type: 'ball', x: p[0], y: p[1], label: '' }} court={play.court} />
         ))}
       </svg>
 

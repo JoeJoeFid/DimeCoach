@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Play } from '../types';
-import { COURT, Court, VIEW_PAD, courtHeight } from './PlayDiagram';
+import { COURT, Ball, Court, VIEW_PAD, courtHeight } from './PlayDiagram';
 
 const TICKER = ['Dynamic warm-up', 'Shell drill', 'Ground ball triangles', 'Routes on air', 'Give and go', 'Cutoffs and relays', 'Form tackling', 'Free throws', 'Live batting practice', 'Special teams', 'Water break', 'Late-game situations'];
 const POINTS = [
@@ -35,8 +35,11 @@ interface Scene {
   home?: boolean;
   court: Play['court'];
   caption: string;
-  /** The drawn lines under the players. A trailing "p" marks a pass or throw, drawn dashed. */
-  lines: [string, 'p'?][];
+  /**
+   * The drawn lines under the players. A run, cut or dribble ends in an arrow. A trailing "p" marks
+   * a pass or throw, drawn dashed, and "s" a screen, which ends in a bar.
+   */
+  lines: [string, ('p' | 's')?][];
   players: Mover[];
   ball: Mover;
 }
@@ -47,7 +50,7 @@ export const SCENES: Scene[] = [
     court: 'half',
     caption: 'A pick and roll from the top of the key, drawn on a half court',
     // 5 comes up to screen for 1, 1 dribbles off the screen, 5 rolls to the rim and gets the pass.
-    lines: [['M 29 19.8 L 28 25.6'], ['M 26.6 29.6 C 29 30 31.5 27 32 22.8'], ['M 27.4 25.6 L 26.2 11.2'], ['M 31.2 19.8 L 27.2 10.6', 'p']],
+    lines: [['M 29 19.8 L 28.1 25', 's'], ['M 26.6 29.6 C 29 30 31.5 27 32 22.8'], ['M 27.4 25.6 L 26.2 11.2'], ['M 31.2 19.8 L 27.2 10.6', 'p']],
     players: [
       { label: '2', path: 'M 7 21 L 7 21', ...HOLD },
       { label: '3', path: 'M 45 9 L 45 9', ...HOLD },
@@ -99,6 +102,19 @@ export const SCENES: Scene[] = [
     ball: { path: 'M 26 1 L 26 32.500 L 31 10.500 L 12.500 8.500 L 22 0.500', keyPoints: '0;0;0.37;0.37;0.635;0.635;0.855;0.855;1;1', keyTimes: '0;0.06;0.26;0.3;0.46;0.5;0.66;0.7;0.78;1' },
   },
 ];
+/** What a line ends in: an arrowhead pointing the way it was going, or for a screen a bar across it. */
+function lineEnd(d: string, bar: boolean) {
+  const n = (d.match(/-?\d*\.?\d+/g) || []).map(Number);
+  const [x0, y0, x, y] = n.slice(-4);
+  const len = Math.hypot(x - x0, y - y0) || 1;
+  const ux = (x - x0) / len;
+  const uy = (y - y0) / len;
+  const f = (v: number) => v.toFixed(2);
+  if (bar) return `M ${f(x - uy * 1.5)} ${f(y + ux * 1.5)} L ${f(x + uy * 1.5)} ${f(y - ux * 1.5)}`;
+  const bx = x - ux * 1.5;
+  const by = y - uy * 1.5;
+  return `M ${f(x + ux * 0.3)} ${f(y + uy * 0.3)} L ${f(bx - uy * 0.75)} ${f(by + ux * 0.75)} L ${f(bx + uy * 0.75)} ${f(by - ux * 0.75)} Z`;
+}
 const SCENE_SECONDS = 7;
 /** The plays shown on the sign-in page, one after another. */
 const HOME_SCENES = SCENES.filter((s) => s.home !== false);
@@ -117,8 +133,11 @@ export function HeroPlay({ scene, still }: { scene: Scene; still: boolean }) {
     <svg className="play-svg hero-court" viewBox={`${-VIEW_PAD} ${-VIEW_PAD} ${COURT.width + VIEW_PAD * 2} ${h + VIEW_PAD * 2}`} role="img" aria-label={scene.caption}>
       <Court court={scene.court} flipped={false} />
       <g className="hero-lines">
-        {scene.lines.map(([d, pass]) => (
-          <path key={d} d={d} className={pass ? 'pass' : undefined} />
+        {scene.lines.map(([d, kind]) => (
+          <g key={d}>
+            <path d={d} className={kind === 'p' ? 'pass' : undefined} />
+            {kind !== 'p' && <path d={lineEnd(d, kind === 's')} className={kind === 's' ? 'bar' : 'head'} />}
+          </g>
         ))}
       </g>
       {scene.players.map((p) => (
@@ -131,7 +150,7 @@ export function HeroPlay({ scene, still }: { scene: Scene; still: boolean }) {
         </g>
       ))}
       <g className="hero-ball" {...place(scene.ball)}>
-        <circle r="0.95" />
+        <Ball court={scene.court} r={0.95} />
         {motion(scene.ball)}
       </g>
     </svg>

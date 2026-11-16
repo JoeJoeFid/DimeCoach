@@ -358,9 +358,58 @@ export function textBox(mark: PlayMark) {
   return { lines, width, height: lines.length * lineHeight, lineHeight };
 }
 
-export function MarkShape({ mark, selected }: { mark: PlayMark; selected?: boolean }) {
+/**
+ * The ball of the sport the surface belongs to, drawn around 0,0: a basketball on a court, a
+ * baseball on a diamond, a football on a gridiron, a volleyball on a volleyball court.
+ * The colours are set here and not in the stylesheet, so they are the same wherever it is drawn.
+ */
+export function Ball({ court, r = 0.8 }: { court?: Play['court']; r?: number }) {
+  const ink = '#16130f';
+  const seam = { fill: 'none', stroke: ink, strokeWidth: r * 0.13, strokeLinecap: 'round' } as const;
+  const edge = { stroke: ink, strokeWidth: r * 0.16 };
+  if (court && isGridiron(court)) {
+    const w = r * 1.45;
+    const t = r * 0.95;
+    return (
+      <g transform="rotate(-35)">
+        <path d={`M ${-w} 0 Q 0 ${-t * 1.5} ${w} 0 Q 0 ${t * 1.5} ${-w} 0 Z`} style={{ fill: '#8a4b2a', ...edge }} />
+        <path d={`M ${-r * 0.5} 0 H ${r * 0.5} M ${-r * 0.3} ${-r * 0.22} V ${r * 0.22} M 0 ${-r * 0.22} V ${r * 0.22} M ${r * 0.3} ${-r * 0.22} V ${r * 0.22}`} style={{ ...seam, stroke: '#fff' }} />
+      </g>
+    );
+  }
+  if (court && isDiamond(court))
+    return (
+      <g>
+        <circle r={r} style={{ fill: '#fff', ...edge }} />
+        <path d={`M ${-r * 0.5} ${-r * 0.78} Q ${-r * 0.05} 0 ${-r * 0.5} ${r * 0.78} M ${r * 0.5} ${-r * 0.78} Q ${r * 0.05} 0 ${r * 0.5} ${r * 0.78}`} style={{ ...seam, stroke: '#d0312d' }} />
+      </g>
+    );
+  if (court && isVolley(court))
+    return (
+      <g>
+        <circle r={r} style={{ fill: '#fff8d6', ...edge }} />
+        <path
+          d={`M 0 0 Q ${r * 0.1} ${-r * 0.7} ${-r * 0.5} ${-r * 0.86} M 0 0 Q ${r * 0.65} ${r * 0.25} ${r * 0.98} ${-r * 0.1} M 0 0 Q ${-r * 0.7} ${r * 0.3} ${-r * 0.45} ${r * 0.88}`}
+          style={{ ...seam, stroke: '#2b5fb3' }}
+        />
+      </g>
+    );
+  return (
+    <g>
+      <circle r={r} style={{ fill: '#eb6834', ...edge }} />
+      <path d={`M ${-r} 0 H ${r} M 0 ${-r} V ${r} M ${-r * 0.7} ${-r * 0.7} Q ${-r * 0.15} 0 ${-r * 0.7} ${r * 0.7} M ${r * 0.7} ${-r * 0.7} Q ${r * 0.15} 0 ${r * 0.7} ${r * 0.7}`} style={seam} />
+    </g>
+  );
+}
+
+export function MarkShape({ mark, selected, court }: { mark: PlayMark; selected?: boolean; /** The surface, which says what kind of ball this sport plays with. */ court?: Play['court'] }) {
   const cls = `play-mark ${mark.type} ${mark.hasBall ? 'has-ball' : ''} ${selected ? 'selected' : ''}`;
-  if (mark.type === 'ball') return <circle className={cls} cx={mark.x} cy={mark.y} r={0.8} />;
+  if (mark.type === 'ball')
+    return (
+      <g className={cls} transform={`translate(${mark.x} ${mark.y})`}>
+        <Ball court={court} />
+      </g>
+    );
   if (mark.type === 'cone') return <path className={cls} d={`M ${mark.x} ${mark.y - 1} L ${mark.x + 0.9} ${mark.y + 0.8} L ${mark.x - 0.9} ${mark.y + 0.8} Z`} />;
   if (mark.type === 'text') {
     const box = textBox(mark);
@@ -404,7 +453,7 @@ export function PlayDiagram({ play, frame, className = '' }: { play: Pick<Play, 
         <LineShape key={o.id} line={o} objects={frame.objects} />
       ))}
       {frame.objects.filter(isMark).map((o) => (
-        <MarkShape key={o.id} mark={o} />
+        <MarkShape key={o.id} mark={o} court={play.court} />
       ))}
     </svg>
   );
