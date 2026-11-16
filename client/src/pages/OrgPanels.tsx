@@ -752,52 +752,55 @@ function LeagueCard({
       {view === 'teams' && (
         <>
           {teams.length === 0 && <p className="muted">No teams yet.</p>}
-          <ul className="org-rows">
-            {teams.map((t) => (
-              <li key={t.id}>
-                <div className="org-row-main">
-                  <strong>
-                    {t.name}
+          <ul className="org-team-grid">
+            {teams.map((t) => {
+              const row = standings.find((r) => r.team_id === t.id);
+              return (
+                <li key={t.id} className={`org-team-tile ${t.mine ? 'mine' : ''}`}>
+                  <div className="org-team-head">
+                    <strong>{t.name}</strong>
                     {t.mine && <span className="kind">Your team</span>}
-                  </strong>
-                  <span className="org-coaches">
-                    {t.coaches.length === 0 && <span className="org-note warn">No coach yet</span>}
-                    {t.coaches.map((s) => (
-                      <span key={s.user_id} className={`chip ${s.head ? 'head' : ''}`}>
-                        {s.name}
-                        <span className="muted"> {s.head ? 'head coach' : 'assistant'}</span>
-                        {manage && (
-                          <button
-                            type="button"
-                            aria-label={`Take ${s.name} off ${t.name}`}
-                            onClick={async () => {
-                              if (await confirmDialog({ title: `Take ${s.name} off ${t.name}?`, body: 'They lose access to the team. What they wrote for it is copied to their own account, so they keep it. Their coach seat stays theirs until you take it back under People.', confirmLabel: 'Take off the team', danger: true }))
-                                act(() => api.orgUnassignCoach(c.id, t.id, s.user_id), `${s.name} is off ${t.name}.`);
-                            }}
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </span>
-                    ))}
+                    {manage && <MoreMenu items={teamMenu(t)} label={`More for ${t.name}`} />}
+                  </div>
+                  <span className="muted small">
+                    {[manage && plural(t.players, 'player'), row && row.played > 0 && `${row.won} won, ${row.lost} lost${row.tied ? `, ${row.tied} tied` : ''}`].filter(Boolean).join(' · ') || (manage ? '' : 'No games played yet')}
                   </span>
-                </div>
-                {manage && <span className="muted small org-players">{plural(t.players, 'player')}</span>}
-                <span className="row-actions">
-                  {manage && (
-                    <button type="button" className="btn small" onClick={() => onCoach(t)}>
-                      Assign a coach
-                    </button>
-                  )}
-                  {t.can_open && (
-                    <button type="button" className="btn small" onClick={() => openTeam(t)} title="Opens the team: its practices, roster and calendar">
-                      <Icon d={ICONS.open} size={14} /> Open
-                    </button>
-                  )}
-                  {manage && <MoreMenu items={teamMenu(t)} label={`More for ${t.name}`} />}
-                </span>
-              </li>
-            ))}
+                    <span className="org-coaches">
+                      {t.coaches.length === 0 && <span className="org-note warn">No coach yet</span>}
+                      {t.coaches.map((s) => (
+                        <span key={s.user_id} className={`chip ${s.head ? 'head' : ''}`}>
+                          {s.name}
+                          <span className="muted"> {s.head ? 'head coach' : 'assistant'}</span>
+                          {manage && (
+                            <button
+                              type="button"
+                              aria-label={`Take ${s.name} off ${t.name}`}
+                              onClick={async () => {
+                                if (await confirmDialog({ title: `Take ${s.name} off ${t.name}?`, body: 'They lose access to the team. What they wrote for it is copied to their own account, so they keep it. Their coach seat stays theirs until you take it back under People.', confirmLabel: 'Take off the team', danger: true }))
+                                  act(() => api.orgUnassignCoach(c.id, t.id, s.user_id), `${s.name} is off ${t.name}.`);
+                              }}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </span>
+                  <div className="org-team-foot">
+                    {manage && (
+                      <button type="button" className="btn small" onClick={() => onCoach(t)}>
+                        Assign a coach
+                      </button>
+                    )}
+                    {t.can_open && (
+                      <button type="button" className="btn small" onClick={() => openTeam(t)} title="Opens the team: its practices, roster and calendar">
+                        <Icon d={ICONS.open} size={14} /> Open
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
           {manage && (
             <form

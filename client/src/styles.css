@@ -13115,3 +13115,48 @@ span.org-note {
   font: inherit;
   cursor: pointer;
 }
+
+/* The teams of one league, a tile each. */
+.org-team-grid {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.org-team-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.org-team-tile.mine {
+  border-color: var(--accent-edge);
+}
+.org-team-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+.org-team-head strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.02rem;
+  overflow-wrap: anywhere;
+}
+.org-team-foot {
+  margin-top: auto;
+  padding-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.org-team-foot:empty {
+  display: none;
+}
