@@ -12150,3 +12150,52 @@ img.res-thumb.link-shot {
   margin: 0 auto;
   max-width: 44ch;
 }
+
+/* ---------- Linking a team calendar: numbered steps, each with a small picture ---------- */
+.cal-steps {
+  list-style: none;
+  counter-reset: cal;
+  margin: 10px 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.cal-steps li {
+  counter-increment: cal;
+  display: grid;
+  grid-template-columns: 24px 20px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  font-size: 0.92rem;
+}
+.cal-steps li::before {
+  content: counter(cal);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+.cal-icon {
+  flex: none;
+  color: var(--muted);
+}
+.cal-notes {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.cal-notes li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cal-notes .cal-icon {
+  width: 15px;
+  height: 15px;
+}

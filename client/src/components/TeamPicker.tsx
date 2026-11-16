@@ -52,9 +52,7 @@ export default function TeamPicker({
           Dime Coach
         </div>
         <h1>{none ? `Welcome${first ? `, ${first}` : ''}` : `Which team${first ? `, ${first}` : ''}?`}</h1>
-        <p className="muted auth-lead">
-          {none ? 'Everything in Dime Coach belongs to a team, so start by making yours.' : 'Pick the team you want to work on. To change teams later, use "Switch team" at the top of the menu.'}
-        </p>
+        {none && <p className="muted auth-lead">Everything in Dime Coach belongs to a team, so start by making yours.</p>}
         {error && <p className="error">{error}</p>}
         {ownTeams.length > 0 && (
           <ul className="team-pick-list" aria-label="Your teams">

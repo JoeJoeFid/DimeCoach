@@ -160,6 +160,12 @@ function ParentsCard({ players, canSee }: { players: Player[] | null; canSee: bo
   );
 }
 
+const CalIcon = ({ d }: { d: string }) => (
+  <svg className="cal-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.700" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
+
 /** The owner's list of people the team is shared with, and what each one may change. */
 function StaffCard({ team }: { team: Team }) {
   const { user: me } = useApp();
@@ -759,11 +765,49 @@ function CalendarCard({ team }: { team: Team }) {
         <h2>Schedule from GameChanger</h2>
         {team.calendar_url && <span className="muted small">Last synced {fmtSynced(team.calendar_synced_at)}</span>}
       </div>
-      <p className="muted small">
-        Paste the team's calendar link to show its games and practices on your dashboard. In the GameChanger app, open the team, tap the gear
-        icon, then Schedule Sync, then Sync Schedule to Your Calendar, and copy the calendar link. Links from TeamSnap, SportsEngine and Google
-        Calendar work the same way. The schedule is read-only here: changes still happen in GameChanger.
-      </p>
+      <p className="muted small">Link the team's calendar to show its games and practices on your dashboard.</p>
+      <ol className="cal-steps">
+        <li>
+          <CalIcon d="M7 3.500h10a1.500 1.500 0 0 1 1.500 1.500v14a1.500 1.500 0 0 1-1.500 1.500H7A1.500 1.500 0 0 1 5.500 19V5A1.500 1.500 0 0 1 7 3.500ZM10.500 17.500h3" />
+          <span>
+            In the <strong>GameChanger</strong> app, open the team.
+          </span>
+        </li>
+        <li>
+          <CalIcon d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12 3v2.500M12 18.500V21M3 12h2.500M18.500 12H21M5.600 5.600l1.800 1.800M16.600 16.600l1.800 1.800M5.600 18.400l1.800-1.800M16.600 7.400l1.800-1.800" />
+          <span>
+            Tap the <strong>gear</strong> icon.
+          </span>
+        </li>
+        <li>
+          <CalIcon d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7" />
+          <span>
+            Tap <strong>Schedule Sync</strong>, then <strong>Sync Schedule to Your Calendar</strong>.
+          </span>
+        </li>
+        <li>
+          <CalIcon d="M10 14a4 4 0 0 0 5.700 0l3-3a4 4 0 0 0-5.700-5.700l-1 1M14 10a4 4 0 0 0-5.700 0l-3 3a4 4 0 0 0 5.700 5.700l1-1" />
+          <span>
+            <strong>Copy</strong> the calendar link.
+          </span>
+        </li>
+        <li>
+          <CalIcon d="M9 4.500h6v3H9ZM9 6H6.500v14.500h11V6H15M12 11v6M9.500 14.500 12 17l2.500-2.500" />
+          <span>
+            <strong>Paste</strong> it in the box below and save it.
+          </span>
+        </li>
+      </ol>
+      <ul className="cal-notes muted small">
+        <li>
+          <CalIcon d="M5 12.500l4.500 4.500L19 7.500" />
+          Links from TeamSnap, SportsEngine and Google Calendar work the same way.
+        </li>
+        <li>
+          <CalIcon d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6Z" />
+          The schedule is read-only here. Changes still happen in GameChanger.
+        </li>
+      </ul>
       {error && <p className="error">{error}</p>}
       {notice && <p className="banner ok">{notice}</p>}
       <form
