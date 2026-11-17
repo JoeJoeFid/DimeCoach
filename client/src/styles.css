@@ -14321,3 +14321,134 @@ button.cx-row:hover .cx-row-text strong {
     flex-basis: 58px;
   }
 }
+
+/* A practice's summary: the schedule on the left and the categories on the right, so that a long
+   practice makes it wide and not tall. Where there is no room for two, they stack as before. */
+.cal-peek-cols {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.cal-peek-cols > div {
+  min-width: 0;
+}
+.cal-peek-cols .cal-peek-items {
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+}
+.cal-peek-cols .cal-peek-more {
+  margin-top: 6px;
+}
+.cal-peek-cols.two {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.cal-peek-cols.two .cal-peek-cats {
+  margin-top: 0;
+  padding: 0 0 0 18px;
+  border-top: 0;
+  border-left: 1px solid var(--line);
+}
+.previous-cols {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.previous-cols.two {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.previous-cols.two .previous-items {
+  padding: 0;
+  border: 0;
+}
+.previous-cats {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.previous-cols.two .previous-cats {
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+}
+
+/* Resources: the categories a resource is filed under, and choosing them */
+.res-tag-filter {
+  flex: 0 0 auto;
+  width: auto;
+}
+.res-tags,
+.res-tag-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.res-tag-choices {
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.res-grid.compact .res-tags {
+  flex: 1 1 0;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Dashboard: the categories behind a tile's number, shown when it is pointed at */
+.tile.has-tip {
+  cursor: help;
+}
+.tile.has-tip:hover,
+.tile.has-tip:focus-visible {
+  border-color: var(--line-strong);
+}
+.tooltip.wide {
+  max-width: 360px;
+  padding: 10px 12px;
+}
+.tile-tip ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+}
+.tile-tip p {
+  margin: 6px 0 0;
+}
+.tile-tip li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+.tile-tip-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-tip-num {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.tile-tip-state {
+  grid-column: 2 / -1;
+  font-size: 0.74rem;
+  opacity: 0.75;
+}
+.tile-tip-state.off {
+  opacity: 1;
+  font-weight: 600;
+}

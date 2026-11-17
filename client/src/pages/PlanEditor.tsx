@@ -852,8 +852,12 @@ export default function PlanEditor() {
 type Minutes = ReturnType<typeof planMinutes>;
 const PREVIOUS_SHOWN = 8;
 const SUMMARY_WIDTH = 360;
+/** With the schedule on the left and the categories on the right. */
+const SUMMARY_WIDE = 620;
 /** The most activities listed in the summary of an earlier practice, so it stays a glance. */
-const PREVIOUS_ROWS = 12;
+const PREVIOUS_ROWS = 16;
+/** True when a practice has time under at least one category, so there are bars to show. */
+const hasCategories = (mins: { byTag: Map<number, number> }) => [...mins.byTag.keys()].some((k) => k !== 0);
 /**
  * The practices before this one. Pointing at one (or tabbing to it) opens a summary beside the
  * list: what was done and when, and the same category breakdown as "At a glance". Clicking opens it.
@@ -918,12 +922,13 @@ function PreviousPractices({ current, tags }: { current: Plan; tags: Tag[] }) {
         </ul>
       )}
       {shown && summary && (
-        <div ref={popup} className="previous-summary" role="status" style={{ right: shown.right, top: popupTop, width: SUMMARY_WIDTH }}>
+        <div ref={popup} className="previous-summary" role="status" style={{ right: shown.right, top: popupTop, width: hasCategories(summary.mins) ? SUMMARY_WIDE : SUMMARY_WIDTH }}>
           <h3>
             {fmtDateShort(shown.plan.date)}
             <span className="muted"> · {fmtDuration(summary.mins.work + summary.mins.breaks)}</span>
           </h3>
           {(shown.plan.title || shown.plan.location) && <p className="muted small">{[shown.plan.title, shown.plan.location].filter(Boolean).join(' · ')}</p>}
+          <div className={`previous-cols ${hasCategories(summary.mins) ? 'two' : ''}`}>
           <ol className="previous-items">
             {shown.plan.items.slice(0, PREVIOUS_ROWS).map((it, i) => (
               <li key={it.key} className={it.kind === 'break' ? 'break' : ''}>
@@ -934,7 +939,10 @@ function PreviousPractices({ current, tags }: { current: Plan; tags: Tag[] }) {
             ))}
             {shown.plan.items.length > PREVIOUS_ROWS && <li className="break">and {shown.plan.items.length - PREVIOUS_ROWS} more</li>}
           </ol>
-          <CategoryRows mins={summary.mins} tags={tags} empty="No categories were set on this one." />
+          <div className="previous-cats">
+            <CategoryRows mins={summary.mins} tags={tags} empty="No categories were set on this one." />
+          </div>
+          </div>
         </div>
       )}
     </aside>
@@ -1295,7 +1303,7 @@ function PreviousPlanPicker({ current, tags, onPick, onClose }: { current: Plan;
   const viewNoun = current.kind === 'homework' ? 'sheet' : 'practice';
   // With a pointer and room for it, a summary pops up beside the row the pointer is over.
   // On a phone or a narrow window each row has a "View" button that opens the summary under it.
-  const [peek, setPeek] = useState<{ plan: Plan; left: number; top: number } | null>(null);
+  const [peek, setPeek] = useState<{ plan: Plan; left: number; top: number; width: number } | null>(null);
   const [open, setOpen] = useState(0);
   const peekRef = useRef<HTMLDivElement>(null);
   const showPeek = (plan: Plan) => (ev: { currentTarget: HTMLElement }) => {
@@ -1303,9 +1311,9 @@ function PreviousPlanPicker({ current, tags, onPick, onClose }: { current: Plan;
     const row = ev.currentTarget.getBoundingClientRect();
     const box = ev.currentTarget.closest('.modal')?.getBoundingClientRect() ?? row;
     // Beside the box when there is room, otherwise over the right-hand end of the list.
-    const left =
-      box.right + 10 + PREV_PEEK_WIDTH <= window.innerWidth - 8 ? box.right + 10 : box.left - 10 - PREV_PEEK_WIDTH >= 8 ? box.left - 10 - PREV_PEEK_WIDTH : row.right - PREV_PEEK_WIDTH - 8;
-    setPeek({ plan, left, top: row.top });
+    const width = hasCategories(planMinutes(plan, new Set(tags.map((t) => t.id)))) ? PREV_PEEK_WIDE : PREV_PEEK_WIDTH;
+    const left = box.right + 10 + width <= window.innerWidth - 8 ? box.right + 10 : box.left - 10 - width >= 8 ? box.left - 10 - width : Math.max(8, row.right - width - 8);
+    setPeek({ plan, left, top: row.top, width });
   };
   // Once it is drawn its height is known: keep the whole of it on the screen.
   useLayoutEffect(() => {
@@ -1383,8 +1391,8 @@ function PreviousPlanPicker({ current, tags, onPick, onClose }: { current: Plan;
         </ul>
       )}
       {peek && (
-        <div className="cal-peek prev-peek" role="tooltip" ref={peekRef} style={{ left: peek.left, top: peek.top, width: PREV_PEEK_WIDTH }}>
-          <PlanSummary plan={peek.plan} tags={tags} />
+        <div className="cal-peek prev-peek" role="tooltip" ref={peekRef} style={{ left: peek.left, top: peek.top, width: peek.width }}>
+          <PlanSummary plan={peek.plan} tags={tags} wide={peek.width > PREV_PEEK_WIDTH} />
         </div>
       )}
     </Modal>
@@ -1392,15 +1400,17 @@ function PreviousPlanPicker({ current, tags, onPick, onClose }: { current: Plan;
 }
 
 const PREV_PEEK_WIDTH = 330;
+const PREV_PEEK_WIDE = 600;
 /** How many items a practice's summary lists before saying how many more there are. */
-const SUMMARY_ITEMS = 12;
+const SUMMARY_ITEMS = 16;
 
 /** What is in a practice at a glance: when and where it was, its items, and where the time went. */
-function PlanSummary({ plan, tags }: { plan: Plan; tags: Tag[] }) {
+function PlanSummary({ plan, tags, wide = false }: { plan: Plan; tags: Tag[]; wide?: boolean }) {
   const slots = schedule(plan.start_time, plan.items);
   const mins = planMinutes(plan, new Set(tags.map((t) => t.id)));
   const start = plan.start_time ? fmtClock(parseClock(plan.start_time)) : '';
   const end = start && slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : '';
+  const rows = wide ? SUMMARY_ITEMS : 12;
   return (
     <>
       <strong className="cal-peek-title">{plan.title || (plan.is_template ? 'Template' : 'Practice')}</strong>
@@ -1408,8 +1418,10 @@ function PlanSummary({ plan, tags }: { plan: Plan; tags: Tag[] }) {
         {[plan.is_template ? 'Template' : fmtDateShort(plan.date), start && (end ? `${start} to ${end}` : start), fmtDuration(mins.work + mins.breaks)].filter(Boolean).join(' · ')}
       </p>
       {plan.location && <p className="cal-peek-where">{plan.location}</p>}
+      <div className={`cal-peek-cols ${wide ? 'two' : ''}`}>
+      <div>
       <ol className={`cal-peek-items ${start ? '' : 'untimed'}`}>
-        {plan.items.slice(0, SUMMARY_ITEMS).map((it, i) => (
+        {plan.items.slice(0, rows).map((it, i) => (
           <li key={i} className={it.kind === 'break' ? 'break' : ''}>
             {start && <time>{fmtClock(slots[i].start)}</time>}
             <span>{it.title || (it.kind === 'break' ? 'Break' : 'Untitled')}</span>
@@ -1417,12 +1429,14 @@ function PlanSummary({ plan, tags }: { plan: Plan; tags: Tag[] }) {
           </li>
         ))}
       </ol>
-      {plan.items.length > SUMMARY_ITEMS && <p className="cal-peek-more">and {plan.items.length - SUMMARY_ITEMS} more</p>}
-      {[...mins.byTag.keys()].some((k) => k !== 0) && (
+      {plan.items.length > rows && <p className="cal-peek-more">and {plan.items.length - rows} more</p>}
+      </div>
+      {hasCategories(mins) && (
         <div className="cal-peek-cats">
           <CategoryRows mins={mins} tags={tags} empty="" />
         </div>
       )}
+      </div>
     </>
   );
 }

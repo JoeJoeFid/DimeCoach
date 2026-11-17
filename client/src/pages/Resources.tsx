@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link } from 'react-router-dom';
 import { api, type StorageSpace } from '../api';
 import { SpaceMeter } from '../components/SpaceMeter';
-import type { Resource } from '../types';
+import type { Resource, Tag } from '../types';
+import { useApp } from '../App';
 import { prepareImage } from '../components/ItemImages';
 import { normalizeUrl } from '../components/ItemMedia';
 import { ResourceThumb, fileUrl, searchText } from '../components/ResourcePicker';
@@ -33,6 +34,13 @@ export default function Resources() {
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  // Categories are the team's own: the ones of its sport. 0 is every category, -1 is filed under none.
+  const { sportTags } = useApp();
+  const [tagId, setTagId] = useState(0);
+  /** The key of the resource whose categories are being chosen. */
+  const [tagging, setTagging] = useState('');
+  const sportTagIds = useMemo(() => new Set(sportTags.map((t) => t.id)), [sportTags]);
+  const inTag = (r: Resource) => tagId === 0 || (tagId === -1 ? !r.tag_ids.some((id) => sportTagIds.has(id)) : r.tag_ids.includes(tagId));
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ title: '', url: '' });
   const [progress, setProgress] = useState<number | null>(null);
@@ -133,7 +141,8 @@ export default function Resources() {
     return c;
   }, [resources]);
   const gone = usePendingDeletes();
-  const shown = (resources || []).filter((r) => !(r.resource_id && gone.has(`resource:${r.resource_id}`)) && (filter === 'all' || r.kind === filter) && (!q.trim() || searchText(r).includes(q.trim().toLowerCase())));
+  const tagged = tagging ? (resources || []).find((r) => r.key === tagging) : undefined;
+  const shown = (resources || []).filter((r) => !(r.resource_id && gone.has(`resource:${r.resource_id}`)) && (filter === 'all' || r.kind === filter) && inTag(r) && (!q.trim() || searchText(r).includes(q.trim().toLowerCase())));
 
   return (
     <div className="page">
@@ -182,6 +191,17 @@ export default function Resources() {
 
       <div className="playbook-filters">
         <input className="input grow" placeholder="Search by name, address, or the drill, play or practice it is on" value={q} onChange={(e) => setQ(e.target.value)} />
+        {sportTags.length > 0 && (
+          <select className="input res-tag-filter" aria-label="Filter by category" value={tagId} onChange={(e) => setTagId(Number(e.target.value))}>
+            <option value={0}>All categories</option>
+            {sportTags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+            <option value={-1}>No category</option>
+          </select>
+        )}
         <div className="seg" role="group" aria-label="Kind of resource">
           {FILTERS.map((f) => (
             <button key={f.id} className={filter === f.id ? 'on' : ''} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
@@ -214,11 +234,40 @@ export default function Resources() {
       ) : (
         <div className={`res-grid ${compact ? 'compact' : ''}`}>
           {shown.map((r) => (
-            <ResourceCard key={r.key} resource={r} onView={() => setViewing(r)} onRename={(title) => run(() => api.renameResource(r.resource_id!, title))} onRemove={() => remove(r)} />
+            <ResourceCard key={r.key} resource={r} tags={sportTags} onTag={() => setTagging(r.key)} onView={() => setViewing(r)} onRename={(title) => run(() => api.renameResource(r.resource_id!, title))} onRemove={() => remove(r)} />
           ))}
         </div>
       )}
 
+      {tagged && (
+        <Modal title={`Categories for "${tagged.title}"`} onClose={() => setTagging('')}>
+          {sportTags.length === 0 ? (
+            <p className="muted">
+              This team has no categories yet. <Link to="/tags">Add categories</Link>, then file resources under them.
+            </p>
+          ) : (
+            <>
+              <p className="muted small">Choose every category this belongs under. It is saved as you choose.</p>
+              <div className="res-tag-choices">
+                {sportTags.map((t) => {
+                  const on = tagged.tag_ids.includes(t.id);
+                  return (
+                    <button key={t.id} type="button" className={`chip toggle ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => run(() => api.tagResource(tagged.key, on ? tagged.tag_ids.filter((id) => id !== t.id) : [...tagged.tag_ids, t.id]))}>
+                      <span className="dot" style={{ background: t.color }} />
+                      {t.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          <div className="modal-actions">
+            <button type="button" className="btn primary" onClick={() => setTagging('')}>
+              Done
+            </button>
+          </div>
+        </Modal>
+      )}
       {viewing && (
         <Modal title={viewing.title} onClose={() => setViewing(null)} wide>
           {viewing.kind === 'image' ? <img className="res-full" src={fileUrl(viewing)} alt={viewing.title} /> : <video className="res-full" src={fileUrl(viewing)} controls autoPlay />}
@@ -228,10 +277,11 @@ export default function Resources() {
   );
 }
 
-function ResourceCard({ resource: r, onView, onRename, onRemove }: { resource: Resource; onView: () => void; onRename: (title: string) => void; onRemove: () => void }) {
+function ResourceCard({ resource: r, tags, onTag, onView, onRename, onRemove }: { resource: Resource; tags: Tag[]; onTag: () => void; onView: () => void; onRename: (title: string) => void; onRemove: () => void }) {
   const [title, setTitle] = useState(r.title);
   useEffect(() => setTitle(r.title), [r.title]);
   const saved = r.resource_id !== null;
+  const mine = tags.filter((t) => r.tag_ids.includes(t.id));
   return (
     <div className={`res-card kind-${r.kind}`}>
       {r.kind === 'link' ? (
@@ -266,6 +316,16 @@ function ResourceCard({ resource: r, onView, onRename, onRemove }: { resource: R
             {r.url}
           </a>
         )}
+        {mine.length > 0 && (
+          <div className="res-tags">
+            {mine.map((t) => (
+              <span key={t.id} className="chip">
+                <span className="dot" style={{ background: t.color }} />
+                {t.name}
+              </span>
+            ))}
+          </div>
+        )}
         {r.uses.length > 0 ? (
           <ul className="res-uses">
             {r.uses.slice(0, 4).map((u, i) => (
@@ -288,6 +348,9 @@ function ResourceCard({ resource: r, onView, onRename, onRemove }: { resource: R
               {r.kind === 'video' ? 'Play' : 'View'}
             </button>
           )}
+          <button className="btn small" onClick={onTag} aria-label={`Categories for ${r.title}`}>
+            Categories
+          </button>
           {saved && (
             <button className="btn small danger" onClick={onRemove}>
               Remove

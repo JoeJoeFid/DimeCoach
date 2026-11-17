@@ -178,6 +178,8 @@ export interface Resource {
   /** Links only: 'ok' when a small preview picture is kept, 'none' when the page offers none, null when nobody has looked yet. */
   thumb?: 'ok' | 'none' | null;
   uses: { type: 'drill' | 'play' | 'practice'; id: number; name: string }[];
+  /** The categories it is filed under. */
+  tag_ids: number[];
 }
 /** The shared shape of a practice item and a library drill. */
 export interface ItemContent {

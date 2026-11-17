@@ -811,6 +811,7 @@ export const api = {
   resources: () => req<Resource[]>('GET', '/resources'),
   addResource: (b: { kind: Resource['kind']; title: string; url?: string; file_id?: number }) => req<Resource[]>('POST', '/resources', b),
   renameResource: (id: number, title: string) => req<Resource[]>('PUT', `/resources/${id}`, { title }),
+  tagResource: (key: string, tag_ids: number[]) => req<Resource[]>('PUT', '/resources/tags', { key, tag_ids }),
   deleteResource: (id: number) => req<Resource[]>('DELETE', `/resources/${id}`),
 
   plays: () => req<Play[]>('GET', '/plays'),

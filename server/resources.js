@@ -4,7 +4,7 @@
 //   1. Resources saved directly (the resources table): a link, or an uploaded picture or video, with a title.
 //   2. Everything already attached to drills, plays and practice items, gathered on the fly.
 // The same link (by address) or file (by id) appears once, with a note of everywhere it is used.
-import { all, get, run } from './db.js';
+import { all, get, run, tx } from './db.js';
 import { cleanLinks, deleteUpload } from './images.js';
 import { thumbStates } from './linkThumbs.js';
 
@@ -59,7 +59,7 @@ function attachments(ownerId) {
 function resourceList(ownerId) {
   const byKey = new Map();
   const entry = (kind, key, init) => {
-    if (!byKey.has(key)) byKey.set(key, { key, kind, title: '', url: '', file_id: null, resource_id: null, created_at: '', uses: [], ...init });
+    if (!byKey.has(key)) byKey.set(key, { key, kind, title: '', url: '', file_id: null, resource_id: null, created_at: '', uses: [], tag_ids: [], ...init });
     return byKey.get(key);
   };
   // Saved resources first, so their titles win.
@@ -74,6 +74,8 @@ function resourceList(ownerId) {
     if (!e.title && a.label) e.title = a.label;
     if (!e.uses.some((u) => u.type === a.use.type && u.id === a.use.id && u.name === a.use.name)) e.uses.push(a.use);
   }
+  // The categories each one is filed under.
+  for (const t of all('SELECT res_key, tag_id FROM resource_tags WHERE owner_id=? ORDER BY tag_id', ownerId)) byKey.get(t.res_key)?.tag_ids.push(t.tag_id);
   const out = [];
   const thumbs = thumbStates(ownerId);
   for (const e of byKey.values()) {
@@ -112,6 +114,20 @@ export function mountResources(app) {
     res.json(resourceList(req.ownerId));
   });
 
+  // Files a resource under categories: the whole set for it, replacing what was there. It is
+  // named by its key, since one that is only attached to a drill has no row of its own.
+  app.put('/api/resources/tags', (req, res) => {
+    const key = String(req.body.key ?? '');
+    if (!resourceList(req.ownerId).some((r) => r.key === key)) return res.status(404).json({ error: 'That resource was not found.' });
+    const mine = new Set(all('SELECT id FROM tags WHERE owner_id=?', req.ownerId).map((t) => t.id));
+    const ids = [...new Set(list(req.body.tag_ids).map(Number))].filter((id) => mine.has(id)).slice(0, 50);
+    tx(() => {
+      run('DELETE FROM resource_tags WHERE owner_id=? AND res_key=?', req.ownerId, key);
+      for (const id of ids) run('INSERT INTO resource_tags (owner_id, res_key, tag_id) VALUES (?,?,?)', req.ownerId, key, id);
+    });
+    res.json(resourceList(req.ownerId));
+  });
+
   app.put('/api/resources/:id', (req, res) => {
     const r = get('SELECT id FROM resources WHERE id=? AND owner_id=?', Number(req.params.id), req.ownerId);
     if (!r) return res.status(404).json({ error: 'Not found' });
@@ -125,6 +141,10 @@ export function mountResources(app) {
     if (!r) return res.status(404).json({ error: 'Not found' });
     run('DELETE FROM resources WHERE id=?', r.id);
     if (r.file_id && !attachments(req.ownerId).some((a) => a.file_id === r.file_id)) deleteUpload(r.file_id, req.ownerId);
-    res.json(resourceList(req.ownerId));
+    const left = resourceList(req.ownerId);
+    // Gone from the list altogether: its categories go with it.
+    const key = r.kind === 'link' ? `link:${r.url}` : `file:${r.file_id}`;
+    if (!left.some((x) => x.key === key)) run('DELETE FROM resource_tags WHERE owner_id=? AND res_key=?', req.ownerId, key);
+    res.json(left);
   });
 }

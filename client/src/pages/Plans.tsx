@@ -9,7 +9,7 @@ import { buildSchedule, withoutDuplicateBlanks, nextEntry, planStateOf, type Sch
 import { MoreMenu, type MenuItem } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, useCompletedDeletes, usePendingDeletes } from '../components/toasts';
-import PlanCalendar, { PEEK_WIDTH, Peek } from '../components/PlanCalendar';
+import PlanCalendar, { Peek } from '../components/PlanCalendar';
 import { CommunityPicker, ShareDialog } from '../components/community';
 
 type View = 'list' | 'calendar';
@@ -59,7 +59,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const [fromCommunity, setFromCommunity] = useState(false);
   const [sharing, setSharing] = useState<Plan | null>(null);
   // The practice whose summary is showing, and where on the screen it goes.
-  const [summary, setSummary] = useState<{ entry: ScheduleEntry; left: number; top: number } | null>(null);
+  const [summary, setSummary] = useState<{ entry: ScheduleEntry; left: number; right: number; top: number } | null>(null);
   // It goes away on a click anywhere else, on Escape, and when the page moves under it.
   useEffect(() => {
     if (!summary) return;
@@ -357,9 +357,8 @@ export default function Plans({ kind }: { kind: PlanKind }) {
             onClick={(ev) => {
               if (summary?.entry.key === e.key) return setSummary(null);
               const r = ev.currentTarget.getBoundingClientRect();
-              // Beside the button on the right when there is room, else on its left. The summary keeps itself on the screen.
-              const right = r.right + 8 + PEEK_WIDTH <= window.innerWidth - 8;
-              setSummary({ entry: e, left: right ? r.right + 8 : Math.max(8, r.left - 8 - PEEK_WIDTH), top: r.top - 8 });
+              // The summary puts itself beside the button, and keeps itself on the screen.
+              setSummary({ entry: e, left: r.left, right: r.right, top: r.top - 8 });
             }}
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

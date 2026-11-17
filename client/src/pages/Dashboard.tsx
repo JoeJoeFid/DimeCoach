@@ -1,5 +1,5 @@
 import PageTitle from '../components/PageTitle';
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FocusEvent, type HTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../App';
@@ -7,7 +7,7 @@ import type { Plan, Tag } from '../types';
 import PracticeTimeline from '../components/PracticeTimeline';
 import { DrillArt, PlayArt, TimelineArt } from '../components/Tour';
 import { sportKind } from '../sports';
-import { HEAT_BASE, HEAT_PRESETS, PERIODS, SCOPES, UNTAGGED, heatRamp, fmtDateShort, periodBounds, scopeOf, targetFor, type Period, type TargetScope, fmtDateTiny, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
+import { HEAT_BASE, HEAT_PRESETS, PERIODS, SCOPES, heatRamp, fmtDateShort, periodBounds, scopeOf, targetFor, type Period, type TargetScope, fmtDateTiny, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
 
 const PERIOD_KEY = 'practiceplan.dashboardPeriod';
 /** A category counts as neglected after this many practices in a row without it. */
@@ -21,6 +21,8 @@ interface Tip {
   x: number;
   y: number;
   content: ReactNode;
+  /** A list, which needs more room than a line of words. */
+  wide?: boolean;
 }
 
 const nowMinutes = () => {
@@ -37,7 +39,6 @@ const HeadIcon = ({ d }: { d: string }) => (
 export default function Dashboard() {
   const { team, sportTags, sport, can } = useApp();
   const [plans, setPlans] = useState<Plan[] | null>(null);
-  const [homeworkCount, setHomeworkCount] = useState(0);
   const [error, setError] = useState('');
   const [period, setPeriodState] = useState<Period>(() => {
     const saved = localStorage.getItem(PERIOD_KEY) as Period | null;
@@ -76,11 +77,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     setPlans(null);
-    Promise.all([api.plansFull(teamId, 'practice'), api.plans(teamId, 'homework')])
-      .then(([p, h]) => {
-        setPlans(p);
-        setHomeworkCount(h.length);
-      })
+    api
+      .plansFull(teamId, 'practice')
+      .then(setPlans)
       .catch((e) => setError((e as Error).message));
   }, [teamId]);
 
@@ -118,8 +117,6 @@ export default function Dashboard() {
       breaks += mins.breaks;
       for (const [t, m] of mins.byTag) totals.set(t, (totals.get(t) || 0) + m);
     }
-    const untagged = totals.get(UNTAGGED) || 0;
-
     const rows = sportTags.map((tag) => {
       const minutes = totals.get(tag.id) || 0;
       // The share of practice time that worked on this category. Shares can overlap, so they may total over 100%.
@@ -142,16 +139,7 @@ export default function Dashboard() {
       .filter((r) => perPlan.length > 0 && (r.lastDate === null || r.practicesSince >= NEGLECT_AFTER))
       .sort((a, b) => b.practicesSince - a.practicesSince);
 
-    const drills = new Map<string, { count: number; minutes: number }>();
-    for (const { plan } of perPlan)
-      for (const it of plan.items)
-        if (it.kind === 'item' && it.title.trim()) {
-          const d = drills.get(it.title.trim()) || { count: 0, minutes: 0 };
-          drills.set(it.title.trim(), { count: d.count + 1, minutes: d.minutes + it.duration_min });
-        }
-    const topDrills = [...drills.entries()].sort((a, b) => b[1].minutes - a[1].minutes).slice(0, 5);
-
-    return { perPlan, upcoming, rows, neglected, work, breaks, untagged, topDrills };
+    return { perPlan, upcoming, rows, neglected, work, breaks };
   }, [plans, sportTags, period, scope, today, clock]);
 
   const showTip = (content: ReactNode) => ({
@@ -170,6 +158,58 @@ export default function Dashboard() {
   const linkFirst = !!team && !team.calendar_url && can('schedule');
   const withTargets = stats.rows.filter((r) => r.gap !== null);
   const onTarget = withTargets.filter((r) => Math.abs(r.gap!) <= ON_TARGET_WITHIN).length;
+  // What the two category tiles show when pointed at, or reached with the keyboard: the categories behind the number.
+  const tileTip = (content: ReactNode) => ({
+    onMouseEnter: (e: MouseEvent) => setTip({ x: e.clientX, y: e.clientY, content, wide: true }),
+    onMouseMove: (e: MouseEvent) => setTip({ x: e.clientX, y: e.clientY, content, wide: true }),
+    onMouseLeave: () => setTip(null),
+    onFocus: (e: FocusEvent<HTMLElement>) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      setTip({ x: r.left, y: r.bottom - 8, content, wide: true });
+    },
+    onBlur: () => setTip(null),
+  });
+  const targetTip = (
+    <div className="tile-tip">
+      <strong>Share of practice time against target, {phrase}</strong>
+      <ul>
+        {[...withTargets]
+          .sort((a, b) => Math.abs(a.gap!) - Math.abs(b.gap!))
+          .map((r) => {
+            const ok = Math.abs(r.gap!) <= ON_TARGET_WITHIN;
+            const off = Math.round(Math.abs(r.gap!));
+            return (
+              <li key={r.tag.id}>
+                <span className="dot" style={{ background: r.tag.color }} />
+                <span className="tile-tip-name">{r.tag.name}</span>
+                <span className="tile-tip-num">
+                  {Math.round(r.share)}% of {Math.round(r.target!)}%
+                </span>
+                <span className={`tile-tip-state ${ok ? 'ok' : 'off'}`}>{ok ? 'On target' : `${off} ${off === 1 ? 'point' : 'points'} ${r.gap! > 0 ? 'over' : 'under'}`}</span>
+              </li>
+            );
+          })}
+      </ul>
+    </div>
+  );
+  const attentionTip = (
+    <div className="tile-tip">
+      <strong>Not worked on in the last {NEGLECT_AFTER} practices</strong>
+      {stats.neglected.length === 0 ? (
+        <p>Every category has been worked on recently.</p>
+      ) : (
+        <ul>
+          {stats.neglected.map((r) => (
+            <li key={r.tag.id}>
+              <span className="dot" style={{ background: r.tag.color }} />
+              <span className="tile-tip-name">{r.tag.name}</span>
+              <span className="tile-tip-num">{r.lastDate ? `last ${fmtDateTiny(r.lastDate)}, ${r.practicesSince} practices ago` : `not worked on ${phrase}`}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 
   return (
     <div className="page heat-scope" style={rampVars}>
@@ -295,8 +335,9 @@ export default function Dashboard() {
               label="Categories on target"
               value={withTargets.length ? `${onTarget} of ${withTargets.length}` : 'No targets'}
               sub={withTargets.length ? `within ${ON_TARGET_WITHIN} points of target` : 'Set targets on the Categories page'}
+              tip={withTargets.length ? tileTip(targetTip) : undefined}
             />
-            <Tile label="Need attention" value={String(stats.neglected.length)} sub={`not worked in ${NEGLECT_AFTER}+ practices`} />
+            <Tile label="Need attention" value={String(stats.neglected.length)} sub={`not worked in ${NEGLECT_AFTER}+ practices`} tip={tileTip(attentionTip)} />
           </div>
 
           <CategoryHistory perPlan={stats.perPlan} upcoming={stats.upcoming} tags={sportTags} showTip={showTip} base={base} onChoose={chooseColor} />
@@ -368,59 +409,11 @@ export default function Dashboard() {
             </section>
           </div>
 
-          <div className="dash-grid">
-            <section className="card">
-              <h2>Most used items</h2>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th className="num">Times run</th>
-                    <th className="num">Minutes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.topDrills.map(([name, d]) => (
-                    <tr key={name}>
-                      <td>{name}</td>
-                      <td className="num">{d.count}</td>
-                      <td className="num">{d.minutes}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-            <section className="card">
-              <h2>Other numbers</h2>
-              <table className="table">
-                <tbody>
-                  <tr>
-                    <td>Untagged practice time</td>
-                    <td className="num">{fmtDuration(stats.untagged)}</td>
-                  </tr>
-                  <tr>
-                    <td>Share of time spent on breaks</td>
-                    <td className="num">{Math.round((stats.breaks / Math.max(1, stats.work + stats.breaks)) * 100)}%</td>
-                  </tr>
-                  <tr>
-                    <td>Categories worked on</td>
-                    <td className="num">
-                      {stats.rows.filter((r) => r.minutes > 0).length} of {stats.rows.length}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Homework sheets created</td>
-                    <td className="num">{homeworkCount}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
-          </div>
         </>
       )}
 
       {tip && (
-        <div className="tooltip" style={{ left: Math.min(tip.x + 14, window.innerWidth - 240), top: tip.y + 14 }}>
+        <div className={`tooltip ${tip.wide ? 'wide' : ''}`} style={{ left: Math.max(8, Math.min(tip.x + 14, window.innerWidth - (tip.wide ? 380 : 240))), ...(tip.wide && tip.y > window.innerHeight * 0.55 ? { bottom: window.innerHeight - tip.y + 14 } : { top: tip.y + 14 }) }}>
           {tip.content}
         </div>
       )}
@@ -428,9 +421,10 @@ export default function Dashboard() {
   );
 }
 
-function Tile({ label, value, sub }: { label: string; value: string; sub: string }) {
+/** One number. With `tip`, pointing at it (or reaching it with the keyboard) shows what is behind the number. */
+function Tile({ label, value, sub, tip }: { label: string; value: string; sub: string; tip?: HTMLAttributes<HTMLDivElement> }) {
   return (
-    <div className="tile">
+    <div className={`tile ${tip ? 'has-tip' : ''}`} tabIndex={tip ? 0 : undefined} {...tip}>
       <div className="tile-label">{label}</div>
       <div className="tile-value">{value}</div>
       <div className="tile-sub">{sub}</div>

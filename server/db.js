@@ -179,6 +179,17 @@ CREATE TABLE IF NOT EXISTS resources (
 );
 `);
 
+// The categories a resource is filed under. A resource is known by its key (the address of a
+// link, or the file of a picture or video), so one that only exists on a drill can be filed too.
+db.exec(`
+CREATE TABLE IF NOT EXISTS resource_tags (
+  owner_id INTEGER NOT NULL REFERENCES owners(id),
+  res_key TEXT NOT NULL,
+  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (owner_id, res_key, tag_id)
+);
+`);
+
 // Columns added after the first release. Existing data files get them here.
 // Communities. See server/communities.js. People join as users; what they share stays in their own workspace.
 db.exec(`
