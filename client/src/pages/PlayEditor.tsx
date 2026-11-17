@@ -27,6 +27,7 @@ import {
   type Pt,
   OUT,
   Apron,
+  Grain,
   courtClass,
   viewBoxFor,
 } from '../components/PlayDiagram';
@@ -1207,12 +1208,14 @@ export default function PlayEditor() {
             <h4>Steps</h4>
             <DndContext sensors={stepSensors} collisionDetection={closestCenter} onDragEnd={moveStep}>
               <SortableContext items={play.frames.map((_, i) => String(i))} strategy={rectSortingStrategy}>
-                <div className="step-list">
+                {/* When any step has a note, every step becomes a row: its picture, then its note beside it. */}
+                <div className={`step-list ${play.frames.some((f) => f.note.trim()) ? 'has-notes' : ''}`}>
                   {play.frames.map((f, i) => (
                     <StepThumb
                       key={i}
                       id={String(i)}
                       number={i + 1}
+                      note={f.note}
                       on={i === index}
                       onOpen={() => {
                         setStep(i);
@@ -1269,6 +1272,7 @@ export default function PlayEditor() {
           >
             <Apron h={h} />
             <Court court={play.court} flipped={play.flipped} />
+            {play.theme === 'wood' && <Grain h={h} />}
             {frame.objects.filter(isShape).map((o) => (
               <g key={o.id} onPointerDown={(e) => onObjectDown(e, o)}>
                 <ShapeView shape={o} selected={isSelected(o.id)} />
@@ -1491,22 +1495,24 @@ function ToolIcon({ tool }: { tool: Tool }) {
 }
 
 /** One step in the strip: click to open it, drag to move it earlier or later. */
-function StepThumb({ id, number, on, onOpen, children }: { id: string; number: number; on: boolean; onOpen: () => void; children: ReactNode }) {
+function StepThumb({ id, number, note, on, onOpen, children }: { id: string; number: number; note?: string; on: boolean; onOpen: () => void; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   return (
     <button
       ref={setNodeRef}
       type="button"
-      className={`step-thumb ${on ? 'on' : ''} ${isDragging ? 'moving' : ''}`}
+      className={`step-thumb ${on ? 'on' : ''} ${isDragging ? 'moving' : ''} ${note?.trim() ? 'noted' : ''}`}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       {...attributes}
       {...listeners}
       aria-pressed={on}
-      aria-label={`Step ${number}`}
+      aria-label={note?.trim() ? `Step ${number}: ${note.trim()}` : `Step ${number}`}
       onClick={onOpen}
     >
       {children}
       <span>{number}</span>
+      {/* A step that has a note shows it beside its picture, and takes the full width of the list to do so. */}
+      {note?.trim() && <em className="step-note">{note.trim()}</em>}
     </button>
   );
 }

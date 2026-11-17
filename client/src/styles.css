@@ -14156,3 +14156,55 @@ button.cx-row:hover .cx-row-text strong {
 .court-lines .court-block {
   fill: var(--court-line);
 }
+
+/* The boards of a wood court: faint enough to read as a floor without competing with the play. */
+.court-grain {
+  pointer-events: none;
+}
+.court-board-shade {
+  fill: #5b3410;
+}
+.court-board-seam {
+  stroke: #5b3410;
+  stroke-opacity: 0.16;
+  stroke-width: 0.05;
+}
+/* Paper stays plain. */
+.sheet .court-grain {
+  display: none;
+}
+
+/* ---------- Play editor: as wide as the practice page, with room for each step's note ---------- */
+.page.play-editor {
+  max-width: 1760px;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+@media (min-width: 1101px) {
+  .builder {
+    grid-template-columns: clamp(210px, 21%, 340px) minmax(0, 1fr) clamp(250px, 19%, 320px);
+  }
+}
+.step-list.has-notes,
+.builder-left .step-list.has-notes {
+  grid-template-columns: minmax(0, 1fr);
+}
+.step-list.has-notes .step-thumb {
+  display: grid;
+  grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  text-align: left;
+}
+.step-note {
+  padding: 4px 4px 4px 0;
+  color: var(--ink);
+  font-style: normal;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+}

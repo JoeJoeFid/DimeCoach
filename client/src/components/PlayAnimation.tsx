@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Play } from '../types';
 import { beatsOf, locate, ordinal, snapshot, timeline } from '../playAnimation';
-import { Apron, Court, LineShape, MarkShape, ShapeView, courtClass, courtHeight, isLine, isShape, viewBoxFor } from './PlayDiagram';
+import { Apron, Court, Grain, LineShape, MarkShape, ShapeView, courtClass, courtHeight, isLine, isShape, viewBoxFor } from './PlayDiagram';
 
 const SPEEDS = [0.5, 1, 2];
 
@@ -55,6 +55,7 @@ export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Pla
       <svg className={`play-svg anim-court ${courtClass(play.theme)}`} viewBox={viewBoxFor(h)} role="img" aria-label={`Animation, ${caption}`}>
         <Apron h={h} />
         <Court court={play.court} flipped={play.flipped} />
+        {play.theme === 'wood' && <Grain h={h} />}
         {frame.objects.filter(isShape).map((o) => (
           <ShapeView key={o.id} shape={o} />
         ))}

@@ -165,6 +165,38 @@ function VolleyballCourt({ court }: { court: 'vfull' | 'vhalf' }) {
 /** The ground around the court, behind everything: where a player stands out of bounds. */
 export const Apron = ({ h }: { h: number }) => <rect className="court-apron" x={-PAD} y={-OUT} width={COURT.width + PAD * 2} height={h + OUT * 2} />;
 
+/** How wide one floorboard is drawn, in feet. Wider than a real board, so the boards can be made out at any size. */
+const BOARD = 0.9;
+/** Where along its length each board of the pattern has its end joint, so the joints are staggered as on a real floor. */
+const JOINTS = [3, 11, 6.5, 14, 1, 9, 12.5, 4.5];
+/** How much darker each board of the pattern is than the floor: boards are never quite one color. */
+const SHADES = [0, 0.05, 0.02, 0.07, 0.01, 0.045, 0, 0.06];
+/**
+ * A wood floor, very faintly: boards running the length of the court, with staggered end joints
+ * and slight differences of shade. It lies over the court and under everything drawn on it, and
+ * only shows on a court colored as wood.
+ */
+export function Grain({ h }: { h: number }) {
+  const tileW = BOARD * JOINTS.length;
+  const tileH = 16;
+  return (
+    <g className="court-grain" aria-hidden="true">
+      <defs>
+        <pattern id="court-boards" patternUnits="userSpaceOnUse" x={0} y={0} width={tileW} height={tileH}>
+          {JOINTS.map((joint, i) => (
+            <g key={i}>
+              <rect x={i * BOARD} y={0} width={BOARD} height={tileH} className="court-board-shade" style={{ fillOpacity: SHADES[i] }} />
+              <line x1={i * BOARD} y1={0} x2={i * BOARD} y2={tileH} className="court-board-seam" />
+              <line x1={i * BOARD} y1={joint} x2={(i + 1) * BOARD} y2={joint} className="court-board-seam" />
+            </g>
+          ))}
+        </pattern>
+      </defs>
+      <rect x={-PAD} y={-OUT} width={COURT.width + PAD * 2} height={h + OUT * 2} fill="url(#court-boards)" />
+    </g>
+  );
+}
+
 export function Court({ court, flipped }: { court: Play['court']; flipped: boolean }) {
   const { width: W, half: H } = COURT;
   const h = courtHeight(court);
@@ -468,6 +500,7 @@ export function PlayDiagram({ play, frame, className = '' }: { play: Pick<Play, 
     <svg className={`play-svg ${courtClass(play.theme)} ${className}`} viewBox={viewBoxFor(h)} role="img" aria-label={frame.note || 'Play diagram'}>
       <Apron h={h} />
       <Court court={play.court} flipped={play.flipped} />
+      {play.theme === 'wood' && <Grain h={h} />}
       {frame.objects.filter(isShape).map((o) => (
         <ShapeView key={o.id} shape={o} />
       ))}
