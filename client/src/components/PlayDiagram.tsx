@@ -167,54 +167,61 @@ export const Apron = ({ h }: { h: number }) => <rect className="court-apron" x={
 
 /** How wide one floorboard is drawn, in feet. Wider than a real board, so the boards can be made out at any size. */
 const BOARD = 0.9;
+/** Numbers that look random but are the same every time, so the floor does not change between drawings. */
+function scatter(seed: number) {
+  let t = seed;
+  return () => {
+    t = (t + 0x6d2b79f5) | 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+/** The browns a board can be tinted with. They are close to one another, so no board stands out as light or dark. */
+const BROWNS = ['#8a5a26', '#7d4f1f', '#96632b', '#a06a2e', '#85561f', '#916029'];
+const TILE_H = 23;
+const STRIPS = 31;
 /**
- * The boards of the pattern, side by side. Each strip is two boards end to end, meeting at
- * "joint" (so the joints are staggered as on a real floor), and each board has a brown of its own
- * laid over the floor: a tint and how strongly it shows. No two neighbors are alike, since a wood
- * floor is never one color.
+ * The boards of the pattern. Each strip across the floor is cut into two to four boards at
+ * scattered places, and each board is tinted a little with one of the browns, by a scattered
+ * amount. The last board of a strip runs round the end of the pattern to its start, so nothing
+ * lines up where the pattern repeats.
  */
-const BOARDS: { joint: number; a: [string, number]; b: [string, number] }[] = [
-  { joint: 3, a: ['#7a4a1c', 0.1], b: ['#fff1d0', 0.1] },
-  { joint: 11, a: ['#a8621f', 0.13], b: ['#5b3410', 0.06] },
-  { joint: 6.5, a: ['#fff1d0', 0.14], b: ['#8f5a22', 0.11] },
-  { joint: 14, a: ['#5b3410', 0.12], b: ['#c07a2e', 0.1] },
-  { joint: 1, a: ['#c07a2e', 0.08], b: ['#fff1d0', 0.06] },
-  { joint: 9, a: ['#8f5a22', 0.15], b: ['#7a4a1c', 0.04] },
-  { joint: 12.5, a: ['#fff1d0', 0.07], b: ['#a8621f', 0.14] },
-  { joint: 4.5, a: ['#6b3d14', 0.09], b: ['#c07a2e', 0.13] },
-  { joint: 8, a: ['#c98a3c', 0.14], b: ['#5b3410', 0.1] },
-  { joint: 15, a: ['#7a4a1c', 0.05], b: ['#fff1d0', 0.12] },
-  { joint: 2, a: ['#a8621f', 0.09], b: ['#6b3d14', 0.13] },
-  { joint: 10.5, a: ['#fff1d0', 0.11], b: ['#8f5a22', 0.07] },
-  { joint: 5.5, a: ['#5b3410', 0.08], b: ['#c98a3c', 0.15] },
-];
+const BOARDS = (() => {
+  const next = scatter(20261117);
+  return Array.from({ length: STRIPS }, () => {
+    const cuts = 2 + Math.floor(next() * 3);
+    const joints = Array.from({ length: cuts }, () => 0.5 + next() * (TILE_H - 1)).sort((x, y) => x - y);
+    // How strongly each board is tinted: a narrow range, so the floor varies without going patchy.
+    const pieces = joints.map(() => ({ color: BROWNS[Math.floor(next() * BROWNS.length)], strength: 0.02 + next() * 0.075 }));
+    return { joints, pieces };
+  });
+})();
 /**
  * A wood floor, faintly: boards running the length of the court, each a slightly different brown,
  * with seams between them that can barely be made out. It lies over the court and under
  * everything drawn on it, and only shows on a court colored as wood.
  */
 export function Grain({ h }: { h: number }) {
-  const tileW = BOARD * BOARDS.length;
-  const tileH = 16;
   return (
     <g className="court-grain" aria-hidden="true">
       <defs>
-        <pattern id="court-boards" patternUnits="userSpaceOnUse" x={0} y={0} width={tileW} height={tileH}>
-          {BOARDS.map((board, i) => {
-            // Each strip has two joints. One board lies between them; the other runs from the second
-            // joint round the end of the pattern to the first, so that where the pattern repeats no
-            // line of joints runs straight across the floor.
-            const j1 = Math.min(board.joint, (board.joint + 7 + (i % 4)) % tileH);
-            const j2 = Math.max(board.joint, (board.joint + 7 + (i % 4)) % tileH);
+        <pattern id="court-boards" patternUnits="userSpaceOnUse" x={0} y={0} width={BOARD * STRIPS} height={TILE_H}>
+          {BOARDS.map(({ joints, pieces }, i) => {
             const x = i * BOARD;
+            const last = pieces[pieces.length - 1];
             return (
               <g key={i}>
-                <rect x={x} y={j1} width={BOARD} height={j2 - j1} fill={board.a[0]} fillOpacity={board.a[1]} />
-                <rect x={x} y={0} width={BOARD} height={j1} fill={board.b[0]} fillOpacity={board.b[1]} />
-                <rect x={x} y={j2} width={BOARD} height={tileH - j2} fill={board.b[0]} fillOpacity={board.b[1]} />
-                <line x1={x} y1={0} x2={x} y2={tileH} className="court-board-seam" />
-                <line x1={x} y1={j1} x2={x + BOARD} y2={j1} className="court-board-seam" />
-                <line x1={x} y1={j2} x2={x + BOARD} y2={j2} className="court-board-seam" />
+                {/* from the last joint, round the end of the pattern, to the first */}
+                <rect x={x} y={0} width={BOARD} height={joints[0]} fill={last.color} fillOpacity={last.strength} />
+                <rect x={x} y={joints[joints.length - 1]} width={BOARD} height={TILE_H - joints[joints.length - 1]} fill={last.color} fillOpacity={last.strength} />
+                {joints.slice(0, -1).map((j, n) => (
+                  <rect key={n} x={x} y={j} width={BOARD} height={joints[n + 1] - j} fill={pieces[n].color} fillOpacity={pieces[n].strength} />
+                ))}
+                <line x1={x} y1={0} x2={x} y2={TILE_H} className="court-board-seam" />
+                {joints.map((j, n) => (
+                  <line key={n} x1={x} y1={j} x2={x + BOARD} y2={j} className="court-board-seam" />
+                ))}
               </g>
             );
           })}
