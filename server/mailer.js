@@ -28,28 +28,112 @@ const LOGO_FILE = path.join(import.meta.dirname, '..', 'dist', 'logo-mark.png');
 const siteUrl = () => String(process.env.PP_PUBLIC_URL || '').trim().replace(/\/+$/, '');
 const logoUrl = () => (/^https?:\/\//.test(siteUrl()) && fs.existsSync(LOGO_FILE) ? `${siteUrl()}/logo-mark.png` : '');
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-/** The message as a simple page: each paragraph of the text, with web addresses made into links. */
-export function htmlFor(text) {
+// Colors of the app, written out: mail programs do not read style sheets or variables.
+const C = { page: '#f3f3f0', card: '#ffffff', ink: '#0d0d0e', ink2: '#48484d', muted: '#76767d', line: '#e3e3dd', band: '#0d0d0e', accent: '#d2f24b', accentInk: '#151b00', soft: '#f6f6f3' };
+const FONT = "'Geist',Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif";
+const LINK = /https?:\/\/[^\s<]+/g;
+const linked = (escaped) => escaped.replace(LINK, (url) => `<a href="${url}" style="color:${C.ink};text-decoration:underline;word-break:break-all">${url}</a>`).replace(/\n/g, '<br>');
+/** What to write on the button for a link, from the line that leads up to it: "Open it here:" becomes "Open it here". */
+function buttonLabel(lead) {
+  const words = String(lead || '').replace(/[:.]\s*$/, '').trim();
+  if (words && words.length <= 44) return words;
+  // Too long for a button: "Choose a password to finish setting up your account" is cut to "Choose a password".
+  const short = words.split(' to ')[0];
+  return short.length >= 8 && short.length <= 44 && short !== words ? short : 'Open in Dime Coach';
+}
+
+/**
+ * The message as a page for mail programs that show one. It is built from the same words as the
+ * plain text, which every message is written in, by reading how they are laid out:
+ *  - a paragraph that is only a link becomes a button, named by the line before it
+ *  - "Someone wrote:" followed by their words becomes a set-off note
+ *  - a line followed by lines that start with "- " becomes a list
+ *  - what comes after the button (how long the link lasts, what to do if it was a mistake) is small print
+ * So a message looks right without anything extra being written for it.
+ */
+export function htmlFor(text, subject = '') {
   const logo = logoUrl();
+  const site = siteUrl();
   const paragraphs = String(text)
     .split(/\n{2,}/)
     .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => {
-      const body = esc(p)
-        .replace(/https?:\/\/[^\s<]+/g, (url) => `<a href="${url}" style="color:#1E6B4A;word-break:break-all">${url}</a>`)
-        .replace(/\n/g, '<br>');
-      return `<p style="margin:0 0 16px">${body}</p>`;
-    })
-    .join('');
-  const mark = logo ? `<img src="${esc(logo)}" width="42" height="36" alt="" style="vertical-align:middle;border:0;margin-right:10px">` : '';
+    .filter(Boolean);
+  const blocks = [];
+  let afterButton = false;
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i];
+    const lines = p.split('\n');
+    const small = `margin:0 0 10px;font-size:13px;line-height:1.5;color:${C.muted}`;
+    // Only a link: the thing to press. The line before it has already said what it is for.
+    if (/^https?:\/\/\S+$/.test(p)) {
+      const lead = paragraphs[i - 1] && /[:.]$/.test(paragraphs[i - 1]) ? paragraphs[i - 1].split('\n').pop() : '';
+      blocks.push(
+        `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 14px"><tr><td style="border-radius:10px;background:${C.accent}">` +
+          `<a href="${esc(p)}" style="display:inline-block;padding:13px 22px;font-size:15px;font-weight:700;color:${C.accentInk};text-decoration:none;border-radius:10px">${esc(buttonLabel(lead))} &rarr;</a>` +
+          `</td></tr></table>` +
+          `<p style="${small}">Or paste this link into your browser:<br><a href="${esc(p)}" style="color:${C.muted};word-break:break-all">${esc(p)}</a></p>`,
+      );
+      afterButton = true;
+      continue;
+    }
+    // "Pat wrote:" and then what Pat wrote.
+    if (lines.length > 1 && /^.{1,60} wrote:$/.test(lines[0])) {
+      blocks.push(
+        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 18px"><tr><td style="padding:14px 16px;border-left:4px solid ${C.accent};background:${C.soft};border-radius:0 10px 10px 0">` +
+          `<div style="font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:${C.muted};margin:0 0 6px">${esc(lines[0].replace(/:$/, ''))}</div>` +
+          `<div style="font-size:15px;line-height:1.55;color:${C.ink}">${linked(esc(lines.slice(1).join('\n')))}</div>` +
+          `</td></tr></table>`,
+      );
+      continue;
+    }
+    // A line, then a list under it.
+    const items = lines.filter((l) => /^- /.test(l));
+    if (items.length && items.length >= lines.length - 1) {
+      const head = /^- /.test(lines[0]) ? '' : lines[0];
+      blocks.push(
+        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 18px;border:1px solid ${C.line};border-radius:10px"><tr><td style="padding:14px 16px">` +
+          (head ? `<div style="font-size:13px;font-weight:700;color:${C.ink2};margin:0 0 8px">${esc(head.replace(/:$/, ''))}</div>` : '') +
+          items
+            .map((l, n) => {
+              const m = /^- (.*?)(?: \(([^()]*)\))?$/.exec(l);
+              return (
+                `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${n ? `border-top:1px solid ${C.line};` : ''}"><tr>` +
+                `<td style="padding:7px 0;font-size:14px;color:${C.ink}">${esc(m[1])}</td>` +
+                (m[2] ? `<td align="right" style="padding:7px 0 7px 12px;font-size:13px;color:${C.muted};white-space:nowrap">${esc(m[2])}</td>` : '') +
+                `</tr></table>`
+              );
+            })
+            .join('') +
+          `</td></tr></table>`,
+      );
+      continue;
+    }
+    // The line that leads to a button says what the button is for: the button now says it, so the line goes quiet.
+    const leadsToButton = /^https?:\/\/\S+$/.test(paragraphs[i + 1] || '') && /:$/.test(p) && lines.length === 1 && buttonLabel(p) === p.replace(/:$/, '').trim();
+    if (leadsToButton) continue;
+    blocks.push(afterButton ? `<p style="${small}">${linked(esc(p))}</p>` : `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:${C.ink}">${linked(esc(p))}</p>`);
+  }
+  // The first words, shown beside the subject in the list of messages.
+  const preview = esc(paragraphs.slice(1, 3).join(' ').replace(LINK, '').replace(/\s+/g, ' ').slice(0, 140));
+  // The mark is drawn for a light page, so on the dark band it sits on a small white tile.
+  const mark = logo ? `<span style="display:inline-block;vertical-align:middle;margin-right:10px;padding:4px 5px;border-radius:8px;background:#ffffff;line-height:0"><img src="${esc(logo)}" width="28" height="24" alt="" style="border:0"></span>` : '';
   return (
-    '<!doctype html><html><body style="margin:0;padding:24px 12px;background:#F9FAFB;font-family:Inter,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#111827">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #E5E7EB;border-radius:12px"><tr><td style="padding:28px 28px 12px">' +
-    `<div style="margin:0 0 22px;font-size:20px;font-weight:700;letter-spacing:-0.02em;color:#0F2B21">${mark}<span style="vertical-align:middle">Dime Coach</span></div>` +
-    `<div style="font-size:15px;line-height:1.55">${paragraphs}</div>` +
-    '</td></tr></table></td></tr></table></body></html>'
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(subject || 'Dime Coach')}</title></head>` +
+    `<body style="margin:0;padding:0;background:${C.page};font-family:${FONT};color:${C.ink};-webkit-text-size-adjust:100%">` +
+    `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${C.page}">${preview}</div>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}"><tr><td align="center" style="padding:28px 12px">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;border-radius:16px;overflow:hidden;border:1px solid ${C.line};background:${C.card}">` +
+    `<tr><td style="background:${C.band};padding:18px 28px"><span style="font-size:18px;font-weight:700;letter-spacing:-0.02em;color:#ffffff">${mark}<span style="vertical-align:middle">Dime Coach</span></span></td></tr>` +
+    `<tr><td style="height:4px;line-height:4px;font-size:0;background:${C.accent}">&nbsp;</td></tr>` +
+    `<tr><td style="padding:28px 28px 18px">` +
+    (subject ? `<h1 style="margin:0 0 18px;font-size:22px;line-height:1.25;letter-spacing:-0.02em;color:${C.ink}">${esc(subject)}</h1>` : '') +
+    blocks.join('') +
+    `</td></tr>` +
+    `<tr><td style="padding:16px 28px 22px;border-top:1px solid ${C.line};font-size:12px;line-height:1.5;color:${C.muted}">` +
+    `Dime Coach is where coaches plan practices, keep drills and draw plays.` +
+    (site ? ` <a href="${esc(site)}" style="color:${C.muted}">${esc(site.replace(/^https?:\/\//, ''))}</a>` : '') +
+    `</td></tr>` +
+    `</table></td></tr></table></body></html>`
   );
 }
 
@@ -58,7 +142,7 @@ async function viaResend({ to, subject, text }) {
   const r = await fetch(RESEND_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey()}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: from(), to: [to], subject, text, html: htmlFor(text) }),
+    body: JSON.stringify({ from: from(), to: [to], subject, text, html: htmlFor(text, subject) }),
     signal: AbortSignal.timeout(15000),
   });
   if (r.ok) return;

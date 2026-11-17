@@ -7,6 +7,7 @@ import RegistrationCard from '../components/RegistrationCard';
 import SportIcon from '../components/SportIcon';
 import AccessibilityCard from '../components/AccessibilityCard';
 import CommunityPlans from '../components/CommunityPlans';
+import EmailSamples from '../components/EmailSamples';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 import { SpaceMeter, fmtSpace } from '../components/SpaceMeter';
@@ -465,6 +466,7 @@ export default function SystemAdmin() {
             Sign-up and email
           </h2>
           {settings && <RegistrationCard settings={settings} run={run} />}
+          <EmailSamples canSend={canEmail} run={run} />
 
             </>
           )}

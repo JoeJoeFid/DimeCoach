@@ -9,7 +9,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { all, db, dbPath, get, run, tx } from './db.js';
 import { createWorkspace } from './seed.js';
-import { mailerStatus, sendMail } from './mailer.js';
+import { htmlFor, mailerStatus, sendMail } from './mailer.js';
+import { MAIL_SAMPLES } from './mailSamples.js';
 import { notify } from './notices.js';
 import { RESET_MINUTES, claimInvites, clearResets, inviteByToken, mailReset, resetByToken } from './invites.js';
 import { claimOrgInvites, orgInviteByToken } from './orgs.js';
@@ -974,6 +975,26 @@ export function mountAuth(app) {
       text: `Hi ${req.user.name},\n\nThis is a test from Dime Coach. If you are reading it, email is connected and working.`,
     });
     if (!r.ok) return res.status(502).json({ error: `The test email was not sent. ${r.error}` });
+    res.json({ ok: true, to: req.user.email });
+  });
+  // One example of each kind of email, to look at here or to send to the administrator's own address.
+  const sampleFor = (req) => {
+    const s = MAIL_SAMPLES.find((x) => x.id === req.params.id);
+    const base = String(process.env.PP_PUBLIC_URL || `${req.protocol}://${req.headers.host}`).replace(/\/+$/, '');
+    return s ? s.make({ me: req.user, base }) : null;
+  };
+  app.get('/api/admin/email-samples', admin, (_req, res) => res.json(MAIL_SAMPLES.map((s) => ({ id: s.id, label: s.label }))));
+  app.get('/api/admin/email-samples/:id', admin, (req, res) => {
+    const m = sampleFor(req);
+    if (!m) return res.status(404).json({ error: 'Not found' });
+    res.json({ subject: m.subject, text: m.text, html: htmlFor(m.text, m.subject) });
+  });
+  app.post('/api/admin/email-samples/:id/send', admin, async (req, res) => {
+    const m = sampleFor(req);
+    if (!m) return res.status(404).json({ error: 'Not found' });
+    if (!mailerStatus().configured) return res.status(400).json({ error: 'No email service is connected, so nothing can be sent. The preview still shows how it looks.' });
+    const r = await sendMail({ to: req.user.email, subject: `[Sample] ${m.subject}`, text: m.text });
+    if (!r.ok) return res.status(502).json({ error: `The sample was not sent. ${r.error}` });
     res.json({ ok: true, to: req.user.email });
   });
   app.put('/api/admin/settings', admin, (req, res) => {

@@ -724,6 +724,9 @@ export const api = {
   communityPlans: () => req<CommunityPlanRow[]>('GET', '/system/communities'),
   setCommunityPlan: (id: number, b: { plan?: 'group' | 'organization'; seats?: number; expires?: string }) => req<CommunityPlanRow[]>('PUT', `/system/communities/${id}`, b),
   adminSetSettings: (b: { registration_mode?: AdminSettings['registration_mode']; keyboard_access?: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
+  emailSamples: () => req<{ id: string; label: string }[]>('GET', '/admin/email-samples'),
+  emailSample: (id: string) => req<{ subject: string; text: string; html: string }>('GET', `/admin/email-samples/${id}`),
+  sendEmailSample: (id: string) => req<{ ok: true; to: string }>('POST', `/admin/email-samples/${id}/send`, {}),
   adminTestEmail: () => req<{ ok: true; to: string }>('POST', '/admin/test-email'),
 
   aiStatus: () => req<AiStatus>('GET', '/ai/status'),
