@@ -204,6 +204,7 @@ function mailSystemInvite(req, user) {
     subject: `${req.user.name} invited you to Dime Coach`,
     text:
       `Hi ${user.name},\n\n${req.user.name} invited you to Dime Coach, where coaches plan practices, keep drills and draw plays.\n\n` +
+      (String(user.invite_note || '').trim() ? `${req.user.name} wrote:\n${String(user.invite_note).trim()}\n\n` : '') +
       `Choose a password to finish setting up your account:\n\n${base}/welcome?token=${token}\n\n` +
       `The link works for ${SYSTEM_INVITE_DAYS} days. If you were not expecting this, ignore this message and nothing will happen.`,
     secret: token,
@@ -637,6 +638,8 @@ export function mountAuth(app) {
     // Nobody can sign in with this: the password is random and thrown away.
     const id = existing ? existing.id : Number(run("INSERT INTO users (email, name, password_hash, can_import, status) VALUES (?,?,?,?,'invited')", email, name, hashPassword(crypto.randomBytes(32).toString('base64url')), req.body.can_import ? 1 : 0).lastInsertRowid);
     if (existing) run('UPDATE users SET name=? WHERE id=?', name, id);
+    // A message of the administrator's own, to go in the invitation.
+    run('UPDATE users SET invite_note=? WHERE id=?', str(req.body.note).slice(0, 2000).trim(), id);
     const r = await mailSystemInvite(req, get('SELECT * FROM users WHERE id=?', id));
     if (!r.ok) {
       if (!existing) run('DELETE FROM users WHERE id=?', id);
@@ -648,6 +651,11 @@ export function mountAuth(app) {
     const target = get("SELECT * FROM users WHERE id=? AND status='invited'", Number(req.params.id));
     if (!target) return res.status(404).json({ error: 'Not found' });
     if (!mailerStatus().configured) return res.status(400).json({ error: 'No email service is connected, so the invitation cannot be sent.' });
+    // Sent again with the same message, unless a new one comes with the request.
+    if (typeof req.body.note === 'string') {
+      run('UPDATE users SET invite_note=? WHERE id=?', str(req.body.note).slice(0, 2000).trim(), target.id);
+      target.invite_note = str(req.body.note).slice(0, 2000).trim();
+    }
     const r = await mailSystemInvite(req, target);
     if (!r.ok) return res.status(502).json({ error: `The invitation was not sent. ${r.error}` });
     res.json({ ok: true });

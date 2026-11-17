@@ -94,7 +94,7 @@ export default function SystemAdmin() {
   /** Cap boxes being typed in, by user id. Absent means the box shows the saved value. */
   const [caps, setCaps] = useState<Record<number, string>>({});
   const [defaultCap, setDefaultCap] = useState<string | null>(null);
-  const blank = { name: '', email: '', password: '', can_import: false, cap: '' };
+  const blank = { name: '', email: '', password: '', can_import: false, cap: '', note: '' };
   const [draft, setDraft] = useState(blank);
   /** How a person is added: an emailed invitation, or an account made here with a starting password. */
   const [adding, setAdding] = useState<'invite' | 'password'>('invite');
@@ -144,7 +144,7 @@ export default function SystemAdmin() {
     const d = draft;
     run(
       async () => {
-        const made = inviting ? await api.adminInvite({ name: d.name, email: d.email, can_import: d.can_import }) : await api.adminCreateUser({ name: d.name, email: d.email, password: d.password, can_import: d.can_import });
+        const made = inviting ? await api.adminInvite({ name: d.name, email: d.email, can_import: d.can_import, note: d.note }) : await api.adminCreateUser({ name: d.name, email: d.email, password: d.password, can_import: d.can_import });
         // The account exists from here on, so clear the form even if a follow-up setting fails.
         setDraft(blank);
         if (d.cap.trim() !== '') await api.systemUpdateUser(made.id, { upload_cap_mb: Number(d.cap) });
@@ -350,6 +350,20 @@ export default function SystemAdmin() {
                 <input type="checkbox" checked={draft.can_import} onChange={(e) => setDraft({ ...draft, can_import: e.target.checked })} />
                 Allow plan import
               </label>
+              {inviting && (
+                <label className="invite-note">
+                  <span className="field-label">Your message (optional)</span>
+                  <textarea
+                    className="input"
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="A few words of your own to go in the invitation, such as why you are inviting them or what to do first."
+                    value={draft.note}
+                    onChange={(e) => setDraft({ ...draft, note: e.target.value })}
+                  />
+                  <span className="muted small">It goes in the email under “{me.name} wrote:”, above the link. Sending the invitation again sends the same message.</span>
+                </label>
+              )}
               <button className="btn primary">{inviting ? 'Send invitation' : 'Create account'}</button>
             </form>
           </div>

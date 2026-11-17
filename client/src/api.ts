@@ -596,7 +596,7 @@ export const api = {
 
   adminUsers: () => req<AdminUser[]>('GET', '/admin/users'),
   adminCreateUser: (b: { name: string; email: string; password: string; can_import: boolean }) => req<AdminUser>('POST', '/admin/users', b),
-  adminInvite: (b: { name: string; email: string; can_import: boolean }) => req<AdminUser>('POST', '/admin/invites', b),
+  adminInvite: (b: { name: string; email: string; can_import: boolean; note: string }) => req<AdminUser>('POST', '/admin/invites', b),
   adminResendInvite: (id: number) => req<{ ok: true }>('POST', `/admin/invites/${id}/resend`, {}),
   adminUpdateUser: (id: number, b: { can_import?: boolean; status?: 'active' | 'disabled'; password?: string }) =>
     req<AdminUser>('PUT', `/admin/users/${id}`, b),

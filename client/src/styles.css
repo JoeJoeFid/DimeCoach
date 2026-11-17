@@ -13988,3 +13988,11 @@ button.cx-row:hover .cx-row-text strong {
     justify-content: flex-start;
   }
 }
+
+/* The administrator's own words for an invitation: a full row of the form. */
+.invite-note {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}

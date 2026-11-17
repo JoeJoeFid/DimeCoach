@@ -253,6 +253,8 @@ addColumn('plans', 'print_notes', 'INTEGER DEFAULT 1');
 addColumn('users', 'prefs_json', "TEXT DEFAULT '{}'");
 // Upload space in megabytes. NULL means the system default applies.
 addColumn('users', 'upload_cap_mb', 'INTEGER');
+// What the administrator wrote to go with an invitation, kept so that sending it again says the same.
+addColumn('users', 'invite_note', "TEXT DEFAULT ''");
 // Target overrides per tracking period: {"practice": 20, "week": 15, ...}. Missing keys use target_pct.
 addColumn('tags', 'targets_json', "TEXT DEFAULT '{}'");
 // Pictures on an item or drill: [{id, width_pct, caption}].
