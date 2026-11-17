@@ -30,7 +30,7 @@ export function buildSchedule(plans: Plan[], events: ScheduleEvent[]): ScheduleE
   for (const ev of events) {
     // A game only pairs with a plan made for it (same title), so a practice on game day stays separate.
     const planned =
-      filledFirst.find((e) => e.plan && e.date === ev.date && !e.event && e.title === ev.title) ||
+      filledFirst.find((e) => e.plan && e.date === ev.date && !e.event && (e.title === ev.title || e.title === ev.full_title)) ||
       (ev.kind !== 'game' ? filledFirst.find((e) => e.plan && e.date === ev.date && !e.event) : undefined);
     if (planned) planned.event = ev;
     else list.push({ key: `e${ev.id}`, date: ev.date, time: ev.start_time, kind: ev.kind, title: ev.title, location: ev.location, event: ev });

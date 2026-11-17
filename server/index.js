@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { all, get, run, tx } from './db.js';
 import { seedIfEmpty, seedSport } from './seed.js';
 import { ImportError, analyzePlan, claudeStatus, manualPrompt, parseDraft } from './ai.js';
-import { CalendarError, fetchCalendar, normalizeCalendarUrl, validZone } from './calendar.js';
+import { CalendarError, fetchCalendar, normalizeCalendarUrl, sharedOpening, validZone, withoutOpening } from './calendar.js';
 import { mountAuth, requireImport } from './auth.js';
 import { mountCoachLibrary } from './coachLibrary.js';
 import { mountCommunities } from './communities.js';
@@ -161,9 +161,14 @@ const calendarFail = (res, e) => {
  * Someone has worked on this event in Dime Coach: said what it is, or made a plan for it. A plan
  * belongs to an event the way the schedule pairs them: same day, and for a game the same title.
  */
-const eventTouched = (ev) =>
+const eventTouched = (ev, opening = '') =>
   !!ev.touched ||
-  !!get("SELECT 1 FROM plans WHERE team_id=? AND date=? AND is_template=0 AND kind='practice' AND (title=? OR ?<>'game') LIMIT 1", ev.team_id, ev.date, ev.title, ev.kind);
+  !!get(
+    "SELECT 1 FROM plans WHERE team_id=? AND date=? AND is_template=0 AND kind='practice' AND (title=? OR title=? OR ?<>'game') LIMIT 1",
+    ev.team_id, ev.date, ev.title, withoutOpening(ev.title, opening), ev.kind,
+  );
+/** The team's name as its calendar writes it in front of every event, to be left off when showing them. */
+const teamOpening = (teamId) => sharedOpening(all("SELECT title FROM events WHERE team_id=? AND uid NOT LIKE 'league-%'", teamId).map((r) => r.title));
 const EVENT_FIELDS = ['title', 'date', 'start_time', 'end_time', 'location', 'notes'];
 const eventSource = (ev) => JSON.stringify(Object.fromEntries(EVENT_FIELDS.map((k) => [k, ev[k] ?? ''])));
 /**
@@ -182,6 +187,7 @@ function zoneFrom(req, team) {
 }
 async function syncCalendar(team) {
   const events = await fetchCalendar(team.calendar_url, team.time_zone);
+  const opening = sharedOpening(events.map((e) => e.title));
   tx(() => {
     // Games set by the team's league are not from this calendar, and stay.
     const old = new Map();
@@ -195,7 +201,7 @@ async function syncCalendar(team) {
         );
       // An event that was only planned, not changed itself, shows its plan's own time and place. Its
       // calendar details can follow the calendar as long as it stays on the same day, so the plan still belongs to it.
-      else if (eventTouched(row) && (row.touched || ev.date !== row.date || (row.kind === 'game' && ev.title !== row.title)))
+      else if (eventTouched(row, opening) && (row.touched || ev.date !== row.date || (row.kind === 'game' && ev.title !== row.title)))
         run('UPDATE events SET gone=0, src_json=? WHERE id=?', eventSource(ev), row.id);
       else
         run(
@@ -206,7 +212,7 @@ async function syncCalendar(team) {
     // What the calendar no longer has: gone here too, unless someone has worked on it here.
     for (const rows of old.values())
       for (const row of rows) {
-        if (eventTouched(row)) run("UPDATE events SET gone=1, src_json='' WHERE id=?", row.id);
+        if (eventTouched(row, opening)) run("UPDATE events SET gone=1, src_json='' WHERE id=?", row.id);
         else run('DELETE FROM events WHERE id=?', row.id);
       }
     // Where the coach has said what an event really is, that wins over the guess made from its title.
@@ -220,16 +226,17 @@ async function syncCalendar(team) {
   return events.length;
 }
 /** An event as the schedule shows it, with what the team calendar now says when that differs from what is kept here. */
-function eventOut(ev) {
+function eventOut(ev, opening = teamOpening(ev.team_id)) {
   let now = null;
   try {
     const src = ev.src_json ? JSON.parse(ev.src_json) : null;
-    if (src && ['title', 'date', 'start_time', 'location'].some((k) => (src[k] ?? '') !== (ev[k] ?? ''))) now = { title: src.title, date: src.date, start_time: src.start_time, location: src.location };
+    if (src && ['title', 'date', 'start_time', 'location'].some((k) => (src[k] ?? '') !== (ev[k] ?? ''))) now = { title: withoutOpening(src.title, opening), date: src.date, start_time: src.start_time, location: src.location };
   } catch {
     /* nothing remembered */
   }
   return {
-    id: ev.id, kind: ev.kind, title: ev.title, date: ev.date, start_time: ev.start_time, end_time: ev.end_time, location: ev.location, notes: ev.notes,
+    // The title is shown without the team's name in front. The full one is kept for matching plans made before.
+    id: ev.id, kind: ev.kind, title: withoutOpening(ev.title, opening), full_title: ev.title, date: ev.date, start_time: ev.start_time, end_time: ev.end_time, location: ev.location, notes: ev.notes,
     official: String(ev.uid).startsWith('league-') ? 1 : 0, gone: !!ev.gone, calendar_now: now,
   };
 }
@@ -300,7 +307,8 @@ app.post('/api/teams/:id/calendar/sync', async (req, res) => {
 app.get('/api/teams/:id/events', (req, res) => {
   if (!ownTeam(req, req.params.id)) return notFound(res);
   const from = /^\d{4}-\d{2}-\d{2}$/.test(str(req.query.from)) ? str(req.query.from) : '0000-00-00';
-  res.json(all('SELECT * FROM events WHERE team_id=? AND date>=? ORDER BY date, start_time, id', id(req.params.id), from).map(eventOut));
+  const opening = teamOpening(id(req.params.id));
+  res.json(all('SELECT * FROM events WHERE team_id=? AND date>=? ORDER BY date, start_time, id', id(req.params.id), from).map((ev) => eventOut(ev, opening)));
 });
 
 // --- Players --------------------------------------------------------------

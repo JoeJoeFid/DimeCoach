@@ -22,7 +22,10 @@ export interface Team {
 export interface ScheduleEvent {
   id: number;
   kind: 'practice' | 'game' | 'other';
+  /** As shown: without the team's name that team apps put in front of every event. */
   title: string;
+  /** As the calendar wrote it. */
+  full_title?: string;
   date: string;
   start_time: string;
   end_time: string;

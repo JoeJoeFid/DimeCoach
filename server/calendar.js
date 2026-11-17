@@ -49,6 +49,43 @@ function parseWhen(value, zone) {
   };
 }
 
+/**
+ * Team apps put the team's name in front of every event: "RAMS Basketball - 6th Grade 12U Practice",
+ * "RAMS Basketball - 6th Grade 12U @ Waukee Flyers". This finds those opening words: the longest
+ * run of two or more words that at least half the titles start with. '' when the titles share no such opening.
+ */
+export function sharedOpening(titles) {
+  const list = titles.map((t) => String(t || '').trim()).filter(Boolean);
+  if (list.length < 3) return '';
+  const counts = new Map();
+  for (const t of list) {
+    const words = t.split(/\s+/);
+    // Never the whole title: something has to be left to call the event.
+    for (let n = 1; n < words.length; n++) {
+      const opening = words.slice(0, n).join(' ');
+      counts.set(opening, (counts.get(opening) || 0) + 1);
+    }
+  }
+  const enough = Math.max(3, Math.ceil(list.length * 0.5));
+  // A word that joins the team to the rest ("@", "vs", "at", a dash) belongs to what follows, not to the team's name.
+  const joins = /^(@|vs\.?|versus|at|v\.?|-|–|—|:|\|)$/i;
+  let best = '';
+  for (const [opening, n] of counts) {
+    if (n < enough || opening.length <= best.length) continue;
+    if (joins.test(opening.split(' ').pop())) continue;
+    // One word is too little to be sure of, and words that say what the event is ("Practice") are not a team's name.
+    if (!opening.includes(' ') || classify(opening) !== 'other') continue;
+    best = opening;
+  }
+  return best.length >= 4 ? best : '';
+}
+/** A title without the team's name in front. Titles that do not start with it are left alone. */
+export function withoutOpening(title, opening) {
+  const t = String(title || '').trim();
+  if (!opening || !t.startsWith(`${opening} `)) return t;
+  return t.slice(opening.length).replace(/^[\s:|–—-]+/, '').trim() || t;
+}
+
 /** Best guess at what an event is, from its title. The coach can still plan any event as a practice. */
 export function classify(title) {
   if (/\b(practice|training|workout|open gym)\b/i.test(title)) return 'practice';
