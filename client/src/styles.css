@@ -14457,7 +14457,9 @@ button.cx-row:hover .cx-row-text strong {
 .timeline {
   position: relative;
   margin-top: 14px;
-  padding: 26px 16px 10px;
+  padding: 26px 16px 16px;
+  /* A shade off the page, the same way in light and dark: a little of the ink mixed into it. */
+  background: color-mix(in srgb, var(--ink) 3.5%, var(--bg));
   border: 1px solid var(--line-strong);
   border-radius: calc(var(--radius) + 4px);
 }

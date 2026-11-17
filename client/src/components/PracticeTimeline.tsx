@@ -274,18 +274,13 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
           </div>
         </div>
       </div>
-      <div className="tl-foot">
-        {start !== homeStart && (
-          <button className="link small" onClick={() => setStartAt(null)}>
-            Back to what is coming up
-          </button>
-        )}
-        {!team.calendar_url && (
+      {!team.calendar_url && (
+        <div className="tl-foot">
           <span className="muted small">
             Use GameChanger? <Link to="/teams?tab=schedule">Link the team calendar</Link> to see games and scheduled practices here.
           </span>
-        )}
-      </div>
+        </div>
+      )}
       {editing && (
         <EditEntry
           entry={editing}
