@@ -242,9 +242,12 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
                   {focus.kind === 'game' ? 'Plan this game' : focus.kind === 'practice' ? 'Plan this practice' : 'Plan this event'}
                 </button>
               )}
-              <button className="btn" onClick={() => setEditing(focus)} title="Change what this is: a practice, a game or something else">
-                Edit
-              </button>
+              {/* A practice or game with a plan is edited on its own page. Only an event still on the calendar alone needs this: it is the one place to say what the event is. */}
+              {!focus.plan && focus.event && (
+                <button className="btn" onClick={() => setEditing(focus)} title="Say what this is: a practice, a game or something else">
+                  Change type
+                </button>
+              )}
             </div>
           </div>
 
