@@ -6,7 +6,7 @@ import { useApp } from '../App';
 import type { Drill, ItemContent, Play } from '../types';
 import ItemBody from '../components/ItemBody';
 import DrillImport from '../components/DrillImport';
-import { Field, Modal, TagChip } from '../components/bits';
+import { Field, Modal, TagChip, ShareIcon } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 import { htmlPreview, roomyScreen } from '../util';
@@ -141,9 +141,7 @@ export default function Library() {
                 {/* Clicking the drill itself opens it to edit. */}
                 <span className="row-actions">
                   <button type="button" className="btn small icon-btn" aria-label={`Share ${d.name}`} title="Share" onClick={() => setSharing(d)}>
-                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M12 15V4M8 7.500l4-4 4 4M5 12v7h14v-7" />
-                    </svg>
+                    <ShareIcon size={17} />
                   </button>
                   <button type="button" className="btn small icon-btn danger" aria-label={`Delete ${d.name}`} title="Delete" onClick={() => remove(d)}>
                     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

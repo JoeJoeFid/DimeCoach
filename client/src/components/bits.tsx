@@ -132,3 +132,10 @@ export function MoreMenu({ items, label = 'More options', caret = false }: { ite
     </div>
   );
 }
+
+/** The sign for sharing or sending: an arrow curving up and to the right, as on Windows and in social apps. */
+export const ShareIcon = ({ size = 18 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M14 4.500 21 11l-7 6.500V13.500c-5.200 0-8.700 1.700-11 5.500.700-6.300 4.300-10.300 11-11V4.500Z" />
+  </svg>
+);

@@ -8,7 +8,7 @@ import { useApp } from '../App';
 import type { Drill, ImportDraft, Item, Plan, Play, Player, Tag, Team } from '../types';
 import { blankItem, clean, fmtClock, fmtDateShort, parseClock, fmtDuration, htmlPreview, isBlankHtml, planMinutes, roomyScreen, schedule, slotGroups, slotLabel, type Slot } from '../util';
 import ItemBody from '../components/ItemBody';
-import { Field, Modal, MoreMenu, TagChip, type MenuItem } from '../components/bits';
+import { Field, Modal, MoreMenu, TagChip, type MenuItem, ShareIcon } from '../components/bits';
 import { CommunityPicker, ShareDialog } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, showUndo } from '../components/toasts';
@@ -655,12 +655,7 @@ export default function PlanEditor() {
                     Print
                   </button>
                   <button type="button" className="btn icon-btn share-btn" aria-label="Share" title="Share: send it to coaches, put it in a community, or make a link" onClick={() => setSharing(true)}>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="18" cy="5" r="2.600" />
-                      <circle cx="6" cy="12" r="2.600" />
-                      <circle cx="18" cy="19" r="2.600" />
-                      <path d="m8.300 10.700 7.400-4.300M8.300 13.300l7.400 4.300" />
-                    </svg>
+                    <ShareIcon />
                   </button>
                   <MoreMenu items={moreItems} />
                 </>
@@ -692,12 +687,7 @@ export default function PlanEditor() {
                     Print
                   </button>
                   <button type="button" className="btn icon-btn share-btn" aria-label="Share" title="Share: send it to coaches, put it in a community, or make a link" onClick={() => setSharing(true)}>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="18" cy="5" r="2.600" />
-                      <circle cx="6" cy="12" r="2.600" />
-                      <circle cx="18" cy="19" r="2.600" />
-                      <path d="m8.300 10.700 7.400-4.300M8.300 13.300l7.400 4.300" />
-                    </svg>
+                    <ShareIcon />
                   </button>
                   </>
                 )}
