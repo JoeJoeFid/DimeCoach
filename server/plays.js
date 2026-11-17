@@ -54,8 +54,9 @@ function cleanFrames(input) {
         if (o?.type === 'line' && LINES.includes(o.kind) && Array.isArray(o.points) && o.points.length === 3) {
           const line = { id, type: 'line', kind: o.kind, points: o.points.map(point) };
           // What each end is attached to: another object's id, or a basket.
-          if (o.from) line.from = str(o.from, 24);
-          if (o.to) line.to = str(o.to, 24);
+          if (o.from) line.from = str(o.from, 32);
+          // The far end of another line is written "end:" and that line's id.
+          if (o.to) line.to = str(o.to, 32);
           // Its place in the order of movement. First is the default and is not stored.
           const order = Math.round(Number(o.order));
           if (Number.isFinite(order) && order > 1) line.order = Math.min(40, order);

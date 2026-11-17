@@ -34,7 +34,7 @@ import {
 import PlayAnimation from '../components/PlayAnimation';
 import { ShareDialog } from '../components/community';
 import { beatsOf, describeLine, ordinal, sequenceOf, withOrder, withSequence, type SequenceItem } from '../playAnimation';
-import { HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, sources, targets, withEnd } from '../playLogic';
+import { END, HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, sources, syncEnds, targets, withEnd } from '../playLogic';
 import Attachments from '../components/Attachments';
 import PlayIntro from '../components/PlayIntro';
 import { Field, Modal } from '../components/bits';
@@ -289,7 +289,7 @@ export default function PlayEditor() {
     const p = latest.current;
     if (!p) return;
     if (record) remember();
-    update({ frames: p.frames.map((f, i) => (i === index ? { ...f, objects: fn(f.objects) } : f)) });
+    update({ frames: p.frames.map((f, i) => (i === index ? { ...f, objects: syncEnds(fn(f.objects)) } : f)) });
   };
   const undo = useCallback(() => {
     const prev = past.current.pop();
@@ -569,7 +569,7 @@ export default function PlayEditor() {
     if (!d && aim) {
       const p = point(e);
       const line = current().objects.find((o) => o.id === aim) as PlayLine | undefined;
-      setSnap(nearestAnchor(p, targets(current(), play), line?.from)?.id ?? null);
+      setSnap(nearestAnchor(p, targets(current(), play, aim), line?.from)?.id ?? null);
       setObjects((os) => os.map((o) => (o.id === aim && isLine(o) ? { ...o, points: [o.points[0], [(o.points[0][0] + p[0]) / 2, (o.points[0][1] + p[1]) / 2], p] } : o)), false);
       return;
     }
@@ -599,7 +599,7 @@ export default function PlayEditor() {
       }, first);
     } else if (d.kind === 'draw') {
       const line = current().objects.find((o) => o.id === d.id) as PlayLine | undefined;
-      setSnap(nearestAnchor(p, targets(current(), play), line?.from)?.id ?? null);
+      setSnap(nearestAnchor(p, targets(current(), play, d.id), line?.from)?.id ?? null);
       setObjects(
         (os) => os.map((o) => (o.id === d.id && isLine(o) ? { ...o, points: [o.points[0], [(o.points[0][0] + p[0]) / 2, (o.points[0][1] + p[1]) / 2], p] } : o)),
         false,
@@ -609,7 +609,7 @@ export default function PlayEditor() {
       d.moved = true;
       if (d.index !== 1) {
         const line = current().objects.find((o) => o.id === d.id) as PlayLine | undefined;
-        const pool = d.index === 0 ? sources(current()) : targets(current(), play);
+        const pool = d.index === 0 ? sources(current()) : targets(current(), play, d.id);
         setSnap(nearestAnchor(p, pool, d.index === 0 ? line?.to : line?.from)?.id ?? null);
       }
       setObjects((os) => os.map((o) => {
@@ -672,13 +672,13 @@ export default function PlayEditor() {
         setSelected(null);
         return;
       }
-      // Let go on a player, the ball or the basket and the line ends there.
-      const to = nearestAnchor(line.points[2] as Pt, targets(current(), play), line.from);
+      // Let go on a player, the ball, the basket or the end of another player's line, and the line ends there.
+      const to = nearestAnchor(line.points[2] as Pt, targets(current(), play, d.id), line.from);
       if (to) setObjects((os) => os.map((o) => (o.id === d.id && isLine(o) ? { ...withEnd(o, 2, [to.x, to.y]), to: to.id } : o)), false);
     }
     if (d.kind === 'handle' && d.index !== 1 && d.moved && line && isLine(line)) {
       const isStart = d.index === 0;
-      const anchor = nearestAnchor(line.points[d.index] as Pt, isStart ? sources(current()) : targets(current(), play), isStart ? line.to : line.from);
+      const anchor = nearestAnchor(line.points[d.index] as Pt, isStart ? sources(current()) : targets(current(), play, d.id), isStart ? line.to : line.from);
       setObjects(
         (os) =>
           os.map((o) => {
@@ -1289,7 +1289,7 @@ export default function PlayEditor() {
               </g>
             ))}
             {/* A ring on whatever the line end will attach to if released now. */}
-            {snapAt && <circle className="snap-ring" cx={snapAt.x} cy={snapAt.y} r={snapAt.id.startsWith('basket') ? 1.7 : 2.2} />}
+            {snapAt && <circle className="snap-ring" cx={snapAt.x} cy={snapAt.y} r={snapAt.id.startsWith('basket') ? 1.7 : snapAt.id.startsWith(END) ? 1.3 : 2.2} />}
             {frame.objects.filter(isMark).map((o) => (
               <g key={o.id} onPointerDown={(e) => onObjectDown(e, o)}>
                 <MarkShape mark={o} selected={isSelected(o.id)} court={play.court} />

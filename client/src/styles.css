@@ -14200,8 +14200,14 @@ button.cx-row:hover .cx-row-text strong {
   font-size: 0.8rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 6;
-  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+/* A line belongs to the player it starts from, and wears that player's color when they have one. */
+.play-line.owned:not(.selected) .line-body {
+  stroke: var(--line-color);
+}
+.play-line.owned:not(.selected) .line-head {
+  fill: var(--line-color);
+  stroke: var(--line-color);
 }

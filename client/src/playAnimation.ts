@@ -3,7 +3,7 @@
 // rules drive the order list in the editor and the animated playback.
 import { LINE_WORDS, type SportKind } from './sports';
 import { MARK_R, isLine, isMark, isPlayer, sampleLine, type Pt } from './components/PlayDiagram';
-import { travelPath } from './playLogic';
+import { END, playerAt, travelPath } from './playLogic';
 import type { Play, PlayFrame, PlayLine, PlayMark, PlayObject } from './types';
 
 /** A line's place in its step's order of movement. Lines with no place set all move first, together. */
@@ -72,6 +72,8 @@ export function describeLine(line: PlayLine, frame: PlayFrame, sport: SportKind 
   const name = (id: string | undefined) => {
     if (!id) return '';
     if (id.startsWith('basket')) return 'the basket';
+    // Aimed at where another player's line ends: it is for that player, on the move.
+    if (id.startsWith(END)) return playerAt(id, frame.objects)?.label || '';
     const m = frame.objects.find((o) => o.id === id);
     return m && isMark(m) ? (m.type === 'ball' ? 'The ball' : m.label || 'A player') : '';
   };
@@ -139,8 +141,13 @@ export function snapshot(frame: PlayFrame, beat: number, t: number): Snapshot {
   const pass = (line: PlayLine, u: number) => {
     const path = sampleLine(line.points, 32);
     const source = line.from ? marks.find((m) => m.id === line.from) : nearest(players, path[0]);
-    const receiver = line.to ? players.find((p) => p.id === line.to) : nearest(players, path[path.length - 1]);
-    const air = Math.min(1, u / FLIGHT);
+    const aimed = playerAt(line.to, frame.objects);
+    const receiver = line.to ? players.find((p) => p.id === aimed?.id) : nearest(players, path[path.length - 1]);
+    // A pass to where a cutter is going, thrown while they cut, is in the air for the whole movement:
+    // the ball and the player get there together. Any other pass is quicker than a player.
+    const lead = line.to?.startsWith(END) ? frame.objects.find((o) => o.id === line.to!.slice(END.length)) : undefined;
+    const together = !!lead && isLine(lead) && (lead.order ?? 1) === (line.order ?? 1);
+    const air = Math.min(1, together ? u : u / FLIGHT);
     if (u <= 0) return;
     if (source?.type === 'ball') {
       // A loose ball thrown in: it travels itself, and is caught at the end.

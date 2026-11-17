@@ -366,8 +366,11 @@ function lineShape(line: PlayLine, trims = { start: 0, end: 0 }) {
 // --- Shapes, lines and marks ---------------------------------------------------
 export function LineShape({ line, objects, selected, hit }: { line: PlayLine; objects?: PlayObject[]; selected?: boolean; hit?: ReactNode }) {
   const s = lineShape(line, objects ? lineTrims(line, objects) : undefined);
+  // A line drawn from a player who has a color of their own is drawn in that color, so it is plain whose it is.
+  const owner = line.from ? objects?.find((o) => o.id === line.from) : undefined;
+  const color = owner && isPlayer(owner) ? owner.color : undefined;
   return (
-    <g className={`play-line ${line.kind} ${selected ? 'selected' : ''}`}>
+    <g className={`play-line ${line.kind} ${selected ? 'selected' : ''} ${color ? 'owned' : ''}`} style={color ? ({ '--line-color': color } as CSSProperties) : undefined}>
       {hit}
       <path d={s.body} className="line-body" />
       {s.bar && <path d={s.bar} className="line-body bar" />}

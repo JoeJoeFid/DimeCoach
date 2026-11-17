@@ -21,8 +21,56 @@ const end = (l: PlayLine) => l.points[2] as Pt;
 
 /** Things a line can start from: players and the ball. */
 export const sources = (frame: PlayFrame): Anchor[] => frame.objects.filter((o): o is PlayMark => isPlayer(o) || o.type === 'ball');
-/** Things a line can end at: players, the ball and the baskets. */
-export const targets = (frame: PlayFrame, play: Court): Anchor[] => [...sources(frame), ...baskets(play)];
+/** How the far end of a line is named as something to attach to: this, then the line's own id. */
+export const END = 'end:';
+/** Lines that take a player somewhere: everything but a pass. */
+const moves = (l: PlayLine) => l.kind !== 'pass';
+/**
+ * Where players arrive: the far end of each cut, dribble and screen line. A pass thrown to one
+ * meets the player as they get there. `except` is the line being drawn, which cannot end on itself.
+ */
+export const arrivals = (frame: PlayFrame, except?: string): Anchor[] =>
+  frame.objects
+    .filter(isLine)
+    .filter((l) => moves(l) && l.id !== except)
+    .map((l) => ({ id: END + l.id, x: end(l)[0], y: end(l)[1] }));
+/** Things a line can end at: players, the ball, the baskets, and where another player's line ends. */
+export const targets = (frame: PlayFrame, play: Court, forLine?: string): Anchor[] => [...sources(frame), ...baskets(play), ...arrivals(frame, forLine)];
+
+/** The player who runs a line: the one it starts from, or failing that the one standing at its start. */
+export function runnerOf(line: PlayLine, objects: PlayObject[]): PlayMark | undefined {
+  const players = objects.filter(isPlayer);
+  return (line.from ? players.find((p) => p.id === line.from) : undefined) ?? players.find((p) => near([p.x, p.y], start(line), SNAP));
+}
+/**
+ * The player a line is aimed at. Usually that is the player it is attached to. A line attached
+ * to where another line ends is aimed at whoever runs that line.
+ */
+export function playerAt(to: string | undefined, objects: PlayObject[]): PlayMark | undefined {
+  if (!to) return undefined;
+  if (!to.startsWith(END)) return objects.filter(isPlayer).find((p) => p.id === to);
+  const line = objects.find((o) => o.id === to.slice(END.length));
+  return line && isLine(line) ? runnerOf(line, objects) : undefined;
+}
+/**
+ * Keeps every line that is attached to the far end of another line ending exactly there, after
+ * anything has moved. A line whose target line is gone is let go.
+ */
+export function syncEnds(objects: PlayObject[]): PlayObject[] {
+  let out = objects;
+  // Twice, so that a line attached to a line that is itself attached settles too.
+  for (let pass = 0; pass < 2; pass++) {
+    const lines = new Map(out.filter(isLine).map((l) => [l.id, l]));
+    out = out.map((o) => {
+      if (!isLine(o) || !o.to?.startsWith(END)) return o;
+      const target = lines.get(o.to.slice(END.length));
+      if (!target || !moves(target) || target.id === o.id) return { ...o, to: undefined };
+      const at = end(target);
+      return near(end(o), at, 0.001) ? o : withEnd(o, 2, at);
+    });
+  }
+  return out;
+}
 
 export function nearestAnchor(p: Pt, list: Anchor[], exclude?: string): Anchor | null {
   let best: Anchor | null = null;
@@ -64,6 +112,10 @@ export function followAnchor(objects: PlayObject[], id: string, p: Pt): PlayObje
 export function describeAnchor(id: string | undefined, frame: PlayFrame): string {
   if (!id) return 'a free spot';
   if (id.startsWith('basket')) return 'the basket';
+  if (id.startsWith(END)) {
+    const runner = playerAt(id, frame.objects);
+    return runner ? `where player ${runner.label || '?'} ends up` : 'where another line ends';
+  }
   const m = frame.objects.find((o) => o.id === id);
   if (!m || !isMark(m)) return 'a free spot';
   return m.type === 'ball' ? 'the ball' : `player ${m.label || '?'}`;
@@ -156,7 +208,7 @@ export function carryForward(frame: PlayFrame, play: Court): PlayFrame {
       used.add(pass.id);
       const hoop = pass.to ? hoops.find((h) => h.id === pass.to) : undefined;
       if (hoop) return { spot: [hoop.x, hoop.y] };
-      const receiver = pass.to ? players.find((p) => p.id === pass.to) : players.find((p) => near([p.x, p.y], end(pass), REACH));
+      const receiver = pass.to ? players.find((p) => p.id === playerAt(pass.to, frame.objects)?.id) : players.find((p) => near([p.x, p.y], end(pass), REACH));
       if (!receiver) return { spot: end(pass) };
       carrier = receiver;
     }
