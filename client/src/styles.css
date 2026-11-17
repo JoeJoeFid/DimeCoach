@@ -14043,3 +14043,19 @@ button.cx-row:hover .cx-row-text strong {
   margin-top: 14px;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
+
+/* First name and last name, side by side. */
+.name-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex: 2 1 320px;
+  min-width: 0;
+}
+.name-pair > .field {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.name-pair .input {
+  width: 100%;
+}

@@ -94,7 +94,7 @@ export function mountContacts(app) {
       subject: `${req.user.name} added you to ${team.name} on Dime Coach`,
       text:
         `Hi${c.name ? ` ${c.name}` : ''},\n\n` +
-        `${req.user.name} (${req.user.email}) added you to the parents, family and friends of ${team.name}, as ${as}${kids.length ? ` of ${kids.join(' and ')}` : ''}.\n\n` +
+        `${req.user.name} added you to the parents, family and friends of ${team.name}, as ${as}${kids.length ? ` of ${kids.join(' and ')}` : ''}.\n\n` +
         (note ? `${req.user.name} wrote:\n${note}\n\n` : '') +
         `Dime Coach is where the coaches of ${team.name} plan practices and games. Being on this list means they can send you practice plans, schedules and news at this address. You do not need an account.\n\n` +
         `If you would rather not be on the list, write to ${req.user.name} at ${req.user.email}.`,

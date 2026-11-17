@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser, type UserActivity } from '../api';
 import { useApp } from '../App';
-import { Field, Modal, MoreMenu } from '../components/bits';
+import { Field, Modal, MoreMenu, NameFields } from '../components/bits';
 import RegistrationCard from '../components/RegistrationCard';
 import SportIcon from '../components/SportIcon';
 import AccessibilityCard from '../components/AccessibilityCard';
@@ -95,7 +95,7 @@ export default function SystemAdmin() {
   /** Cap boxes being typed in, by user id. Absent means the box shows the saved value. */
   const [caps, setCaps] = useState<Record<number, string>>({});
   const [defaultCap, setDefaultCap] = useState<string | null>(null);
-  const blank = { name: '', email: '', password: '', can_import: false, cap: '', note: '' };
+  const blank = { name: '', first: '', last: '', email: '', password: '', can_import: false, cap: '', note: '' };
   const [draft, setDraft] = useState(blank);
   /** How a person is added: an emailed invitation, or an account made here with a starting password. */
   const [adding, setAdding] = useState<'invite' | 'password'>('invite');
@@ -145,7 +145,7 @@ export default function SystemAdmin() {
     const d = draft;
     run(
       async () => {
-        const made = inviting ? await api.adminInvite({ name: d.name, email: d.email, can_import: d.can_import, note: d.note }) : await api.adminCreateUser({ name: d.name, email: d.email, password: d.password, can_import: d.can_import });
+        const made = inviting ? await api.adminInvite({ name: d.name, first_name: d.first, last_name: d.last, email: d.email, can_import: d.can_import, note: d.note }) : await api.adminCreateUser({ name: d.name, first_name: d.first, last_name: d.last, email: d.email, password: d.password, can_import: d.can_import });
         // The account exists from here on, so clear the form even if a follow-up setting fails.
         setDraft(blank);
         if (d.cap.trim() !== '') await api.systemUpdateUser(made.id, { upload_cap_mb: Number(d.cap) });
@@ -324,9 +324,7 @@ export default function SystemAdmin() {
               Each person gets a workspace of their own. Plan import runs Claude on the computer hosting Dime Coach, so allow it only for people you want using that.
             </p>
             <form className="fields" onSubmit={create}>
-              <Field label="Name" grow>
-                <input className="input" required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-              </Field>
+              <NameFields whose="their" name={draft.name} onChange={(name, p) => setDraft({ ...draft, name, first: p.first, last: p.last })} />
               <Field label="Email" grow>
                 <input className="input" type="email" required value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
               </Field>

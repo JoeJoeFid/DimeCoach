@@ -4,6 +4,7 @@ import { SIGNED_OUT_EVENT, api, type AuthStatus, type Bootstrap, type User } fro
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { sportKind } from './sports';
 import { DialogHost } from './components/dialogs';
+import { NameFields, splitName, type NameParts } from './components/bits';
 import { ToastHost, flushDeletes, showNews } from './components/toasts';
 import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
@@ -740,13 +741,14 @@ function SharedBar() {
 function Account({ onChanged }: { onChanged: () => void }) {
   const { user } = useApp();
   const [name, setName] = useState(user.name);
+  const [parts, setParts] = useState<NameParts | undefined>(undefined);
   const [state, setState] = useState<{ busy?: boolean; error?: string; saved?: boolean }>({});
   useEffect(() => setName(user.name), [user.name]);
   const saveName = async (e: React.FormEvent) => {
     e.preventDefault();
     setState({ busy: true });
     try {
-      await api.setName(name);
+      await api.setName(name, parts);
       setState({ saved: true });
       onChanged();
     } catch (err) {
@@ -766,20 +768,15 @@ function Account({ onChanged }: { onChanged: () => void }) {
       <div className="card account-card">
         <h2>Your name</h2>
         <form className="fields stack" onSubmit={saveName}>
-          <label className="field">
-            <span>Name</span>
-            <input
-              className="input"
-              required
-              maxLength={80}
-              autoComplete="name"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setState({});
-              }}
-            />
-          </label>
+          <NameFields
+            name={name}
+            parts={{ first: user.first_name || splitName(user.name).first, last: user.first_name || user.last_name ? user.last_name : splitName(user.name).last }}
+            onChange={(n, p) => {
+              setName(n);
+              setParts(p);
+              setState({});
+            }}
+          />
           <p className="muted small">This is the name other coaches see on your posts, shared teams and messages.</p>
           {state.error && <p className="error">{state.error}</p>}
           {state.saved && <p className="notice">Name saved.</p>}

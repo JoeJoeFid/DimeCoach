@@ -253,6 +253,31 @@ addColumn('plans', 'print_notes', 'INTEGER DEFAULT 1');
 addColumn('users', 'prefs_json', "TEXT DEFAULT '{}'");
 // Upload space in megabytes. NULL means the system default applies.
 addColumn('users', 'upload_cap_mb', 'INTEGER');
+// A person's name in two parts. "name" stays the whole name, as it is shown everywhere. Whenever it
+// is written, the parts are filled in beside it: from what the person typed in the two boxes when
+// that is known (name_hints), else by splitting at the first space.
+addColumn('users', 'first_name', "TEXT DEFAULT ''");
+addColumn('users', 'last_name', "TEXT DEFAULT ''");
+db.exec(`
+CREATE TABLE IF NOT EXISTS name_hints (name TEXT PRIMARY KEY, first TEXT NOT NULL, last TEXT NOT NULL);
+CREATE TRIGGER IF NOT EXISTS users_names_insert AFTER INSERT ON users BEGIN
+  UPDATE users SET
+    first_name = COALESCE((SELECT first FROM name_hints WHERE name=NEW.name), CASE WHEN instr(NEW.name, ' ') > 0 THEN substr(NEW.name, 1, instr(NEW.name, ' ') - 1) ELSE NEW.name END),
+    last_name = COALESCE((SELECT last FROM name_hints WHERE name=NEW.name), CASE WHEN instr(NEW.name, ' ') > 0 THEN trim(substr(NEW.name, instr(NEW.name, ' ') + 1)) ELSE '' END)
+  WHERE id=NEW.id;
+END;
+CREATE TRIGGER IF NOT EXISTS users_names_update AFTER UPDATE OF name ON users BEGIN
+  UPDATE users SET
+    first_name = COALESCE((SELECT first FROM name_hints WHERE name=NEW.name), CASE WHEN instr(NEW.name, ' ') > 0 THEN substr(NEW.name, 1, instr(NEW.name, ' ') - 1) ELSE NEW.name END),
+    last_name = COALESCE((SELECT last FROM name_hints WHERE name=NEW.name), CASE WHEN instr(NEW.name, ' ') > 0 THEN trim(substr(NEW.name, instr(NEW.name, ' ') + 1)) ELSE '' END)
+  WHERE id=NEW.id;
+END;
+`);
+// Accounts made before there were two boxes.
+db.exec(`UPDATE users SET
+  first_name = CASE WHEN instr(name, ' ') > 0 THEN substr(name, 1, instr(name, ' ') - 1) ELSE name END,
+  last_name = CASE WHEN instr(name, ' ') > 0 THEN trim(substr(name, instr(name, ' ') + 1)) ELSE '' END
+  WHERE COALESCE(first_name, '') = '' AND COALESCE(last_name, '') = '' AND COALESCE(name, '') <> ''`);
 // What the administrator wrote to go with an invitation, kept so that sending it again says the same.
 addColumn('users', 'invite_note', "TEXT DEFAULT ''");
 // Target overrides per tracking period: {"practice": 20, "week": 15, ...}. Missing keys use target_pct.

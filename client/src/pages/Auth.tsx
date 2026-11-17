@@ -3,7 +3,7 @@ import { Link, Route, Routes, useNavigate, useSearchParams } from 'react-router-
 import { api, type User } from '../api';
 import type { InviteInfo } from '../types';
 import { ThemeToggle } from '../theme';
-import { Field } from '../components/bits';
+import { Field, NameFields, splitName, type NameParts } from '../components/bits';
 import AuthHero from '../components/AuthHero';
 
 const MIN_PASSWORD = 10;
@@ -89,11 +89,12 @@ export function Setup({ onDone }: { onDone: () => void }) {
   const [tab, setTab] = useState<'in' | 'up'>('up');
   const [restoring, setRestoring] = useState(false);
   const [name, setName] = useState('');
+  const [parts, setParts] = useState<NameParts>({ first: '', last: '' });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const { busy, error, submit } = useSubmit(async () => {
-    await api.setup({ name, email, password, setup_token: code || undefined });
+    await api.setup({ name, first_name: parts.first, last_name: parts.last, email, password, setup_token: code || undefined });
     onDone();
   });
   if (restoring) return <Restore onDone={onDone} onBack={() => setRestoring(false)} />;
@@ -116,9 +117,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
     <AuthShell title="Create your account" lead="You are the first one here, so this account also looks after the site and adds other coaches." tab="up" onTab={setTab}>
       <form className="fields stack" onSubmit={submit}>
         {error && <p className="error">{error}</p>}
-        <Field label="Your name">
-          <input className="input" autoFocus required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-        </Field>
+        <NameFields name={name} parts={parts} autoFocus onChange={(n, p) => (setName(n), setParts(p))} />
         <Field label="Email">
           <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
         </Field>
@@ -320,6 +319,7 @@ export function Welcome({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is 
   const [email, setEmail] = useState<string | null>(null);
   const [bad, setBad] = useState('');
   const [name, setName] = useState('');
+  const [parts, setParts] = useState<NameParts>({ first: '', last: '' });
   const [password, setPassword] = useState('');
   useEffect(() => {
     let alive = true;
@@ -329,6 +329,7 @@ export function Welcome({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is 
         if (!alive) return;
         setEmail(r.email);
         setName(r.name);
+        setParts(r.first_name || r.last_name ? { first: r.first_name || '', last: r.last_name || '' } : splitName(r.name));
       })
       .catch((e) => alive && setBad((e as Error).message));
     return () => {
@@ -340,7 +341,7 @@ export function Welcome({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is 
     onSignedIn();
   };
   const { busy, error, submit } = useSubmit(async () => {
-    await api.acceptWelcome({ token, name, password });
+    await api.acceptWelcome({ token, name, first_name: parts.first, last_name: parts.last, password });
     enter();
   });
   if (bad)
@@ -378,9 +379,7 @@ export function Welcome({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is 
         <Field label="Email">
           <input className="input" type="email" value={email} readOnly autoComplete="username" />
         </Field>
-        <Field label="Your name">
-          <input className="input" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-        </Field>
+        <NameFields name={name} parts={parts} onChange={(n, p) => (setName(n), setParts(p))} />
         <Field label={`Password (at least ${MIN_PASSWORD} characters)`}>
           <input className="input" type="password" autoFocus required minLength={MIN_PASSWORD} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         </Field>
@@ -404,6 +403,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
   const [bad, setBad] = useState('');
   const [added, setAdded] = useState(false);
   const [name, setName] = useState('');
+  const [parts, setParts] = useState<NameParts>({ first: '', last: '' });
   const [password, setPassword] = useState('');
   const mine = !!signedInAs && !!info && signedInAs.email.toLowerCase() === info.email.toLowerCase();
   useEffect(() => {
@@ -414,7 +414,10 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
         if (!alive) return;
         setInfo(r);
         // An organization's admin typed the person's name when inviting them: the form starts with it.
-        if (r.name) setName(r.name);
+        if (r.name) {
+          setName(r.name);
+          setParts(splitName(r.name));
+        }
       })
       .catch((e) => alive && setBad((e as Error).message));
     return () => {
@@ -435,7 +438,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
     };
   }, [existing, added, token]);
   const { busy, error, submit } = useSubmit(async () => {
-    await api.acceptTeamInvite({ token, name, password });
+    await api.acceptTeamInvite({ token, name, first_name: parts.first, last_name: parts.last, password });
     navigate('/', { replace: true });
     onSignedIn();
   });
@@ -521,9 +524,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
         <Field label="Email">
           <input className="input" type="email" value={info.email} readOnly autoComplete="username" />
         </Field>
-        <Field label="Your name">
-          <input className="input" autoFocus required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-        </Field>
+        <NameFields name={name} parts={parts} autoFocus onChange={(n, p) => (setName(n), setParts(p))} />
         <Field label={`Password (at least ${MIN_PASSWORD} characters)`}>
           <input className="input" type="password" required minLength={MIN_PASSWORD} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         </Field>
@@ -540,11 +541,12 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
 
 function Register({ confirm, onSignedIn }: { /** Whether a confirmation link is emailed before the account works. */ confirm: boolean; onSignedIn: () => void }) {
   const [name, setName] = useState('');
+  const [parts, setParts] = useState<NameParts>({ first: '', last: '' });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [sent, setSent] = useState(false);
   const { busy, error, submit } = useSubmit(async () => {
-    const r = await api.register({ name, email, password });
+    const r = await api.register({ name, first_name: parts.first, last_name: parts.last, email, password });
     // With no confirmation step the account is ready and already signed in.
     if (r.user) onSignedIn();
     else setSent(true);
@@ -561,9 +563,7 @@ function Register({ confirm, onSignedIn }: { /** Whether a confirmation link is 
     <AuthShell title="Join the bench" lead={confirm ? 'Create your account. You will get an email with a link to confirm your address.' : 'Create your account with an email and a password, and you are in.'} tab="up">
       <form className="fields stack" onSubmit={submit}>
         {error && <p className="error">{error}</p>}
-        <Field label="Your name">
-          <input className="input" autoFocus required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-        </Field>
+        <NameFields name={name} parts={parts} autoFocus onChange={(n, p) => (setName(n), setParts(p))} />
         <Field label="Email">
           <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
         </Field>

@@ -391,7 +391,7 @@ async function mailOrgInvite(req, inviteId) {
     to: inv.email,
     subject: `${req.user.name} invited you to ${inv.community} on Dime Coach`,
     text:
-      `Hi${inv.name ? ` ${inv.name}` : ''},\n\n${req.user.name} (${req.user.email}) invited you to join ${inv.community} on Dime Coach as ${as}.\n\n` +
+      `Hi${inv.name ? ` ${inv.name}` : ''},\n\n${req.user.name} invited you to join ${inv.community} on Dime Coach as ${as}.\n\n` +
       `Dime Coach is where coaches plan practices, keep drills and draw plays together. ${inv.community} uses it for its teams, schedules and announcements.\n\n` +
       `Create your account to join:\n\n${publicBase(req)}/join?token=${token}\n\n` +
       `The link works for ${INVITE_DAYS} days. If you were not expecting this, ignore this message and nothing will happen.`,

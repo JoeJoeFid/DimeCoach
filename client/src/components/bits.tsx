@@ -139,3 +139,39 @@ export const ShareIcon = ({ size = 18 }: { size?: number }) => (
     <path d="M14 4.500 21 11l-7 6.500V13.500c-5.200 0-8.700 1.700-11 5.500.700-6.300 4.300-10.300 11-11V4.500Z" />
   </svg>
 );
+
+/** A whole name as its first word and the rest, for filling the two boxes from a name written as one. */
+export const splitName = (name: string) => {
+  const n = name.trim().replace(/\s+/g, ' ');
+  const i = n.indexOf(' ');
+  return i < 0 ? { first: n, last: '' } : { first: n.slice(0, i), last: n.slice(i + 1) };
+};
+export type NameParts = { first: string; last: string };
+/**
+ * A person's name as two boxes: first name and last name. It reports the whole name, as it is
+ * shown everywhere, together with the two parts as typed.
+ */
+export function NameFields({ name, parts, onChange, autoFocus, whose = 'your' }: { name: string; parts?: NameParts; onChange: (name: string, parts: NameParts) => void; autoFocus?: boolean; whose?: 'your' | 'their' }) {
+  const [typed, setTyped] = useState<NameParts>(() => parts ?? splitName(name));
+  // When the name is filled in from outside (an invitation that already knows it), the boxes follow.
+  useEffect(() => {
+    if (`${typed.first} ${typed.last}`.trim() !== name.trim()) setTyped(parts && `${parts.first} ${parts.last}`.trim() === name.trim() ? parts : splitName(name));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name]);
+  const set = (next: NameParts) => {
+    setTyped(next);
+    onChange(`${next.first.trim()} ${next.last.trim()}`.trim(), { first: next.first.trim(), last: next.last.trim() });
+  };
+  return (
+    <div className="name-pair">
+      <label className="field">
+        <span className="field-label">First name</span>
+        <input className="input" autoFocus={autoFocus} required maxLength={40} value={typed.first} onChange={(e) => set({ ...typed, first: e.target.value })} autoComplete={whose === 'your' ? 'given-name' : 'off'} />
+      </label>
+      <label className="field">
+        <span className="field-label">Last name</span>
+        <input className="input" maxLength={40} value={typed.last} onChange={(e) => set({ ...typed, last: e.target.value })} autoComplete={whose === 'your' ? 'family-name' : 'off'} />
+      </label>
+    </div>
+  );
+}

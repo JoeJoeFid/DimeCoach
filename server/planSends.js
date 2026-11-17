@@ -177,11 +177,10 @@ export function mountPlanSends(app) {
         subject: `${req.user.name} sent you a ${noun}: ${title}`,
         text:
           `Hi${r.user ? ` ${r.user.name}` : ''},\n\n` +
-          `${req.user.name} (${req.user.email}) sent you a ${noun} on Dime Coach: "${title}"${team ? `, for ${team.name}` : ''}${when ? `, ${when}` : ''}.\n\n` +
+          `${req.user.name} sent you a ${noun} on Dime Coach: "${title}"${team ? `, for ${team.name}` : ''}${when ? `, ${when}` : ''}.\n\n` +
           (note ? `${req.user.name} wrote:\n${note}\n\n` : '') +
           (outline ? `${outline}\n\n` : '') +
-          `Open it here:\n\n${link}\n\n` +
-          `You can read it without an account. If you use Dime Coach, sign in and you can add a copy to your own practices.`,
+          `Open it here:\n\n${link}`,
         secret: token,
       });
       if (result.ok) mailed++;

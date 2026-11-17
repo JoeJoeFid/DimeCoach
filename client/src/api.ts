@@ -61,7 +61,10 @@ export type ImportSource = { name: string; media_type: string; data: string } | 
 export interface User {
   id: number;
   email: string;
+  /** The whole name, as shown everywhere. */
   name: string;
+  first_name: string;
+  last_name: string;
   /** Administrator of the whole system. */
   is_admin: boolean;
   /** Plan import, granted per user by the administrator. */
@@ -578,25 +581,25 @@ export interface AdminSettings {
 
 export const api = {
   authStatus: () => req<AuthStatus>('GET', '/auth/status'),
-  setup: (b: { name: string; email: string; password: string; setup_token?: string }) => req<{ user: User }>('POST', '/auth/setup', b),
+  setup: (b: { name: string; first_name?: string; last_name?: string; email: string; password: string; setup_token?: string }) => req<{ user: User }>('POST', '/auth/setup', b),
   login: (email: string, password: string) => req<{ user: User }>('POST', '/auth/login', { email, password }),
   logout: () => req('POST', '/auth/logout', {}),
-  register: (b: { name: string; email: string; password: string }) => req<{ ok: true; user?: User }>('POST', '/auth/register', b),
+  register: (b: { name: string; first_name?: string; last_name?: string; email: string; password: string }) => req<{ ok: true; user?: User }>('POST', '/auth/register', b),
   confirm: (token: string) => req('POST', '/auth/confirm', { token }),
   forgotPassword: (email: string) => req<{ ok: true; minutes: number }>('POST', '/auth/forgot', { email }),
   resetCheck: (token: string) => req<{ ok: true; email: string }>('GET', `/auth/reset?token=${encodeURIComponent(token)}`),
   resetPassword: (token: string, password: string) => req<{ user: User }>('POST', '/auth/reset', { token, password }),
-  welcomeInfo: (token: string) => req<{ name: string; email: string }>('GET', `/auth/welcome?token=${encodeURIComponent(token)}`),
-  acceptWelcome: (b: { token: string; name: string; password: string }) => req<{ ok: true; user: User }>('POST', '/auth/welcome', b),
+  welcomeInfo: (token: string) => req<{ name: string; first_name?: string; last_name?: string; email: string }>('GET', `/auth/welcome?token=${encodeURIComponent(token)}`),
+  acceptWelcome: (b: { token: string; name: string; first_name?: string; last_name?: string; password: string }) => req<{ ok: true; user: User }>('POST', '/auth/welcome', b),
   inviteInfo: (token: string) => req<InviteInfo>('GET', `/auth/invite?token=${encodeURIComponent(token)}`),
-  acceptTeamInvite: (b: { token: string; name?: string; password?: string }) => req<{ ok: true; existing?: boolean; user?: User }>('POST', '/auth/invite/accept', b),
+  acceptTeamInvite: (b: { token: string; name?: string; first_name?: string; last_name?: string; password?: string }) => req<{ ok: true; existing?: boolean; user?: User }>('POST', '/auth/invite/accept', b),
   savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean; play_intro_done?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
-  setName: (name: string) => req<{ user: User }>('PUT', '/auth/profile', { name }),
+  setName: (name: string, parts?: { first: string; last: string }) => req<{ user: User }>('PUT', '/auth/profile', { name, first_name: parts?.first, last_name: parts?.last }),
   changePassword: (current: string, next: string) => req<{ user: User }>('POST', '/auth/password', { current, next }),
 
   adminUsers: () => req<AdminUser[]>('GET', '/admin/users'),
-  adminCreateUser: (b: { name: string; email: string; password: string; can_import: boolean }) => req<AdminUser>('POST', '/admin/users', b),
-  adminInvite: (b: { name: string; email: string; can_import: boolean; note: string }) => req<AdminUser>('POST', '/admin/invites', b),
+  adminCreateUser: (b: { name: string; first_name?: string; last_name?: string; email: string; password: string; can_import: boolean }) => req<AdminUser>('POST', '/admin/users', b),
+  adminInvite: (b: { name: string; first_name?: string; last_name?: string; email: string; can_import: boolean; note: string }) => req<AdminUser>('POST', '/admin/invites', b),
   adminResendInvite: (id: number) => req<{ ok: true }>('POST', `/admin/invites/${id}/resend`, {}),
   adminUpdateUser: (id: number, b: { can_import?: boolean; status?: 'active' | 'disabled'; password?: string }) =>
     req<AdminUser>('PUT', `/admin/users/${id}`, b),

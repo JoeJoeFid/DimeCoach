@@ -59,7 +59,7 @@ async function mailInvite(req, inviteId) {
     to: inv.email,
     subject: `${req.user.name} invited you to ${inv.team} on Dime Coach`,
     text:
-      `Hi,\n\n${req.user.name} (${req.user.email}) invited you to join the team "${inv.team}"${what ? ` (${what})` : ''} on Dime Coach as ${inv.title}.\n\n` +
+      `Hi,\n\n${req.user.name} invited you to join the team "${inv.team}"${what ? ` (${what})` : ''} on Dime Coach as ${inv.title}.\n\n` +
       `Dime Coach is where coaches plan practices, keep drills and draw plays together.\n\n` +
       `Create your account to join the team:\n\n${publicBase(req)}/join?token=${token}\n\n` +
       `The link works for ${INVITE_DAYS} days. If you were not expecting this, ignore this message and nothing will happen.`,

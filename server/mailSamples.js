@@ -18,7 +18,7 @@ export const MAIL_SAMPLES = [
     make: ({ me, base }) => ({
       subject: `${me.name} invited you to Tigers on Dime Coach`,
       text:
-        `Hi,\n\n${me.name} (${me.email}) invited you to join the team "Tigers" (Basketball, Winter 2026-27) on Dime Coach as Assistant coach.\n\n` +
+        `Hi,\n\n${me.name} invited you to join the team "Tigers" (Basketball, Winter 2026-27) on Dime Coach as Assistant coach.\n\n` +
         `Dime Coach is where coaches plan practices, keep drills and draw plays together.\n\n` +
         `Create your account to join the team:\n\n${base}/join?token=sample\n\n` +
         `The link works for ${DAYS} days. If you were not expecting this, ignore this message and nothing will happen.`,
@@ -29,11 +29,10 @@ export const MAIL_SAMPLES = [
     make: ({ me, base }) => ({
       subject: `${me.name} sent you a practice plan: Thursday practice`,
       text:
-        `Hi Casey,\n\n${me.name} (${me.email}) sent you a practice plan on Dime Coach: "Thursday practice", for Tigers, Thursday, November 19.\n\n` +
+        `Hi Casey,\n\n${me.name} sent you a practice plan on Dime Coach: "Thursday practice", for Tigers, Thursday, November 19.\n\n` +
         `${me.name} wrote:\nTry the shell drill before scrimmage. It settled our help defense.\n\n` +
         `4 items, 62 minutes:\n- Dynamic warm-up (10 min)\n- Layup lines (12 min)\n- Shell drill (15 min)\n- 5-on-5 half court (20 min)\n\n` +
-        `Open it here:\n\n${base}/shared/sample\n\n` +
-        `You can read it without an account. If you use Dime Coach, sign in and you can add a copy to your own practices.`,
+        `Open it here:\n\n${base}/shared/sample`,
     }),
   },
   {
@@ -41,7 +40,7 @@ export const MAIL_SAMPLES = [
     make: ({ me, base }) => ({
       subject: `${me.name} invited you to Eastside Youth on Dime Coach`,
       text:
-        `Hi Casey,\n\n${me.name} (${me.email}) invited you to Eastside Youth on Dime Coach as Head coach of Tigers.\n\n` +
+        `Hi Casey,\n\n${me.name} invited you to Eastside Youth on Dime Coach as Head coach of Tigers.\n\n` +
         `Dime Coach is where Eastside Youth's coaches plan practices, keep drills and draw plays together.\n\n` +
         `Create your account to join:\n\n${base}/join?token=sample\n\n` +
         `The link works for ${DAYS} days. If you were not expecting this, ignore this message and nothing will happen.`,
@@ -62,7 +61,7 @@ export const MAIL_SAMPLES = [
     make: ({ me }) => ({
       subject: `${me.name} added you to Tigers on Dime Coach`,
       text:
-        `Hi Pat,\n\n${me.name} (${me.email}) added you to the parents, family and friends of Tigers, as a parent of Jordan Smith.\n\n` +
+        `Hi Pat,\n\n${me.name} added you to the parents, family and friends of Tigers, as a parent of Jordan Smith.\n\n` +
         `${me.name} wrote:\nGlad to have you with us this season.\n\n` +
         `Dime Coach is where the coaches of Tigers plan practices and games. Being on this list means they can send you practice plans, schedules and news at this address. You do not need an account.\n\n` +
         `If you would rather not be on the list, write to ${me.name} at ${me.email}.`,

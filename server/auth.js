@@ -136,8 +136,22 @@ function prefsOf(u) {
 const SYSTEM_ADMIN_EMAIL = String(process.env.PP_SYSTEM_ADMIN || 'fid.joe@gmail.com').trim().toLowerCase();
 export const isSystemAdmin = (u) => !!u && String(u.email).trim().toLowerCase() === SYSTEM_ADMIN_EMAIL && u.status === 'active';
 
+/**
+ * The whole name from what a form sent: the first and last name from their own boxes, or one
+ * name as before. What was typed in the two boxes is remembered, so that "Mary Ann" and "Smith"
+ * are kept as they were typed and not split again at the first space.
+ */
+function nameFrom(body) {
+  const tidy = (v) => str(v).trim().replace(/\s+/g, ' ');
+  const first = tidy(body?.first_name);
+  const last = tidy(body?.last_name);
+  if (!first && !last) return tidy(body?.name);
+  const name = `${first} ${last}`.trim();
+  run('INSERT INTO name_hints (name, first, last) VALUES (?,?,?) ON CONFLICT(name) DO UPDATE SET first=excluded.first, last=excluded.last', name, first, last);
+  return name;
+}
 const userOut = (u) => ({
-  id: u.id, email: u.email, name: u.name, is_admin: !!u.is_admin, can_import: !!u.can_import, is_system_admin: isSystemAdmin(u),
+  id: u.id, email: u.email, name: u.name, first_name: u.first_name || '', last_name: u.last_name || '', is_admin: !!u.is_admin, can_import: !!u.can_import, is_system_admin: isSystemAdmin(u),
   must_change_password: !!u.must_change_password, prefs: prefsOf(u),
 });
 
@@ -281,7 +295,7 @@ export function mountAuth(app) {
         error: token ? 'The setup code is not right.' : 'Setup must be done from the computer running Dime Coach, or with a setup code.',
       });
     const email = normEmail(req.body.email);
-    const name = str(req.body.name).trim();
+    const name = nameFrom(req.body);
     if (!name) return res.status(400).json({ error: 'Enter your name.' });
     if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
     const problem = passwordProblem(req.body.password);
@@ -370,7 +384,7 @@ export function mountAuth(app) {
   app.post('/api/auth/register', (req, res) => {
     if (!registrationOpen()) return res.status(403).json({ error: 'Registration is not open yet. Ask the administrator for an account.' });
     const email = normEmail(req.body.email);
-    const name = str(req.body.name).trim();
+    const name = nameFrom(req.body);
     if (!name) return res.status(400).json({ error: 'Enter your name.' });
     if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
     const problem = passwordProblem(req.body.password);
@@ -470,12 +484,12 @@ export function mountAuth(app) {
   app.get('/api/auth/welcome', (req, res) => {
     const u = invitedBy(str(req.query.token));
     if (!u) return res.status(400).json({ error: BAD_WELCOME });
-    res.json({ name: u.name, email: u.email });
+    res.json({ name: u.name, first_name: u.first_name || '', last_name: u.last_name || '', email: u.email });
   });
   app.post('/api/auth/welcome', (req, res) => {
     const u = invitedBy(str(req.body.token));
     if (!u) return res.status(400).json({ error: BAD_WELCOME });
-    const name = str(req.body.name).trim().replace(/\s+/g, ' ') || u.name;
+    const name = nameFrom(req.body) || u.name;
     if (name.length > 80) return res.status(400).json({ error: 'Keep your name under 80 characters.' });
     const problem = passwordProblem(req.body.password);
     if (problem) return res.status(400).json({ error: problem });
@@ -509,7 +523,7 @@ export function mountAuth(app) {
       tx(() => claimAll(existing.id, existing.email));
       return res.json({ ok: true, existing: true });
     }
-    const name = str(req.body.name).trim().replace(/\s+/g, ' ');
+    const name = nameFrom(req.body);
     if (!name) return res.status(400).json({ error: 'Enter your name.' });
     if (name.length > 80) return res.status(400).json({ error: 'Keep your name under 80 characters.' });
     const problem = passwordProblem(req.body.password);
@@ -562,7 +576,7 @@ export function mountAuth(app) {
 
   // A person's own name, as other coaches see it.
   app.put('/api/auth/profile', (req, res) => {
-    const name = str(req.body.name).trim().replace(/\s+/g, ' ');
+    const name = nameFrom(req.body);
     if (!name) return res.status(400).json({ error: 'Enter your name.' });
     if (name.length > 80) return res.status(400).json({ error: 'Keep your name under 80 characters.' });
     run('UPDATE users SET name=? WHERE id=?', name, req.user.id);
@@ -609,7 +623,7 @@ export function mountAuth(app) {
 
   app.post('/api/admin/users', admin, (req, res) => {
     const email = normEmail(req.body.email);
-    const name = str(req.body.name).trim();
+    const name = nameFrom(req.body);
     if (!name) return res.status(400).json({ error: 'Enter a name.' });
     if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
     const problem = passwordProblem(req.body.password);
@@ -629,7 +643,7 @@ export function mountAuth(app) {
   // then the account is only a name and an address.
   app.post('/api/admin/invites', admin, async (req, res) => {
     const email = normEmail(req.body.email);
-    const name = str(req.body.name).trim().replace(/\s+/g, ' ');
+    const name = nameFrom(req.body);
     if (!name) return res.status(400).json({ error: 'Enter a name.' });
     if (name.length > 80) return res.status(400).json({ error: 'Keep the name under 80 characters.' });
     if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
