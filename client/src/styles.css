@@ -10106,43 +10106,43 @@ fieldset.perm-list:disabled .check.perm {
 .item-body.cards .chips .chip.toggle {
   padding: 6px 14px;
 }
-.item-body.cards .ib-grid {
+.item-body.ib-tiles .ib-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
-.item-body.cards .ib-grid > section {
+.item-body.ib-tiles .ib-grid > section {
   position: relative;
   padding: 16px 18px 18px 56px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface-2);
 }
-.item-body.cards .ib-grid > section.full {
+.item-body.ib-tiles .ib-grid > section.full {
   grid-column: 1 / -1;
 }
-.item-body.cards .ib-grid > section.coach-only {
+.item-body.ib-tiles .ib-grid > section.coach-only {
   background: var(--coach);
   border-color: var(--coach-line);
 }
-.item-body.cards .ib-sign {
+.item-body.ib-tiles .ib-sign {
   display: block;
   position: absolute;
   left: 18px;
   top: 17px;
   color: var(--ink-2);
 }
-.item-body.cards .ib-grid h4 {
+.item-body.ib-tiles .ib-grid h4 {
   margin: 0 0 12px;
   font-size: 0.98rem;
 }
-.item-body.cards .ib-grid h4 .hint {
+.item-body.ib-tiles .ib-grid h4 .hint {
   display: block;
   margin: 3px 0 0;
   font-weight: 400;
   line-height: 1.35;
 }
-.item-body.cards .ib-grid .btn.small {
+.item-body.ib-tiles .ib-grid .btn.small {
   min-height: 36px;
   padding: 6px 14px;
 }
@@ -10156,7 +10156,7 @@ fieldset.perm-list:disabled .check.perm {
   padding: 8px 20px;
 }
 @media (max-width: 760px) {
-  .item-body.cards .ib-grid {
+  .item-body.ib-tiles .ib-grid {
     grid-template-columns: minmax(0, 1fr);
   }
   .drill-top .field:not(.grow) {
@@ -14024,4 +14024,22 @@ button.cx-row:hover .cx-row-text strong {
   width: 390px;
   max-width: 100%;
   margin: 0 auto;
+}
+
+/* The same cards under a practice item's details as in the drill window: resources, plays,
+   stations and groups, and the coach-only note, each with its sign. */
+.item-body.ib-tiles .ib-grid h4 {
+  color: var(--ink);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+.item-body.ib-tiles .ib-grid h4 .hint {
+  color: var(--muted);
+  font-size: 0.84rem;
+  letter-spacing: 0;
+}
+.item-body.ib-tiles:not(.cards) .ib-grid {
+  margin-top: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }

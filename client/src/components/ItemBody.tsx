@@ -17,6 +17,8 @@ interface Props {
   plays?: Play[];
   /** Lays the extras out as a grid of cards, each with its own sign: used where the drill is edited on its own. */
   cards?: boolean;
+  /** Lays only the extras out as those cards, leaving the top as it is: used on a practice item. */
+  tiles?: boolean;
 }
 
 const SIGNS = {
@@ -33,7 +35,7 @@ const Sign = ({ d }: { d: string }) => (
 );
 
 /** The editable content shared by practice items and library drills. */
-export default function ItemBody({ value, onChange, tags, players, plays, cards }: Props) {
+export default function ItemBody({ value, onChange, tags, players, plays, cards, tiles }: Props) {
   const playIds = value.play_ids || [];
   const attached = playIds.map((pid) => plays?.find((p) => p.id === pid)).filter((p): p is Play => !!p);
   const available = (plays || []).filter((p) => !playIds.includes(p.id));
@@ -47,7 +49,7 @@ export default function ItemBody({ value, onChange, tags, players, plays, cards 
     onChange({ groups: value.groups.map((g, j) => (j === i ? { ...g, ...patch } : g)) });
 
   return (
-    <div className={`item-body ${cards ? 'cards' : ''}`}>
+    <div className={`item-body ${cards ? 'cards' : ''} ${cards || tiles ? 'ib-tiles' : ''}`}>
       <section>
         <h4>Categories {cards && <span className="hint">Select one or more categories to help organize and find this drill.</span>}</h4>
         <TagPicker tags={tags} value={value.tag_ids} onChange={(tag_ids) => onChange({ tag_ids })} />
@@ -215,7 +217,7 @@ export default function ItemBody({ value, onChange, tags, players, plays, cards 
             </div>
           )}
         </section>
-      ) : cards ? (
+      ) : cards || tiles ? (
         <section>
           <h4>
             <Sign d={SIGNS.coach} />

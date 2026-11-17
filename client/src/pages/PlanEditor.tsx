@@ -1172,7 +1172,7 @@ function SortableRow(props: {
 
         {!isBreak && isOpen && (
           <>
-            <ItemBody value={item} onChange={onPatch} tags={tags} players={players} plays={props.plays} />
+            <ItemBody tiles value={item} onChange={onPatch} tags={tags} players={players} plays={props.plays} />
             <div className="item-foot">
               <button type="button" className="btn small collapse-btn" onClick={collapse}>
                 ▲ Collapse
