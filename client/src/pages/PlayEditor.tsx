@@ -609,7 +609,7 @@ export default function PlayEditor() {
       d.moved = true;
       if (d.index !== 1) {
         const line = current().objects.find((o) => o.id === d.id) as PlayLine | undefined;
-        const pool = d.index === 0 ? sources(current()) : targets(current(), play, d.id);
+        const pool = d.index === 0 ? sources(current(), d.id) : targets(current(), play, d.id);
         setSnap(nearestAnchor(p, pool, d.index === 0 ? line?.to : line?.from)?.id ?? null);
       }
       setObjects((os) => os.map((o) => {
@@ -678,7 +678,7 @@ export default function PlayEditor() {
     }
     if (d.kind === 'handle' && d.index !== 1 && d.moved && line && isLine(line)) {
       const isStart = d.index === 0;
-      const anchor = nearestAnchor(line.points[d.index] as Pt, isStart ? sources(current()) : targets(current(), play, d.id), isStart ? line.to : line.from);
+      const anchor = nearestAnchor(line.points[d.index] as Pt, isStart ? sources(current(), d.id) : targets(current(), play, d.id), isStart ? line.to : line.from);
       setObjects(
         (os) =>
           os.map((o) => {

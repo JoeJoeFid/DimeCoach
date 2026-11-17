@@ -140,7 +140,7 @@ export function snapshot(frame: PlayFrame, beat: number, t: number): Snapshot {
 
   const pass = (line: PlayLine, u: number) => {
     const path = sampleLine(line.points, 32);
-    const source = line.from ? marks.find((m) => m.id === line.from) : nearest(players, path[0]);
+    const source = line.from ? (line.from.startsWith(END) ? playerAt(line.from, frame.objects) : marks.find((m) => m.id === line.from)) : nearest(players, path[0]);
     const aimed = playerAt(line.to, frame.objects);
     const receiver = line.to ? players.find((p) => p.id === aimed?.id) : nearest(players, path[path.length - 1]);
     // A pass to where a cutter is going, thrown while they cut, is in the air for the whole movement:
@@ -164,7 +164,7 @@ export function snapshot(frame: PlayFrame, beat: number, t: number): Snapshot {
   };
   const move = (line: PlayLine, u: number) => {
     const path = travelPath(line);
-    const mover = line.from ? marks.find((m) => m.id === line.from) : (nearest(players, path[0]) ?? nearest(marks.filter((m) => m.type === 'ball'), path[0]));
+    const mover = line.from ? (line.from.startsWith(END) ? playerAt(line.from, frame.objects) : marks.find((m) => m.id === line.from)) : (nearest(players, path[0]) ?? nearest(marks.filter((m) => m.type === 'ball'), path[0]));
     if (mover) pos.set(mover.id, pointAlong(path, ease(u)));
   };
   const run = (lines: PlayLine[], u: number) => {

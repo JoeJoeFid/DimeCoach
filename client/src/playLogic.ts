@@ -19,8 +19,8 @@ const near = (a: Pt, b: Pt, d: number) => Math.hypot(a[0] - b[0], a[1] - b[1]) <
 const start = (l: PlayLine) => l.points[0] as Pt;
 const end = (l: PlayLine) => l.points[2] as Pt;
 
-/** Things a line can start from: players and the ball. */
-export const sources = (frame: PlayFrame): Anchor[] => frame.objects.filter((o): o is PlayMark => isPlayer(o) || o.type === 'ball');
+/** The players and the ball. */
+const marksOf = (frame: PlayFrame): Anchor[] => frame.objects.filter((o): o is PlayMark => isPlayer(o) || o.type === 'ball');
 /** How the far end of a line is named as something to attach to: this, then the line's own id. */
 export const END = 'end:';
 /** Lines that take a player somewhere: everything but a pass. */
@@ -32,13 +32,24 @@ const moves = (l: PlayLine) => l.kind !== 'pass';
 export const arrivals = (frame: PlayFrame, except?: string): Anchor[] =>
   frame.objects
     .filter(isLine)
-    .filter((l) => moves(l) && l.id !== except)
+    // A line that already ends on a player or the basket has nothing of its own to offer there.
+    .filter((l) => moves(l) && l.id !== except && !l.to)
     .map((l) => ({ id: END + l.id, x: end(l)[0], y: end(l)[1] }));
+/**
+ * Things a line can start from: players, the ball, and where another player's line ends. A line
+ * started from the end of a cut is that same player's next movement: cut, then screen.
+ */
+export const sources = (frame: PlayFrame, forLine?: string): Anchor[] => [...marksOf(frame), ...arrivals(frame, forLine)];
 /** Things a line can end at: players, the ball, the baskets, and where another player's line ends. */
-export const targets = (frame: PlayFrame, play: Court, forLine?: string): Anchor[] => [...sources(frame), ...baskets(play), ...arrivals(frame, forLine)];
+export const targets = (frame: PlayFrame, play: Court, forLine?: string): Anchor[] => [...marksOf(frame), ...baskets(play), ...arrivals(frame, forLine)];
 
 /** The player who runs a line: the one it starts from, or failing that the one standing at its start. */
-export function runnerOf(line: PlayLine, objects: PlayObject[]): PlayMark | undefined {
+export function runnerOf(line: PlayLine, objects: PlayObject[], depth = 0): PlayMark | undefined {
+  // A line started from where another line ends is run by whoever ran that one.
+  if (line.from?.startsWith(END)) {
+    const before = objects.find((o) => o.id === line.from!.slice(END.length));
+    return before && isLine(before) && depth < 8 ? runnerOf(before, objects, depth + 1) : undefined;
+  }
   const players = objects.filter(isPlayer);
   return (line.from ? players.find((p) => p.id === line.from) : undefined) ?? players.find((p) => near([p.x, p.y], start(line), SNAP));
 }
@@ -62,11 +73,23 @@ export function syncEnds(objects: PlayObject[]): PlayObject[] {
   for (let pass = 0; pass < 2; pass++) {
     const lines = new Map(out.filter(isLine).map((l) => [l.id, l]));
     out = out.map((o) => {
-      if (!isLine(o) || !o.to?.startsWith(END)) return o;
-      const target = lines.get(o.to.slice(END.length));
-      if (!target || !moves(target) || target.id === o.id) return { ...o, to: undefined };
-      const at = end(target);
-      return near(end(o), at, 0.001) ? o : withEnd(o, 2, at);
+      if (!isLine(o)) return o;
+      let line = o;
+      if (line.to?.startsWith(END)) {
+        const target = lines.get(line.to.slice(END.length));
+        if (!target || !moves(target) || target.id === line.id) line = { ...line, to: undefined };
+        else if (!near(end(line), end(target), 0.001)) line = withEnd(line, 2, end(target));
+      }
+      if (line.from?.startsWith(END)) {
+        const before = lines.get(line.from.slice(END.length));
+        if (!before || !moves(before) || before.id === line.id) line = { ...line, from: undefined };
+        else {
+          if (!near(start(line), end(before), 0.001)) line = withEnd(line, 0, end(before));
+          // It cannot begin until the line before it is finished, so it comes later in the order of movement.
+          if ((line.order ?? 1) <= (before.order ?? 1)) line = { ...line, order: (before.order ?? 1) + 1 };
+        }
+      }
+      return line;
     });
   }
   return out;
@@ -78,7 +101,8 @@ export function nearestAnchor(p: Pt, list: Anchor[], exclude?: string): Anchor |
   for (const a of list) {
     if (a.id === exclude) continue;
     const d = Math.hypot(a.x - p[0], a.y - p[1]);
-    if (d <= bestD) {
+    // Of two things at the same spot the earlier in the list wins: a player before the end of a line.
+    if (d < bestD || (!best && d <= bestD)) {
       best = a;
       bestD = d;
     }
@@ -181,11 +205,14 @@ export function carryForward(frame: PlayFrame, play: Court): PlayFrame {
       used.add(first.id);
       at = landing(first);
       // A second, unattached line drawn on from where the first one ended continues the movement.
+      let last = first;
       for (let hop = 0; hop < 5; hop++) {
-        const next = lines.find((l) => !used.has(l.id) && l.kind !== 'pass' && !l.from && near(start(l), at, REACH));
+        // The next line of the same player: one started from the end of the last, or drawn on from where it ended.
+        const next = lines.find((l) => !used.has(l.id) && l.kind !== 'pass' && (l.from ? l.from === END + last.id : near(start(l), at, REACH)));
         if (!next) break;
         used.add(next.id);
         at = landing(next);
+        last = next;
       }
     }
     movedTo.set(p.id, at);
@@ -202,7 +229,7 @@ export function carryForward(frame: PlayFrame, play: Court): PlayFrame {
         (l) =>
           l.kind === 'pass' &&
           !used.has(l.id) &&
-          (l.from ? l.from === carrier?.id || (hop === 0 && l.from === ballId) : near(start(l), from, REACH) || (hop === 0 && near(start(l), at, REACH))),
+          (l.from ? l.from === carrier?.id || (hop === 0 && l.from === ballId) || (l.from.startsWith(END) && !!carrier && playerAt(l.from, frame.objects)?.id === carrier.id) : near(start(l), from, REACH) || (hop === 0 && near(start(l), at, REACH))),
       );
       if (!pass) break;
       used.add(pass.id);

@@ -367,7 +367,13 @@ function lineShape(line: PlayLine, trims = { start: 0, end: 0 }) {
 export function LineShape({ line, objects, selected, hit }: { line: PlayLine; objects?: PlayObject[]; selected?: boolean; hit?: ReactNode }) {
   const s = lineShape(line, objects ? lineTrims(line, objects) : undefined);
   // A line drawn from a player who has a color of their own is drawn in that color, so it is plain whose it is.
-  const owner = line.from ? objects?.find((o) => o.id === line.from) : undefined;
+  // A line started from the end of another line belongs to whoever that one belongs to.
+  let from = line.from;
+  for (let hop = 0; hop < 8 && from?.startsWith('end:'); hop++) {
+    const before = objects?.find((o) => o.id === from!.slice(4));
+    from = before && isLine(before) ? before.from : undefined;
+  }
+  const owner = from ? objects?.find((o) => o.id === from) : undefined;
   const color = owner && isPlayer(owner) ? owner.color : undefined;
   return (
     <g className={`play-line ${line.kind} ${selected ? 'selected' : ''} ${color ? 'owned' : ''}`} style={color ? ({ '--line-color': color } as CSSProperties) : undefined}>
