@@ -7384,7 +7384,7 @@ fieldset.plain {
 }
 .plan-row.ps-row {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) minmax(0, 230px) 124px auto;
+  grid-template-columns: 92px minmax(0, 1fr) 124px auto;
   align-items: center;
   gap: 16px;
   padding: 10px 16px;
@@ -13973,18 +13973,18 @@ button.cx-row:hover .cx-row-text strong {
 }
 
 /* The button on a practice's line that brings up its summary. */
-.ps-summary {
-  border-top: none;
-  border-right: none;
-  border-bottom: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-.ps-summary:hover,
 .ps-summary[aria-expanded='true'] {
-  color: var(--ink);
+  border-color: var(--ink-2);
+}
+
+/* On a phone the buttons of a practice's line go under it, so its name and details keep their room. */
+@media (max-width: 560px) {
+  .plan-row.ps-row {
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
+  .ps-row .ps-actions {
+    grid-column: 2;
+    grid-row: auto;
+    justify-content: flex-start;
+  }
 }

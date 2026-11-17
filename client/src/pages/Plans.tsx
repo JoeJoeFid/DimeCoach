@@ -320,37 +320,38 @@ export default function Plans({ kind }: { kind: PlanKind }) {
                 {e.location.split('\n')[0]}
               </span>
             )}
-          </span>
-        </span>
-        <span className="ps-counts">
-          {p && (
-            <>
-              <span>
+            {p && (
+              <span className="ps-dot">
                 {count} item{count === 1 ? '' : 's'}
               </span>
-              <button
-                type="button"
-                className="ps-focus ps-summary"
-                aria-expanded={summary?.entry.key === e.key}
-                title="What is in it, and where the time goes"
-                onClick={(ev) => {
-                  if (summary?.entry.key === e.key) return setSummary(null);
-                  const r = ev.currentTarget.getBoundingClientRect();
-                  // Beside the button on the right when there is room, else on its left. The summary keeps itself on the screen.
-                  const right = r.right + 8 + PEEK_WIDTH <= window.innerWidth - 8;
-                  setSummary({ entry: e, left: right ? r.right + 8 : Math.max(8, r.left - 8 - PEEK_WIDTH), top: r.top - 8 });
-                }}
-              >
-                Summary
-              </button>
-            </>
-          )}
+            )}
+          </span>
         </span>
         <span className={`ps-pill ${pill.cls}`}>
           <Icon d={pill.icon} />
           {pill.text}
         </span>
         <span className="ps-actions">
+          {p && (
+            <button
+              type="button"
+              className="btn icon-btn ps-summary"
+              aria-label={`Summary of ${p.title || 'this plan'}`}
+              aria-expanded={summary?.entry.key === e.key}
+              title="Summary: what is in it, and where the time goes"
+            onClick={(ev) => {
+              if (summary?.entry.key === e.key) return setSummary(null);
+              const r = ev.currentTarget.getBoundingClientRect();
+              // Beside the button on the right when there is room, else on its left. The summary keeps itself on the screen.
+              const right = r.right + 8 + PEEK_WIDTH <= window.innerWidth - 8;
+              setSummary({ entry: e, left: right ? r.right + 8 : Math.max(8, r.left - 8 - PEEK_WIDTH), top: r.top - 8 });
+            }}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6.500 3.500h11v17h-11zM9.500 8h5M9.500 12h5M9.500 16h3" />
+              </svg>
+            </button>
+          )}
           {p ? (
             <Link className="btn primary ps-view" to={`/plans/${p.id}`}>
               View

@@ -6,22 +6,46 @@ export class CalendarError extends Error {}
 const pad = (n) => String(n).padStart(2, '0');
 const unescapeText = (s) => s.replace(/\\n/gi, '\n').replace(/\\([,;\\])/g, '$1').trim();
 
+/** A time zone name this computer knows, such as "America/Chicago". Anything else is ''. */
+export function validZone(name) {
+  const zone = String(name || '').trim();
+  if (!zone) return '';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return zone;
+  } catch {
+    return '';
+  }
+}
+/** UTC under any of its names. A calendar that says its zone is UTC has not said where the team is. */
+const isUtc = (zone) => /^(utc|gmt|z|etc\/(utc|gmt|uct|universal|zulu))$/i.test(zone);
+
+/** A moment, as the date and the time on the clock in a time zone. */
+function wallClock(moment, zone) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(moment).map((p) => [p.type, p.value]),
+  );
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
 /**
- * Parses an iCalendar date value into a local date and time.
+ * Parses an iCalendar date value into the date and time on the team's clock.
  * - A value with a TZID is the team's wall-clock time, so it is kept as written.
- * - A UTC value (ending in Z) is converted to this computer's time zone.
+ * - A UTC value (ending in Z) is converted to the team's time zone. Without one, to this
+ *   computer's, which is only right when the server sits where the team does.
  * - A date-only value is an all-day event with no time.
  */
-function parseWhen(value) {
+function parseWhen(value, zone) {
   const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(value.trim());
   if (!m) return null;
   const [, y, mo, d, h, mi, , z] = m;
   if (h === undefined) return { date: `${y}-${mo}-${d}`, time: '' };
   if (!z) return { date: `${y}-${mo}-${d}`, time: `${h}:${mi}` };
-  const local = new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi));
+  const moment = new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi));
+  if (zone) return wallClock(moment, zone);
   return {
-    date: `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`,
-    time: `${pad(local.getHours())}:${pad(local.getMinutes())}`,
+    date: `${moment.getFullYear()}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())}`,
+    time: `${pad(moment.getHours())}:${pad(moment.getMinutes())}`,
   };
 }
 
@@ -32,10 +56,13 @@ export function classify(title) {
   return 'other';
 }
 
-export function parseIcs(text) {
+/** `teamZone` is where the team is, for times the calendar gives in UTC. A zone the calendar names for itself comes first. */
+export function parseIcs(text, teamZone = '') {
   if (!/BEGIN:VCALENDAR/i.test(text)) throw new CalendarError('That link did not return a calendar. Check that it is the calendar subscription link.');
   // Long lines are folded onto continuation lines that start with a space or tab.
   const lines = text.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '').split('\n');
+  const named = validZone((/^X-WR-TIMEZONE:(.+)$/im.exec(text) || [])[1]);
+  const zone = named && !isUtc(named) ? named : validZone(teamZone);
   const events = [];
   let cur = null;
   for (const line of lines) {
@@ -65,8 +92,8 @@ export function parseIcs(text) {
       else if (name === 'DESCRIPTION') cur.description = unescapeText(value);
       else if (name === 'UID') cur.uid = value.trim();
       else if (name === 'STATUS') cur.status = value.trim().toUpperCase();
-      else if (name === 'DTSTART') cur.start = parseWhen(value);
-      else if (name === 'DTEND') cur.end = parseWhen(value);
+      else if (name === 'DTSTART') cur.start = parseWhen(value, zone);
+      else if (name === 'DTEND') cur.end = parseWhen(value, zone);
     }
   }
   return events;
@@ -86,7 +113,7 @@ export function normalizeCalendarUrl(input) {
   return url.toString();
 }
 
-export async function fetchCalendar(url) {
+export async function fetchCalendar(url, teamZone = '') {
   let res;
   try {
     res = await fetch(url, { signal: AbortSignal.timeout(20000), headers: { Accept: 'text/calendar, text/plain, */*' } });
@@ -96,5 +123,5 @@ export async function fetchCalendar(url) {
   if (!res.ok) throw new CalendarError(`The calendar link returned an error (${res.status}). Copy a fresh link from the app and try again.`);
   const text = await res.text();
   if (text.length > 5_000_000) throw new CalendarError('That calendar is too large to import.');
-  return parseIcs(text);
+  return parseIcs(text, teamZone);
 }

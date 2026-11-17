@@ -239,6 +239,8 @@ addColumn('teams', 'calendar_synced_at', "TEXT DEFAULT ''");
 // A calendar event follows the team calendar until someone works on it in Dime Coach. From then on
 // it is kept as it is here: "touched" says so, "gone" that the calendar no longer has it, and
 // "src_json" what the calendar says about it now.
+// Where the team is, as a time zone name. Calendars often give times in UTC, and this turns them back into the team's own.
+addColumn('teams', 'time_zone', "TEXT DEFAULT ''");
 addColumn('events', 'touched', 'INTEGER DEFAULT 0');
 addColumn('events', 'gone', 'INTEGER DEFAULT 0');
 addColumn('events', 'src_json', "TEXT DEFAULT ''");

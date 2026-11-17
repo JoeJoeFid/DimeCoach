@@ -28,6 +28,14 @@ let keySeq = 0;
 export const newKey = () => `k${Date.now().toString(36)}-${keySeq++}`;
 const withKeys = (p: Plan): Plan => ({ ...p, items: (p.items || []).map((it) => ({ ...it, images: it.images || [], play_ids: it.play_ids || [], links: it.links || [], videos: it.videos || [], key: newKey() })) });
 
+/** The time zone this browser is in, such as "America/Chicago". The team calendar's times are turned into it. */
+const timeZone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+};
 export interface Bootstrap {
   sports: Sport[];
   /** Teams in the workspace being worked in. Inside a shared team, just that team. */
@@ -744,8 +752,8 @@ export const api = {
   setPositionPrefs: (teamId: number, prefs: Record<string, string[]>) => req<Team>('PUT', `/teams/${teamId}/positions`, { prefs }),
   deleteTeam: (id: number) => req('DELETE', `/teams/${id}`),
 
-  setCalendar: (teamId: number, url: string) => req<{ count: number; team: Team }>('PUT', `/teams/${teamId}/calendar`, { url }),
-  syncCalendar: (teamId: number) => req<{ count: number; team: Team }>('POST', `/teams/${teamId}/calendar/sync`),
+  setCalendar: (teamId: number, url: string) => req<{ count: number; team: Team }>('PUT', `/teams/${teamId}/calendar`, { url, tz: timeZone() }),
+  syncCalendar: (teamId: number) => req<{ count: number; team: Team }>('POST', `/teams/${teamId}/calendar/sync`, { tz: timeZone() }),
   setEventKind: (teamId: number, eventId: number, kind: ScheduleEvent['kind']) => req<ScheduleEvent>('PUT', `/teams/${teamId}/events/${eventId}`, { kind }),
   followEvent: (teamId: number, eventId: number) => req<{ ok: boolean }>('POST', `/teams/${teamId}/events/${eventId}/follow`, {}),
   events: (teamId: number, from: string) => req<ScheduleEvent[]>('GET', `/teams/${teamId}/events?from=${from}`),

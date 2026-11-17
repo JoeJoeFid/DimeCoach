@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { all, get, run, tx } from './db.js';
 import { seedIfEmpty, seedSport } from './seed.js';
 import { ImportError, analyzePlan, claudeStatus, manualPrompt, parseDraft } from './ai.js';
-import { CalendarError, fetchCalendar, normalizeCalendarUrl } from './calendar.js';
+import { CalendarError, fetchCalendar, normalizeCalendarUrl, validZone } from './calendar.js';
 import { mountAuth, requireImport } from './auth.js';
 import { mountCoachLibrary } from './coachLibrary.js';
 import { mountCommunities } from './communities.js';
@@ -171,8 +171,17 @@ const eventSource = (ev) => JSON.stringify(Object.fromEntries(EVENT_FIELDS.map((
  * changes when the calendar changes and goes when the calendar drops it. An event someone has
  * worked on here is kept exactly as it is, and only remembers what the calendar says now.
  */
+/**
+ * The team's time zone: the one the coach's browser is in when they link or read the calendar,
+ * remembered for next time. A coach is almost always where their team is.
+ */
+function zoneFrom(req, team) {
+  const zone = validZone(req.body?.tz);
+  if (zone && zone !== team.time_zone) run('UPDATE teams SET time_zone=? WHERE id=?', zone, team.id);
+  return zone || team.time_zone || '';
+}
 async function syncCalendar(team) {
-  const events = await fetchCalendar(team.calendar_url);
+  const events = await fetchCalendar(team.calendar_url, team.time_zone);
   tx(() => {
     // Games set by the team's league are not from this calendar, and stay.
     const old = new Map();
@@ -267,7 +276,7 @@ app.put('/api/teams/:id/calendar', async (req, res) => {
       return res.json({ count: 0, team: get(`SELECT ${TEAM_COLS} FROM teams WHERE id=?`, team.id) });
     }
     // Only keep the link if it actually works.
-    const count = await syncCalendar({ ...team, calendar_url: url });
+    const count = await syncCalendar({ ...team, calendar_url: url, time_zone: zoneFrom(req, team) });
     run('UPDATE teams SET calendar_url=? WHERE id=?', url, team.id);
     res.json({ count, team: get(`SELECT ${TEAM_COLS} FROM teams WHERE id=?`, team.id) });
   } catch (e) {
@@ -279,7 +288,7 @@ app.post('/api/teams/:id/calendar/sync', async (req, res) => {
   if (!team) return notFound(res);
   if (!team.calendar_url) return res.status(400).json({ error: 'This team has no calendar link yet.' });
   try {
-    const count = await syncCalendar(team);
+    const count = await syncCalendar({ ...team, time_zone: zoneFrom(req, team) });
     res.json({ count, team: get(`SELECT ${TEAM_COLS} FROM teams WHERE id=?`, team.id) });
   } catch (e) {
     calendarFail(res, e);
