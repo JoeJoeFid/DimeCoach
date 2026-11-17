@@ -14452,3 +14452,34 @@ button.cx-row:hover .cx-row-text strong {
   opacity: 1;
   font-weight: 600;
 }
+
+/* Dashboard: the schedule strip sits in a box of its own, named by a tag on its top edge. */
+.timeline {
+  position: relative;
+  margin-top: 14px;
+  padding: 26px 16px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: calc(var(--radius) + 4px);
+}
+.tl-label {
+  position: absolute;
+  top: -13px;
+  left: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+@media (max-width: 760px) {
+  .timeline {
+    padding: 22px 10px 8px;
+  }
+}
