@@ -311,6 +311,20 @@ export interface OrgStanding {
   points_for: number;
   points_against: number;
 }
+/** How an organization is using Dime Coach, in totals. */
+export interface OrgUsage {
+  members: number;
+  active_week: number;
+  active_before: number;
+  weeks: { start: string; active: number }[];
+  practices: number;
+  practices_before: number;
+  shared: { drill: number; play: number; plan: number };
+  discussions: number;
+  replies: number;
+  top: { id: number; kind: ShareKind; title: string; by: string; copies: number }[];
+  quiet: { id: number; name: string; league: string; days: number | null }[];
+}
 export interface OrgGames {
   games: OrgGame[];
   /** By league id. */
@@ -416,6 +430,10 @@ export interface CommunityShare {
   /** What to draw on its card: a play's first step, or the first lines of a practice. */
   art?: { play?: Pick<Play, 'court' | 'flipped'> & { frame: Play['frames'][number] }; lines?: { kind: 'item' | 'break'; title: string; duration_min: number }[]; text?: string };
   tags: { name: string; color: string }[];
+  /** The sport it belongs to, by name. */
+  sport: string;
+  /** How many times other coaches took a copy. */
+  copies: number;
 }
 type SharedLink = { url: string; label: string };
 type SharedTag = { name: string; color: string };
@@ -504,6 +522,43 @@ export interface MyShareState {
   share_id: number | null;
   status: 'pending' | 'approved' | null;
 }
+/** Sending one practice to other coaches: who can be picked, who it went to, and the link for anyone. */
+export interface PlanSendState {
+  /** Whether this site can send email. Without it, only people picked from the list can be sent to. */
+  mail: boolean;
+  people: { id: number; name: string; where: string }[];
+  sent: { id: number; to: string; created_at: string }[];
+  link: { id: number; url: string } | null;
+  result?: { mailed: number; messaged: number; failed: string[]; total: number };
+}
+/** A practice opened from a link. */
+export interface SharedPlanPage {
+  title: string;
+  noun: string;
+  by: string;
+  team: string;
+  sport: string;
+  date: string;
+  note: string;
+  content: SharedPlan;
+}
+/** Someone who follows a team without coaching it: a parent, a relative, or a friend of the team. */
+export interface TeamContact {
+  id: number;
+  name: string;
+  email: string;
+  kind: 'parent' | 'family' | 'friend';
+  /** The players they belong to. Empty for a friend of the whole team, or someone not linked yet. */
+  player_ids: number[];
+  invited_at: string | null;
+}
+export interface TeamContacts {
+  /** Whether this site can send email, and so invitations. */
+  mail: boolean;
+  contacts: TeamContact[];
+  warning?: string;
+}
+type ContactFields = Pick<TeamContact, 'name' | 'email' | 'kind' | 'player_ids'>;
 export interface AdminSettings {
   registration_mode: 'closed' | 'open' | 'verify';
   keyboard_access: boolean;
@@ -585,6 +640,12 @@ export const api = {
   share: (id: number, kind: ShareKind, itemId: number) => req<CommunityShare[]>('POST', `/communities/${id}/shares`, { kind, item_id: itemId }),
   unshare: (shareId: number) => req<CommunityShare[]>('DELETE', `/community-shares/${shareId}`),
   approveShare: (shareId: number) => req<CommunityShare[]>('POST', `/community-shares/${shareId}/approve`, {}),
+  planSends: (planId: number) => req<PlanSendState>('GET', `/plans/${planId}/sends`),
+  sendPlan: (planId: number, b: { user_ids: number[]; emails: string[]; note: string }) => req<PlanSendState>('POST', `/plans/${planId}/sends`, b),
+  planSendLink: (planId: number) => req<PlanSendState>('POST', `/plans/${planId}/sends/link`, {}),
+  removePlanSend: (planId: number, sendId: number) => req<PlanSendState>('DELETE', `/plans/${planId}/sends/${sendId}`),
+  sharedPlan: (token: string) => req<SharedPlanPage>('GET', `/public/plans/${encodeURIComponent(token)}`),
+  copySharedPlan: (token: string, b: { team_id: number; date: string }) => req<{ id: number }>('POST', `/plan-links/${encodeURIComponent(token)}/copy`, b),
   myShares: (kind: ShareKind, itemId: number) => req<MyShareState[]>('GET', `/community-shares/mine?kind=${kind}&item_id=${itemId}`),
   planCollaborators: (planId: number) => req<PlanCollaborator[]>('GET', `/plans/${planId}/collaborators`),
   planPosts: (planId: number) => req<PlanPost[]>('GET', `/plans/${planId}/posts`),
@@ -634,6 +695,7 @@ export const api = {
   orgDeleteTeam: (id: number, teamId: number, confirm: string) => req<Org>('DELETE', `/communities/${id}/org/teams/${teamId}`, { confirm }),
   orgAssignCoach: (id: number, teamId: number, userId: number, title: string) => req<Org>('POST', `/communities/${id}/org/teams/${teamId}/coaches`, { user_id: userId, title }),
   orgUnassignCoach: (id: number, teamId: number, userId: number) => req<Org>('DELETE', `/communities/${id}/org/teams/${teamId}/coaches/${userId}`),
+  orgUsage: (id: number) => req<OrgUsage>('GET', `/communities/${id}/org/usage`),
   orgGames: (id: number) => req<OrgGames>('GET', `/communities/${id}/org/games`),
   orgAddGame: (id: number, b: Partial<OrgGame>) => req<OrgGames>('POST', `/communities/${id}/org/games`, b),
   orgUpdateGame: (id: number, gameId: number, b: Partial<OrgGame>) => req<OrgGames>('PUT', `/communities/${id}/org/games/${gameId}`, b),
@@ -688,6 +750,11 @@ export const api = {
   events: (teamId: number, from: string) => req<ScheduleEvent[]>('GET', `/teams/${teamId}/events?from=${from}`),
 
   players: (teamId: number) => req<Player[]>('GET', `/teams/${teamId}/players`),
+  teamContacts: (teamId: number) => req<TeamContacts>('GET', `/teams/${teamId}/contacts`),
+  addTeamContact: (teamId: number, b: ContactFields & { invite: boolean; note: string }) => req<TeamContacts>('POST', `/teams/${teamId}/contacts`, b),
+  updateTeamContact: (teamId: number, id: number, b: ContactFields) => req<TeamContacts>('PUT', `/teams/${teamId}/contacts/${id}`, b),
+  removeTeamContact: (teamId: number, id: number) => req<TeamContacts>('DELETE', `/teams/${teamId}/contacts/${id}`),
+  inviteTeamContact: (teamId: number, id: number, note: string) => req<TeamContacts>('POST', `/teams/${teamId}/contacts/${id}/invite`, { note }),
   createPlayer: (teamId: number, p: Partial<Player>) => req<Player>('POST', `/teams/${teamId}/players`, p),
   updatePlayer: (p: Player) => req<Player>('PUT', `/players/${p.id}`, p),
   deletePlayer: (id: number) => req('DELETE', `/players/${id}`),

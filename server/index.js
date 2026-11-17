@@ -10,6 +10,8 @@ import { mountAuth, requireImport } from './auth.js';
 import { mountCoachLibrary } from './coachLibrary.js';
 import { mountCommunities } from './communities.js';
 import { mountOrgPublic, mountOrgs } from './orgs.js';
+import { mountPlanSends, mountPlanSendsPublic } from './planSends.js';
+import { mountContacts } from './contacts.js';
 import { mountLive } from './live.js';
 import { mentionedIn, notify } from './notices.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
@@ -41,11 +43,15 @@ app.disable('x-powered-by');
 // swaps in the owner's workspace when someone is working in a team shared with them.
 // An organization's public schedule page is open to anyone, so it comes before sign-in.
 mountOrgPublic(app);
+// So is a practice opened from a link a coach sent.
+mountPlanSendsPublic(app);
 mountAuth(app);
 mountStaff(app);
 mountImages(app);
 mountCommunities(app);
 mountOrgs(app);
+mountPlanSends(app);
+mountContacts(app);
 mountCoachLibrary(app);
 mountLive(app);
 mountPlays(app);

@@ -15,6 +15,7 @@ import Messages from './pages/Messages';
 import CoachLibraryPage from './pages/CoachLibrary';
 import CommunityPage from './pages/Community';
 import OrgPublic from './pages/OrgPublic';
+import SharedPlan from './pages/SharedPlan';
 import Dashboard from './pages/Dashboard';
 import Plans from './pages/Plans';
 import PlanEditor from './pages/PlanEditor';
@@ -125,7 +126,7 @@ export default function App() {
   const [error, setError] = useState('');
   // Set by signing in, and cleared once a team is picked: coming back to an open session skips the question.
   const [justSignedIn, setJustSignedIn] = useState(false);
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
 
   const refresh = useCallback(async () => {
     try {
@@ -162,6 +163,13 @@ export default function App() {
     view = (
       <Routes>
         <Route path="/o/:slug" element={<OrgPublic />} />
+      </Routes>
+    );
+  // So is a practice a coach sent by link. "Sign in" there shows the sign-in page, and comes back here.
+  else if (/^\/shared\/[^/]+\/?$/.test(pathname) && (auth.user || !search.includes('signin=1')))
+    view = (
+      <Routes>
+        <Route path="/shared/:token" element={<SharedPlan user={auth.user} />} />
       </Routes>
     );
   else if (auth.setup_needed) view = <Setup onDone={refresh} />;

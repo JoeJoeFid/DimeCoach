@@ -234,7 +234,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
                   </Link>
                   <SchedulePreview plan={focus.plan} />
                   <Link className="btn" to={`/plans/${focus.plan.id}/print`}>
-                    Print / share
+                    Print
                   </Link>
                 </>
               ) : (

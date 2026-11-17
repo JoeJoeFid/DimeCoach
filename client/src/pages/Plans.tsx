@@ -10,7 +10,7 @@ import { MoreMenu, TagChip, type MenuItem } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, useCompletedDeletes, usePendingDeletes } from '../components/toasts';
 import PlanCalendar from '../components/PlanCalendar';
-import { CommunityPicker } from '../components/community';
+import { CommunityPicker, ShareDialog } from '../components/community';
 
 type View = 'list' | 'calendar';
 type Filter = 'all' | ScheduleEntry['kind'];
@@ -57,6 +57,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [fromCommunity, setFromCommunity] = useState(false);
+  const [sharing, setSharing] = useState<Plan | null>(null);
   // A link can ask for the calendar outright, as "View calendar" on the dashboard does.
   const [view, setView] = useState<View>(() => (new URLSearchParams(window.location.search).get('view') === 'calendar' ? 'calendar' : savedView()));
   /** Which kind of thing is listed. The list itself runs through the whole season, month after month. */
@@ -240,7 +241,8 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       e.kind === 'game' ? { cls: 'game', icon: icons.trophy, text: 'Game' } : e.kind === 'other' && !p ? { cls: 'event', icon: icons.flag, text: 'Event' } : state === 'ready' ? { cls: 'planned', icon: icons.check, text: 'Planned' } : state === 'empty' ? { cls: 'todo', icon: icons.alert, text: 'Empty' } : { cls: 'todo', icon: icons.alert, text: 'No plan yet' };
     const more: MenuItem[] = p
       ? [
-          { label: 'Print / share', onSelect: () => navigate(`/plans/${p.id}/print`) },
+          { label: 'Print', onSelect: () => navigate(`/plans/${p.id}/print`) },
+          { label: 'Share', onSelect: () => setSharing(p) },
           ...(kind === 'practice' && user.can_import ? [{ label: 'Import an old plan into it', onSelect: () => navigate(`/plans/${p.id}?import=1`) }] : []),
           { label: 'Duplicate', onSelect: () => duplicate(p) },
           { label: 'Delete', onSelect: () => remove(p, noun), danger: true },
@@ -398,6 +400,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
         )}
       </div>
       {error && <p className="error">{error}</p>}
+      {sharing && <ShareDialog kind="plan" itemId={sharing.id} title={sharing.title || (kind === 'homework' ? 'Homework' : 'Practice')} onClose={() => setSharing(null)} />}
       {fromCommunity && <CommunityPicker kind="plan" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plans/${id}`)} />}
 
       {kind === 'practice' && hasCalendar && (

@@ -13160,3 +13160,800 @@ span.org-note {
 .org-team-foot:empty {
   display: none;
 }
+
+/* Sharing a practice: with coaches, with communities, or by link. */
+.share-tabs {
+  display: flex;
+  margin-bottom: 14px;
+}
+.share-tabs button {
+  flex: 1;
+  min-height: 32px;
+}
+.share-send {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.share-send > p {
+  margin: 0;
+}
+.share-send > .btn {
+  align-self: flex-start;
+}
+.share-send > .link {
+  align-self: flex-start;
+}
+.share-people {
+  list-style: none;
+  margin: 0;
+  padding: 6px 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 2px;
+}
+.share-people .check {
+  padding: 5px 0;
+}
+.share-sent ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.share-sent li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.share-sent li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.share-sent li .link {
+  flex: none;
+}
+.share-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.share-link-row code {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.share-also {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+/* A practice opened from a link. */
+.shared-gone {
+  padding-top: 40px;
+}
+.shared-note p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+.shared-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.shared-add select {
+  flex: 1;
+  min-width: 180px;
+  max-width: 320px;
+}
+.share-send > label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.share-send > label .input {
+  width: 100%;
+}
+.shared-page {
+  --pub: #0f2b21;
+}
+
+/* ---------- Community and organization pages: the shared layout ---------- */
+/* Colors come from the tokens the rest of the app uses; nothing here names a color of its own. */
+.cx-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding-bottom: 14px;
+}
+.cx-top .cx-crest {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+.cx-top-name {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cx-top-name h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.cx-top-end {
+  margin-left: auto;
+}
+.cx-switch {
+  margin-left: 12px;
+  padding: 4px;
+}
+.cx-switch button {
+  min-height: 32px;
+  padding: 0 18px;
+}
+.seg.cx-switch button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+.cx-tabs {
+  display: flex;
+  gap: 26px;
+  margin-bottom: 22px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cx-tabs::-webkit-scrollbar {
+  display: none;
+}
+.cx-tabs button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 0 12px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.cx-tabs button:hover {
+  color: var(--ink);
+}
+.cx-tabs button.on {
+  color: var(--ink);
+  font-weight: 650;
+  border-bottom-color: var(--accent-edge);
+}
+.cx-back {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.cx-path {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.cx-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-bottom: 20px;
+}
+.cx-head h1 {
+  margin: 4px 0 0;
+  font-size: 1.85rem;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.cx-head p {
+  margin: 6px 0 0;
+}
+.cx-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.cx-head-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cx-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.cx-stats.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+.cx-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.cx-stat {
+  cursor: pointer;
+}
+button.cx-stat:hover {
+  border-color: var(--line-strong);
+}
+.cx-stat strong {
+  font-size: 1.9rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.cx-stat span {
+  font-size: 0.9rem;
+}
+.cx-stat small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.cx-stat small.warn {
+  color: var(--ink);
+  font-weight: 600;
+}
+.cx-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.cx-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.cx-stack {
+  display: grid;
+  gap: 16px;
+}
+.cx .card.cx-card {
+  margin: 0;
+  padding: 20px 22px;
+}
+.cx-day,
+.cx-alert + .card.cx-card,
+.cx-filters + .card.cx-card {
+  margin-top: 14px !important;
+}
+.cx-card > h2,
+.cx-card-head h2 {
+  margin: 0 0 8px;
+  font-size: 1.08rem;
+}
+.cx-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cx-card-title .muted {
+  font-weight: 500;
+}
+.cx-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cx-card-action {
+  margin-top: 12px;
+}
+.cx-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cx-rows > li + li {
+  border-top: 1px solid var(--line);
+}
+.cx-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.cx-row {
+  cursor: pointer;
+}
+button.cx-row:hover .cx-row-text strong {
+  text-decoration: underline;
+}
+.cx-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cx-row-text strong {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.cx-row-text strong .kind {
+  margin-left: 8px;
+}
+.cx-row-end {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cx-chev {
+  flex: none;
+  color: var(--muted);
+}
+.cx-badge {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: hsl(var(--hue) 42% 42%);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.cx-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-size: 0.74rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.cx-pill.ok {
+  background: var(--ok-soft);
+  color: var(--ink);
+}
+.cx-pill.warn {
+  background: var(--warn-soft);
+  color: var(--ink);
+}
+.cx-alerts {
+  display: grid;
+  gap: 10px;
+}
+.cx-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  color: var(--ink);
+}
+.cx-alerts .cx-alert {
+  margin-top: 0;
+}
+.cx-alert-sign {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--warn);
+  color: var(--accent-ink);
+  font-weight: 800;
+}
+.cx-alert-go {
+  flex: none;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.cx-date {
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 46px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-2);
+  line-height: 1.1;
+}
+.cx-date small {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cx-date b {
+  font-size: 1rem;
+}
+.cx-date.cx-time {
+  width: 64px;
+}
+.cx-date.cx-time b {
+  font-size: 0.8rem;
+}
+.cx-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.cx-filters select {
+  width: auto;
+  min-width: 140px;
+}
+.cx-sports {
+  margin-bottom: 10px;
+}
+.cx-search {
+  margin-bottom: 12px;
+  max-width: 340px;
+}
+/* Season › league › team */
+.cx-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.cx-crumb-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cx-crumb-sep {
+  color: var(--muted);
+}
+.cx-crumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 160px;
+  padding: 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cx-crumb.last {
+  border-color: var(--accent-edge);
+}
+.cx-crumb > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cx-crumb small {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cx-crumb b {
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.cx-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 260px;
+  max-height: 340px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.cx-crumb-wrap:not(:first-child) .cx-menu {
+  left: 22px;
+}
+.cx-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.cx-menu button:hover {
+  background: var(--surface-2);
+}
+.cx-menu button.on {
+  background: var(--surface-3);
+  font-weight: 650;
+}
+.cx-menu small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+.cx-menu-none {
+  padding: 8px 10px;
+}
+.cx-subtabs {
+  display: flex;
+  gap: 22px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.cx-subtabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.cx-subtabs button.on {
+  color: var(--ink);
+  font-weight: 650;
+  border-bottom-color: var(--accent-edge);
+}
+/* Shared things on the home page */
+.cx-shares {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.cx-shares > li {
+  display: flex;
+  min-width: 0;
+}
+.cx-share {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+}
+.cx-share:hover {
+  border-color: var(--line-strong);
+}
+.cx-share .cm-art {
+  width: 100%;
+}
+.cx-share-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px 14px;
+}
+.cx-share-by {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 0.84rem;
+}
+.cx-share-by small {
+  margin-left: auto;
+  color: var(--muted);
+}
+.org-team-head .org-team-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 1.02rem;
+  font-weight: 700;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+/* The line of active members over the weeks */
+.cx-trend {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 6px;
+}
+.cx-trend text {
+  fill: var(--muted);
+  font-size: 11px;
+  font-family: var(--sans);
+}
+.cx-trend-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.cx-trend-line {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.cx-trend-dot {
+  fill: var(--series);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+@media (max-width: 900px) {
+  .cx-cols,
+  .cx-pair {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .cx-stats {
+    grid-template-columns: 1fr;
+  }
+  .cx-stats.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cx-head h1 {
+    font-size: 1.5rem;
+  }
+  .cx-tabs {
+    gap: 20px;
+  }
+  .cx-switch {
+    order: 3;
+    margin-left: 0;
+  }
+  .cx-crumbs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cx-crumb-sep {
+    display: none;
+  }
+  .cx-crumb-wrap,
+  .cx-crumb {
+    width: 100%;
+  }
+  .cx-crumb b {
+    max-width: none;
+  }
+  .cx-menu,
+  .cx-crumb-wrap:not(:first-child) .cx-menu {
+    left: 0;
+    right: 0;
+    min-width: 0;
+  }
+  .cx-shares {
+    grid-template-columns: 1fr;
+  }
+  .cx-alert {
+    flex-wrap: wrap;
+  }
+  .cx-alert-go {
+    flex-basis: 100%;
+    padding-left: 42px;
+    text-align: left;
+  }
+  .cx-filters select {
+    flex: 1 1 45%;
+    min-width: 0;
+  }
+}
+
+/* Parents, family and friends of a team */
+.family-add {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.family-wide {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.family td {
+  vertical-align: top;
+}
+@media (max-width: 700px) {
+  .family-add {
+    grid-template-columns: 1fr;
+  }
+}

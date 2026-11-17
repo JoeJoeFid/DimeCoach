@@ -3,7 +3,7 @@
 // and showing a shared thing safely.
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type Community, type CommunityShare, type CommunityShareDetail, type MyShareState, type ShareKind, type SharedDrill, type SharedPlan, type SharedPlay } from '../api';
+import { api, type Community, type CommunityShare, type CommunityShareDetail, type MyShareState, type PlanSendState, type ShareKind, type SharedDrill, type SharedPlan, type SharedPlay } from '../api';
 import { useApp } from '../App';
 import { clean, fmtClock, fmtDateShort, isBlankHtml, parseClock, todayISO } from '../util';
 import { Modal } from './bits';
@@ -302,7 +302,7 @@ export function CommunityPicker({
 }
 
 /** For one of your own things: tick the communities it should be shared with. */
-export function ShareDialog({ kind, itemId, title, onClose }: { kind: ShareKind; itemId: number; title: string; onClose: () => void }) {
+function CommunityChoices({ kind, itemId }: { kind: ShareKind; itemId: number }) {
   const words = KIND_WORDS[kind];
   const { user } = useApp();
   const [rows, setRows] = useState<MyShareState[] | null>(null);
@@ -347,7 +347,7 @@ export function ShareDialog({ kind, itemId, title, onClose }: { kind: ShareKind;
     load();
   };
   return (
-    <Modal title={`Share "${title}"`} onClose={onClose}>
+    <>
       {error && <p className="error">{error}</p>}
       {pub && (
         <div className="share-public">
@@ -395,8 +395,204 @@ export function ShareDialog({ kind, itemId, title, onClose }: { kind: ShareKind;
           </ul>
         </>
       )}
+    </>
+  );
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : word.endsWith('ch') ? 'es' : 's'}`;
+
+/** A practice, sent to other coaches: pick them, or type their addresses. Each gets a link of their own. */
+function SendToCoaches({ planId }: { planId: number }) {
+  const [st, setSt] = useState<PlanSendState | null>(null);
+  const [picked, setPicked] = useState<number[]>([]);
+  const [emails, setEmails] = useState('');
+  const [note, setNote] = useState('');
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.planSends(planId).then(setSt, (e) => setError((e as Error).message));
+  }, [planId]);
+  if (!st) return error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>;
+  const typed = emails
+    .split(/[\s,;]+/)
+    .map((e) => e.trim())
+    .filter(Boolean);
+  const count = picked.length + typed.length;
+  const shown = st.people.filter((p) => !q.trim() || `${p.name} ${p.where}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const send = async () => {
+    setBusy(true);
+    setSaid('');
+    try {
+      const next = await api.sendPlan(planId, { user_ids: picked, emails: typed, note });
+      setSt(next);
+      const r = next.result!;
+      setSaid(
+        r.failed.length
+          ? `The email to ${r.failed.join(', ')} did not go through.${r.mailed ? ` ${plural(r.mailed, 'other')} did.` : ''}`
+          : next.mail
+            ? `Sent to ${plural(r.total, 'coach')}.`
+            : `${plural(r.messaged, 'coach')} got a message in Dime Coach with the link.`,
+      );
+      setPicked([]);
+      setEmails('');
+      setNote('');
+      setError('');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setBusy(false);
+  };
+  const stop = async (id: number) => {
+    try {
+      setSt(await api.removePlanSend(planId, id));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  return (
+    <div className="share-send">
+      <p className="muted small">
+        {st.mail
+          ? 'Each coach gets an email with the outline and a link to read it. A coach who uses Dime Coach can add a copy to their own practices.'
+          : 'Email is not set up on this site, so each coach you pick gets a message in Dime Coach with a link to read it.'}{' '}
+        Your coach-only notes, player notes and uploaded files stay private.
+      </p>
+      {error && <p className="error">{error}</p>}
+      {said && (
+        <p className="banner ok" role="status">
+          {said}
+        </p>
+      )}
+      {st.people.length > 8 && <input className="input" placeholder="Search coaches" aria-label="Search coaches" value={q} onChange={(e) => setQ(e.target.value)} />}
+      {st.people.length === 0 ? (
+        <p className="muted small">Coaches on this team and people in your communities show up here to pick.</p>
+      ) : (
+        <ul className="share-people">
+          {shown.map((p) => (
+            <li key={p.id}>
+              <label className="check">
+                <input type="checkbox" checked={picked.includes(p.id)} onChange={(e) => setPicked((list) => (e.target.checked ? [...list, p.id] : list.filter((id) => id !== p.id)))} />
+                <span>
+                  <strong>{p.name}</strong>
+                  <span className="muted small"> · {p.where}</span>
+                </span>
+              </label>
+            </li>
+          ))}
+          {shown.length === 0 && <li className="muted small">Nobody matches that search.</li>}
+        </ul>
+      )}
+      {st.mail && (
+        <label>
+          <span className="field-label">{st.people.length ? 'Or send to email addresses' : 'Email addresses'}</span>
+          <input className="input" type="text" inputMode="email" placeholder="coach@example.com, another@example.com" value={emails} onChange={(e) => setEmails(e.target.value)} />
+        </label>
+      )}
+      <label>
+        <span className="field-label">Add a note (optional)</span>
+        <textarea className="input" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      <button type="button" className="btn primary" disabled={busy || count === 0} onClick={send}>
+        {busy ? 'Sending…' : count ? `Send to ${plural(count, 'coach')}` : 'Send'}
+      </button>
+      {st.sent.length > 0 && (
+        <div className="share-sent">
+          <span className="field-label">Already sent to</span>
+          <ul>
+            {st.sent.map((r) => (
+              <li key={r.id}>
+                <span>
+                  {r.to}
+                  <span className="muted small"> · {fmtDateShort(r.created_at.slice(0, 10))}</span>
+                </span>
+                <button type="button" className="link" onClick={() => stop(r.id)} title="Their link stops working">
+                  Stop sharing
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A link to a practice that anyone can open, for a text message or a group chat. */
+function PlanLink({ planId }: { planId: number }) {
+  const [st, setSt] = useState<PlanSendState | null>(null);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const act = (work: () => Promise<PlanSendState>) => work().then(setSt, (e) => setError((e as Error).message));
+  useEffect(() => {
+    api.planSends(planId).then(setSt, (e) => setError((e as Error).message));
+  }, [planId]);
+  if (!st) return error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>;
+  return (
+    <div className="share-send">
+      {error && <p className="error">{error}</p>}
+      {st.link ? (
+        <>
+          <p className="muted small">Anyone with this link can read the practice without an account. It shows the practice as it is when they open it, without your coach-only notes, player notes or uploaded files.</p>
+          <div className="share-link-row">
+            <code>{st.link.url}</code>
+            <button
+              type="button"
+              className="btn small primary"
+              onClick={() => {
+                navigator.clipboard?.writeText(st.link!.url);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1500);
+              }}
+            >
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+          </div>
+          <button type="button" className="link" onClick={() => act(() => api.removePlanSend(planId, st.link!.id))}>
+            Turn this link off
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="muted small">Make a link that anyone can open to read this practice, without an account. Paste it into a text message, a group chat or your team app.</p>
+          <button type="button" className="btn primary" onClick={() => act(() => api.planSendLink(planId))}>
+            Make a link
+          </button>
+        </>
+      )}
+      <p className="muted small share-also">
+        For players and parents, <Link to={`/plans/${planId}/print`}>Print</Link> has a version made for them, to print, copy or email.
+      </p>
+    </div>
+  );
+}
+
+type ShareTab = 'coaches' | 'communities' | 'link';
+const SHARE_TABS: [ShareTab, string][] = [
+  ['coaches', 'Coaches'],
+  ['communities', 'Communities'],
+  ['link', 'Link'],
+];
+/** Sharing one of your own things. A drill or play goes to communities. A practice can also be sent to coaches, or by link. */
+export function ShareDialog({ kind, itemId, title, onClose }: { kind: ShareKind; itemId: number; title: string; onClose: () => void }) {
+  const [tab, setTab] = useState<ShareTab>(kind === 'plan' ? 'coaches' : 'communities');
+  return (
+    <Modal title={`Share "${title}"`} onClose={onClose}>
+      {kind === 'plan' && (
+        <div className="seg share-tabs" role="group" aria-label="Where to share it">
+          {SHARE_TABS.map(([id, label]) => (
+            <button key={id} type="button" className={tab === id ? 'on' : ''} aria-pressed={tab === id} onClick={() => setTab(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {tab === 'coaches' && <SendToCoaches planId={itemId} />}
+      {tab === 'communities' && <CommunityChoices kind={kind} itemId={itemId} />}
+      {tab === 'link' && <PlanLink planId={itemId} />}
       <div className="modal-actions">
-        <button className="btn primary" onClick={onClose}>
+        <button className={`btn ${kind === 'plan' ? '' : 'primary'}`} onClick={onClose}>
           Done
         </button>
       </div>

@@ -9,6 +9,7 @@ import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Field, Modal, MoreMenu, type MenuItem } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import SportIcon from '../components/SportIcon';
+import { Alert, Badge, Crumbs, DateBlock, PageHead, Pill, Row, Stat, SubTabs, type Crumb } from '../components/cx';
 
 export interface OrgPanelProps {
   c: CommunityDetail;
@@ -82,7 +83,10 @@ export function LapsedBanner({ c }: { c: CommunityDetail }) {
 // --- People, seats and requirements ---------------------------------------------------
 const CHECK_WORD: Record<OrgCheck['state'], string> = { ok: 'Done', due: 'Runs out soon', expired: 'Run out', missing: 'Missing' };
 
-export function OrgPeople({ c, org, act, say }: OrgPanelProps) {
+type PeopleView = 'coaches' | 'invites' | 'requirements';
+export function OrgPeople({ c, org, act, say, initialView }: OrgPanelProps & { initialView?: PeopleView }) {
+  const [view, setView] = useState<PeopleView>(initialView ?? 'coaches');
+  const unchecked = org.people.filter((p) => p.coach && p.compliance.some((x) => x.state === 'missing' || x.state === 'expired')).length;
   const app = useApp();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -133,9 +137,30 @@ export function OrgPeople({ c, org, act, say }: OrgPanelProps) {
 
   return (
     <>
+      <PageHead eyebrow="Management / Coaches" title="Coaches & seats" sub="Invite coaches and keep track of what they need to finish.">
+        <button type="button" className="btn primary" onClick={() => setView('invites')}>
+          + Invite coaches
+        </button>
+      </PageHead>
+      <div className="cx-stats">
+        <Stat value={`${org.org.seats_used} / ${org.org.seats}`} label="Seats used" note={`${plural(left, 'seat')} available`} warn={left === 0} />
+        <Stat value={org.invites.length} label={org.invites.length === 1 ? 'Invitation waiting' : 'Invitations waiting'} note={org.invites.length ? 'Not accepted yet' : 'Nobody is waiting'} onClick={() => setView('invites')} />
+        <Stat value={unchecked} label={unchecked === 1 ? 'Coach with missing checks' : 'Coaches with missing checks'} note={unchecked ? 'Needs follow-up' : org.requirements.length ? 'Everyone is cleared' : 'No requirements set'} warn={unchecked > 0} onClick={() => setView('requirements')} />
+      </div>
+      <SubTabs<PeopleView>
+        label="Coaches"
+        value={view}
+        onChange={setView}
+        tabs={[
+          ['coaches', 'Coaches'],
+          ['invites', 'Invite', org.invites.length],
+          ['requirements', 'Requirements', unchecked],
+        ]}
+      />
+      {view === 'invites' && (
       <div className="card org-card">
         <div className="org-card-head">
-          <h2>Coaches and seats</h2>
+          <h2>Invite coaches</h2>
           <SeatMeter org={org} />
         </div>
         <p className="muted small">
@@ -215,10 +240,11 @@ export function OrgPeople({ c, org, act, say }: OrgPanelProps) {
             )}
           </form>
         )}
-        {coach && left === 0 && <p className="org-note warn">Every coach seat is in use. Take a seat back from someone below, cancel an invitation, or ask for more seats.</p>}
+        {coach && left === 0 && <p className="org-note warn">Every coach seat is in use. Take a seat back from someone under "Coaches", cancel an invitation, or ask for more seats.</p>}
       </div>
+      )}
 
-      {org.invites.length > 0 && (
+      {view === 'invites' && org.invites.length > 0 && (
         <div className="card org-card">
           <h2>
             Invited, not joined yet <span className="muted">({org.invites.length})</span>
@@ -250,6 +276,7 @@ export function OrgPeople({ c, org, act, say }: OrgPanelProps) {
         </div>
       )}
 
+      {view === 'coaches' && (
       <div className="card org-card">
         <h2>
           Who coaches what <span className="muted">({org.people.filter((p) => p.coach).length} coaches)</span>
@@ -316,8 +343,9 @@ export function OrgPeople({ c, org, act, say }: OrgPanelProps) {
           </table>
         </div>
       </div>
+      )}
 
-      <Requirements c={c} org={org} act={act} />
+      {view === 'requirements' && <Requirements c={c} org={org} act={act} />}
       {check && (
         <CheckModal
           c={c}
@@ -411,10 +439,10 @@ function CheckModal({ entry, onClose, save }: { c: CommunityDetail; entry: { per
 // --- Leagues, teams and the schedule --------------------------------------------------
 const STATUS_WORD: Record<OrgGame['status'], string> = { scheduled: '', final: 'Final', postponed: 'Postponed', cancelled: 'Cancelled' };
 
-export function OrgTeams({ c, org, act, fail, say }: OrgPanelProps) {
+export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { focus?: { leagueId?: number } | null }) {
   const app = useApp();
   const manage = org.can.leagues && !org.org.lapsed;
-  const [seasonId, setSeasonId] = useState(0);
+  const [seasonId, setSeasonId] = useState(() => org.leagues.find((l) => l.id === focus?.leagueId)?.season_id ?? 0);
   const [games, setGames] = useState<OrgGames | null>(null);
   const [coachFor, setCoachFor] = useState<OrgTeam | null>(null);
   const [editing, setEditing] = useState<{ league: OrgLeague; game: OrgGame | null } | null>(null);
@@ -422,13 +450,59 @@ export function OrgTeams({ c, org, act, fail, say }: OrgPanelProps) {
   const [addLeague, setAddLeague] = useState(false);
   const [rolling, setRolling] = useState(false);
   /** The league being looked at in full. With none, the page is the overview of all of them. */
-  const [openId, setOpenId] = useState(0);
+  const [openId, setOpenId] = useState(focus?.leagueId ?? 0);
+  /** The team being looked at, inside the open league. */
+  const [teamId, setTeamId] = useState(0);
   const season = org.seasons.find((s) => s.id === seasonId) ?? org.seasons[0] ?? null;
   const leagues = season
     ? org.leagues.filter((l) => l.season_id === season.id).sort((a, b) => a.sport.localeCompare(b.sport) || a.name.localeCompare(b.name, undefined, { numeric: true }))
     : [];
   const open = leagues.find((l) => l.id === openId) ?? null;
   const sports = [...new Set(leagues.map((l) => l.sport))];
+  const leagueTeams = open ? org.teams.filter((t) => t.league_id === open.id) : [];
+  const team = leagueTeams.find((t) => t.id === teamId) ?? null;
+  const seasonTeams = org.teams.filter((t) => leagues.some((l) => l.id === t.league_id));
+  // Where you are, as selectors: each one also jumps sideways to another season, league or team.
+  const crumbs: Crumb[] = [
+    {
+      label: 'Season',
+      value: season ? `${season.name}${season.archived ? ' (archived)' : ''}` : '',
+      options: org.seasons.map((s) => ({ id: s.id, label: s.name, note: s.archived ? 'Archived' : undefined })),
+      current: season?.id ?? 0,
+      onPick: (id) => {
+        setSeasonId(id);
+        setOpenId(0);
+        setTeamId(0);
+      },
+    },
+    ...(leagues.length
+      ? [
+          {
+            label: 'League',
+            value: open?.name ?? 'All leagues',
+            options: leagues.map((l) => ({ id: l.id, label: l.name, note: l.sport })),
+            current: open?.id ?? 0,
+            onPick: (id: number) => {
+              setOpenId(id);
+              setTeamId(0);
+            },
+            all: `All leagues in ${season?.name ?? 'the season'}`,
+          },
+        ]
+      : []),
+    ...(open
+      ? [
+          {
+            label: 'Team',
+            value: team?.name ?? 'All teams',
+            options: leagueTeams.map((t) => ({ id: t.id, label: t.name, note: (t.coaches.find((s) => s.head) ?? t.coaches[0])?.name ?? 'Coach needed' })),
+            current: team?.id ?? 0,
+            onPick: setTeamId,
+            all: `All teams in ${open.name}`,
+          },
+        ]
+      : []),
+  ];
 
   useEffect(() => {
     api.orgGames(c.id).then(setGames).catch(fail);
@@ -486,71 +560,76 @@ export function OrgTeams({ c, org, act, fail, say }: OrgPanelProps) {
 
   return (
     <>
-      <div className="org-season-bar">
-        <label className="org-season-pick">
-          <span className="field-label">Season</span>
-          <select className="input" value={season?.id ?? 0} onChange={(e) => setSeasonId(Number(e.target.value))}>
-            {org.seasons.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.archived ? ' (archived)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-        {manage && (
-          <span className="org-season-actions">
-            <button type="button" className="btn" onClick={() => setAddLeague(true)}>
-              <Icon d={ICONS.plus} size={15} /> Add a league
-            </button>
-            <button type="button" className="btn" onClick={newSeason}>
-              New season
-            </button>
-            <MoreMenu items={seasonMenu} label="More for this season" />
-          </span>
-        )}
-      </div>
-
-      {leagues.length === 0 && (
+      <Crumbs items={crumbs} />
+      {!open && season && (
+        <PageHead eyebrow="Seasons & teams / Season" title={season.name} sub={`${plural(leagues.length, 'league')} · ${plural(seasonTeams.length, 'team')}${season.archived ? ' · archived' : ''}`}>
+          {manage && (
+            <>
+              <button type="button" className="btn primary" onClick={() => setAddLeague(true)}>
+                + Add league
+              </button>
+              <button type="button" className="btn" onClick={newSeason}>
+                New season
+              </button>
+              <MoreMenu items={seasonMenu} label="More for this season" />
+            </>
+          )}
+        </PageHead>
+      )}
+      {!open && leagues.length === 0 && (
         <div className="card org-empty">
           <p className="muted">{manage ? 'No leagues in this season yet. Add one for each sport and age group, such as "Boys 12 and under".' : 'No leagues in this season yet.'}</p>
         </div>
       )}
-      {/* The overview: every league of the season as a small card, grouped by sport. Choosing one opens it in full. */}
-      {!open &&
-        sports.map((sport) => (
-          <section key={sport} className="org-sport" aria-label={sport}>
-            {sports.length > 1 && (
-              <h2 className="org-sport-head">
-                <SportIcon sport={sport} size={20} /> {sport}
-                <span className="muted small">
-                  {plural(leagues.filter((l) => l.sport === sport).length, 'league')} · {plural(org.teams.filter((t) => leagues.some((l) => l.sport === sport && l.id === t.league_id)).length, 'team')}
-                </span>
-              </h2>
-            )}
-            <ul className="org-league-grid">
-              {leagues
-                .filter((l) => l.sport === sport)
-                .map((l) => (
-                  <li key={l.id}>
-                    <LeagueSummary league={l} manage={manage} showSport={sports.length === 1} teams={org.teams.filter((t) => t.league_id === l.id)} games={(games?.games ?? []).filter((g) => g.league_id === l.id)} onOpen={() => setOpenId(l.id)} />
-                  </li>
-                ))}
-            </ul>
-          </section>
-        ))}
-      {open && (
+      {/* The season: its leagues, grouped by sport. Choosing one opens it. */}
+      {!open && leagues.length > 0 && (
+        <div className="cx-pair">
+          {sports.map((sport) => {
+            const inSport = leagues.filter((l) => l.sport === sport);
+            return (
+              <section key={sport} className="card cx-card" aria-label={sport}>
+                <h2 className="cx-card-title">
+                  <SportIcon sport={sport} size={20} /> {sport} <span className="muted">· {plural(inSport.length, 'league')}</span>
+                </h2>
+                <ul className="cx-rows">
+                  {inSport.map((l) => {
+                    const ts = org.teams.filter((t) => t.league_id === l.id);
+                    const coaches = new Set(ts.flatMap((t) => t.coaches.map((s) => s.user_id))).size;
+                    const bare = ts.filter((t) => t.coaches.length === 0).length;
+                    return (
+                      <Row
+                        key={l.id}
+                        lead={<Badge text={l.name} />}
+                        title={
+                          <>
+                            {l.name}
+                            {ts.some((t) => t.mine) && <span className="kind">Your team</span>}
+                          </>
+                        }
+                        sub={[l.age_group, plural(ts.length, 'team'), plural(coaches, 'coach', 'coaches')].filter(Boolean).join(' · ')}
+                        end={manage && bare > 0 ? <Pill tone="warn">{bare === 1 ? '1 team needs a coach' : `${bare} teams need a coach`}</Pill> : undefined}
+                        onClick={() => {
+                          setOpenId(l.id);
+                          setTeamId(0);
+                        }}
+                      />
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
+      )}
+      {open && !team && (
         <>
-          <button type="button" className="back-link org-back" onClick={() => setOpenId(0)}>
-            ← All leagues in {season?.name}
-          </button>
           <LeagueCard
             key={open.id}
             c={c}
             org={org}
             league={open}
             manage={manage}
-            teams={org.teams.filter((t) => t.league_id === open.id)}
+            teams={leagueTeams}
             games={(games?.games ?? []).filter((g) => g.league_id === open.id)}
             standings={games?.standings[open.id] ?? []}
             act={act}
@@ -559,8 +638,26 @@ export function OrgTeams({ c, org, act, fail, say }: OrgPanelProps) {
             onGame={(game) => setEditing({ league: open, game })}
             onBuild={() => setBuilding(open)}
             openTeam={(t) => app.openTeam(true, t.id)}
+            onTeam={(t) => setTeamId(t.id)}
           />
+          {manage &&
+            leagueTeams
+              .filter((t) => !t.coaches.some((s) => s.head))
+              .slice(0, 3)
+              .map((t) => <Alert key={t.id} title={`${t.name} has no head coach`} sub="Assign one so the team can be opened and planned for." action="Assign" onAction={() => setCoachFor(t)} />)}
         </>
+      )}
+      {open && team && (
+        <TeamPage
+          org={org}
+          league={open}
+          team={team}
+          games={(games?.games ?? []).filter((g) => g.league_id === open.id)}
+          standings={games?.standings[open.id] ?? []}
+          manage={manage}
+          onCoach={() => setCoachFor(team)}
+          openTeam={() => app.openTeam(true, team.id)}
+        />
       )}
 
       {addLeague && season && <LeagueModal c={c} seasonId={season.id} act={act} onClose={() => setAddLeague(false)} />}
@@ -594,47 +691,103 @@ export function OrgTeams({ c, org, act, fail, say }: OrgPanelProps) {
   );
 }
 
-/** One league on the overview: what it is, how many teams and games, its teams with their head coaches, and what needs attention. */
-function LeagueSummary({ league, teams, games, manage, showSport, onOpen }: { league: OrgLeague; teams: OrgTeam[]; games: OrgGame[]; manage: boolean; showSport: boolean; onOpen: () => void }) {
+/** One team, for the people who run the organization: who coaches it, how it is doing, and its games. */
+function TeamPage({
+  org,
+  league,
+  team,
+  games,
+  standings,
+  manage,
+  onCoach,
+  openTeam,
+}: {
+  org: Org;
+  league: OrgLeague;
+  team: OrgTeam;
+  games: OrgGame[];
+  standings: OrgGames['standings'][number];
+  manage: boolean;
+  onCoach: () => void;
+  openTeam: () => void;
+}) {
   const today = todayISO();
-  const next = games.find((g) => g.date >= today && g.status === 'scheduled');
-  const uncoached = teams.filter((t) => t.coaches.length === 0).length;
-  const clashes = games.filter((g) => g.warnings.length > 0).length;
-  const mine = teams.some((t) => t.mine);
+  const mine = games.filter((g) => g.home_team_id === team.id || g.away_team_id === team.id);
+  const upcoming = mine.filter((g) => g.date >= today && g.status !== 'final' && g.status !== 'cancelled');
+  const played = mine.filter((g) => g.status === 'final').reverse();
+  const row = standings.find((r) => r.team_id === team.id);
+  const head = team.coaches.find((s) => s.head);
+  const result = (g: OrgGame) => {
+    const us = g.home_team_id === team.id ? g.home_score : g.away_score;
+    const them = g.home_team_id === team.id ? g.away_score : g.home_score;
+    if (us === null || them === null) return <Pill>Final</Pill>;
+    return us > them ? <Pill tone="ok">Win</Pill> : us < them ? <Pill>Loss</Pill> : <Pill>Tie</Pill>;
+  };
   return (
-    <button type="button" className={`org-league-tile ${mine ? 'mine' : ''}`} onClick={onOpen}>
-      <span className="org-tile-head">
-        <strong>{league.name}</strong>
-        {mine && <span className="kind">Your team</span>}
-      </span>
-      <span className="muted small">{[showSport && league.sport, league.age_group, plural(teams.length, 'team'), games.length ? plural(games.length, 'game') : 'no schedule yet'].filter(Boolean).join(' · ')}</span>
-      {teams.length > 0 && (
-        <span className="org-tile-teams">
-          {teams.map((t) => {
-            const head = t.coaches.find((s) => s.head) ?? t.coaches[0];
-            return (
-              <span key={t.id} className={t.mine ? 'mine' : ''}>
-                <span>{t.name}</span>
-                <span className={head ? 'muted' : 'org-tile-none'}>{head ? head.name : 'No coach'}</span>
-              </span>
-            );
-          })}
-        </span>
-      )}
-      <span className="org-tile-foot">
-        {next ? (
-          <span className="muted small">
-            Next: {fmtDateShort(next.date)}
-            {next.start_time ? `, ${clock(next.start_time)}` : ''}
-          </span>
-        ) : (
-          <span />
+    <>
+      <PageHead eyebrow={`${league.name} / Team`} title={team.name} sub={[league.sport, org.seasons.find((s) => s.id === league.season_id)?.name, manage ? plural(team.players, 'player') : ''].filter(Boolean).join(' · ')}>
+        {team.can_open && (
+          <button type="button" className="btn primary" onClick={openTeam} title="Opens the team: its practices, roster and calendar">
+            <Icon d={ICONS.open} size={15} /> Open team
+          </button>
         )}
-        {manage && uncoached > 0 && <span className="org-note warn">{plural(uncoached, 'team')} without a coach</span>}
-        {manage && clashes > 0 && <span className="org-note warn">{plural(clashes, 'double booking')}</span>}
-        <span className="org-tile-go">Open →</span>
-      </span>
-    </button>
+      </PageHead>
+      <div className="cx-stats">
+        <Stat value={team.coaches.length} label={team.coaches.length === 1 ? 'Coach' : 'Coaches'} note={head ? `Head coach: ${head.name}` : 'No head coach yet'} warn={!head} />
+        <Stat value={row && row.played ? `${row.won}–${row.lost}${row.tied ? `–${row.tied}` : ''}` : '–'} label={row && row.tied ? 'Won, lost, tied' : 'Won and lost'} note={row && row.played ? `${plural(row.played, 'game')} played` : 'No games played yet'} />
+        <Stat value={upcoming.length} label={upcoming.length === 1 ? 'Game to come' : 'Games to come'} note={upcoming[0] ? `Next: ${fmtDateShort(upcoming[0].date)}` : 'Nothing on the schedule'} />
+      </div>
+      <div className="cx-cols">
+        <section className="card cx-card">
+          <h2>Team schedule</h2>
+          {mine.length === 0 ? (
+            <p className="muted">No games yet. Build the schedule from the league's "Schedule".</p>
+          ) : (
+            <ul className="cx-rows">
+              {upcoming.map((g) => (
+                <Row
+                  key={g.id}
+                  lead={<DateBlock date={g.date} />}
+                  title={`${g.away} at ${g.home}`}
+                  sub={[clock(g.start_time), g.venue || 'Place not set'].join(' · ')}
+                  end={g.status === 'postponed' ? <Pill tone="warn">Postponed</Pill> : g.warnings.length ? <Pill tone="warn">Booked twice</Pill> : <Pill tone="ok">To come</Pill>}
+                />
+              ))}
+              {played.map((g) => (
+                <Row key={g.id} lead={<DateBlock date={g.date} />} title={`${g.away} ${g.away_score ?? '–'}, ${g.home} ${g.home_score ?? '–'}`} sub={['Final score', g.venue].filter(Boolean).join(' · ')} end={result(g)} />
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="card cx-card">
+          <h2>Coaching staff</h2>
+          {team.coaches.length === 0 ? (
+            <p className="muted">Nobody coaches this team yet.</p>
+          ) : (
+            <ul className="cx-rows">
+              {team.coaches.map((s) => {
+                const person = org.people.find((p) => p.id === s.user_id);
+                const cleared = person && org.requirements.length > 0 ? !person.compliance.some((x) => x.state === 'missing' || x.state === 'expired') : null;
+                return (
+                  <Row
+                    key={s.user_id}
+                    lead={<Badge text={s.name} />}
+                    title={s.name}
+                    sub={[s.head ? 'Head coach' : 'Assistant coach', cleared === null ? '' : cleared ? 'Checks complete' : 'Checks missing'].filter(Boolean).join(' · ')}
+                    end={cleared === null ? undefined : cleared ? <Pill tone="ok">Ready</Pill> : <Pill tone="warn">Not cleared</Pill>}
+                  />
+                );
+              })}
+            </ul>
+          )}
+          {manage && (
+            <button type="button" className="btn cx-card-action" onClick={onCoach}>
+              {team.coaches.length ? 'Change coaches' : 'Assign a coach'}
+            </button>
+          )}
+        </section>
+      </div>
+    </>
   );
 }
 
@@ -651,6 +804,7 @@ function LeagueCard({
   onGame,
   onBuild,
   openTeam,
+  onTeam,
 }: {
   c: CommunityDetail;
   org: Org;
@@ -665,6 +819,7 @@ function LeagueCard({
   onGame: (g: OrgGame | null) => void;
   onBuild: () => void;
   openTeam: (t: OrgTeam) => void;
+  onTeam: (t: OrgTeam) => void;
 }) {
   const [view, setView] = useState<'teams' | 'schedule' | 'standings'>('teams');
   const [names, setNames] = useState('');
@@ -758,7 +913,9 @@ function LeagueCard({
               return (
                 <li key={t.id} className={`org-team-tile ${t.mine ? 'mine' : ''}`}>
                   <div className="org-team-head">
-                    <strong>{t.name}</strong>
+                    <button type="button" className="link org-team-name" onClick={() => onTeam(t)} title={`Open ${t.name}: its coaches, games and record`}>
+                      {t.name}
+                    </button>
                     {t.mine && <span className="kind">Your team</span>}
                     {manage && <MoreMenu items={teamMenu(t)} label={`More for ${t.name}`} />}
                   </div>
@@ -776,7 +933,7 @@ function LeagueCard({
                               type="button"
                               aria-label={`Take ${s.name} off ${t.name}`}
                               onClick={async () => {
-                                if (await confirmDialog({ title: `Take ${s.name} off ${t.name}?`, body: 'They lose access to the team. What they wrote for it is copied to their own account, so they keep it. Their coach seat stays theirs until you take it back under People.', confirmLabel: 'Take off the team', danger: true }))
+                                if (await confirmDialog({ title: `Take ${s.name} off ${t.name}?`, body: 'They lose access to the team. What they wrote for it is copied to their own account, so they keep it. Their coach seat stays theirs until you take it back under "Coaches".', confirmLabel: 'Take off the team', danger: true }))
                                   act(() => api.orgUnassignCoach(c.id, t.id, s.user_id), `${s.name} is off ${t.name}.`);
                               }}
                             >
@@ -1129,7 +1286,7 @@ function CoachModal({ c, org, team, act, onClose }: { c: CommunityDetail; org: O
             : 'An assistant plans practices and adds drills and plays, and sees the roster without changing it.'}
         </p>
         {person && !person.coach && <p className={`org-note ${left > 0 ? '' : 'warn'}`}>{left > 0 ? `${person.name} has no coach seat yet. Assigning them uses one of the ${left} left.` : `${person.name} has no coach seat, and none are left.`}</p>}
-        <p className="muted small">Not in the list? Add them under People first. If they have no account yet, the invitation there can name this team.</p>
+        <p className="muted small">Not in the list? Add them under "Coaches" first. If they have no account yet, the invitation there can name this team.</p>
         <div className="modal-actions">
           <button className="btn primary" disabled={!person}>
             Assign
@@ -1140,7 +1297,7 @@ function CoachModal({ c, org, team, act, onClose }: { c: CommunityDetail; org: O
   );
 }
 
-function GameModal({ org, league, game, onClose, save }: { org: Org; league: OrgLeague; game: OrgGame | null; onClose: () => void; save: (b: Partial<OrgGame>) => void }) {
+export function GameModal({ org, league, game, onClose, save }: { org: Org; league: OrgLeague; game: OrgGame | null; onClose: () => void; save: (b: Partial<OrgGame>) => void }) {
   const teams = org.teams.filter((t) => t.league_id === league.id);
   const [date, setDate] = useState(game?.date ?? todayISO());
   const [time, setTime] = useState(game?.start_time ?? '09:00');

@@ -18,7 +18,7 @@
 // and until when. Nothing here takes payment.
 import crypto from 'node:crypto';
 import { all, db, get, run, tx } from './db.js';
-import { can, enter, membership, permsOf } from './communities.js';
+import { can, enter, membership, permsOf, titleOf as shareTitle } from './communities.js';
 import { isSystemAdmin } from './auth.js';
 import { publicBase } from './invites.js';
 import { mailerStatus, sendMail } from './mailer.js';
@@ -43,6 +43,8 @@ addColumn('communities', 'public_on', 'INTEGER DEFAULT 0');
 addColumn('communities', 'library_scope', "TEXT DEFAULT 'all'");
 // A member who coaches for the organization, and so uses one of its seats.
 addColumn('community_members', 'coach', 'INTEGER DEFAULT 0');
+// How many times other coaches took a copy of something shared.
+addColumn('community_shares', 'copies', 'INTEGER DEFAULT 0');
 addColumn('teams', 'community_id', 'INTEGER');
 addColumn('teams', 'league_id', 'INTEGER');
 // Who made a drill, play or plan. Only filled in inside an organization's workspace, where many people work.
@@ -645,6 +647,59 @@ export function mountOrgs(app) {
   app.get('/api/communities/:id/org', (req, res) => {
     const at = orgEnter(req, res);
     if (at) send(res, at);
+  });
+
+  /** How the organization is being used, in totals: for its admins. Nothing here says what any one person did. */
+  app.get('/api/communities/:id/org/usage', (req, res) => {
+    const at = orgEnter(req, res, { admin: true });
+    if (!at) return;
+    const c = at.c;
+    const DAY = 86400_000;
+    const iso = (ms) => new Date(ms).toISOString();
+    const members = all("SELECT user_id FROM community_members WHERE community_id=? AND status='active'", c.id).map((r) => r.user_id);
+    const marks = members.map(() => '?').join(',');
+    const activeBetween = (from, to) =>
+      members.length ? get(`SELECT COUNT(DISTINCT user_id) AS n FROM activity WHERE user_id IN (${marks}) AND at>=? AND at<?`, ...members, iso(from), iso(to)).n : 0;
+    const now = Date.now();
+    const weeks = [];
+    for (let i = 7; i >= 0; i--) weeks.push({ start: iso(now - (i + 1) * 7 * DAY).slice(0, 10), active: activeBetween(now - (i + 1) * 7 * DAY, now - i * 7 * DAY) });
+    const planned = (from, to) =>
+      c.owner_id
+        ? get(`SELECT COUNT(*) AS n FROM plans WHERE owner_id=? AND is_template=0 AND kind='practice' AND datetime(created_at)>=datetime('now', ?) AND datetime(created_at)<datetime('now', ?)`, c.owner_id, from, to).n
+        : 0;
+    const shared = all("SELECT kind, COUNT(*) AS n FROM community_shares WHERE community_id=? AND status='approved' AND datetime(created_at)>=datetime('now','-30 days') GROUP BY kind", c.id);
+    const kindCount = (k) => shared.find((r) => r.kind === k)?.n ?? 0;
+    const posts = get(
+      `SELECT SUM(CASE WHEN parent_id IS NULL AND share_id IS NULL THEN 1 ELSE 0 END) AS started, SUM(CASE WHEN parent_id IS NOT NULL OR share_id IS NOT NULL THEN 1 ELSE 0 END) AS replies
+         FROM community_posts WHERE community_id=? AND datetime(created_at)>=datetime('now','-30 days')`,
+      c.id,
+    );
+    const TABLE = { drill: 'drills', play: 'plays', plan: 'plans' };
+    const top = all('SELECT s.*, u.name AS by_name FROM community_shares s JOIN users u ON u.id=s.user_id WHERE s.community_id=? AND COALESCE(s.copies,0)>0 ORDER BY s.copies DESC, s.id DESC LIMIT 5', c.id)
+      .map((s) => {
+        const row = get(`SELECT * FROM ${TABLE[s.kind]} WHERE id=? AND owner_id=?`, s.item_id, s.owner_id);
+        return row ? { id: s.id, kind: s.kind, title: shareTitle(s.kind, row), by: s.by_name, copies: s.copies } : null;
+      })
+      .filter(Boolean);
+    // Teams of the seasons still running that have had no practice planned or changed for two weeks.
+    const quiet = all(
+      `SELECT t.id, t.name, l.name AS league, (SELECT MAX(updated_at) FROM plans p WHERE p.team_id=t.id AND p.is_template=0) AS last
+         FROM teams t JOIN org_leagues l ON l.id=t.league_id JOIN org_seasons s ON s.id=l.season_id
+        WHERE t.community_id=? AND s.archived=0 ORDER BY last IS NOT NULL, last`,
+      c.id,
+    )
+      .map((t) => ({ id: t.id, name: t.name, league: t.league, days: t.last ? Math.floor((now - Date.parse(`${String(t.last).replace(' ', 'T')}Z`)) / DAY) : null }))
+      .filter((t) => t.days === null || t.days >= 14)
+      .slice(0, 6);
+    res.json({
+      members: members.length,
+      active_week: activeBetween(now - 7 * DAY, now), active_before: activeBetween(now - 14 * DAY, now - 7 * DAY),
+      weeks,
+      practices: planned('-30 days', '+1 day'), practices_before: planned('-60 days', '-30 days'),
+      shared: { drill: kindCount('drill'), play: kindCount('play'), plan: kindCount('plan') },
+      discussions: posts?.started ?? 0, replies: posts?.replies ?? 0,
+      top, quiet,
+    });
   });
 
   // --- People and seats ------------------------------------------------------------

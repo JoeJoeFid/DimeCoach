@@ -402,7 +402,6 @@ export default function PlanEditor() {
   const moreItems: MenuItem[] = [
     ...(!isHomework && app.user.can_import ? [{ label: 'Import plan', onSelect: () => setImporting(true) }] : []),
     { label: 'Duplicate', onSelect: duplicate },
-    ...(!plan.is_template ? [{ label: 'Share with a community', onSelect: () => setSharing(true) }] : []),
     ...(!plan.is_template ? [{ label: 'Save as template', onSelect: saveAsTemplate }] : []),
     { label: 'Delete', onSelect: remove, danger: true },
   ];
@@ -653,7 +652,15 @@ export default function PlanEditor() {
               actions={
                 <>
                   <button className="btn primary" onClick={openPrint}>
-                    Print / share
+                    Print
+                  </button>
+                  <button type="button" className="btn icon-btn share-btn" aria-label="Share" title="Share: send it to coaches, put it in a community, or make a link" onClick={() => setSharing(true)}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="18" cy="5" r="2.600" />
+                      <circle cx="6" cy="12" r="2.600" />
+                      <circle cx="18" cy="19" r="2.600" />
+                      <path d="m8.300 10.700 7.400-4.300M8.300 13.300l7.400 4.300" />
+                    </svg>
                   </button>
                   <MoreMenu items={moreItems} />
                 </>
@@ -680,9 +687,19 @@ export default function PlanEditor() {
                   </svg>
                 </button>
                 {!plan.is_template && (
+                  <>
                   <button className="btn primary" onClick={openPrint}>
-                    Print / share
+                    Print
                   </button>
+                  <button type="button" className="btn icon-btn share-btn" aria-label="Share" title="Share: send it to coaches, put it in a community, or make a link" onClick={() => setSharing(true)}>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="18" cy="5" r="2.600" />
+                      <circle cx="6" cy="12" r="2.600" />
+                      <circle cx="18" cy="19" r="2.600" />
+                      <path d="m8.300 10.700 7.400-4.300M8.300 13.300l7.400 4.300" />
+                    </svg>
+                  </button>
+                  </>
                 )}
                 <MoreMenu items={moreItems} />
               </div>

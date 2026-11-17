@@ -123,18 +123,21 @@ function shareOut(s, userId) {
     id: s.id, community_id: s.community_id, community_name: s.community_name, kind: s.kind, status: s.status,
     title: titleOf(s.kind, row), summary: summaryOf(s.kind, row), by: s.by_name, by_id: s.user_id, mine: s.user_id === userId, shared_at: s.created_at,
     art: artOf(s.kind, row),
+    // For finding what fits a coach's sport, and for showing what coaches found useful.
+    sport: sportNameOf(s, row), copies: s.copies || 0,
     // Which of their own things this is, so the sharer's lists can mark it. Not told to anyone else.
     item_id: s.user_id === userId ? s.item_id : undefined,
     tags: s.kind === 'drill' ? tagNames('drill_tags', 'drill_id', row.id) : [],
   };
 }
-/** The sport a shared thing belongs to, in lower case: a drill's or play's own, a practice's by its team. */
-function sportOfShare(s) {
-  const row = source(s);
+/** The name of the sport a shared thing belongs to: a drill's or play's own, a practice's by its team. */
+function sportNameOf(s, row = source(s)) {
   if (!row) return '';
   const sportId = s.kind === 'plan' ? get('SELECT sport_id FROM teams WHERE id=?', row.team_id)?.sport_id : row.sport_id;
-  return String(get('SELECT name FROM sports WHERE id=?', sportId)?.name ?? '').toLowerCase();
+  return String(get('SELECT name FROM sports WHERE id=?', sportId)?.name ?? '');
 }
+/** The same, in lower case, for comparing. */
+const sportOfShare = (s) => sportNameOf(s).toLowerCase();
 /**
  * Builds the test for which shares one person sees in a community. An organization can keep each
  * coach to the sports they coach; what a person shared themselves they always see.
@@ -351,7 +354,7 @@ export function mountCommunities(app) {
     if (str(req.body?.confirm, 200).trim().toLowerCase() !== at.c.name.trim().toLowerCase()) return res.status(400).json({ error: 'Type the name of the community exactly to delete it.' });
     // An organization's teams, rosters and practices live with it. They are removed one by one, on purpose, before it can go.
     if (isOrg(at.c) && get('SELECT 1 AS ok FROM teams WHERE community_id=?', at.c.id))
-      return res.status(400).json({ error: 'This organization still has teams. Delete its teams under Leagues & teams first: their coaches keep a copy of what they wrote.' });
+      return res.status(400).json({ error: 'This organization still has teams. Delete its teams under "Seasons & teams" first: their coaches keep a copy of what they wrote.' });
     for (const m of all("SELECT user_id FROM community_members WHERE community_id=? AND status='active' AND user_id<>?", at.c.id, req.user.id))
       notify(m.user_id, { kind: 'community', title: `${req.user.name} deleted the community ${at.c.name}`, body: 'Anything you added to your own drills, plays or practices from it is still yours.' });
     run('DELETE FROM communities WHERE id=?', at.c.id);
@@ -660,10 +663,14 @@ export function mountCommunities(app) {
       const team = get('SELECT * FROM teams WHERE id=? AND owner_id=?', Number(b.team_id), req.ownerId);
       if (!team) return res.status(400).json({ error: 'Choose one of your teams to add this practice to.' });
       const date = /^\d{4}-\d{2}-\d{2}$/.test(String(b.date)) ? String(b.date) : new Date().toISOString().slice(0, 10);
-      return res.json({ kind: 'plan', id: tx(() => copyPlan(row, req.ownerId, team, date)) });
+      const planId = tx(() => copyPlan(row, req.ownerId, team, date));
+      if (s.user_id !== req.user.id) run('UPDATE community_shares SET copies=COALESCE(copies,0)+1 WHERE id=?', s.id);
+      return res.json({ kind: 'plan', id: planId });
     }
     const sport = get('SELECT id FROM sports WHERE id=? AND owner_id=?', Number(b.sport_id), req.ownerId);
     if (!sport) return res.status(400).json({ error: 'Unknown sport' });
-    res.json({ kind: s.kind, id: tx(() => (s.kind === 'drill' ? copyDrill(row, req.ownerId, sport.id) : copyPlay(row, req.ownerId, sport.id, new Map()))) });
+    const madeId = tx(() => (s.kind === 'drill' ? copyDrill(row, req.ownerId, sport.id) : copyPlay(row, req.ownerId, sport.id, new Map())));
+    if (s.user_id !== req.user.id) run('UPDATE community_shares SET copies=COALESCE(copies,0)+1 WHERE id=?', s.id);
+    res.json({ kind: s.kind, id: madeId });
   });
 }

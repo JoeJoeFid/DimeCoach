@@ -92,12 +92,14 @@ function gate(req) {
     case 'shared-teams':
     case 'community-shares':
     case 'messages':
+    // Taking a copy of a practice someone sent goes to the caller's own teams, wherever they are working.
+    case 'plan-links':
       return null;
     case 'teams':
       if (!seg[1]) return write ? ownerOnly('add teams') : null;
       if (!sameTeam(seg[1])) return NOT_FOUND;
-      if (org && write && (seg[2] === 'staff' || seg[2] === 'invites')) return { status: 403, error: `The coaches of this team are assigned by ${org.name}, under "Leagues & teams" in the organization.` };
-      if (org && req.method === 'DELETE' && !seg[2]) return { status: 403, error: `This team belongs to ${org.name}. It is deleted under "Leagues & teams" in the organization.` };
+      if (org && write && (seg[2] === 'staff' || seg[2] === 'invites')) return { status: 403, error: `The coaches of this team are assigned by ${org.name}, under "Seasons & teams" in the organization.` };
+      if (org && req.method === 'DELETE' && !seg[2]) return { status: 403, error: `This team belongs to ${org.name}. It is deleted under "Seasons & teams" in the organization.` };
       // Who the team is shared with, and renaming or deleting it, need the "manage this team" permission.
       if (seg[2] === 'staff' || seg[2] === 'invites') return perms.manage ? null : { status: 403, error: `${ownerName} has not given you permission to manage who this team is shared with.` };
       if (!write) return null;
@@ -105,6 +107,8 @@ function gate(req) {
       // Position names are part of planning games.
       if (seg[2] === 'positions') return need('plans');
       if (seg[2] === 'players') return need('roster');
+      // The parents, family and friends of the team go with its roster.
+      if (seg[2] === 'contacts') return need('roster');
       return perms.manage ? null : { status: 403, error: `${ownerName} has not given you permission to rename or delete this team.` };
     case 'players': {
       if (!write) return null;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Papa from 'papaparse';
-import { api } from '../api';
+import { api, type TeamContact, type TeamContacts } from '../api';
 import { useApp } from '../App';
 import type { Player, StaffMember, Team, TeamInvite, TeamPerm } from '../types';
 import { Field, Modal } from '../components/bits';
@@ -112,51 +112,290 @@ const PERM_LABELS: [TeamPerm, string][] = [
   ['schedule', 'Schedule'],
 ];
 
-/** The parents of the players on the roster, read from the contact details kept with each player. */
-function ParentsCard({ players, canSee }: { players: Player[] | null; canSee: boolean }) {
-  const parents = (players || []).filter((p) => p.parent_name.trim() || p.parent_email.trim());
-  const emails = [...new Set(parents.map((p) => p.parent_email.trim()).filter(Boolean))];
+const KIND_WORDS: Record<TeamContact['kind'], string> = { parent: 'Parent or guardian', family: 'Family', friend: 'Friend of the team' };
+const fmtDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+/**
+ * The people around a team who do not coach it: parents, family and friends. Parents written on
+ * the roster are listed too. Anyone can be added here by name and email and invited, and linked
+ * to their players then or later. Someone linked to nobody is a friend of the whole team.
+ */
+function FamilyCard({ team, players, canSee, canEdit }: { team: Team; players: Player[] | null; canSee: boolean; canEdit: boolean }) {
+  const [data, setData] = useState<TeamContacts | null>(null);
+  const [error, setError] = useState('');
+  const [said, setSaid] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [kind, setKind] = useState<TeamContact['kind']>('parent');
+  const [invite, setInvite] = useState(true);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [linking, setLinking] = useState<TeamContact | null>(null);
+  useEffect(() => {
+    setData(null);
+    if (canSee) api.teamContacts(team.id).then(setData, (e) => setError((e as Error).message));
+  }, [team.id, canSee]);
+  const act = async (work: () => Promise<TeamContacts>, done = '') => {
+    setBusy(true);
+    try {
+      const next = await work();
+      setData(next);
+      setError('');
+      setSaid(next.warning || done);
+      setBusy(false);
+      return true;
+    } catch (e) {
+      setSaid('');
+      setError((e as Error).message);
+      setBusy(false);
+      return false;
+    }
+  };
+  const roster = (players || []).filter((pl) => pl.active);
+  // Parents written on the roster who have not been added here by the same address.
+  const listed = new Set((data?.contacts ?? []).map((c) => c.email).filter(Boolean));
+  const fromRoster = (players || []).filter((pl) => (pl.parent_name.trim() || pl.parent_email.trim()) && !listed.has(pl.parent_email.trim().toLowerCase()));
+  const contacts = data?.contacts ?? [];
+  const total = contacts.length + fromRoster.length;
+  const emails = [...new Set([...contacts.map((c) => c.email), ...fromRoster.map((pl) => pl.parent_email.trim())].filter(Boolean))];
+  const kids = (c: TeamContact) => roster.filter((pl) => c.player_ids.includes(pl.id)).map((pl) => pl.name);
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const sending = invite && !!data?.mail && !!email.trim();
+    if (await act(() => api.addTeamContact(team.id, { name, email, kind, player_ids: [], invite: sending, note }), sending ? `${name || email} was added and sent an invitation.` : `${name || email} was added.`)) {
+      setName('');
+      setEmail('');
+      setNote('');
+      setAdding(false);
+    }
+  };
   return (
     <div className="card">
       <div className="card-head">
-        <h2>Parents {canSee && parents.length > 0 && <span className="muted">({parents.length})</span>}</h2>
-        {canSee && emails.length > 0 && (
-          <a className="btn small" href={`mailto:?bcc=${encodeURIComponent(emails.join(','))}`}>
-            Email all parents
-          </a>
+        <h2>Parents, family &amp; friends {canSee && total > 0 && <span className="muted">({total})</span>}</h2>
+        {canSee && (
+          <span className="row-actions">
+            {emails.length > 0 && (
+              <a className="btn small" href={`mailto:?bcc=${encodeURIComponent(emails.join(','))}`}>
+                Email everyone
+              </a>
+            )}
+            {canEdit && (
+              <button type="button" className="btn small primary" onClick={() => setAdding(!adding)}>
+                {adding ? 'Close' : '+ Add or invite someone'}
+              </button>
+            )}
+          </span>
         )}
       </div>
       {!canSee ? (
-        <p className="muted small">Parent contacts are hidden for you on this team.</p>
-      ) : players === null ? (
-        <p className="muted small">Loading…</p>
-      ) : parents.length === 0 ? (
-        <p className="muted small">No parent details yet. Add a parent's name or email to a player on the Team info &amp; roster tab and they are listed here.</p>
+        <p className="muted small">Parent and family contacts are hidden for you on this team.</p>
       ) : (
-        <div className="table-scroll">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Parent</th>
-                <th>Player</th>
-                <th>Email</th>
-              </tr>
-            </thead>
-            <tbody>
-              {parents.map((p) => (
-                <tr key={p.id}>
-                  <td>
-                    <strong>{p.parent_name || 'Parent'}</strong>
-                  </td>
-                  <td>{p.name}</td>
-                  <td>{p.parent_email && <a href={`mailto:${p.parent_email}`}>{p.parent_email}</a>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <p className="muted small">The people around the team who do not coach it. Link each one to their players now or later. Someone linked to nobody is a friend of the whole team.</p>
+          {error && <p className="error">{error}</p>}
+          {said && (
+            <p className="banner ok" role="status">
+              {said}
+            </p>
+          )}
+          {adding && (
+            <form className="family-add" onSubmit={add}>
+              <Field label="Name">
+                <input className="input" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+              </Field>
+              <Field label="Email">
+                <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </Field>
+              <Field label="They are">
+                <select className="input" value={kind} onChange={(e) => setKind(e.target.value as TeamContact['kind'])}>
+                  {(Object.keys(KIND_WORDS) as TeamContact['kind'][]).map((k) => (
+                    <option key={k} value={k}>
+                      {KIND_WORDS[k]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {data?.mail ? (
+                <label className="check family-wide">
+                  <input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} /> Send them an invitation by email, saying you added them to {team.name}
+                </label>
+              ) : (
+                <p className="muted small family-wide">Email is not set up on this site, so they are added to the list without an invitation.</p>
+              )}
+              {data?.mail && invite && (
+                <label className="family-wide">
+                  <span className="field-label">Add a note to the invitation (optional)</span>
+                  <textarea className="input" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
+                </label>
+              )}
+              <div className="family-wide">
+                <button className="btn primary" disabled={busy || (!name.trim() && !email.trim())}>
+                  {invite && data?.mail && email.trim() ? 'Add and invite' : 'Add'}
+                </button>
+              </div>
+            </form>
+          )}
+          {data === null || players === null ? (
+            <p className="muted small">Loading…</p>
+          ) : total === 0 ? (
+            <p className="muted small">Nobody yet. Add a parent, a relative or a friend of the team here, or put a parent's name and email on a player in the roster.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="table family">
+                <thead>
+                  <tr>
+                    <th>Person</th>
+                    <th>They are</th>
+                    <th>Linked to</th>
+                    <th>Invitation</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {contacts.map((c) => (
+                    <tr key={c.id}>
+                      <td>
+                        <strong>{c.name || c.email}</strong>
+                        {c.name && c.email && (
+                          <div className="small">
+                            <a href={`mailto:${c.email}`}>{c.email}</a>
+                          </div>
+                        )}
+                      </td>
+                      <td>{KIND_WORDS[c.kind]}</td>
+                      <td>
+                        {kids(c).length ? kids(c).join(', ') : <span className="muted">{c.kind === 'friend' ? 'The whole team' : 'Nobody yet'}</span>}
+                        {canEdit && (
+                          <>
+                            {' '}
+                            <button type="button" className="link small" onClick={() => setLinking(c)}>
+                              {kids(c).length ? 'Change' : 'Link to players'}
+                            </button>
+                          </>
+                        )}
+                      </td>
+                      <td>
+                        {c.invited_at ? <span className="muted small">Sent {fmtDay(c.invited_at)}</span> : <span className="muted small">Not invited</span>}
+                        {canEdit && data.mail && c.email && (
+                          <>
+                            {' '}
+                            <button type="button" className="link small" disabled={busy} onClick={() => act(() => api.inviteTeamContact(team.id, c.id, ''), `An invitation was sent to ${c.name || c.email}.`)}>
+                              {c.invited_at ? 'Send again' : 'Invite'}
+                            </button>
+                          </>
+                        )}
+                      </td>
+                      <td>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="link small danger"
+                            onClick={async () => {
+                              if (await confirmDialog({ title: `Take ${c.name || c.email} off the list?`, body: 'They stop being listed with this team. Nothing is sent to them.', confirmLabel: 'Take off', danger: true }))
+                                act(() => api.removeTeamContact(team.id, c.id));
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {fromRoster.map((pl) => (
+                    <tr key={`p${pl.id}`}>
+                      <td>
+                        <strong>{pl.parent_name || 'Parent'}</strong>
+                        {pl.parent_email && (
+                          <div className="small">
+                            <a href={`mailto:${pl.parent_email}`}>{pl.parent_email}</a>
+                          </div>
+                        )}
+                      </td>
+                      <td>{KIND_WORDS.parent}</td>
+                      <td>{pl.name}</td>
+                      <td>
+                        <span className="muted small">From the roster</span>
+                        {canEdit && data.mail && pl.parent_email.trim() && (
+                          <>
+                            {' '}
+                            <button
+                              type="button"
+                              className="link small"
+                              disabled={busy}
+                              onClick={() => act(() => api.addTeamContact(team.id, { name: pl.parent_name, email: pl.parent_email, kind: 'parent', player_ids: [pl.id], invite: true, note: '' }), `An invitation was sent to ${pl.parent_name || pl.parent_email}.`)}
+                            >
+                              Invite
+                            </button>
+                          </>
+                        )}
+                      </td>
+                      <td />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+      {linking && (
+        <LinkPlayers
+          contact={linking}
+          players={roster}
+          onClose={() => setLinking(null)}
+          save={async (ids, k) => {
+            if (await act(() => api.updateTeamContact(team.id, linking.id, { name: linking.name, email: linking.email, kind: k, player_ids: ids }), 'Saved.')) setLinking(null);
+          }}
+        />
       )}
     </div>
+  );
+}
+
+/** Choosing which players a person belongs to, and what they are to the team. */
+function LinkPlayers({ contact, players, onClose, save }: { contact: TeamContact; players: Player[]; onClose: () => void; save: (ids: number[], kind: TeamContact['kind']) => void }) {
+  const [ids, setIds] = useState<number[]>(contact.player_ids);
+  const [kind, setKind] = useState(contact.kind);
+  return (
+    <Modal title={`Who is ${contact.name || contact.email} here for?`} onClose={onClose}>
+      <Field label="They are">
+        <select className="input" value={kind} onChange={(e) => setKind(e.target.value as TeamContact['kind'])}>
+          {(Object.keys(KIND_WORDS) as TeamContact['kind'][]).map((k) => (
+            <option key={k} value={k}>
+              {KIND_WORDS[k]}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <p className="muted small">Tick their players. Leave them all unticked for a friend of the whole team, or to decide later.</p>
+      {players.length === 0 ? (
+        <p className="muted small">There are no players on the roster yet.</p>
+      ) : (
+        <ul className="share-people">
+          {players.map((pl) => (
+            <li key={pl.id}>
+              <label className="check">
+                <input type="checkbox" checked={ids.includes(pl.id)} onChange={(e) => setIds((list) => (e.target.checked ? [...list, pl.id] : list.filter((id) => id !== pl.id)))} />
+                <span>
+                  {pl.name}
+                  {pl.number && <span className="muted small"> · #{pl.number}</span>}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="btn primary" onClick={() => save(ids, kind)}>
+          Save
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -593,7 +832,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
               <p className="muted small">{app.access?.owner_name} decides who this team is shared with.</p>
             </div>
           )}
-          <ParentsCard players={players} canSee={app.can('contacts')} />
+          <FamilyCard team={team} players={players} canSee={app.can('contacts')} canEdit={app.can('roster')} />
         </>
       )}
 

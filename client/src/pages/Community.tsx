@@ -9,10 +9,29 @@ import { KIND_WORDS, ShareRow, SharedPreview, sharesKind } from '../components/c
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { PlayDiagram } from '../components/PlayDiagram';
 import { EditBox, EditedMark, MentionArea, MentionText } from '../components/Mentions';
-import { LapsedBanner, OrgAnnouncements, OrgLibrarySettings, OrgLog, OrgVenues, OrgPeople, OrgPublicSettings, OrgTeams, PinnedAnnouncements, SeatMeter } from './OrgPanels';
+import { LapsedBanner, OrgAnnouncements, OrgLibrarySettings, OrgLog, OrgVenues, OrgPeople, OrgPublicSettings, OrgTeams, PinnedAnnouncements } from './OrgPanels';
+import { ManageOverview, OrgSchedule, OrgUsage, type ManageGo } from './OrgManage';
+import { Badge, PageHead, Row } from '../components/cx';
 
-type Tab = 'messages' | 'announcements' | 'teams' | 'venues' | 'library' | 'people' | 'log' | 'settings';
-const TABS: Tab[] = ['messages', 'announcements', 'teams', 'venues', 'library', 'people', 'log', 'settings'];
+// A community has two sides. Everyone sees the community side: home, the shared library, the
+// discussions and the members. The people who run an organization also have the management side.
+type Tab = 'home' | 'library' | 'discussions' | 'members' | 'announcements' | 'overview' | 'seasons' | 'schedule' | 'coaches' | 'more' | 'venues' | 'usage' | 'log' | 'public' | 'settings';
+const TABS: Tab[] = ['home', 'library', 'discussions', 'members', 'announcements', 'overview', 'seasons', 'schedule', 'coaches', 'more', 'venues', 'usage', 'log', 'public', 'settings'];
+const COMMUNITY_TABS: Tab[] = ['home', 'library', 'discussions', 'members'];
+/** What sits behind "More" on the management side. */
+const MORE_TABS: Tab[] = ['more', 'announcements', 'venues', 'usage', 'log', 'public', 'settings'];
+/** Names sections used to have, so older links still land in the right place. */
+const OLD_TABS: Record<string, Tab> = { messages: 'discussions', teams: 'seasons', people: 'members' };
+const readTab = (asked: string | null): Tab | null => {
+  const t = (OLD_TABS[asked ?? ''] ?? asked) as Tab;
+  return TABS.includes(t) ? t : null;
+};
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** The first line of a message, which stands in for its title. */
+const firstLine = (body: string) => {
+  const line = body.trim().split('\n')[0];
+  return line.length > 90 ? `${line.slice(0, 88)}…` : line || 'Message';
+};
 const KINDS: ShareKind[] = ['drill', 'play', 'plan'];
 const ROLE = { creator: 'Creator', admin: 'Admin', member: 'Member' } as const;
 const KIND_LABEL: Record<ShareKind, string> = { drill: 'Drill', play: 'Play', plan: 'Practice plan' };
@@ -123,11 +142,11 @@ export default function CommunityPage() {
   const [posts, setPosts] = useState<CommunityPost[] | null>(null);
   const [shares, setShares] = useState<CommunityShare[] | null>(null);
   const [params] = useSearchParams();
-  const asked = params.get('tab') as Tab | null;
-  const [tab, setTab] = useState<Tab>(asked && TABS.includes(asked) ? asked : 'messages');
+  const asked = readTab(params.get('tab'));
+  const [tab, setTab] = useState<Tab>(asked ?? 'home');
   // A message that points at a section opens it, also when this page is already showing.
   useEffect(() => {
-    if (asked && TABS.includes(asked)) setTab(asked);
+    if (asked) setTab(asked);
   }, [asked]);
   /** The organization side, for a community on that plan. */
   const [org, setOrg] = useState<Org | null>(null);
@@ -136,6 +155,11 @@ export default function CommunityPage() {
   const [notice, setNotice] = useState('');
   const [sharing, setSharing] = useState<ShareKind | 'choose' | null>(null);
   const [preview, setPreview] = useState<CommunityShare | null>(null);
+  // The conversation that is open on its own, and whether a new one is being written.
+  const [thread, setThread] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
+  // Where the overview sent the manager: a league to open, or a part of the coaches page.
+  const [focus, setFocus] = useState<{ leagueId?: number; view?: 'coaches' | 'invites' | 'requirements' } | null>(null);
   // Set while the picker was opened from a reply: what is chosen is shared and handed to that reply.
   const [attachTo, setAttachTo] = useState<{ done: (p: Picked) => void } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -283,13 +307,39 @@ export default function CommunityPage() {
     ...(s.status === 'pending' && may.approve ? [{ label: 'Approve', onSelect: () => actShares(() => api.approveShare(s.id), `"${s.title}" is now in the library.`) }] : []),
     ...(s.mine || (s.status === 'pending' ? may.approve : may.moderate) ? [{ label: s.mine ? 'Stop sharing' : s.status === 'pending' ? 'Decline' : 'Remove from the library', danger: true, onSelect: () => actShares(() => api.unshare(s.id)) }] : []),
   ];
-  const tabs: [Tab, string, string, number][] = [
-    ['messages', 'Discussion', ICON.talk, 0],
-    ...((isOrg ? [['announcements', 'Announcements', ICON.megaphone, 0], ['teams', 'Leagues & teams', ICON.trophy, 0], ['venues', 'Fields & gyms', ICON.place, 0]] : []) as [Tab, string, string, number][]),
-    ['library', 'Shared library', ICON.library, c.pending_shares],
-    ['people', 'People', ICON.people, 0],
-    ...((isOrg && c.role !== 'member' ? [['log', 'Activity log', ICON.log, 0]] : []) as [Tab, string, string, number][]),
-    ['settings', 'Settings', ICON.settings, 0],
+  // The management side is for those who help run an organization.
+  const managing = isOrg && c.role !== 'member';
+  const at: Tab = COMMUNITY_TABS.includes(tab) || managing || tab === 'settings' || (tab === 'announcements' && isOrg) ? tab : 'home';
+  const side = managing && !COMMUNITY_TABS.includes(at) ? 'manage' : 'community';
+  const tabs: [Tab, string, number][] =
+    side === 'manage'
+      ? [
+          ['overview', 'Overview', 0],
+          ['seasons', 'Seasons & teams', 0],
+          ['schedule', 'Schedule', 0],
+          ['coaches', 'Coaches', 0],
+          ['more', 'More', 0],
+        ]
+      : [
+          ['home', 'Home', 0],
+          ['library', 'Library', c.pending_shares],
+          ['discussions', 'Discussions', 0],
+          ['members', 'Members', 0],
+        ];
+  const onTab = (t: Tab) => t === at || (t === 'more' && side === 'manage' && MORE_TABS.includes(at));
+  const open = (t: Tab) => {
+    setFocus(null);
+    setThread(null);
+    setComposing(false);
+    setTab(t);
+  };
+  const go: ManageGo = (t, where) => {
+    setFocus(where ?? null);
+    setTab(t);
+  };
+  const topMenu: MenuItem[] = [
+    { label: 'All communities', onSelect: () => navigate('/communities') },
+    ...(side === 'community' ? [{ label: may.settings && !managing ? 'Settings' : c.role === 'creator' ? 'About this community' : 'Leave this community', onSelect: () => open('settings') }] : []),
   ];
   // Messages with their replies; replies made to shared things; and every one of them flat, newest first.
   const threads = posts ? posts.filter((p) => !p.share_id) : null;
@@ -298,100 +348,127 @@ export default function CommunityPage() {
   const everyPost = flatten(posts || []).sort((a, b) => stamp(b.created_at) - stamp(a.created_at));
   // Something sent along with a reply shows there, not as an entry of its own in the feed.
   const sentWithReply = new Set(everyPost.map((p) => p.attach_share_id).filter(Boolean));
-  const rail = { c, active, posts: everyPost, approved, onPeople: () => setTab('people') };
+  const feed = {
+    c,
+    q: '',
+    kinds,
+    posts: threads,
+    shareReplies,
+    shares: approved.filter((x) => !sentWithReply.has(x.id)),
+    allShares: shares || [],
+    people: active.map((x) => x.name),
+    onPick: pick,
+    onSend: sendPost,
+    roleOf,
+    composer,
+    onPosts: setPosts,
+    onError: fail,
+    onPreview: setPreview,
+    onCopy: copy,
+    shareMenu,
+  };
 
   return (
-    <div className="page cm">
-      <Link to="/communities" className="back-link">
-        ← Communities
-      </Link>
-      <header className="cm-hero">
-        <span className="cm-crest" aria-hidden="true">
+    <div className="page cm cx">
+      <header className="cx-top">
+        <Link to="/communities" className="cm-crest cx-crest" title="All communities" aria-label="All communities">
           {c.image ? <img src={c.image} alt="" /> : initials(c.name)}
-        </span>
-        <div className="cm-hero-text">
+        </Link>
+        <div className="cx-top-name">
           <h1>{c.name}</h1>
-          <p>{c.description || 'A place for coaches to talk and share.'}</p>
-          <span className="cm-hero-meta">
-            {isOrg && <span className="kind game">Organization</span>}
-            {active.length} member{active.length === 1 ? '' : 's'} · you are {c.role === 'member' ? 'a member' : c.role === 'admin' ? 'an admin' : 'the creator'}
+          <span className="muted small">
+            {isOrg ? 'Organization' : 'Community'} · {plural(active.length, 'member')}
           </span>
-          {isOrg && c.role !== 'member' && <SeatMeter org={org ?? c} />}
         </div>
-        <div className="cm-hero-actions">
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              setTab('messages');
-              window.setTimeout(() => composer.current?.focus(), 50);
-            }}
-          >
-            <Svg d={ICON.plus} size={15} /> New post
-          </button>
-          {kinds.length > 0 && (
-            <button type="button" className="btn primary" onClick={startShare}>
-              <Svg d={ICON.library} size={15} /> Share one of mine
+        {managing && (
+          <div className="seg cx-switch" role="group" aria-label="Which side to look at">
+            <button type="button" className={side === 'community' ? 'on' : ''} aria-pressed={side === 'community'} onClick={() => open('home')}>
+              Community
             </button>
-          )}
-        </div>
-      </header>
-      <div className="cm-bar">
-        <div className="cm-tabs" role="tablist" aria-label="Sections">
-          {tabs.map(([t, label, icon, count]) => (
-            <button key={t} type="button" role="tab" className={tab === t ? 'on' : ''} aria-selected={tab === t} onClick={() => setTab(t)}>
-              <Svg d={icon} />
-              {label}
-              {count > 0 && <span className="cm-count">{count}</span>}
+            <button type="button" className={side === 'manage' ? 'on' : ''} aria-pressed={side === 'manage'} onClick={() => open('overview')}>
+              Manage
             </button>
-          ))}
-        </div>
-        {(tab === 'messages' || tab === 'library') && (
-          <label className="cm-search">
-            <Svg d={ICON.search} size={16} />
-            <input type="search" placeholder="Search this community" aria-label="Search this community" value={q} onChange={(e) => setQ(e.target.value)} />
-          </label>
+          </div>
         )}
-      </div>
+        <span className="cx-top-end">
+          <MoreMenu items={topMenu} label={`More for ${c.name}`} />
+        </span>
+      </header>
+      <nav className="cx-tabs" role="tablist" aria-label={side === 'manage' ? 'Management' : 'Community'}>
+        {tabs.map(([t, label, count]) => (
+          <button key={t} type="button" role="tab" className={onTab(t) ? 'on' : ''} aria-selected={onTab(t)} onClick={() => open(t)}>
+            {label}
+            {count > 0 && <span className="cm-count">{count}</span>}
+          </button>
+        ))}
+      </nav>
       {error && <p className="error">{error}</p>}
       {notice && <p className="banner ok">{notice}</p>}
       <LapsedBanner c={c} />
-      {tab === 'messages' && isOrg && <PinnedAnnouncements c={c} onOpen={() => setTab('announcements')} />}
-      {tab === 'announcements' && orgProps && <OrgAnnouncements {...orgProps} />}
-      {tab === 'teams' && orgProps && <OrgTeams {...orgProps} />}
-      {tab === 'venues' && orgProps && <OrgVenues {...orgProps} />}
-      {tab === 'log' && orgProps && <OrgLog c={c} fail={fail} />}
-
-      {tab === 'messages' && (
-        <div className="cm-cols">
-          <Feed
-            c={c}
-            q={q}
-            kinds={kinds}
-            posts={threads}
-            shareReplies={shareReplies}
-            shares={approved.filter((s) => !sentWithReply.has(s.id))}
-            allShares={shares || []}
-            people={active.map((p) => p.name)}
-            onPick={pick}
-            onSend={sendPost}
-            roleOf={roleOf}
-            composer={composer}
-            onPosts={setPosts}
-            onError={fail}
-            onPreview={setPreview}
-            onCopy={copy}
-            shareMenu={shareMenu}
-          />
-          <aside className="cm-rail">
-            <Overview {...rail} />
-            <Members {...rail} admin={may.people} />
-            <Activity {...rail} />
-            <Contributors {...rail} />
-          </aside>
-        </div>
+      {side === 'manage' && at !== 'more' && MORE_TABS.includes(at) && (
+        <button type="button" className="back-link cx-back" onClick={() => open('more')}>
+          ← More tools
+        </button>
       )}
-      {tab === 'library' && (
+      {side === 'community' && (at === 'announcements' || at === 'settings') && (
+        <button type="button" className="back-link cx-back" onClick={() => open('home')}>
+          ← Home
+        </button>
+      )}
+
+      {at === 'home' && (
+        <CommunityHome
+          c={c}
+          isOrg={isOrg}
+          kinds={kinds}
+          shares={approved}
+          threads={threads || []}
+          invited={c.people.length - active.length}
+          onShare={startShare}
+          onPreview={setPreview}
+          onOpen={open}
+          onThread={(key) => {
+            open('discussions');
+            setThread(key);
+          }}
+        />
+      )}
+      {at === 'discussions' && (
+        <Discussions feed={feed} q={q} setQ={setQ} threads={threads} shares={approved} shareReplies={shareReplies} thread={thread} setThread={setThread} composing={composing} setComposing={setComposing} />
+      )}
+      {at === 'announcements' && orgProps && <OrgAnnouncements {...orgProps} />}
+      {at === 'overview' && orgProps && <ManageOverview {...orgProps} go={go} />}
+      {at === 'seasons' && orgProps && <OrgTeams key={`league-${focus?.leagueId ?? 0}`} {...orgProps} focus={focus} />}
+      {at === 'schedule' && orgProps && <OrgSchedule {...orgProps} />}
+      {at === 'coaches' && orgProps && (may.people ? <OrgPeople key={focus?.view ?? 'coaches'} {...orgProps} initialView={focus?.view} /> : <div className="card">Coaches and seats are looked after by the admins who were given the People job.</div>)}
+      {at === 'venues' && orgProps && <OrgVenues {...orgProps} />}
+      {at === 'usage' && orgProps && <OrgUsage c={c} fail={fail} go={go} />}
+      {at === 'log' && orgProps && <OrgLog c={c} fail={fail} />}
+      {at === 'public' && orgProps && <OrgPublicSettings {...orgProps} />}
+      {at === 'more' && (
+        <>
+          <PageHead eyebrow="Management / More" title="More tools" sub={`Everything else you need to run ${c.name}.`} />
+          <div className="cx-pair">
+            <section className="card cx-card">
+              <h2>Communications</h2>
+              <ul className="cx-rows">
+                <Row lead={<Badge text="Announcements" />} title="Announcements" sub="Write to everyone, or to one sport, league or team" onClick={() => open('announcements')} />
+                {may.settings && <Row lead={<Badge text="Public schedule" />} title="Public schedule" sub="A page of game times for parents and players" onClick={() => open('public')} />}
+              </ul>
+            </section>
+            <section className="card cx-card">
+              <h2>Tools</h2>
+              <ul className="cx-rows">
+                <Row lead={<Badge text="Fields gyms" />} title="Fields & gyms" sub="Where your teams play" onClick={() => open('venues')} />
+                <Row lead={<Badge text="Usage" />} title="Usage" sub="How coaches are using Dime Coach" onClick={() => open('usage')} />
+                <Row lead={<Badge text="Activity log" />} title="Activity log" sub="Changes made by the people who run this" onClick={() => open('log')} />
+                <Row lead={<Badge text="Settings" />} title="Settings" sub="Name, picture, what can be shared, and who sees what" onClick={() => open('settings')} />
+              </ul>
+            </section>
+          </div>
+        </>
+      )}
+      {at === 'library' && (
         <Library
           c={c}
           q={q}
@@ -405,14 +482,14 @@ export default function CommunityPage() {
           onPreview={setPreview}
           onCopy={copy}
           shareMenu={shareMenu}
-          onDiscussion={() => setTab('messages')}
+          onDiscussion={() => open('discussions')}
           onNewCode={() => run(() => api.newJoinCode(c.id), 'There is a new join code. The old one no longer works.')}
         />
       )}
 
-      {tab === 'people' && (
+      {at === 'members' && (
         <>
-          {orgProps && may.people && <OrgPeople {...orgProps} />}
+          <PageHead eyebrow="Community / Members" title={`Coaches in ${c.name}`} sub={`${plural(active.length, 'member')}${isOrg ? '' : ' sharing ideas'}.`} />
           <div className="card">
             <h2>
               People <span className="muted">({active.length})</span>
@@ -491,7 +568,7 @@ export default function CommunityPage() {
         </>
       )}
 
-      {tab === 'settings' && (
+      {at === 'settings' && (
         <>
           {may.settings ? (
             <>
@@ -650,6 +727,9 @@ function Feed({
   onPreview,
   onCopy,
   shareMenu,
+  only,
+  composeOnly,
+  onSent,
 }: {
   c: CommunityDetail;
   q: string;
@@ -668,6 +748,11 @@ function Feed({
   onPreview: (s: CommunityShare) => void;
   onCopy: (s: CommunityShare) => void;
   shareMenu: (s: CommunityShare) => MenuItem[];
+  /** Show just this one, opened up: "p" and a message's number, or "s" and a shared thing's. */
+  only?: string;
+  /** Show only the box for writing a new message. */
+  composeOnly?: boolean;
+  onSent?: () => void;
 }) {
   const { user } = useApp();
   const [body, setBody] = useState('');
@@ -684,6 +769,7 @@ function Feed({
     if (await onSend(body.trim(), {}, attached)) {
       setBody('');
       setAttached(null);
+      onSent?.();
     }
     setBusy(false);
   };
@@ -736,6 +822,7 @@ function Feed({
 
   return (
     <div className="cm-feed">
+      {!only && (
       <form className="card cm-compose" onSubmit={send}>
         <div className="cm-compose-row">
           <Avatar name={user.name} big />
@@ -777,7 +864,9 @@ function Feed({
           </button>
         </div>
       </form>
+      )}
 
+      {!only && !composeOnly && (
       <div className="cm-chips" role="group" aria-label="Show">
         {chips.map(([f, label]) => (
           <button key={f} type="button" className={filter === f ? 'on' : ''} aria-pressed={filter === f} onClick={() => setFilter(f)}>
@@ -785,14 +874,15 @@ function Feed({
           </button>
         ))}
       </div>
+      )}
 
-      {posts === null ? (
+      {composeOnly ? null : posts === null ? (
         <p className="muted">Loading…</p>
       ) : entries.length === 0 ? (
         <div className="card cm-none">{words ? 'Nothing matches that search.' : filter === 'shares' ? 'Nothing has been shared here yet.' : 'No messages yet. Say hello.'}</div>
       ) : (
         <ul className="cm-posts">
-          {entries.map((e) => {
+          {(only ? entries.filter((e) => e.key === only) : entries).map((e) => {
             const by = e.post ? e.post.by : e.share!.by;
             const byId = e.post ? e.post.by_id : e.share!.by_id;
             const role = roleOf(byId);
@@ -1128,13 +1218,6 @@ function Thread({ replies, to, ctx }: { replies: CommunityPost[]; to: { parent_i
   );
 }
 
-interface RailProps {
-  c: CommunityDetail;
-  active: CommunityPerson[];
-  posts: CommunityPost[];
-  approved: CommunityShare[];
-  onPeople: () => void;
-}
 const RailCard = ({ icon, title, action, children }: { icon: string; title: ReactNode; action?: ReactNode; children: ReactNode }) => (
   <section className="card cm-side">
     <div className="cm-side-head">
@@ -1145,123 +1228,7 @@ const RailCard = ({ icon, title, action, children }: { icon: string; title: Reac
     {children}
   </section>
 );
-function Overview({ c, active, posts, approved }: RailProps) {
-  const tiles: [string, number, string][] = [
-    [ICON.talk, posts.length, 'Messages'],
-    [ICON.play, approved.filter((s) => s.kind !== 'plan').length, 'Drills & plays'],
-    [ICON.plan, approved.filter((s) => s.kind === 'plan').length, 'Practice plans'],
-  ];
-  return (
-    <RailCard icon={ICON.people} title="Community overview">
-      <p className="muted small">
-        <strong>{active.length}</strong> member{active.length === 1 ? '' : 's'} · started by {c.created_by_name || 'a coach'}
-      </p>
-      <div className="cm-tiles">
-        {tiles.map(([icon, n, label]) => (
-          <span key={label}>
-            <Svg d={icon} size={20} />
-            <b>{n}</b>
-            <small>{label}</small>
-          </span>
-        ))}
-      </div>
-    </RailCard>
-  );
-}
-function Members({ active, onPeople, admin }: RailProps & { admin: boolean }) {
-  return (
-    <RailCard
-      icon={ICON.people}
-      title={
-        <>
-          Members <span className="muted">({active.length})</span>
-        </>
-      }
-      action={
-        <button type="button" className="link small" onClick={onPeople}>
-          {admin ? 'Manage' : 'See all'}
-        </button>
-      }
-    >
-      <ul className="cm-members">
-        {active.slice(0, 8).map((p) => (
-          <li key={p.id}>
-            <Avatar name={p.name} />
-            <span>{p.name}</span>
-            <RoleBadge role={p.role} />
-          </li>
-        ))}
-      </ul>
-      {active.length > 8 && <p className="muted small">and {active.length - 8} more</p>}
-    </RailCard>
-  );
-}
-function Activity({ posts, approved }: RailProps) {
-  const rows = [
-    ...posts.map((p) => ({ key: `p${p.id}`, at: p.created_at, icon: ICON.talk, by: p.by, text: `wrote: ${p.body.length > 60 ? `${p.body.slice(0, 60)}…` : p.body}` })),
-    ...approved.map((s) => ({ key: `s${s.id}`, at: s.shared_at, icon: ICON[s.kind], by: s.by, text: `shared a ${KIND_WORDS[s.kind].one}: ${s.title}` })),
-  ]
-    .sort((a, b) => stamp(b.at) - stamp(a.at))
-    .slice(0, 5);
-  return (
-    <RailCard icon={ICON.activity} title="Recent activity">
-      {rows.length === 0 ? (
-        <p className="muted small">Nothing yet.</p>
-      ) : (
-        <ul className="cm-activity">
-          {rows.map((r) => (
-            <li key={r.key}>
-              <Svg d={r.icon} size={15} />
-              <span>
-                <strong>{r.by}</strong> {r.text}
-              </span>
-              <small>{ago(r.at)}</small>
-            </li>
-          ))}
-        </ul>
-      )}
-    </RailCard>
-  );
-}
-function Contributors({ active, posts, approved }: RailProps) {
-  const counts = new Map<number, number>();
-  for (const p of posts) counts.set(p.by_id, (counts.get(p.by_id) || 0) + 1);
-  for (const s of approved) counts.set(s.by_id, (counts.get(s.by_id) || 0) + 1);
-  const rows = active
-    .map((p) => ({ p, n: counts.get(p.id) || 0 }))
-    .filter((r) => r.n > 0)
-    .sort((a, b) => b.n - a.n)
-    .slice(0, 5);
-  const most = rows[0]?.n || 1;
-  return (
-    <RailCard icon={ICON.trophy} title="Top contributors">
-      {rows.length === 0 ? (
-        <p className="muted small">Messages and shared items count here.</p>
-      ) : (
-        <ul className="cm-top">
-          {rows.map(({ p, n }) => (
-            <li key={p.id}>
-              <Avatar name={p.name} />
-              <span className="cm-top-main">
-                <span>
-                  <strong>{p.name}</strong>
-                  <small>
-                    {n} contribution{n === 1 ? '' : 's'}
-                  </small>
-                </span>
-                <span className="cm-top-bar">
-                  <span style={{ width: `${(n / most) * 100}%` }} />
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </RailCard>
-  );
-}
-
-type Sort = 'new' | 'name';
+type Sort = 'new' | 'copies' | 'name';
 const VIEW_KEY = 'practiceplan.communityView';
 
 /** What members have shared: kinds along the top, filters down the side, and each thing as a card. */
@@ -1302,6 +1269,9 @@ function Library({
   const [sort, setSort] = useState<Sort>('new');
   const [view, setViewState] = useState<'grid' | 'list'>(() => (localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid'));
   const [copied, setCopied] = useState(false);
+  // Which sport to show. Until one is chosen it is the sport of the team the coach is working in.
+  const { sport: mySport } = useApp();
+  const [sportPick, setSportPick] = useState<string | null>(null);
   const setView = (v: 'grid' | 'list') => {
     localStorage.setItem(VIEW_KEY, v);
     setViewState(v);
@@ -1320,7 +1290,9 @@ function Library({
   const waiting = all.filter((s) => s.status === 'pending');
   const approved = all.filter((s) => s.status === 'approved');
   const count = (k: ShareKind) => approved.filter((s) => s.kind === k).length;
-  const ofKind = approved.filter((s) => kind === 'all' || s.kind === kind);
+  const sportsIn = [...new Set(approved.map((s) => s.sport).filter(Boolean))].sort();
+  const sportOn = sportsIn.length < 2 ? '' : (sportPick ?? (mySport && sportsIn.includes(mySport.name) ? mySport.name : ''));
+  const ofKind = approved.filter((s) => (kind === 'all' || s.kind === kind) && (!sportOn || s.sport === sportOn));
   // Categories on what is being looked at, most used first.
   const tagCounts = new Map<string, number>();
   for (const s of ofKind) for (const t of s.tags) tagCounts.set(t.name, (tagCounts.get(t.name) || 0) + 1);
@@ -1330,7 +1302,7 @@ function Library({
     .filter((s) => tags.length === 0 || s.tags.some((t) => tags.includes(t.name)))
     .filter((s) => !mineOnly || s.mine)
     .filter((s) => !words || `${s.title} ${s.by} ${s.summary} ${s.tags.map((t) => t.name).join(' ')}`.toLowerCase().includes(words))
-    .sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : stamp(b.shared_at) - stamp(a.shared_at)));
+    .sort((a, b) => (sort === 'name' ? a.title.localeCompare(b.title) : sort === 'copies' ? b.copies - a.copies || stamp(b.shared_at) - stamp(a.shared_at) : stamp(b.shared_at) - stamp(a.shared_at)));
   const filtered = tags.length > 0 || mineOnly || kind !== 'all' || !!words;
   const clear = () => {
     setTags([]);
@@ -1369,6 +1341,7 @@ function Library({
           <Avatar name={s.by} />
           <span>{s.mine ? 'You' : s.by}</span>
           <small>{ago(s.shared_at)}</small>
+          {s.copies > 0 && <small>· {plural(s.copies, 'copy', 'copies')}</small>}
         </div>
         {s.tags.length > 0 && (
           <span className="chips">
@@ -1430,6 +1403,18 @@ function Library({
         </button>
       </div>
 
+      {sportsIn.length > 1 && (
+        <div className="cm-chips cx-sports" role="group" aria-label="Sport">
+          {sportsIn.map((name) => (
+            <button key={name} type="button" className={sportOn === name ? 'on' : ''} aria-pressed={sportOn === name} onClick={() => setSportPick(name)}>
+              {name}
+            </button>
+          ))}
+          <button type="button" className={sportOn === '' ? 'on' : ''} aria-pressed={sportOn === ''} onClick={() => setSportPick('')}>
+            All sports
+          </button>
+        </div>
+      )}
       <div className="cm-kinds" role="group" aria-label="Kind">
         {kindTabs.map(([k, label, icon, n]) => (
           <button key={k} type="button" className={kind === k ? 'on' : ''} aria-pressed={kind === k} onClick={() => setKind(k)}>
@@ -1486,6 +1471,7 @@ function Library({
             </label>
             <select className="input" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
               <option value="new">Newest first</option>
+              <option value="copies">Most copied first</option>
               <option value="name">A to Z</option>
             </select>
             <div className="seg" role="group" aria-label="Layout">
@@ -1792,6 +1778,201 @@ function Settings({ c, run }: { c: CommunityDetail; run: (fn: () => Promise<unkn
           {flag('require_approval', 'An admin approves each shared item', 'before other members can see it. Admins\' own shares go straight in.')}
         </div>
       </div>
+    </>
+  );
+}
+
+/** The latest moment anything was said in a conversation. */
+const lastSaid = (p: CommunityPost) => Math.max(stamp(p.created_at), ...flatten(p.replies || []).map((r) => stamp(r.created_at)));
+
+/** The front page of a community: what is pinned, what was shared for the coach's sport, and the conversations going on. */
+function CommunityHome({
+  c,
+  isOrg,
+  kinds,
+  shares,
+  threads,
+  invited,
+  onShare,
+  onPreview,
+  onOpen,
+  onThread,
+}: {
+  c: CommunityDetail;
+  isOrg: boolean;
+  kinds: ShareKind[];
+  shares: CommunityShare[];
+  threads: CommunityPost[];
+  invited: number;
+  onShare: () => void;
+  onPreview: (s: CommunityShare) => void;
+  onOpen: (t: Tab) => void;
+  onThread: (key: string) => void;
+}) {
+  const { user, sport } = useApp();
+  const mine = sport ? shares.filter((x) => x.sport === sport.name) : [];
+  // What other coaches found most useful comes first, then the newest.
+  const picks = (mine.length ? mine : shares)
+    .slice()
+    .sort((a, b) => b.copies - a.copies || stamp(b.shared_at) - stamp(a.shared_at))
+    .slice(0, 4);
+  const talks = threads
+    .slice()
+    .sort((a, b) => lastSaid(b) - lastSaid(a))
+    .slice(0, 4);
+  const owner = !isOrg && (c.can.people || c.can.settings);
+  return (
+    <>
+      <PageHead eyebrow="Community / Home" title={`Good to see you, ${user.name.trim().split(/\s+/)[0]}`} sub={`New ideas and conversations from ${c.name}.`}>
+        {kinds.length > 0 && (
+          <button type="button" className="btn primary" onClick={onShare}>
+            Share something
+          </button>
+        )}
+      </PageHead>
+      {isOrg && <PinnedAnnouncements c={c} onOpen={() => onOpen('announcements')} />}
+      <div className="cx-cols">
+        <section className="card cx-card">
+          <div className="cx-card-head">
+            <h2>{mine.length && sport ? `Shared for ${sport.name.toLowerCase()} coaches` : 'Shared by members'}</h2>
+            <button type="button" className="link" onClick={() => onOpen('library')}>
+              Open library →
+            </button>
+          </div>
+          {picks.length === 0 ? (
+            <p className="muted">{kinds.length ? 'Nothing has been shared yet. Be the first: share a drill, a play or a practice plan.' : 'This community is for conversation only.'}</p>
+          ) : (
+            <ul className="cx-shares">
+              {picks.map((x) => (
+                <li key={x.id}>
+                  <button type="button" className="cx-share" onClick={() => onPreview(x)}>
+                    <ShareArt share={x} />
+                    <span className="cx-share-body">
+                      <strong>{x.title}</strong>
+                      <span className="muted small">{[x.sport, x.summary].filter(Boolean).join(' · ')}</span>
+                      <span className="cx-share-by">
+                        <Avatar name={x.by} />
+                        <span>{x.mine ? 'You' : x.by}</span>
+                        {x.copies > 0 && <small>{plural(x.copies, 'copy', 'copies')}</small>}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <div className="cx-stack">
+          <section className="card cx-card">
+            <div className="cx-card-head">
+              <h2>Conversations worth joining</h2>
+              <button type="button" className="link" onClick={() => onOpen('discussions')}>
+                See discussions →
+              </button>
+            </div>
+            {talks.length === 0 ? (
+              <p className="muted">No conversations yet. Ask a question to start one.</p>
+            ) : (
+              <ul className="cx-rows">
+                {talks.map((t) => (
+                  <Row key={t.id} lead={<Avatar name={t.by} big />} title={firstLine(t.body)} sub={`${t.by} · ${plural(countReplies(t.replies || []), 'reply', 'replies')}`} onClick={() => onThread(`p${t.id}`)} />
+                ))}
+              </ul>
+            )}
+          </section>
+          {owner && (
+            <section className="card cx-card">
+              <h2>Owner tools</h2>
+              <ul className="cx-rows">
+                {c.can.people && <Row lead={<Badge text="Manage members" />} title="Manage members" sub={`${plural(c.people.length - invited, 'member')}${invited ? ` · ${plural(invited, 'invitation')} waiting` : ''}`} onClick={() => onOpen('members')} />}
+                {c.can.settings && <Row lead={<Badge text="Settings" />} title="Settings" sub="Name, picture and what can be shared" onClick={() => onOpen('settings')} />}
+              </ul>
+            </section>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** The conversations of a community as a list. Choosing one opens it on its own, with its replies. */
+function Discussions({
+  feed,
+  q,
+  setQ,
+  threads,
+  shares,
+  shareReplies,
+  thread,
+  setThread,
+  composing,
+  setComposing,
+}: {
+  feed: Parameters<typeof Feed>[0];
+  q: string;
+  setQ: (q: string) => void;
+  threads: CommunityPost[] | null;
+  shares: CommunityShare[];
+  shareReplies: Map<number, CommunityPost[]>;
+  thread: string | null;
+  setThread: (key: string | null) => void;
+  composing: boolean;
+  setComposing: (on: boolean) => void;
+}) {
+  // A conversation is a message with its replies, or something shared that people have answered.
+  const rows = [
+    ...(threads || []).map((p) => ({ key: `p${p.id}`, title: firstLine(p.body), by: p.by, started: p.created_at, replies: countReplies(p.replies || []), last: lastSaid(p) })),
+    ...shares
+      .filter((x) => (shareReplies.get(x.id) || []).length > 0)
+      .map((x) => {
+        const said = shareReplies.get(x.id) || [];
+        return { key: `s${x.id}`, title: `${KIND_LABEL[x.kind]}: ${x.title}`, by: x.by, started: x.shared_at, replies: countReplies(said), last: Math.max(stamp(x.shared_at), ...flatten(said).map((r) => stamp(r.created_at))) };
+      }),
+  ].sort((a, b) => b.last - a.last);
+  const one = thread ? rows.find((r) => r.key === thread) : null;
+  if (one)
+    return (
+      <>
+        <nav className="cx-path" aria-label="Where you are">
+          <button type="button" className="link" onClick={() => setThread(null)}>
+            Discussions
+          </button>
+          <span aria-hidden="true">›</span>
+          <span>Conversation</span>
+        </nav>
+        <PageHead eyebrow="Discussion" title={one.title} sub={`${plural(one.replies, 'reply', 'replies')} · started by ${one.by} · ${ago(one.started)}`} />
+        <Feed {...feed} only={one.key} />
+      </>
+    );
+  const words = q.trim().toLowerCase();
+  const shown = rows.filter((r) => !words || `${r.title} ${r.by}`.toLowerCase().includes(words));
+  return (
+    <>
+      <PageHead eyebrow="Community / Discussions" title="Coach conversations" sub="Ask a question or swap ideas with other coaches.">
+        <button type="button" className="btn primary" onClick={() => setComposing(!composing)}>
+          {composing ? 'Close' : '+ Start a conversation'}
+        </button>
+      </PageHead>
+      {composing && <Feed {...feed} composeOnly onSent={() => setComposing(false)} />}
+      {rows.length > 5 && (
+        <label className="cm-search cx-search">
+          <Svg d={ICON.search} size={16} />
+          <input type="search" placeholder="Search conversations" aria-label="Search conversations" value={q} onChange={(e) => setQ(e.target.value)} />
+        </label>
+      )}
+      <section className="card cx-card">
+        {threads === null ? (
+          <p className="muted">Loading…</p>
+        ) : shown.length === 0 ? (
+          <p className="muted">{words ? 'Nothing matches that search.' : 'No conversations yet. Start one: ask a question or share an idea.'}</p>
+        ) : (
+          <ul className="cx-rows">
+            {shown.map((r) => (
+              <Row key={r.key} lead={<Avatar name={r.by} big />} title={r.title} sub={`${r.by} · ${plural(r.replies, 'reply', 'replies')} · ${ago(new Date(r.last).toISOString())}`} onClick={() => setThread(r.key)} />
+            ))}
+          </ul>
+        )}
+      </section>
     </>
   );
 }

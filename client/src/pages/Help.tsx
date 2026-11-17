@@ -94,8 +94,8 @@ const TOPICS: Topic[] = [
   },
   {
     group: 'Practices',
-    title: 'Print a practice or send it to someone',
-    steps: ['Open the practice.', 'Press "Print / share" on the schedule.', 'Choose what to include, then print it or save it as a PDF.'],
+    title: 'Print a practice, or give it to players and parents',
+    steps: ['Open the practice.', 'Press "Print" on the schedule.', 'Choose what to include, then print it, save it as a PDF, or copy it into an email.'],
     words: 'pdf paper handout export email parents',
   },
   {
@@ -137,7 +137,7 @@ const TOPICS: Topic[] = [
   {
     group: 'Games',
     title: 'Print a bench card with substitutions',
-    steps: ['Open the game and press "Print / share".', 'Turn on "Substitutions" to list who comes out, who goes in and who moves position at each change.', 'Print it.'],
+    steps: ['Open the game and press "Print".', 'Turn on "Substitutions" to list who comes out, who goes in and who moves position at each change.', 'Print it.'],
     words: 'subs sheet card paper who goes in out',
   },
   // --- Plays ---
@@ -174,8 +174,20 @@ const TOPICS: Topic[] = [
   },
   {
     group: 'Working with other coaches',
+    title: 'Send a practice to another coach',
+    steps: [
+      'Open the practice and press the share button beside "Print".',
+      'Under "Coaches", pick coaches on your team or in your communities, or type email addresses, add a note if you like, and press Send.',
+      'Each coach gets an email with the outline and a link to read it. A coach who uses Dime Coach can add a copy to their own practices.',
+      'Or under "Link", make a link anyone can open, to paste into a text message or a group chat.',
+      'Your coach-only notes, player notes and uploaded files are never included. "Stop sharing" turns a link off.',
+    ],
+    words: 'email link text assistant forward give share send',
+  },
+  {
+    group: 'Working with other coaches',
     title: 'Share a drill, play or practice with a community',
-    steps: ['In the community, start a post and attach a drill, play or plan to it.', 'Or start from the thing itself: the share button on a drill, or "Share with a community" in a practice\'s "…" menu.', 'Other members can open it and press "Add to mine" to take a copy.'],
+    steps: ['In the community, start a post and attach a drill, play or plan to it.', 'Or start from the thing itself: the share button on a drill or a practice, then "Communities".', 'Other members can open it and press "Add to mine" to take a copy.'],
     words: 'post attach send give publish',
   },
   {
@@ -198,10 +210,11 @@ const TOPICS: Topic[] = [
     title: 'Run a club or league office as an organization',
     steps: [
       'Start a community under Communities, and ask the Dime Coach administrator to put it on the organization plan with the number of coach seats you need.',
-      'Open the community. Under "People", add your coaches by email. Each coach or assistant uses one seat.',
-      'Under "Leagues & teams", start a season, add a league for each sport and age group, and add its teams.',
+      'Open the community and switch to "Manage". The overview lists what needs your attention, each with the way to fix it.',
+      'Under "Coaches", invite your coaches by email. Each coach or assistant uses one seat.',
+      'Under "Seasons & teams", start a season, add a league for each sport and age group, and add its teams. The selectors at the top jump between seasons, leagues and teams.',
       'Use "Assign a coach" on each team, then "Build the schedule" on the league.',
-      'Use "Announcements" to write to everyone, or only to some coaches.',
+      '"Schedule" shows every game in one list. Under "More" are announcements, fields and gyms, usage, the activity log and settings.',
     ],
     tip: 'The organization owns its teams, so a team and its roster stay when a coach moves on. What the coach wrote is copied to their own account at that moment.',
     words: 'organization club league office enterprise seats quota coaches teams schedule season announcement admin',
@@ -220,7 +233,7 @@ const TOPICS: Topic[] = [
   {
     group: 'Organizations',
     title: 'Give parents a public schedule',
-    steps: ['In the organization, open "Settings".', 'Under "Public schedule page", choose a web address and your color, and save.', 'Turn on "Show the page to anyone with the link", then share the link.'],
+    steps: ['In the organization, switch to "Manage", open "More", then "Public schedule".', 'Under "Public schedule page", choose a web address and your color, and save.', 'Turn on "Show the page to anyone with the link", then share the link.'],
     tip: 'The page shows teams, game times, results and standings. It never shows coaches, rosters or players. Each team has a calendar link parents can subscribe to.',
     words: 'public page parents schedule standings results calendar feed subscribe link website',
   },
