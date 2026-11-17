@@ -167,29 +167,57 @@ export const Apron = ({ h }: { h: number }) => <rect className="court-apron" x={
 
 /** How wide one floorboard is drawn, in feet. Wider than a real board, so the boards can be made out at any size. */
 const BOARD = 0.9;
-/** Where along its length each board of the pattern has its end joint, so the joints are staggered as on a real floor. */
-const JOINTS = [3, 11, 6.5, 14, 1, 9, 12.5, 4.5];
-/** How much darker each board of the pattern is than the floor: boards are never quite one color. */
-const SHADES = [0, 0.05, 0.02, 0.07, 0.01, 0.045, 0, 0.06];
 /**
- * A wood floor, very faintly: boards running the length of the court, with staggered end joints
- * and slight differences of shade. It lies over the court and under everything drawn on it, and
- * only shows on a court colored as wood.
+ * The boards of the pattern, side by side. Each strip is two boards end to end, meeting at
+ * "joint" (so the joints are staggered as on a real floor), and each board has a brown of its own
+ * laid over the floor: a tint and how strongly it shows. No two neighbors are alike, since a wood
+ * floor is never one color.
+ */
+const BOARDS: { joint: number; a: [string, number]; b: [string, number] }[] = [
+  { joint: 3, a: ['#7a4a1c', 0.1], b: ['#fff1d0', 0.1] },
+  { joint: 11, a: ['#a8621f', 0.13], b: ['#5b3410', 0.06] },
+  { joint: 6.5, a: ['#fff1d0', 0.14], b: ['#8f5a22', 0.11] },
+  { joint: 14, a: ['#5b3410', 0.12], b: ['#c07a2e', 0.1] },
+  { joint: 1, a: ['#c07a2e', 0.08], b: ['#fff1d0', 0.06] },
+  { joint: 9, a: ['#8f5a22', 0.15], b: ['#7a4a1c', 0.04] },
+  { joint: 12.5, a: ['#fff1d0', 0.07], b: ['#a8621f', 0.14] },
+  { joint: 4.5, a: ['#6b3d14', 0.09], b: ['#c07a2e', 0.13] },
+  { joint: 8, a: ['#c98a3c', 0.14], b: ['#5b3410', 0.1] },
+  { joint: 15, a: ['#7a4a1c', 0.05], b: ['#fff1d0', 0.12] },
+  { joint: 2, a: ['#a8621f', 0.09], b: ['#6b3d14', 0.13] },
+  { joint: 10.5, a: ['#fff1d0', 0.11], b: ['#8f5a22', 0.07] },
+  { joint: 5.5, a: ['#5b3410', 0.08], b: ['#c98a3c', 0.15] },
+];
+/**
+ * A wood floor, faintly: boards running the length of the court, each a slightly different brown,
+ * with seams between them that can barely be made out. It lies over the court and under
+ * everything drawn on it, and only shows on a court colored as wood.
  */
 export function Grain({ h }: { h: number }) {
-  const tileW = BOARD * JOINTS.length;
+  const tileW = BOARD * BOARDS.length;
   const tileH = 16;
   return (
     <g className="court-grain" aria-hidden="true">
       <defs>
         <pattern id="court-boards" patternUnits="userSpaceOnUse" x={0} y={0} width={tileW} height={tileH}>
-          {JOINTS.map((joint, i) => (
-            <g key={i}>
-              <rect x={i * BOARD} y={0} width={BOARD} height={tileH} className="court-board-shade" style={{ fillOpacity: SHADES[i] }} />
-              <line x1={i * BOARD} y1={0} x2={i * BOARD} y2={tileH} className="court-board-seam" />
-              <line x1={i * BOARD} y1={joint} x2={(i + 1) * BOARD} y2={joint} className="court-board-seam" />
-            </g>
-          ))}
+          {BOARDS.map((board, i) => {
+            // Each strip has two joints. One board lies between them; the other runs from the second
+            // joint round the end of the pattern to the first, so that where the pattern repeats no
+            // line of joints runs straight across the floor.
+            const j1 = Math.min(board.joint, (board.joint + 7 + (i % 4)) % tileH);
+            const j2 = Math.max(board.joint, (board.joint + 7 + (i % 4)) % tileH);
+            const x = i * BOARD;
+            return (
+              <g key={i}>
+                <rect x={x} y={j1} width={BOARD} height={j2 - j1} fill={board.a[0]} fillOpacity={board.a[1]} />
+                <rect x={x} y={0} width={BOARD} height={j1} fill={board.b[0]} fillOpacity={board.b[1]} />
+                <rect x={x} y={j2} width={BOARD} height={tileH - j2} fill={board.b[0]} fillOpacity={board.b[1]} />
+                <line x1={x} y1={0} x2={x} y2={tileH} className="court-board-seam" />
+                <line x1={x} y1={j1} x2={x + BOARD} y2={j1} className="court-board-seam" />
+                <line x1={x} y1={j2} x2={x + BOARD} y2={j2} className="court-board-seam" />
+              </g>
+            );
+          })}
         </pattern>
       </defs>
       <rect x={-PAD} y={-OUT} width={COURT.width + PAD * 2} height={h + OUT * 2} fill="url(#court-boards)" />

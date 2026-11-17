@@ -14161,13 +14161,10 @@ button.cx-row:hover .cx-row-text strong {
 .court-grain {
   pointer-events: none;
 }
-.court-board-shade {
-  fill: #5b3410;
-}
 .court-board-seam {
   stroke: #5b3410;
-  stroke-opacity: 0.16;
-  stroke-width: 0.05;
+  stroke-opacity: 0.07;
+  stroke-width: 0.04;
 }
 /* Paper stays plain. */
 .sheet .court-grain {
