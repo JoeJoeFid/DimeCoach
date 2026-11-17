@@ -268,8 +268,16 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       : [];
     // Kept as it is here because someone worked on it, while the team calendar moved on.
     const ev = e.event;
-    const now = ev?.calendar_now;
-    if (ev && (ev.gone || now))
+    const said = ev?.calendar_now;
+    // What the team calendar says about this line. For a planned line that is its calendar event,
+    // since the line itself shows the plan's own date and time. Only a difference from what the
+    // line shows is worth saying.
+    const cal = ev && !ev.official && !ev.gone ? (said ?? (p ? ev : null)) : null;
+    const whenDiffers = !!cal && (cal.date !== e.date || (!!cal.start_time && cal.start_time !== (e.time || '')));
+    const placeDiffers = !!said && said.location !== ev!.location;
+    const titleDiffers = !!said && !p && said.title !== ev!.title;
+    const now = whenDiffers || placeDiffers || titleDiffers ? cal : null;
+    if (ev && (ev.gone || (said && now)))
       more.unshift({
         label: ev.gone ? 'Remove it here too' : 'Use the team calendar’s version',
         onSelect: () => act(() => api.followEvent(teamId, ev.id).then(load)),
@@ -302,8 +310,15 @@ export default function Plans({ kind }: { kind: PlanKind }) {
             </span>
           )}
           {now && !ev?.gone && (
-            <span className="kind warn" title="It was worked on in Dime Coach, so it is kept as it is. To take the change, choose “Use the team calendar’s version” under the three dots.">
-              Team calendar now says {[now.date !== ev!.date || now.start_time !== ev!.start_time ? `${fmtDateShort(now.date)}${now.start_time ? `, ${fmtClock(parseClock(now.start_time))}` : ''}` : '', now.location !== ev!.location ? now.location || 'no place' : '', now.title !== ev!.title ? `“${now.title}”` : ''].filter(Boolean).join(' · ')}
+            <span
+              className="kind warn"
+              title={
+                said
+                  ? 'It was worked on in Dime Coach, so it is kept as it is. To take the change, choose “Use the team calendar’s version” under the three dots.'
+                  : 'This plan’s date or start time is not what the team calendar says. Open it to change its time, or leave it if that is what you want.'
+              }
+            >
+              Team calendar {said ? 'now ' : ''}says {[whenDiffers ? `${fmtDateShort(now.date)}${now.start_time ? `, ${fmtClock(parseClock(now.start_time))}` : ''}` : '', placeDiffers ? now.location.split('\n')[0] || 'no place' : '', titleDiffers ? `“${now.title}”` : ''].filter(Boolean).join(' · ')}
             </span>
           )}
           <span className="ps-meta">

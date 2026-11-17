@@ -193,7 +193,10 @@ async function syncCalendar(team) {
           'INSERT INTO events (owner_id, team_id, uid, kind, title, date, start_time, end_time, location, notes) VALUES (?,?,?,?,?,?,?,?,?,?)',
           team.owner_id, team.id, ev.uid, ev.kind, ev.title, ev.date, ev.start_time, ev.end_time, ev.location, ev.notes,
         );
-      else if (eventTouched(row)) run('UPDATE events SET gone=0, src_json=? WHERE id=?', eventSource(ev), row.id);
+      // An event that was only planned, not changed itself, shows its plan's own time and place. Its
+      // calendar details can follow the calendar as long as it stays on the same day, so the plan still belongs to it.
+      else if (eventTouched(row) && (row.touched || ev.date !== row.date || (row.kind === 'game' && ev.title !== row.title)))
+        run('UPDATE events SET gone=0, src_json=? WHERE id=?', eventSource(ev), row.id);
       else
         run(
           "UPDATE events SET kind=?, title=?, date=?, start_time=?, end_time=?, location=?, notes=?, gone=0, src_json='' WHERE id=?",
