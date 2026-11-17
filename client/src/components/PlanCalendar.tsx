@@ -1,4 +1,4 @@
-import { useMemo, useState, type FocusEvent, type MouseEvent } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../App';
 import { KIND_LABEL, PLAN_STATE_LABEL, planStateOf, type ScheduleEntry } from '../schedule';
@@ -11,7 +11,7 @@ const iso = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad(d)}`;
 /** "2026-11-12" to the first of its month, as [year, month index]. */
 const monthOf = (date: string): [number, number] => [Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1];
 
-const PEEK_WIDTH = 320;
+export const PEEK_WIDTH = 320;
 /** How many of a practice's items the summary lists before saying how many more there are. */
 const PEEK_ITEMS = 7;
 
@@ -19,7 +19,7 @@ const PEEK_ITEMS = 7;
  * What pops up beside something on the calendar while the pointer is over it: when and where it
  * is, and for a practice that has been planned, what is in it and where the time goes.
  */
-function Peek({ entry, at, today }: { entry: ScheduleEntry; at: { left: number; top: number }; today: string }) {
+export function Peek({ entry, at, today }: { entry: ScheduleEntry; at: { left: number; top: number }; today: string }) {
   const { sportTags } = useApp();
   const plan = entry.plan;
   const state = planStateOf(entry);
@@ -32,8 +32,16 @@ function Peek({ entry, at, today }: { entry: ScheduleEntry; at: { left: number; 
   // A planned practice ends when its last item does. A calendar event says when it ends.
   const end = slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : entry.event?.end_time ? fmtClock(parseClock(entry.event.end_time)) : '';
   const location = plan?.location || entry.location;
+  // It starts level with what it describes, then moves up by however much of it would fall off
+  // the bottom of the screen. Its real height is measured, since it depends on what is in it.
+  const box = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState(at.top);
+  useLayoutEffect(() => {
+    const height = box.current?.offsetHeight ?? 0;
+    setTop(Math.max(8, Math.min(at.top, window.innerHeight - height - 8)));
+  }, [at.top, entry.key]);
   return (
-    <div className="cal-peek" role="tooltip" style={{ left: at.left, top: at.top, width: PEEK_WIDTH }}>
+    <div className="cal-peek" role="tooltip" ref={box} style={{ left: at.left, top, width: PEEK_WIDTH }}>
       <div className="cal-peek-top">
         <span className={`kind ${entry.kind === 'game' ? 'game' : entry.kind === 'practice' ? 'practice' : ''}`}>{KIND_LABEL[entry.kind]}</span>
         <span className={`cal-peek-state ${state}`}>{done && state === 'ready' ? 'Completed' : PLAN_STATE_LABEL[state]}</span>
@@ -101,11 +109,10 @@ export default function PlanCalendar({
   const [peek, setPeek] = useState<{ entry: ScheduleEntry; left: number; top: number } | null>(null);
   const showPeek = (entry: ScheduleEntry) => (ev: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>) => {
     const r = ev.currentTarget.getBoundingClientRect();
-    // Beside it on the right when there is room, else on the left. Kept on the screen top and bottom.
+    // Beside it on the right when there is room, else on the left. The summary keeps itself on the screen top and bottom.
     const right = r.right + 8 + PEEK_WIDTH <= window.innerWidth - 8;
     const left = right ? r.right + 8 : Math.max(8, r.left - 8 - PEEK_WIDTH);
-    const guess = 150 + Math.min(PEEK_ITEMS, entry.plan?.items.length ?? 0) * 26 + (entry.plan?.items.length ? 130 : 0);
-    setPeek({ entry, left, top: Math.max(8, Math.min(r.top - 8, window.innerHeight - guess - 8)) });
+    setPeek({ entry, left, top: r.top - 8 });
   };
   const hidePeek = () => setPeek(null);
 

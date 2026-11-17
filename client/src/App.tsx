@@ -700,7 +700,7 @@ function SharedBar() {
   const page = PAGE_PERMS.find(([re]) => re.test(pathname));
   const viewOnly = page && !app.can(page[1]);
   return (
-    <div className={`shared-bar ${viewOnly ? 'view-only' : ''}`} role="status">
+    <div className={`shared-bar ${access.system ? 'system' : viewOnly ? 'view-only' : ''}`} role="status">
       <span>
         {access.system ? (
           <>

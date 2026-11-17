@@ -13957,3 +13957,34 @@ button.cx-row:hover .cx-row-text strong {
     grid-template-columns: 1fr;
   }
 }
+
+/* The system administrator inside someone else's team: a red bar, so it cannot be mistaken for their own. */
+.shared-bar.system {
+  background: #b3261e;
+  border-bottom-color: #8c1d18;
+  color: #fff;
+  font-weight: 550;
+}
+
+/* Never taller than the screen, whatever is in it. */
+.cal-peek {
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+}
+
+/* The button on a practice's line that brings up its summary. */
+.ps-summary {
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ps-summary:hover,
+.ps-summary[aria-expanded='true'] {
+  color: var(--ink);
+}

@@ -236,6 +236,12 @@ addColumn('teams', 'calendar_url', "TEXT DEFAULT ''");
 // The last time a person clicked, typed or saved, written down at most once a minute.
 addColumn('users', 'last_action_at', 'TEXT');
 addColumn('teams', 'calendar_synced_at', "TEXT DEFAULT ''");
+// A calendar event follows the team calendar until someone works on it in Dime Coach. From then on
+// it is kept as it is here: "touched" says so, "gone" that the calendar no longer has it, and
+// "src_json" what the calendar says about it now.
+addColumn('events', 'touched', 'INTEGER DEFAULT 0');
+addColumn('events', 'gone', 'INTEGER DEFAULT 0');
+addColumn('events', 'src_json', "TEXT DEFAULT ''");
 // A game-day plan. It is built like a practice but kept out of the dashboard's category totals.
 addColumn('plans', 'is_game', 'INTEGER DEFAULT 0');
 // The coach's own jottings for a plan, and whether they go on the printed sheet.

@@ -157,16 +157,46 @@ const calendarFail = (res, e) => {
   console.error(e);
   return res.status(500).json({ error: 'The schedule sync failed unexpectedly.' });
 };
+/**
+ * Someone has worked on this event in Dime Coach: said what it is, or made a plan for it. A plan
+ * belongs to an event the way the schedule pairs them: same day, and for a game the same title.
+ */
+const eventTouched = (ev) =>
+  !!ev.touched ||
+  !!get("SELECT 1 FROM plans WHERE team_id=? AND date=? AND is_template=0 AND kind='practice' AND (title=? OR ?<>'game') LIMIT 1", ev.team_id, ev.date, ev.title, ev.kind);
+const EVENT_FIELDS = ['title', 'date', 'start_time', 'end_time', 'location', 'notes'];
+const eventSource = (ev) => JSON.stringify(Object.fromEntries(EVENT_FIELDS.map((k) => [k, ev[k] ?? ''])));
+/**
+ * Reads the team calendar again. An event nobody has touched here follows the calendar: it
+ * changes when the calendar changes and goes when the calendar drops it. An event someone has
+ * worked on here is kept exactly as it is, and only remembers what the calendar says now.
+ */
 async function syncCalendar(team) {
   const events = await fetchCalendar(team.calendar_url);
   tx(() => {
     // Games set by the team's league are not from this calendar, and stay.
-    run("DELETE FROM events WHERE team_id=? AND uid NOT LIKE 'league-%'", team.id);
-    for (const ev of events)
-      run(
-        'INSERT INTO events (owner_id, team_id, uid, kind, title, date, start_time, end_time, location, notes) VALUES (?,?,?,?,?,?,?,?,?,?)',
-        team.owner_id, team.id, ev.uid, ev.kind, ev.title, ev.date, ev.start_time, ev.end_time, ev.location, ev.notes,
-      );
+    const old = new Map();
+    for (const row of all("SELECT * FROM events WHERE team_id=? AND uid NOT LIKE 'league-%' ORDER BY id", team.id)) old.set(row.uid, [...(old.get(row.uid) || []), row]);
+    for (const ev of events) {
+      const row = old.get(ev.uid)?.shift();
+      if (!row)
+        run(
+          'INSERT INTO events (owner_id, team_id, uid, kind, title, date, start_time, end_time, location, notes) VALUES (?,?,?,?,?,?,?,?,?,?)',
+          team.owner_id, team.id, ev.uid, ev.kind, ev.title, ev.date, ev.start_time, ev.end_time, ev.location, ev.notes,
+        );
+      else if (eventTouched(row)) run('UPDATE events SET gone=0, src_json=? WHERE id=?', eventSource(ev), row.id);
+      else
+        run(
+          "UPDATE events SET kind=?, title=?, date=?, start_time=?, end_time=?, location=?, notes=?, gone=0, src_json='' WHERE id=?",
+          ev.kind, ev.title, ev.date, ev.start_time, ev.end_time, ev.location, ev.notes, row.id,
+        );
+    }
+    // What the calendar no longer has: gone here too, unless someone has worked on it here.
+    for (const rows of old.values())
+      for (const row of rows) {
+        if (eventTouched(row)) run("UPDATE events SET gone=1, src_json='' WHERE id=?", row.id);
+        else run('DELETE FROM events WHERE id=?', row.id);
+      }
     // Where the coach has said what an event really is, that wins over the guess made from its title.
     run(
       `UPDATE events SET kind=(SELECT k.kind FROM event_kinds k WHERE k.team_id=events.team_id AND k.uid=events.uid)
@@ -177,7 +207,40 @@ async function syncCalendar(team) {
   });
   return events.length;
 }
-// Changes what a calendar event counts as. Its date, time and place still come from the calendar.
+/** An event as the schedule shows it, with what the team calendar now says when that differs from what is kept here. */
+function eventOut(ev) {
+  let now = null;
+  try {
+    const src = ev.src_json ? JSON.parse(ev.src_json) : null;
+    if (src && ['title', 'date', 'start_time', 'location'].some((k) => (src[k] ?? '') !== (ev[k] ?? ''))) now = { title: src.title, date: src.date, start_time: src.start_time, location: src.location };
+  } catch {
+    /* nothing remembered */
+  }
+  return {
+    id: ev.id, kind: ev.kind, title: ev.title, date: ev.date, start_time: ev.start_time, end_time: ev.end_time, location: ev.location, notes: ev.notes,
+    official: String(ev.uid).startsWith('league-') ? 1 : 0, gone: !!ev.gone, calendar_now: now,
+  };
+}
+/** Stops keeping an event as it is here: it takes the team calendar's version, or goes if the calendar dropped it. */
+app.post('/api/teams/:id/events/:eventId/follow', (req, res) => {
+  if (!ownTeam(req, req.params.id)) return notFound(res);
+  const ev = get("SELECT * FROM events WHERE id=? AND team_id=? AND uid NOT LIKE 'league-%'", id(req.params.eventId), id(req.params.id));
+  if (!ev) return notFound(res);
+  tx(() => {
+    run('DELETE FROM event_kinds WHERE team_id=? AND uid=?', ev.team_id, ev.uid);
+    if (ev.gone) return run('DELETE FROM events WHERE id=?', ev.id);
+    let src = null;
+    try {
+      src = ev.src_json ? JSON.parse(ev.src_json) : null;
+    } catch {
+      /* nothing remembered */
+    }
+    if (src) run('UPDATE events SET title=?, date=?, start_time=?, end_time=?, location=?, notes=? WHERE id=?', src.title, src.date, src.start_time, src.end_time, src.location, src.notes, ev.id);
+    run("UPDATE events SET touched=0, src_json='' WHERE id=?", ev.id);
+  });
+  res.json({ ok: true });
+});
+// Changes what a calendar event counts as. That is an edit made here, so from now on the event is kept as it is.
 app.put('/api/teams/:id/events/:eventId', (req, res) => {
   if (!ownTeam(req, req.params.id)) return notFound(res);
   const ev = get('SELECT * FROM events WHERE id=? AND team_id=?', id(req.params.eventId), id(req.params.id));
@@ -185,10 +248,10 @@ app.put('/api/teams/:id/events/:eventId', (req, res) => {
   const kind = str(req.body.kind);
   if (!['practice', 'game', 'other'].includes(kind)) return res.status(400).json({ error: 'Choose practice, game or other event.' });
   tx(() => {
-    run('UPDATE events SET kind=? WHERE id=?', kind, ev.id);
+    run('UPDATE events SET kind=?, touched=1 WHERE id=?', kind, ev.id);
     run('INSERT INTO event_kinds (team_id, uid, kind) VALUES (?,?,?) ON CONFLICT(team_id, uid) DO UPDATE SET kind=excluded.kind', ev.team_id, ev.uid, kind);
   });
-  res.json(get('SELECT id, kind, title, date, start_time, end_time, location, notes FROM events WHERE id=?', ev.id));
+  res.json(eventOut(get('SELECT * FROM events WHERE id=?', ev.id)));
 });
 // Saves (or clears) the calendar link, then syncs it.
 app.put('/api/teams/:id/calendar', async (req, res) => {
@@ -225,12 +288,7 @@ app.post('/api/teams/:id/calendar/sync', async (req, res) => {
 app.get('/api/teams/:id/events', (req, res) => {
   if (!ownTeam(req, req.params.id)) return notFound(res);
   const from = /^\d{4}-\d{2}-\d{2}$/.test(str(req.query.from)) ? str(req.query.from) : '0000-00-00';
-  res.json(
-    all(
-      "SELECT id, kind, title, date, start_time, end_time, location, notes, uid LIKE 'league-%' AS official FROM events WHERE team_id=? AND date>=? ORDER BY date, start_time, id",
-      id(req.params.id), from,
-    ),
-  );
+  res.json(all('SELECT * FROM events WHERE team_id=? AND date>=? ORDER BY date, start_time, id', id(req.params.id), from).map(eventOut));
 });
 
 // --- Players --------------------------------------------------------------

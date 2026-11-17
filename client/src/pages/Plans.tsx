@@ -6,10 +6,10 @@ import { useApp } from '../App';
 import type { Plan, PlanKind, PlanSummary, ScheduleEvent } from '../types';
 import { fmtClock, fmtDateShort, fmtDuration, fmtSynced, parseClock, planMinutes, todayISO } from '../util';
 import { buildSchedule, withoutDuplicateBlanks, nextEntry, planStateOf, type ScheduleEntry } from '../schedule';
-import { MoreMenu, TagChip, type MenuItem } from '../components/bits';
+import { MoreMenu, type MenuItem } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, useCompletedDeletes, usePendingDeletes } from '../components/toasts';
-import PlanCalendar from '../components/PlanCalendar';
+import PlanCalendar, { PEEK_WIDTH, Peek } from '../components/PlanCalendar';
 import { CommunityPicker, ShareDialog } from '../components/community';
 
 type View = 'list' | 'calendar';
@@ -58,6 +58,25 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const [syncing, setSyncing] = useState(false);
   const [fromCommunity, setFromCommunity] = useState(false);
   const [sharing, setSharing] = useState<Plan | null>(null);
+  // The practice whose summary is showing, and where on the screen it goes.
+  const [summary, setSummary] = useState<{ entry: ScheduleEntry; left: number; top: number } | null>(null);
+  // It goes away on a click anywhere else, on Escape, and when the page moves under it.
+  useEffect(() => {
+    if (!summary) return;
+    const away = (ev: Event) => !(ev.target as HTMLElement).closest?.('.ps-summary') && setSummary(null);
+    const esc = (ev: KeyboardEvent) => ev.key === 'Escape' && setSummary(null);
+    const moved = () => setSummary(null);
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
+    window.addEventListener('scroll', moved, true);
+    window.addEventListener('resize', moved);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc);
+      window.removeEventListener('scroll', moved, true);
+      window.removeEventListener('resize', moved);
+    };
+  }, [summary]);
   // A link can ask for the calendar outright, as "View calendar" on the dashboard does.
   const [view, setView] = useState<View>(() => (new URLSearchParams(window.location.search).get('view') === 'calendar' ? 'calendar' : savedView()));
   /** Which kind of thing is listed. The list itself runs through the whole season, month after month. */
@@ -234,7 +253,6 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           : fmtClock(start);
 
     const d = new Date(`${e.date}T12:00:00`);
-    const focus = p && mins ? sportTags.filter((t) => mins.byTag.has(t.id)) : [];
     const count = p ? p.items.filter((it) => it.kind === 'item').length : 0;
     // What the pill on the right says: a game is a game; otherwise how far along the plan is.
     const pill =
@@ -248,6 +266,14 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           { label: 'Delete', onSelect: () => remove(p, noun), danger: true },
         ]
       : [];
+    // Kept as it is here because someone worked on it, while the team calendar moved on.
+    const ev = e.event;
+    const now = ev?.calendar_now;
+    if (ev && (ev.gone || now))
+      more.unshift({
+        label: ev.gone ? 'Remove it here too' : 'Use the team calendar’s version',
+        onSelect: () => act(() => api.followEvent(teamId, ev.id).then(load)),
+      });
 
     return (
       <li
@@ -270,6 +296,16 @@ export default function Plans({ kind }: { kind: PlanKind }) {
             <span className="ps-title">{e.title}</span>
           )}
           {!!e.event?.official && <span className="kind league" title="Set by your organization. It changes there, not here.">League game</span>}
+          {ev?.gone && (
+            <span className="kind warn" title="It was worked on in Dime Coach, so it is kept. To drop it, choose “Remove it here too” under the three dots.">
+              No longer on the team calendar
+            </span>
+          )}
+          {now && !ev?.gone && (
+            <span className="kind warn" title="It was worked on in Dime Coach, so it is kept as it is. To take the change, choose “Use the team calendar’s version” under the three dots.">
+              Team calendar now says {[now.date !== ev!.date || now.start_time !== ev!.start_time ? `${fmtDateShort(now.date)}${now.start_time ? `, ${fmtClock(parseClock(now.start_time))}` : ''}` : '', now.location !== ev!.location ? now.location || 'no place' : '', now.title !== ev!.title ? `“${now.title}”` : ''].filter(Boolean).join(' · ')}
+            </span>
+          )}
           <span className="ps-meta">
             {when && (
               <span>
@@ -292,19 +328,21 @@ export default function Plans({ kind }: { kind: PlanKind }) {
               <span>
                 {count} item{count === 1 ? '' : 's'}
               </span>
-              {focus.length > 0 && (
-                <details className="ps-focus">
-                  <summary>
-                    {focus.length} focus area{focus.length === 1 ? '' : 's'}
-                    <Icon d={icons.chevron} />
-                  </summary>
-                  <span className="ps-focus-list chips">
-                    {focus.map((t) => (
-                      <TagChip key={t.id} tag={t} minutes={mins!.byTag.get(t.id)} />
-                    ))}
-                  </span>
-                </details>
-              )}
+              <button
+                type="button"
+                className="ps-focus ps-summary"
+                aria-expanded={summary?.entry.key === e.key}
+                title="What is in it, and where the time goes"
+                onClick={(ev) => {
+                  if (summary?.entry.key === e.key) return setSummary(null);
+                  const r = ev.currentTarget.getBoundingClientRect();
+                  // Beside the button on the right when there is room, else on its left. The summary keeps itself on the screen.
+                  const right = r.right + 8 + PEEK_WIDTH <= window.innerWidth - 8;
+                  setSummary({ entry: e, left: right ? r.right + 8 : Math.max(8, r.left - 8 - PEEK_WIDTH), top: r.top - 8 });
+                }}
+              >
+                Summary
+              </button>
             </>
           )}
         </span>
@@ -400,6 +438,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
         )}
       </div>
       {error && <p className="error">{error}</p>}
+      {summary && <Peek entry={summary.entry} at={summary} today={todayISO()} />}
       {sharing && <ShareDialog kind="plan" itemId={sharing.id} title={sharing.title || (kind === 'homework' ? 'Homework' : 'Practice')} onClose={() => setSharing(null)} />}
       {fromCommunity && <CommunityPicker kind="plan" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plans/${id}`)} />}
 

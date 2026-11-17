@@ -30,6 +30,10 @@ export interface ScheduleEvent {
   notes: string;
   /** A league game set by the team's organization, not read from a linked calendar. */
   official?: number | boolean;
+  /** It was worked on here, and the team calendar has since dropped it. It is kept anyway. */
+  gone?: boolean;
+  /** It was worked on here, and the team calendar now says something else about it. */
+  calendar_now?: { title: string; date: string; start_time: string; location: string } | null;
 }
 export interface Tag {
   id: number;

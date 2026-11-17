@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser, type UserActivity } from '../api';
 import { useApp } from '../App';
 import { Field, Modal, MoreMenu } from '../components/bits';
@@ -64,20 +64,24 @@ function StatusCell({ u }: { u: SystemUser }) {
   if (u.sign_ins === 0) return pill('out', 'Never signed in', 'Has an account and has not signed in yet', note);
   return pill('out', 'Logged out', 'Not signed in', note);
 }
-const SECTIONS = [
-  ['people', 'People'],
-  ['signup', 'Sign-up and email'],
-  ['accessibility', 'Accessibility'],
-  ['library', 'Coach library'],
-  ['storage', 'Upload space'],
-  ['backup', 'Backup'],
-];
-
 /**
  * For the system administrator only: every account, what each may do, and how much upload
  * space each has. Accounts can be created here too, with their upload space set from the start.
  */
+/** The page in tabs, by what is being looked after. The tab is in the address, so a link can open one. */
+type SysTab = 'people' | 'access' | 'organizations' | 'content' | 'system';
+const SYS_TABS: [SysTab, string][] = [
+  ['people', 'People'],
+  ['access', 'Access'],
+  ['organizations', 'Organizations'],
+  ['content', 'Content'],
+  ['system', 'System'],
+];
+
 export default function SystemAdmin() {
+  const [params, setParams] = useSearchParams();
+  const asked = params.get('tab') as SysTab | null;
+  const tab: SysTab = SYS_TABS.some(([id]) => id === asked) ? asked! : 'people';
   const { user: me } = useApp();
   const [state, setState] = useState<SystemState | null>(null);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
@@ -247,13 +251,6 @@ export default function SystemAdmin() {
           <h1>System admin</h1>
         </div>
       </div>
-      <nav className="sys-jump" aria-label="Sections of this page">
-        {SECTIONS.map(([id, label]) => (
-          <a key={id} href={`#${id}`}>
-            {label}
-          </a>
-        ))}
-      </nav>
       {error && <p className="error">{error}</p>}
       {notice && <p className="banner ok">{notice}</p>}
 
@@ -261,6 +258,15 @@ export default function SystemAdmin() {
         <p className="muted">Loading…</p>
       ) : (
         <>
+          <nav className="cx-tabs sys-tabs" role="tablist" aria-label="System administration">
+            {SYS_TABS.map(([id, label]) => (
+              <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setParams(id === 'people' ? {} : { tab: id }, { replace: true })}>
+                {label}
+              </button>
+            ))}
+          </nav>
+          {tab === 'people' && (
+            <>
           <div className="sys-tiles">
             <div className="sys-tile">
               <div className="value">{users.length}</div>
@@ -437,21 +443,28 @@ export default function SystemAdmin() {
           </div>
 
 
+            </>
+          )}
+          {tab === 'access' && (
+            <>
           <h2 className="sys-section" id="signup">
             Sign-up and email
           </h2>
           {settings && <RegistrationCard settings={settings} run={run} />}
 
-          <h2 className="sys-section" id="accessibility">
-            Accessibility
-          </h2>
-          {settings && <AccessibilityCard settings={settings} run={run} />}
-
+            </>
+          )}
+          {tab === 'organizations' && (
+            <>
           <h2 className="sys-section" id="organizations">
             Organizations
           </h2>
           <CommunityPlans />
 
+            </>
+          )}
+          {tab === 'content' && (
+            <>
           <h2 className="sys-section" id="library">
             Coach library
           </h2>
@@ -465,6 +478,10 @@ export default function SystemAdmin() {
               Manage the coach library
             </Link>
           </div>
+            </>
+          )}
+          {tab === 'system' && (
+            <>
           <h2 className="sys-section" id="storage">
             Upload space
           </h2>
@@ -509,6 +526,12 @@ export default function SystemAdmin() {
               Download a backup
             </a>
           </div>
+          <h2 className="sys-section" id="accessibility">
+            Accessibility
+          </h2>
+          {settings && <AccessibilityCard settings={settings} run={run} />}
+            </>
+          )}
         </>
       )}
       {viewing && <ActivityModal person={viewing} onClose={() => setViewing(null)} />}
