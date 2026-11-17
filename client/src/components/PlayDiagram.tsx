@@ -12,6 +12,12 @@ export const courtHeight = (court: Play['court']) =>
   isDiamond(court) ? DIAMONDS[court].height : isGridiron(court) ? GRIDIRONS[court].height : isVolley(court) ? VOLLEY_COURTS[court].height : court === 'full' ? COURT.half * 2 : COURT.half;
 const PAD = 1.2;
 export const VIEW_PAD = PAD;
+/** Room past each baseline, in feet, so a player can stand out of bounds for a throw-in. */
+export const OUT = 4.5;
+/** The part of the drawing that is shown: the court, a sliver at each side, and the room past each baseline. */
+export const viewBoxFor = (h: number) => `${-PAD} ${-OUT} ${COURT.width + PAD * 2} ${h + OUT * 2}`;
+/** The class that colors the court for a play's chosen look. */
+export const courtClass = (theme?: string) => (theme === 'wood' ? 'court-wood' : theme === 'dark' ? 'court-dark' : '');
 export const MARK_R = 1.5;
 
 export const isLine = (o: PlayObject): o is PlayLine => o.type === 'line';
@@ -39,6 +45,18 @@ function HalfCourt() {
       <rect x={lx} y={0} width={laneW} height={ftY} />
       <path d={`M ${cx - ftR} ${ftY} A ${ftR} ${ftR} 0 0 0 ${cx + ftR} ${ftY}`} />
       <path d={`M ${cx - ftR} ${ftY} A ${ftR} ${ftR} 0 0 1 ${cx + ftR} ${ftY}`} strokeDasharray="1 1" />
+      {/* along each side of the lane: the block, then three hash marks, where players line up for a free throw */}
+      {[lx, lx + laneW].map((x, side) => {
+        const out = side === 0 ? -1 : 1;
+        return (
+          <g key={side}>
+            <rect className="court-block" x={out < 0 ? x - 0.7 : x} y={7} width={0.7} height={1} />
+            {[11, 14, 17].map((y) => (
+              <line key={y} x1={x} y1={y} x2={x + out * 0.7} y2={y} />
+            ))}
+          </g>
+        );
+      })}
       {/* three point line: short straight runs, then the arc */}
       <path d={`M ${cx - r} 0 L ${cx - r} ${by} A ${r} ${r} 0 0 0 ${cx + r} ${by} L ${cx + r} 0`} />
       {/* backboard and rim */}
@@ -143,6 +161,9 @@ function VolleyballCourt({ court }: { court: 'vfull' | 'vhalf' }) {
     </g>
   );
 }
+
+/** The ground around the court, behind everything: where a player stands out of bounds. */
+export const Apron = ({ h }: { h: number }) => <rect className="court-apron" x={-PAD} y={-OUT} width={COURT.width + PAD * 2} height={h + OUT * 2} />;
 
 export function Court({ court, flipped }: { court: Play['court']; flipped: boolean }) {
   const { width: W, half: H } = COURT;
@@ -441,10 +462,11 @@ export function MarkShape({ mark, selected, court }: { mark: PlayMark; selected?
 }
 
 /** A finished, non-interactive drawing of one step. Shapes sit under the lines, and marks on top. */
-export function PlayDiagram({ play, frame, className = '' }: { play: Pick<Play, 'court' | 'flipped'>; frame: PlayFrame; className?: string }) {
+export function PlayDiagram({ play, frame, className = '' }: { play: Pick<Play, 'court' | 'flipped' | 'theme'>; frame: PlayFrame; className?: string }) {
   const h = courtHeight(play.court);
   return (
-    <svg className={`play-svg ${className}`} viewBox={`${-PAD} ${-PAD} ${COURT.width + PAD * 2} ${h + PAD * 2}`} role="img" aria-label={frame.note || 'Play diagram'}>
+    <svg className={`play-svg ${courtClass(play.theme)} ${className}`} viewBox={viewBoxFor(h)} role="img" aria-label={frame.note || 'Play diagram'}>
+      <Apron h={h} />
       <Court court={play.court} flipped={play.flipped} />
       {frame.objects.filter(isShape).map((o) => (
         <ShapeView key={o.id} shape={o} />

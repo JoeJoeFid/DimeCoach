@@ -78,7 +78,7 @@ const linksOf = (json) => {
 export const tagNames = (table, col, rowId) => all(`SELECT t.name, t.color FROM ${table} x JOIN tags t ON t.id=x.tag_id WHERE x.${col}=? ORDER BY t.name`, rowId);
 const stations = (json) => (Array.isArray(parse(json, [])) ? parse(json, []) : []).map((g) => ({ name: str(g?.name), notes_html: str(g?.notes_html, 20000), members: [] }));
 export const playView = (p) => ({
-  id: p.id, name: p.name, category: p.category, labels: parse(p.labels_json, []), court: p.court, flipped: !!p.flipped,
+  id: p.id, name: p.name, category: p.category, labels: parse(p.labels_json, []), court: p.court, flipped: !!p.flipped, theme: p.theme || '',
   notes: p.notes, frames: parse(p.frames_json, [{ note: '', objects: [] }]), links: linksOf(p.attachments_json),
 });
 const playsOf = (json, ownerId) =>
@@ -109,7 +109,7 @@ export function summaryOf(kind, row) {
 /** What to draw on a shared thing's card: a play's first step, or the first lines of a practice. */
 function artOf(kind, row) {
   const play = kind === 'play' ? row : kind === 'drill' ? playsOf(row.plays_json, row.owner_id)[0] : null;
-  if (play) return { play: { court: play.court, flipped: !!play.flipped, frame: parse(play.frames_json, [])[0] ?? { note: '', objects: [] } } };
+  if (play) return { play: { court: play.court, flipped: !!play.flipped, theme: play.theme || '', frame: parse(play.frames_json, [])[0] ?? { note: '', objects: [] } } };
   if (kind === 'plan') return { lines: planItems(row.id).slice(0, 4).map((it) => ({ kind: it.kind, title: it.title, duration_min: it.duration_min })) };
   // A drill with no play attached: the start of its notes, as plain words.
   const words = String(row.notes_html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
@@ -162,9 +162,9 @@ function mapTags(names, ownerId, sportId) {
 export function copyPlay(p, ownerId, sportId, made) {
   if (made.has(p.id)) return made.get(p.id);
   const r = run(
-    'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, notes, frames_json, attachments_json) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, notes, frames_json, attachments_json, theme) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     ownerId, sportId, p.name, p.category, p.labels_json, p.court, p.flipped ? 1 : 0, p.notes, p.frames_json,
-    JSON.stringify({ images: [], videos: [], links: linksOf(p.attachments_json) }),
+    JSON.stringify({ images: [], videos: [], links: linksOf(p.attachments_json) }), p.theme || '',
   );
   made.set(p.id, Number(r.lastInsertRowid));
   return made.get(p.id);

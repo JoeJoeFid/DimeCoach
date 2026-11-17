@@ -14069,3 +14069,90 @@ button.cx-row:hover .cx-row-text strong {
   user-select: none;
   -webkit-user-drag: none;
 }
+
+/* ---------- How a court is colored ---------- */
+/* The ground past the baselines, where a player stands for a throw-in. Plain courts leave it clear. */
+.court-apron {
+  fill: var(--court-apron, transparent);
+}
+/* These are pictures of a floor, so they name their own colors: a wood court looks the same in light and dark mode. */
+.play-svg.court-wood {
+  --court-floor: #e8c891;
+  --court-apron: #c79a5b;
+  --court-line: #fffaf0;
+  --court-ink: #24160a;
+}
+.play-svg.court-dark {
+  --court-floor: #14171c;
+  --court-apron: #0a0c0f;
+  --court-line: #7c8694;
+  --court-ink: #ffffff;
+}
+/* On paper every court is the plain white one, whatever it looks like on screen. */
+.sheet .play-svg.court-wood,
+.sheet .play-svg.court-dark {
+  --court-floor: #ffffff;
+  --court-apron: transparent;
+  --court-line: #9a9a93;
+  --court-ink: #000000;
+}
+.play-about {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
+}
+.play-about > .field.grow {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.play-about > .field:not(.grow) {
+  flex: none;
+}
+.court-looks {
+  display: flex;
+  gap: 8px;
+}
+.court-look {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.court-look.on {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.court-look-swatch {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--court-floor);
+  color: var(--court-ink);
+  font-size: 0.9rem;
+}
+.court-look.wood .court-look-swatch {
+  background: #e8c891;
+  color: #24160a;
+}
+.court-look.dark .court-look-swatch {
+  background: #14171c;
+  color: #ffffff;
+}
+
+/* The blocks on the lane are filled in, as they are painted on a floor. */
+.court-lines .court-block {
+  fill: var(--court-line);
+}

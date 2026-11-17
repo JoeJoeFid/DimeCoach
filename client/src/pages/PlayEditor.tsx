@@ -25,7 +25,10 @@ import {
   TEXT_SIZE,
   textBox,
   type Pt,
-  VIEW_PAD,
+  OUT,
+  Apron,
+  courtClass,
+  viewBoxFor,
 } from '../components/PlayDiagram';
 import PlayAnimation from '../components/PlayAnimation';
 import { ShareDialog } from '../components/community';
@@ -156,6 +159,13 @@ type Drag =
   | { kind: 'draw'; id: string }
   | { kind: 'group'; last: Pt; moved: boolean }
   | { kind: 'area'; start: Pt };
+
+/** The ways a court can be colored, with what each is for. */
+const COURT_LOOKS: ['' | 'wood' | 'dark', string, string][] = [
+  ['', 'Standard', 'As the app draws it: a plain court that follows light or dark mode'],
+  ['wood', 'Wood', 'A light wood floor'],
+  ['dark', 'Dark', 'A dark court, with players in white'],
+];
 
 export default function PlayEditor() {
   const { id } = useParams();
@@ -368,7 +378,8 @@ export default function PlayEditor() {
     const m = svg.current!.getScreenCTM()!.inverse();
     const x = e.clientX * m.a + e.clientY * m.c + m.e;
     const y = e.clientX * m.b + e.clientY * m.d + m.f;
-    return [Math.min(COURT.width + 1, Math.max(-1, x)), Math.min(h + 1, Math.max(-1, y))];
+    // A little past each sideline, and out past each baseline as far as the drawing shows.
+    return [Math.min(COURT.width + 1, Math.max(-1, x)), Math.min(h + OUT - 1, Math.max(1 - OUT, y))];
   };
   const capture = (e: RPointerEvent) => svg.current?.setPointerCapture(e.pointerId);
 
@@ -929,9 +940,24 @@ export default function PlayEditor() {
               />
             </Field>
           </div>
-          <Field label="About this play">
-            <textarea className="input" placeholder="When to call it, what to look for" value={play.notes} onChange={(e) => update({ notes: e.target.value })} />
-          </Field>
+          <div className="play-about">
+            <Field label="About this play" grow>
+              <textarea className="input" placeholder="When to call it, what to look for" value={play.notes} onChange={(e) => update({ notes: e.target.value })} />
+            </Field>
+            <div className="field">
+              <span className="field-label">{surfaceWord(sport) === 'court' ? 'Court color' : 'Field color'}</span>
+              <div className="court-looks" role="group" aria-label="How the court is colored">
+                {COURT_LOOKS.map(([id, label, hint]) => (
+                  <button key={id} type="button" className={`court-look ${id || 'plain'} ${(play.theme || '') === id ? 'on' : ''}`} aria-pressed={(play.theme || '') === id} title={hint} onClick={() => update({ theme: id })}>
+                    <span className="court-look-swatch" aria-hidden="true">
+                      <b>1</b>
+                    </span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
         <div className="plan-summary">
           <div className="head-actions">
@@ -1223,8 +1249,8 @@ export default function PlayEditor() {
         <div className="card builder-stage">
           <svg
             ref={svg}
-            className={`play-svg editing tool-${tool} ${aim ? 'aiming' : ''} ${carry ? 'drop-ready' : ''}`}
-            viewBox={`${-VIEW_PAD} ${-VIEW_PAD} ${COURT.width + VIEW_PAD * 2} ${h + VIEW_PAD * 2}`}
+            className={`play-svg editing tool-${tool} ${aim ? 'aiming' : ''} ${carry ? 'drop-ready' : ''} ${courtClass(play.theme)}`}
+            viewBox={viewBoxFor(h)}
             onPointerDownCapture={(e) => {
               // Words on the page that were swept up in a text selection (the court's own labels among
               // them) would be picked up and dragged by the browser at this press, and nothing on the
@@ -1241,6 +1267,7 @@ export default function PlayEditor() {
             role="application"
             aria-label={`Court for step ${index + 1}`}
           >
+            <Apron h={h} />
             <Court court={play.court} flipped={play.flipped} />
             {frame.objects.filter(isShape).map((o) => (
               <g key={o.id} onPointerDown={(e) => onObjectDown(e, o)}>

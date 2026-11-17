@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Play } from '../types';
 import { beatsOf, locate, ordinal, snapshot, timeline } from '../playAnimation';
-import { COURT, Court, LineShape, MarkShape, ShapeView, VIEW_PAD, courtHeight, isLine, isShape } from './PlayDiagram';
+import { Apron, Court, LineShape, MarkShape, ShapeView, courtClass, courtHeight, isLine, isShape, viewBoxFor } from './PlayDiagram';
 
 const SPEEDS = [0.5, 1, 2];
 
@@ -9,7 +9,7 @@ const SPEEDS = [0.5, 1, 2];
  * Plays a play: each step in turn, and within a step each group of movement in its order.
  * Players run their lines, the ball flies on passes, and the circle moves to whoever has it.
  */
-export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Play, 'frames' | 'court' | 'flipped'>; startFrame?: number }) {
+export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Play, 'frames' | 'court' | 'flipped' | 'theme'>; startFrame?: number }) {
   const { segments, total } = useMemo(() => timeline(play, startFrame), [play, startFrame]);
   const [ms, setMs] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -52,7 +52,8 @@ export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Pla
 
   return (
     <div className="anim">
-      <svg className="play-svg anim-court" viewBox={`${-VIEW_PAD} ${-VIEW_PAD} ${COURT.width + VIEW_PAD * 2} ${h + VIEW_PAD * 2}`} role="img" aria-label={`Animation, ${caption}`}>
+      <svg className={`play-svg anim-court ${courtClass(play.theme)}`} viewBox={viewBoxFor(h)} role="img" aria-label={`Animation, ${caption}`}>
+        <Apron h={h} />
         <Court court={play.court} flipped={play.flipped} />
         {frame.objects.filter(isShape).map((o) => (
           <ShapeView key={o.id} shape={o} />

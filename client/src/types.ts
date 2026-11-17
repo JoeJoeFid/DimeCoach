@@ -136,6 +136,8 @@ export interface Play {
   labels: string[];
   /** What the play is drawn on: a basketball court, a baseball field or a football field. See sports.ts. */
   court: 'half' | 'full' | 'infield' | 'diamond' | 'gridiron' | 'redzone' | 'vfull' | 'vhalf';
+  /** How the court is colored: '' as the app draws it, light wood, or dark with white players. */
+  theme?: '' | 'wood' | 'dark';
   /** Half court only: true when the basket is drawn at the bottom. */
   flipped: boolean;
   notes: string;

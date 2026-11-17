@@ -89,7 +89,7 @@ const attachmentsJson = (b, ownerId) =>
 const playOut = (p) => ({
   ...attachmentsOut(p),
   id: p.id, sport_id: p.sport_id, name: p.name, category: p.category, labels: parse(p.labels_json, []),
-  court: p.court, flipped: !!p.flipped, notes: p.notes, frames: parse(p.frames_json, [{ note: '', objects: [] }]),
+  court: p.court, flipped: !!p.flipped, theme: p.theme || '', notes: p.notes, frames: parse(p.frames_json, [{ note: '', objects: [] }]),
   updated_at: p.updated_at,
 });
 
@@ -97,6 +97,7 @@ const playOut = (p) => ({
 /** The surfaces a play can be drawn on: basketball courts, baseball fields and football fields. */
 const COURTS = ['half', 'full', 'infield', 'diamond', 'gridiron', 'redzone', 'vfull', 'vhalf'];
 const cleanCourt = (v, fallback) => (COURTS.includes(v) ? v : fallback);
+const cleanTheme = (v, fallback = '') => (['', 'wood', 'dark'].includes(v) ? v : fallback);
 const defaultCourt = (sportName) => (/base|soft/i.test(sportName) ? 'infield' : /football/i.test(sportName) ? 'gridiron' : /volleyball/i.test(sportName) ? 'vfull' : 'half');
 
 export function cleanPlayIds(list, ownerId) {
@@ -127,12 +128,13 @@ export function mountPlays(app) {
     const src = b.from_play_id ? get('SELECT * FROM plays WHERE id=? AND owner_id=?', Number(b.from_play_id), req.ownerId) : null;
     if (b.from_play_id && !src) return res.status(400).json({ error: 'Unknown play to copy' });
     const r = run(
-      'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, notes, frames_json, attachments_json) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, notes, frames_json, attachments_json, theme) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
       req.ownerId, Number(b.sport_id), str(b.name ?? (src ? `${src.name} (copy)` : 'New play'), 120).trim() || 'New play',
       str(b.category ?? src?.category, 60).trim(), src ? src.labels_json : JSON.stringify(cleanLabels(b.labels)),
       cleanCourt(b.court ?? src?.court, defaultCourt(sport.name)), src?.flipped ? 1 : 0, str(src?.notes, 2000),
       src ? src.frames_json : JSON.stringify(cleanFrames(b.frames)),
       src ? src.attachments_json : '{}',
+      cleanTheme(b.theme ?? src?.theme),
     );
     res.json(playOut(get('SELECT * FROM plays WHERE id=?', Number(r.lastInsertRowid))));
   });
@@ -144,9 +146,9 @@ export function mountPlays(app) {
     if (frames.length > 400_000) return res.status(413).json({ error: 'This play is too large to save. Remove some steps or objects.' });
     tx(() =>
       run(
-        `UPDATE plays SET name=?, category=?, labels_json=?, court=?, flipped=?, notes=?, frames_json=?, attachments_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        `UPDATE plays SET name=?, category=?, labels_json=?, court=?, flipped=?, notes=?, frames_json=?, attachments_json=?, theme=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         str(b.name, 120).trim() || 'Untitled play', str(b.category, 60).trim(), JSON.stringify(cleanLabels(b.labels)),
-        cleanCourt(b.court, p.court), b.flipped ? 1 : 0, str(b.notes, 2000), frames, attachmentsJson(b, req.ownerId), p.id,
+        cleanCourt(b.court, p.court), b.flipped ? 1 : 0, str(b.notes, 2000), frames, attachmentsJson(b, req.ownerId), cleanTheme(b.theme, p.theme || ''), p.id,
       ),
     );
     res.json(playOut(get('SELECT * FROM plays WHERE id=?', p.id)));

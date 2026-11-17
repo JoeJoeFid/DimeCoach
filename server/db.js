@@ -293,6 +293,8 @@ addColumn('plan_items', 'extras_json', "TEXT DEFAULT '{}'");
 addColumn('drills', 'extras_json', "TEXT DEFAULT '{}'");
 // Pictures, videos and links on a play: {images: [...], videos: [...], links: [...]}.
 addColumn('plays', 'attachments_json', "TEXT DEFAULT '{}'");
+// How the court is colored: '' as the app draws it, 'wood' or 'dark'.
+addColumn('plays', 'theme', "TEXT DEFAULT ''");
 
 // Callouts used to be a separate one-line field under an item. They now live in the notes:
 // any that exist are moved to the end of the notes as a bold line, and the field is emptied.
