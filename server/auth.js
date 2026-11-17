@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { all, db, dbPath, get, run, tx } from './db.js';
 import { createWorkspace } from './seed.js';
-import { htmlFor, mailerStatus, sendMail } from './mailer.js';
+import { htmlFor, mailerStatus, noteMailActor, sendMail } from './mailer.js';
 import { MAIL_SAMPLES } from './mailSamples.js';
 import { notify } from './notices.js';
 import { RESET_MINUTES, claimInvites, clearResets, inviteByToken, mailReset, resetByToken } from './invites.js';
@@ -551,6 +551,7 @@ export function mountAuth(app) {
     if (!membership) return res.status(403).json({ error: 'This account has no workspace. Contact the administrator.' });
     req.user = user;
     req.ownerId = membership.owner_id;
+    noteMailActor(user.id);
     // An open page says "still here" when its person has clicked or typed. Nothing is written for it.
     if (req.method === 'POST' && req.path === '/live/active') {
       noteAction(user.id);
@@ -1010,6 +1011,45 @@ export function mountAuth(app) {
     const r = await sendMail({ to: req.user.email, subject: `[Sample] ${m.subject}`, text: m.text });
     if (!r.ok) return res.status(502).json({ error: `The sample was not sent. ${r.error}` });
     res.json({ ok: true, to: req.user.email });
+  });
+  // How many emails went out each day, and with `day` the emails of that one day. `q` narrows
+  // both to a person (who received it, or whose doing it was) or to a subject.
+  app.get('/api/admin/email-log', admin, (req, res) => {
+    const days = Math.min(366, Math.max(1, Math.round(Number(req.query.days)) || 30));
+    // Days are the administrator's own: the browser says how many minutes its clock is behind UTC.
+    const behind = Math.min(840, Math.max(-840, Math.round(Number(req.query.tz)) || 0));
+    const shift = `${behind > 0 ? '-' : '+'}${Math.abs(behind)} minutes`;
+    const q = str(req.query.q).trim().toLowerCase().slice(0, 120);
+    const from = `FROM outbox o LEFT JOIN users t ON lower(t.email)=lower(o.to_email) LEFT JOIN users f ON f.id=o.from_user
+      WHERE date(o.created_at, ?) > date('now', ?, ?)
+        AND (?='' OR instr(lower(o.to_email), ?) OR instr(lower(o.subject), ?) OR instr(lower(t.name), ?) OR instr(lower(f.name), ?) OR instr(lower(f.email), ?))`;
+    const args = [shift, shift, `-${days} days`, q, q, q, q, q, q];
+    const day = str(req.query.day);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      const LIMIT = 300;
+      const rows = all(
+        `SELECT o.id, o.to_email, o.subject, o.created_at, o.sent_at, t.name AS to_name, f.name AS from_name ${from} AND date(o.created_at, ?)=? ORDER BY o.id DESC LIMIT ?`,
+        ...args,
+        shift,
+        day,
+        LIMIT + 1,
+      );
+      return res.json({
+        days: [],
+        more: rows.length > LIMIT,
+        messages: rows.slice(0, LIMIT).map((m) => ({
+          id: m.id,
+          to_email: m.to_email,
+          to_name: m.to_name || '',
+          from_name: m.from_name || '',
+          subject: m.subject,
+          at: `${String(m.created_at).replace(' ', 'T')}Z`,
+          sent: !!m.sent_at,
+        })),
+      });
+    }
+    const rows = all(`SELECT date(o.created_at, ?) AS day, COUNT(*) AS n, SUM(o.sent_at IS NULL) AS unsent ${from} GROUP BY day ORDER BY day DESC`, shift, ...args);
+    res.json({ days: rows.map((d) => ({ day: d.day, count: d.n, unsent: d.unsent || 0 })) });
   });
   app.put('/api/admin/settings', admin, (req, res) => {
     if (typeof req.body.keyboard_access === 'boolean') setSetting('keyboard_access', req.body.keyboard_access ? '1' : '0');

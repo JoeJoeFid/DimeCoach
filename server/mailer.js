@@ -5,6 +5,7 @@
 //   PP_MAIL_TRANSPORT=log           messages are printed to the server console, which is enough
 //                                   to try the registration flow on your own machine
 // With neither, nothing leaves this server and registration stays closed.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs';
 import path from 'node:path';
 import { run } from './db.js';
@@ -18,6 +19,14 @@ const transport = () => (process.env.PP_MAIL_TRANSPORT === 'log' ? 'log' : apiKe
 
 /** configured is true only when a message can actually leave this server (or be read from its log). */
 export const mailerStatus = () => ({ configured: transport() !== 'none', transport: transport() });
+
+/**
+ * The person signed in for the request being answered, so that an email can be written down as
+ * their doing without every caller having to say so. See noteMailActor.
+ */
+const actor = new AsyncLocalStorage();
+/** Called once a request is known to be someone's: emails sent while answering it are theirs. */
+export const noteMailActor = (userId) => actor.enterWith(userId);
 
 const markSent = (id) => run('UPDATE outbox SET sent_at=? WHERE id=?', new Date().toISOString(), id);
 
@@ -159,7 +168,7 @@ export async function sendMail({ to, subject, text, secret = '' }) {
   const kind = transport();
   // A link that signs someone in or changes a password is sent, but not written down here.
   const kept = secret ? text.split(secret).join('[code not kept]') : text;
-  const id = run('INSERT INTO outbox (to_email, subject, body) VALUES (?,?,?)', to, subject, kept).lastInsertRowid;
+  const id = run('INSERT INTO outbox (to_email, subject, body, from_user) VALUES (?,?,?,?)', to, subject, kept, actor.getStore() ?? null).lastInsertRowid;
   if (kind === 'none') return { ok: false, error: 'No email service is connected.' };
   if (kind === 'log') {
     console.log(`\n--- email to ${to} ---\nSubject: ${subject}\n\n${text}\n--- end ---\n`);

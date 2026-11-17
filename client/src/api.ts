@@ -727,6 +727,11 @@ export const api = {
   communityPlans: () => req<CommunityPlanRow[]>('GET', '/system/communities'),
   setCommunityPlan: (id: number, b: { plan?: 'group' | 'organization'; seats?: number; expires?: string }) => req<CommunityPlanRow[]>('PUT', `/system/communities/${id}`, b),
   adminSetSettings: (b: { registration_mode?: AdminSettings['registration_mode']; keyboard_access?: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
+  emailLog: (o: { q: string; days: number; day?: string }) =>
+    req<{ days: EmailDay[]; messages?: EmailLogMessage[]; more?: boolean }>(
+      'GET',
+      `/admin/email-log?days=${o.days}&tz=${new Date().getTimezoneOffset()}&q=${encodeURIComponent(o.q)}${o.day ? `&day=${o.day}` : ''}`,
+    ),
   emailSamples: () => req<{ id: string; label: string }[]>('GET', '/admin/email-samples'),
   emailSample: (id: string) => req<{ subject: string; text: string; html: string }>('GET', `/admin/email-samples/${id}`),
   sendEmailSample: (id: string) => req<{ ok: true; to: string }>('POST', `/admin/email-samples/${id}/send`, {}),
@@ -839,3 +844,20 @@ export const api = {
     req<Plan>('PUT', `/plans/${p.id}`, { ...p, items: p.items.map(({ key: _key, ...rest }: Item) => rest) }),
   deletePlan: (id: number) => req('DELETE', `/plans/${id}`),
 };
+
+/** One day of outgoing email, for the system administrator. */
+export interface EmailDay {
+  day: string;
+  count: number;
+  unsent: number;
+}
+export interface EmailLogMessage {
+  id: number;
+  to_email: string;
+  to_name: string;
+  /** Who was signed in when it went out; empty when nobody was. */
+  from_name: string;
+  subject: string;
+  at: string;
+  sent: boolean;
+}

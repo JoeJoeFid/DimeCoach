@@ -14196,6 +14196,7 @@ button.cx-row:hover .cx-row-text strong {
 .step-note {
   padding: 4px 4px 4px 0;
   color: var(--ink);
+  font-family: var(--sans);
   font-style: normal;
   font-size: 0.8rem;
   line-height: 1.35;
@@ -14210,4 +14211,113 @@ button.cx-row:hover .cx-row-text strong {
 .play-line.owned:not(.selected) .line-head {
   fill: var(--line-color);
   stroke: var(--line-color);
+}
+
+/* System admin: how many emails went out each day */
+.email-log-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+.email-log-bar input {
+  flex: 1 1 260px;
+  width: auto;
+}
+.email-log-bar select {
+  flex: 0 0 auto;
+  width: auto;
+}
+.email-log-total {
+  margin: 12px 0 8px;
+}
+.email-log-unsent {
+  color: var(--danger);
+  font-weight: 600;
+}
+.email-log-days,
+.email-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.email-log-days > li {
+  border-top: 1px solid var(--line);
+}
+.email-log-day {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 6px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.email-log-day:hover,
+.email-log-day.on {
+  background: var(--surface-2);
+}
+.email-log-date {
+  font-weight: 600;
+}
+.email-log-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.email-log-track span {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: 4px;
+  background: var(--series);
+}
+.email-log-count {
+  min-width: 2ch;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: right;
+}
+.email-log-wait {
+  margin: 0;
+  padding: 8px 6px 12px;
+}
+.email-log-list {
+  padding: 2px 6px 10px;
+}
+.email-log-list > li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px dashed var(--line);
+}
+.email-log-time {
+  flex: 0 0 70px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.email-log-what {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  .email-log-day {
+    grid-template-columns: 96px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .email-log-time {
+    flex-basis: 58px;
+  }
 }

@@ -233,6 +233,9 @@ function addColumn(table, column, ddl) {
   if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 }
 addColumn('teams', 'calendar_url', "TEXT DEFAULT ''");
+// Whose doing an email was: the person signed in when it went out. Empty for one nobody was signed in for.
+addColumn('outbox', 'from_user', 'INTEGER');
+db.exec('CREATE INDEX IF NOT EXISTS idx_outbox_created ON outbox(created_at)');
 // The last time a person clicked, typed or saved, written down at most once a minute.
 addColumn('users', 'last_action_at', 'TEXT');
 addColumn('teams', 'calendar_synced_at', "TEXT DEFAULT ''");

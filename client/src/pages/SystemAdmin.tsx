@@ -7,6 +7,7 @@ import RegistrationCard from '../components/RegistrationCard';
 import SportIcon from '../components/SportIcon';
 import AccessibilityCard from '../components/AccessibilityCard';
 import CommunityPlans from '../components/CommunityPlans';
+import EmailLog from '../components/EmailLog';
 import EmailSamples from '../components/EmailSamples';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
@@ -70,10 +71,11 @@ function StatusCell({ u }: { u: SystemUser }) {
  * space each has. Accounts can be created here too, with their upload space set from the start.
  */
 /** The page in tabs, by what is being looked after. The tab is in the address, so a link can open one. */
-type SysTab = 'people' | 'access' | 'organizations' | 'content' | 'system';
+type SysTab = 'people' | 'access' | 'email' | 'organizations' | 'content' | 'system';
 const SYS_TABS: [SysTab, string][] = [
   ['people', 'People'],
   ['access', 'Access'],
+  ['email', 'Email'],
   ['organizations', 'Organizations'],
   ['content', 'Content'],
   ['system', 'System'],
@@ -464,8 +466,16 @@ export default function SystemAdmin() {
             Sign-up and email
           </h2>
           {settings && <RegistrationCard settings={settings} run={run} />}
-          <EmailSamples canSend={canEmail} run={run} />
 
+            </>
+          )}
+          {tab === 'email' && (
+            <>
+          <h2 className="sys-section" id="email">
+            Email
+          </h2>
+          <EmailLog />
+          <EmailSamples canSend={canEmail} run={run} />
             </>
           )}
           {tab === 'organizations' && (
