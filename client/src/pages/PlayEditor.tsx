@@ -1225,7 +1225,15 @@ export default function PlayEditor() {
             ref={svg}
             className={`play-svg editing tool-${tool} ${aim ? 'aiming' : ''} ${carry ? 'drop-ready' : ''}`}
             viewBox={`${-VIEW_PAD} ${-VIEW_PAD} ${COURT.width + VIEW_PAD * 2} ${h + VIEW_PAD * 2}`}
-            onPointerDownCapture={onAimDown}
+            onPointerDownCapture={(e) => {
+              // Words on the page that were swept up in a text selection (the court's own labels among
+              // them) would be picked up and dragged by the browser at this press, and nothing on the
+              // court would answer. A press on the court is never about selected words, so they are let go.
+              if (e.button === 0) window.getSelection()?.removeAllRanges();
+              onAimDown(e);
+            }}
+            // The browser's own drag (of selected words, or of the picture as an image) must never start here.
+            onDragStart={(e) => e.preventDefault()}
             onPointerDown={onCourtDown}
             onPointerMove={onMove}
             onPointerUp={onUp}

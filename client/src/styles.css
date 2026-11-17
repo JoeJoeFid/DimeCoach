@@ -14059,3 +14059,13 @@ button.cx-row:hover .cx-row-text strong {
 .name-pair .input {
   width: 100%;
 }
+
+/* The court is for pressing and dragging things on it. Nothing in or around it can be swept up as
+   selected words, which the browser would then drag instead of the player under the pointer. */
+.builder-stage,
+.play-svg.editing,
+.play-svg.editing * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
