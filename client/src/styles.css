@@ -14595,7 +14595,8 @@ button.cx-row:hover .cx-row-text strong {
 }
 
 /* Resources: sharing one */
-.res-share {
+.res-share,
+.res-remove {
   display: inline-flex;
   align-items: center;
   padding-left: 8px;
@@ -14629,4 +14630,36 @@ button.cx-row:hover .cx-row-text strong {
 .res-share-link .input {
   flex: 1 1 220px;
   width: auto;
+}
+
+/* The trash can sits at the far end of a resource's buttons, away from the others. */
+.res-actions .res-remove {
+  margin-left: auto;
+}
+.res-grid.compact .res-actions .res-remove {
+  margin-left: 0;
+}
+/* With no address on the line, the name takes the room. */
+.res-grid.compact .res-title {
+  flex: 4 1 0;
+}
+
+/* Sharing a resource: the communities it can be posted in */
+.res-share-places {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.res-share-places li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.share-send .res-share-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }

@@ -109,10 +109,31 @@ export function MentionArea({
   );
 }
 
-/** A message's words, with the names of people mentioned in it made to stand out. */
+/** A stretch of a message with its web addresses made into links that open in a new tab. */
+function linked(text: string, key: string): ReactNode {
+  if (!/https?:\/\//.test(text)) return text;
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(/https?:\/\/[^\s<>"']+/g)) {
+    const i = m.index ?? 0;
+    // A full stop or bracket right after an address belongs to the sentence, not to the address.
+    const url = m[0].replace(/[.,;:!?)\]]+$/, '');
+    if (i > last) out.push(text.slice(last, i));
+    out.push(
+      <a key={`${key}-${i}`} href={url} target="_blank" rel="noopener noreferrer">
+        {url}
+      </a>,
+    );
+    last = i + url.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/** A message's words, with the names of people mentioned in it made to stand out, and web addresses made into links. */
 export function MentionText({ text, people, me }: { text: string; /** Everyone who could have been named, the reader included. */ people: string[]; me?: string }) {
   const names = [...new Set(people.filter(Boolean))].sort((a, b) => b.length - a.length);
-  if (names.length === 0 || !text.includes('@')) return <>{text}</>;
+  if (names.length === 0 || !text.includes('@')) return <>{linked(text, 't')}</>;
   const re = new RegExp(`@(${names.map(escapeRe).join('|')})(?![\\w])`, 'gi');
   const out: ReactNode[] = [];
   let last = 0;
@@ -120,7 +141,7 @@ export function MentionText({ text, people, me }: { text: string; /** Everyone w
     const i = m.index ?? 0;
     // Only at the start, or after a space or bracket: an email address is not a mention.
     if (i > 0 && !/[\s(]/.test(text[i - 1])) continue;
-    if (i > last) out.push(text.slice(last, i));
+    if (i > last) out.push(linked(text.slice(last, i), `p${i}`));
     out.push(
       <span key={i} className={`mention ${me && m[1].toLowerCase() === me.toLowerCase() ? 'me' : ''}`}>
         {m[0]}
@@ -128,7 +149,7 @@ export function MentionText({ text, people, me }: { text: string; /** Everyone w
     );
     last = i + m[0].length;
   }
-  if (last < text.length) out.push(text.slice(last));
+  if (last < text.length) out.push(linked(text.slice(last), 'end'));
   return <>{out}</>;
 }
 

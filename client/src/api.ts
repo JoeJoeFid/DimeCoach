@@ -820,7 +820,9 @@ export const api = {
   resources: () => req<Resource[]>('GET', '/resources'),
   addResource: (b: { kind: Resource['kind']; title: string; url?: string; file_id?: number }) => req<Resource[]>('POST', '/resources', b),
   renameResource: (id: number, title: string) => req<Resource[]>('PUT', `/resources/${id}`, { title }),
-  sendResource: (key: string, emails: string[], note: string) => req<{ sent: number; failed: string[] }>('POST', '/resources/send', { key, emails, note }),
+  resourcePeople: () => req<ResourcePeople>('GET', '/resources/people'),
+  sendResource: (key: string, b: { user_ids: number[]; emails: string[]; note: string }) =>
+    req<{ mailed: number; messaged: number; failed: string[]; total: number }>('POST', '/resources/send', { key, ...b }),
   tagResource: (key: string, tag_ids: number[]) => req<Resource[]>('PUT', '/resources/tags', { key, tag_ids }),
   deleteResource: (id: number) => req<Resource[]>('DELETE', `/resources/${id}`),
 
@@ -902,4 +904,10 @@ export interface MailRulePreview {
   html: string;
   waiting: number;
   people: { name: string; email: string; days: number }[];
+}
+
+/** Who a resource can be shared with, and whether this site can send email. */
+export interface ResourcePeople {
+  mail: boolean;
+  people: { id: number; name: string; where: string }[];
 }

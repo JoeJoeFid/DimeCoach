@@ -9,6 +9,7 @@ import { prepareImage } from '../components/ItemImages';
 import { normalizeUrl } from '../components/ItemMedia';
 import { ResourceThumb, fileUrl, searchText } from '../components/ResourcePicker';
 import { Modal, ShareIcon } from '../components/bits';
+import ShareResource from '../components/ShareResource';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 
@@ -313,11 +314,6 @@ function ResourceCard({ resource: r, tags, onShare, onTag, onView, onRename, onR
         ) : (
           <strong className="res-title">{r.title}</strong>
         )}
-        {r.kind === 'link' && (
-          <a className="muted small res-url" href={r.url} target="_blank" rel="noopener noreferrer">
-            {r.url}
-          </a>
-        )}
         {mine.length > 0 && (
           <div className="res-tags">
             {mine.map((t) => (
@@ -328,7 +324,7 @@ function ResourceCard({ resource: r, tags, onShare, onTag, onView, onRename, onR
             ))}
           </div>
         )}
-        {r.uses.length > 0 ? (
+        {r.uses.length > 0 && (
           <ul className="res-uses">
             {r.uses.slice(0, 4).map((u, i) => (
               <li key={i}>
@@ -337,12 +333,10 @@ function ResourceCard({ resource: r, tags, onShare, onTag, onView, onRename, onR
             ))}
             {r.uses.length > 4 && <li className="muted small">and {r.uses.length - 4} more</li>}
           </ul>
-        ) : (
-          <span className="muted small">Not attached to anything yet.</span>
         )}
         <div className="res-actions">
           {r.kind === 'link' ? (
-            <a className="btn small" href={r.url} target="_blank" rel="noopener noreferrer">
+            <a className="btn small" href={r.url} target="_blank" rel="noopener noreferrer" title={r.url}>
               Open
             </a>
           ) : (
@@ -357,137 +351,14 @@ function ResourceCard({ resource: r, tags, onShare, onTag, onView, onRename, onR
             Categories
           </button>
           {saved && (
-            <button className="btn small danger" onClick={onRemove}>
-              Remove
+            <button className="btn small danger res-remove" onClick={onRemove} aria-label={`Remove ${r.title}`} title="Remove">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 7h16M9.500 7V4.500h5V7M6.500 7l.800 12.500h9.400L17.500 7M10 11v5M14 11v5" />
+              </svg>
             </button>
           )}
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Sharing one resource. A link can be emailed to other coaches, copied, or handed to the device's
- * own share sheet. A picture or video is a private file, so it is handed over as the file itself:
- * to the share sheet where the device has one, or saved to the device to send on.
- */
-function ShareResource({ resource: r, onClose }: { resource: Resource; onClose: () => void }) {
-  const [emails, setEmails] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [said, setSaid] = useState('');
-  const [error, setError] = useState('');
-  const isLink = r.kind === 'link';
-  const typed = emails
-    .split(/[\s,;]+/)
-    .map((e) => e.trim())
-    .filter(Boolean);
-  const sheet = typeof navigator.share === 'function';
-  const fail = (e: unknown) => {
-    // Closing the share sheet without choosing anything is not a failure.
-    if ((e as Error).name !== 'AbortError') setError((e as Error).message);
-  };
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(r.url);
-      setSaid('Link copied.');
-      setError('');
-    } catch {
-      setError('The link could not be copied. Select it above and copy it yourself.');
-    }
-  };
-  const shareLink = () => navigator.share({ title: r.title, url: r.url }).catch(fail);
-  const shareFile = async () => {
-    setBusy(true);
-    try {
-      const blob = await (await fetch(fileUrl(r))).blob();
-      const ext = (blob.type.split('/')[1] || (r.kind === 'video' ? 'mp4' : 'jpg')).replace('quicktime', 'mov').replace('jpeg', 'jpg');
-      const file = new File([blob], `${r.title.replace(/[^\w .-]+/g, '').trim() || r.kind}.${ext}`, { type: blob.type });
-      if (sheet && navigator.canShare?.({ files: [file] })) await navigator.share({ title: r.title, files: [file] });
-      else {
-        // No share sheet for files here: save it, to attach to a message.
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(file);
-        a.download = file.name;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-        setSaid('Saved to this device. Attach it to a message to send it on.');
-      }
-      setError('');
-    } catch (e) {
-      fail(e);
-    }
-    setBusy(false);
-  };
-  const send = async () => {
-    setBusy(true);
-    setSaid('');
-    try {
-      const out = await api.sendResource(r.key, typed, note);
-      setSaid(out.failed.length ? `The email to ${out.failed.join(', ')} did not go through.${out.sent ? ` ${out.sent} did.` : ''}` : `Sent to ${out.sent} ${out.sent === 1 ? 'person' : 'people'}.`);
-      if (!out.failed.length) {
-        setEmails('');
-        setNote('');
-      }
-      setError('');
-    } catch (e) {
-      setError((e as Error).message);
-    }
-    setBusy(false);
-  };
-  return (
-    <Modal title={`Share "${r.title}"`} onClose={onClose}>
-      <div className="res-share-box">
-        {error && <p className="error">{error}</p>}
-        {said && (
-          <p className="banner ok" role="status">
-            {said}
-          </p>
-        )}
-        {isLink ? (
-          <>
-            <div className="res-share-link">
-              <input className="input" readOnly aria-label="Link" value={r.url} onFocus={(e) => e.target.select()} />
-              <button type="button" className="btn" onClick={copy}>
-                Copy link
-              </button>
-              {sheet && (
-                <button type="button" className="btn" onClick={shareLink}>
-                  <ShareIcon size={16} /> Share…
-                </button>
-              )}
-            </div>
-            <label className="field">
-              <span className="field-label">Email it to coaches</span>
-              <input className="input" placeholder="Email addresses, separated by commas" value={emails} onChange={(e) => setEmails(e.target.value)} />
-            </label>
-            <label className="field">
-              <span className="field-label">Add a note (optional)</span>
-              <textarea className="input" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
-            </label>
-          </>
-        ) : (
-          <>
-            <p className="muted small">
-              This {r.kind === 'video' ? 'video' : 'picture'} is a private file, so there is no link to it. {sheet ? 'Share the file itself with another app, such as Messages or Mail.' : 'Save it to this device, then attach it to a message.'}
-            </p>
-            <button type="button" className="btn primary" disabled={busy} onClick={shareFile}>
-              <ShareIcon size={16} /> {busy ? 'Getting the file…' : sheet ? `Share this ${r.kind === 'video' ? 'video' : 'picture'}…` : 'Save to this device'}
-            </button>
-          </>
-        )}
-      </div>
-      <div className="modal-actions">
-        <button type="button" className="btn" onClick={onClose}>
-          Done
-        </button>
-        {isLink && (
-          <button type="button" className="btn primary" disabled={busy || typed.length === 0} onClick={send}>
-            <ShareIcon size={16} /> {busy ? 'Sending…' : typed.length > 1 ? `Send to ${typed.length} people` : 'Send'}
-          </button>
-        )}
-      </div>
-    </Modal>
   );
 }

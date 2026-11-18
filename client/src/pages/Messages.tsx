@@ -45,7 +45,9 @@ export default function Messages() {
   const open = (n: CommunityNewsItem) => {
     if (n.kind === 'notice') {
       if (n.unread && n.id) api.markMessagesRead(n.id).then(got, failed);
-      if (n.link) navigate(n.link);
+      // A shared link leads off the site, and opens beside it.
+      if (/^https?:\/\//.test(n.link || '')) window.open(n.link, '_blank', 'noopener');
+      else if (n.link) navigate(n.link);
     } else navigate(n.kind === 'invite' ? '/communities' : `/communities/${n.community_id}`);
   };
 

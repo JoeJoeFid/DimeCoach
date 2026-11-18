@@ -8,6 +8,7 @@ import { all, get, run, tx } from './db.js';
 import { cleanLinks, deleteUpload } from './images.js';
 import { thumbStates } from './linkThumbs.js';
 import { mailerStatus, sendMail } from './mailer.js';
+import { notify } from './notices.js';
 
 const parse = (s, d) => {
   try {
@@ -101,34 +102,81 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const sends = new Map();
 const sentLately = (userId) => (sends.get(userId) || []).filter((t) => Date.now() - t < 3600_000);
 
+/**
+ * Who the caller can pick to share with: the coaches of the teams in this workspace, then the
+ * members of the caller's communities. Each person once, and never the caller.
+ */
+function peopleFor(req) {
+  const seen = new Set([req.user.id]);
+  const out = [];
+  const add = (rows, where) => {
+    for (const r of rows) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push({ id: r.id, name: r.name, where });
+    }
+  };
+  add(
+    [
+      ...all("SELECT u.id, u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.owner_id=? AND m.role='owner'", req.ownerId),
+      ...all('SELECT DISTINCT u.id, u.name FROM team_staff s JOIN teams t ON t.id=s.team_id JOIN users u ON u.id=s.user_id WHERE t.owner_id=? ORDER BY u.name COLLATE NOCASE', req.ownerId),
+    ],
+    'On your teams',
+  );
+  const mine = all("SELECT c.id, c.name FROM communities c JOIN community_members cm ON cm.community_id=c.id WHERE cm.user_id=? AND cm.status='active' ORDER BY c.name COLLATE NOCASE", req.user.id);
+  for (const c of mine)
+    add(all("SELECT u.id, u.name FROM community_members cm JOIN users u ON u.id=cm.user_id WHERE cm.community_id=? AND cm.status='active' ORDER BY u.name COLLATE NOCASE", c.id), c.name);
+  return out;
+}
+
 export function mountResources(app) {
-  // Emails a saved link to the addresses given, with a note. Pictures and videos are private
-  // files, so they are shared from the device that is showing them, not from here.
+  // Shares a link with coaches: the ones picked from the list, and any addresses typed. Each gets
+  // an email where email is set up, and someone picked also gets a message in Dime Coach.
+  // Pictures and videos are private files, so they are shared from the device showing them.
+  app.get('/api/resources/people', (req, res) => res.json({ mail: mailerStatus().configured, people: peopleFor(req) }));
   app.post('/api/resources/send', async (req, res) => {
     const r = resourceList(req.ownerId).find((x) => x.key === String(req.body.key ?? ''));
     if (!r) return res.status(404).json({ error: 'That resource was not found.' });
-    if (r.kind !== 'link') return res.status(400).json({ error: 'Only links can be sent by email.' });
-    if (!mailerStatus().configured) return res.status(400).json({ error: 'Email is not set up on this site. Copy the link and send it yourself.' });
-    const to = [...new Set(list(req.body.emails).map((e) => str(e, 200).toLowerCase()).filter(Boolean))];
-    const bad = to.find((e) => !EMAIL.test(e));
+    if (r.kind !== 'link') return res.status(400).json({ error: 'Only links can be sent to coaches.' });
+    const allowed = new Set(peopleFor(req).map((p) => p.id));
+    const ids = [...new Set(list(req.body.user_ids).map(Number))].filter((id) => allowed.has(id));
+    const typed = [...new Set(list(req.body.emails).map((e) => str(e, 200).toLowerCase()).filter(Boolean))];
+    const bad = typed.find((e) => !EMAIL.test(e));
     if (bad) return res.status(400).json({ error: `${bad} does not look like an email address.` });
-    if (!to.length) return res.status(400).json({ error: 'Type at least one email address.' });
-    if (to.length > MAX_AT_ONCE) return res.status(400).json({ error: `Send to ${MAX_AT_ONCE} people at most in one go.` });
+    const mail = mailerStatus().configured;
+    if (typed.length && !mail) return res.status(400).json({ error: 'Email is not set up on this site, so a link can only be sent to coaches picked from the list. They get a message in Dime Coach.' });
+    // Everyone it goes to, each once: an address typed for someone who was also picked counts once.
+    const to = new Map();
+    for (const id of ids) {
+      const u = get('SELECT id, name, email FROM users WHERE id=?', id);
+      if (u) to.set(String(u.email).toLowerCase(), { user: u, email: u.email });
+    }
+    for (const e of typed) if (e !== String(req.user.email).toLowerCase() && !to.has(e)) to.set(e, { user: null, email: e });
+    if (!to.size) return res.status(400).json({ error: 'Choose at least one coach, or type an email address.' });
+    if (to.size > MAX_AT_ONCE) return res.status(400).json({ error: `Send to ${MAX_AT_ONCE} people at most in one go.` });
     const lately = sentLately(req.user.id);
-    if (lately.length + to.length > SEND_LIMIT) return res.status(429).json({ error: 'You have sent a lot in the last hour. Try again a little later.' });
+    if (lately.length + to.size > SEND_LIMIT) return res.status(429).json({ error: 'You have sent a lot in the last hour. Try again a little later.' });
     const note = str(req.body.note, 1000);
+    let mailed = 0;
+    let messaged = 0;
     const failed = [];
-    for (const email of to) {
+    for (const t of to.values()) {
       lately.push(Date.now());
+      if (t.user) {
+        notify(t.user.id, { kind: 'share', ref: `resource-${r.key}`.slice(0, 200), title: `${req.user.name} shared a link with you: ${r.title}`, body: note || r.url, link: r.url });
+        messaged++;
+      }
+      if (!mail) continue;
       const sent = await sendMail({
-        to: email,
+        to: t.email,
         subject: `${req.user.name} shared a link with you: ${r.title}`,
-        text: `Hi,\n\n${req.user.name} shared a link with you from Dime Coach: "${r.title}".\n\n` + (note ? `${req.user.name} wrote:\n${note}\n\n` : '') + `Open the link:\n\n${r.url}`,
+        text: `Hi${t.user ? ` ${t.user.name}` : ''},\n\n${req.user.name} shared a link with you from Dime Coach: "${r.title}".\n\n` + (note ? `${req.user.name} wrote:\n${note}\n\n` : '') + `Open the link:\n\n${r.url}`,
       });
-      if (!sent.ok) failed.push(email);
+      if (sent.ok) mailed++;
+      else failed.push(t.user ? t.user.name : t.email);
     }
     sends.set(req.user.id, lately);
-    res.json({ sent: to.length - failed.length, failed });
+    res.json({ mailed, messaged, failed, total: to.size });
   });
 
   app.get('/api/resources', (req, res) => res.json(resourceList(req.ownerId)));
