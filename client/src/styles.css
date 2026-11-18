@@ -15007,3 +15007,270 @@ button.cx-row:hover .cx-job-icon {
   align-items: center;
   gap: 7px;
 }
+
+/* The organization overview: the active season on the left, figures and quick jobs in a narrow column on the right */
+.ov {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+}
+.ov-main,
+.ov-side {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.ov-head,
+.ov-season > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ov-head h2,
+.ov-season h2 {
+  margin: 0;
+}
+.ov-eyebrow {
+  display: block;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ov-season h2 {
+  font-size: 1.5rem;
+}
+.ov-meters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.ov-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.ov-meter {
+  cursor: pointer;
+}
+button.ov-meter:hover {
+  border-color: var(--line-strong);
+}
+.ov-meter-label {
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.ov-meter strong {
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+.ov-meter strong .muted {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.ov-bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  overflow: hidden;
+}
+.ov-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-edge);
+}
+.ov-bar i.warn {
+  background: var(--warn);
+}
+.ov-warn {
+  color: var(--warn);
+}
+.ov-days {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 6px;
+}
+.ov-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.ov-day small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+.ov-day b {
+  font-size: 1rem;
+}
+.ov-day.today {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.ov-day.on {
+  border-color: var(--accent-edge);
+  box-shadow: 0 0 0 1px var(--accent-edge);
+}
+.ov-day-bar {
+  display: flex;
+  align-items: flex-end;
+  width: 60%;
+  max-width: 22px;
+  height: 26px;
+  margin-top: 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  overflow: hidden;
+}
+.ov-day-bar i {
+  display: block;
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent-edge);
+}
+.ov-day-n {
+  min-height: 1.1em;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.ov-sub {
+  margin: 16px 0 4px;
+  font-size: 0.9rem;
+}
+.ov-games {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ov-games li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+.ov-games li:first-child {
+  border-top: none;
+}
+.ov-when {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  width: 92px;
+}
+.ov-teams {
+  flex: 1;
+  min-width: 0;
+}
+.ov-won {
+  font-weight: 700;
+}
+.ov-score {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ov-divisions tbody tr {
+  cursor: pointer;
+}
+.ov-divisions td {
+  vertical-align: middle;
+}
+.ov-division {
+  font-weight: 650;
+}
+.ov-cell-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.ov-cell-bar .ov-bar {
+  width: 64px;
+}
+.ov-glance {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0;
+  overflow: hidden;
+}
+.ov-glance > * {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  min-width: 0;
+}
+.ov-glance > * + * {
+  border-left: 1px solid var(--line);
+}
+.ov-glance > button:not(:disabled) {
+  cursor: pointer;
+}
+.ov-glance strong {
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+.ov-glance span {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.ov-glance small {
+  font-size: 0.74rem;
+}
+.ov-side .cx-card {
+  padding: 16px;
+}
+.ov-side .cx-row {
+  padding: 10px 0;
+  gap: 10px;
+}
+.ov-side .cx-row-text strong {
+  font-size: 0.9rem;
+}
+@media (max-width: 1000px) {
+  .ov {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ov-side {
+    order: -1;
+  }
+}
+@media (max-width: 640px) {
+  .ov-meters {
+    grid-template-columns: 1fr;
+  }
+  .ov-days {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+  .ov-when {
+    width: 70px;
+  }
+}

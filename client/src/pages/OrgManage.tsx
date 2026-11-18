@@ -1,7 +1,7 @@
 // The management side of an organization, as its managers see it: what needs attention, every
 // game in one schedule, and how the organization is using Dime Coach.
 import { useEffect, useState } from 'react';
-import { api, GENDER_WORD, type OrgGame, type OrgGames, type OrgLeague, type OrgUsage as Usage } from '../api';
+import { api, GENDER_WORD, type OrgSignup, type OrgGame, type OrgGames, type OrgLeague, type OrgUsage as Usage } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
 import { promptDialog } from '../components/dialogs';
@@ -31,6 +31,44 @@ function JobIcon({ d }: { d: string }) {
   );
 }
 
+/** A share of a whole, as a figure with a bar under it. */
+function Meter({ label, value, of, note, warn, onClick }: { label: string; value: number; of: number; note: string; warn?: boolean; onClick?: () => void }) {
+  const inner = (
+    <>
+      <span className="ov-meter-label">{label}</span>
+      <strong>
+        {value}
+        <span className="muted"> of {of}</span>
+      </strong>
+      <span className="ov-bar" aria-hidden="true">
+        <i className={warn ? 'warn' : ''} style={{ width: `${of ? Math.min(100, Math.round((value / of) * 100)) : 0}%` }} />
+      </span>
+      <small className={warn ? 'ov-warn' : 'muted'}>{note}</small>
+    </>
+  );
+  return onClick ? (
+    <button type="button" className="ov-meter" onClick={onClick}>
+      {inner}
+    </button>
+  ) : (
+    <div className="ov-meter">{inner}</div>
+  );
+}
+/** The same, small enough for a row of a table. */
+function Bar({ value, of, warn }: { value: number; of: number; warn?: boolean }) {
+  if (!of) return <span className="muted small">None yet</span>;
+  return (
+    <span className="ov-cell-bar">
+      <span className="ov-bar" aria-hidden="true">
+        <i className={warn ? 'warn' : ''} style={{ width: `${Math.min(100, Math.round((value / of) * 100))}%` }} />
+      </span>
+      <span className="small">
+        {value} of {of}
+      </span>
+    </span>
+  );
+}
+
 /** Where a manager can be sent from the overview. */
 export type ManageGo = (tab: 'seasons' | 'players' | 'schedule' | 'coaches' | 'announcements', focus?: { leagueId?: number; build?: boolean; view?: 'coaches' | 'invites' | 'requirements' | 'waiting' | 'teams' }) => void;
 
@@ -38,11 +76,16 @@ export type ManageGo = (tab: 'seasons' | 'players' | 'schedule' | 'coaches' | 'a
 export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: ManageGo }) {
   const [games, setGames] = useState<OrgGames | null>(null);
   const [picking, setPicking] = useState(false);
+  const [signups, setSignups] = useState<OrgSignup[] | null>(null);
+  /** The day picked on the calendar, or none for what comes next. */
+  const [day, setDay] = useState('');
+  const season = org.seasons.find((s) => !s.archived) ?? null;
   useEffect(() => {
     api.orgGames(c.id).then(setGames).catch(fail);
+    // Who signed up is for those who look after divisions.
+    if (season && org.can.leagues) api.orgSignups(c.id, season.id).then((r) => setSignups(r.signups)).catch(fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [c.id]);
-  const season = org.seasons.find((s) => !s.archived) ?? null;
+  }, [c.id, season?.id, org.waiting]);
   const leagues = season ? org.leagues.filter((l) => l.season_id === season.id) : [];
   const teams = org.teams.filter((t) => leagues.some((l) => l.id === t.league_id));
   const today = todayISO();
@@ -59,73 +102,301 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
     if (name && (await act(() => api.orgAddSeason(c.id, name), `${name} is ready. Add its divisions next.`))) go('seasons');
   };
 
+  // --- The active season, in figures -------------------------------------------------
+  const seasonGames = (games?.games ?? []).filter((g) => leagues.some((l) => l.id === g.league_id));
+  const counted = seasonGames.filter((g) => g.status !== 'cancelled');
+  const finals = seasonGames.filter((g) => g.status === 'final');
+  const upcoming = seasonGames.filter((g) => g.date >= today && g.status === 'scheduled');
+  const withHead = teams.length - noHead.length;
+  const signed = signups?.length ?? 0;
+  const onTeams = signups?.filter((g) => g.team_id).length ?? 0;
+  // The fortnight ahead, a day to a square.
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(`${today}T12:00:00`);
+    d.setDate(d.getDate() + i);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { iso, d, games: seasonGames.filter((g) => g.date === iso && g.status !== 'cancelled') };
+  });
+  const most = Math.max(1, ...days.map((x) => x.games.length));
+  const listed = day ? (days.find((x) => x.iso === day)?.games ?? []) : upcoming.slice(0, 5);
+  const divisions = leagues
+    .slice()
+    .sort((x, y) => x.sport.localeCompare(y.sport) || x.name.localeCompare(y.name, undefined, { numeric: true }))
+    .map((l) => {
+      const ts = teams.filter((t) => t.league_id === l.id);
+      const gs = counted.filter((g) => g.league_id === l.id);
+      const top = (games?.standings[l.id] ?? []).find((r) => r.played > 0);
+      return {
+        l,
+        teams: ts.length,
+        heads: ts.filter((t) => t.coaches.some((x) => x.head)).length,
+        players: ts.reduce((n, t) => n + t.players, 0),
+        waiting: signups?.filter((g) => g.league_id === l.id && !g.team_id).length ?? 0,
+        games: gs.length,
+        played: gs.filter((g) => g.status === 'final').length,
+        top,
+      };
+    });
+
   return (
     <>
-      <PageHead eyebrow="Management / Overview" title={`Run ${c.name}`} sub={season ? `${season.name} · your organization at a glance` : 'Your organization at a glance'} />
-      <div className="cx-stats">
-        <Stat value={issues} label={issues === 1 ? 'Thing to fix' : 'Things to fix'} note={issues ? 'Needs your attention' : 'Nothing needs fixing'} warn={issues > 0} />
-        <Stat value={`${org.org.seats_used} / ${org.org.seats}`} label="Coach seats used" note={`${plural(left, 'seat')} available`} warn={left === 0} onClick={org.can.people ? () => go('coaches') : undefined} />
-        <Stat value={leagues.length} label={season ? `${leagues.length === 1 ? 'Division' : 'Divisions'} this season` : 'Divisions'} note={`${plural(teams.length, 'team')} in all`} onClick={() => go('seasons')} />
-      </div>
-      <div className="cx-cols cx-cols-jobs">
-        <section className="card cx-card">
-          <h2>Needs attention</h2>
-          {issues === 0 && <p className="muted">Nothing right now. Every team has a head coach, no place is booked twice, and nobody is waiting on you.</p>}
-          <div className="cx-alerts">
-            {org.waiting > 0 && (
-              <Alert title={`${plural(org.waiting, 'player')} ${org.waiting === 1 ? 'is' : 'are'} waiting for a team`} sub="Signed up, and not on a roster yet." action="Put on teams" onAction={() => go('players', { view: 'waiting' })} />
-            )}
-            {noHead.length > 0 && (
-              <Alert
-                title={`${plural(noHead.length, 'team')} ${noHead.length === 1 ? 'needs' : 'need'} a head coach`}
-                sub={noHead
-                  .slice(0, 3)
-                  .map((t) => `${leagueName(t.league_id)} ${t.name}`)
-                  .join(' · ') + (noHead.length > 3 ? ` · and ${noHead.length - 3} more` : '')}
-                action={org.can.leagues ? 'Assign coaches' : undefined}
-                onAction={() => go('seasons', { leagueId: noHead[0].league_id ?? undefined })}
-              />
-            )}
-            {clashes.length > 0 && (
-              <Alert
-                title={`Booked twice on ${fmtDateShort(clashes[0].date)}${clashes[0].start_time ? ` at ${clock(clashes[0].start_time)}` : ''}`}
-                sub={clashes[0].warnings[0] + (clashes.length > 1 ? ` · and ${plural(clashes.length - 1, 'other game')}` : '')}
-                action="Fix booking"
-                onAction={() => go('schedule')}
-              />
-            )}
-            {unchecked.length > 0 && (
-              <Alert
-                title={`${plural(unchecked.length, 'coach', 'coaches')} ${unchecked.length === 1 ? 'has' : 'have'} missing checks`}
-                sub={unchecked
-                  .slice(0, 3)
-                  .map((p) => p.name)
-                  .join(' · ') + (unchecked.length > 3 ? ` · and ${unchecked.length - 3} more` : '')}
-                action="Review coaches"
-                onAction={() => go('coaches', { view: 'requirements' })}
-              />
-            )}
-            {org.invites.length > 0 && (
-              <Alert
-                title={`${plural(org.invites.length, 'invitation')} ${org.invites.length === 1 ? 'is' : 'are'} waiting`}
-                sub={org.invites.some((i) => i.expired) ? 'Sent, but not accepted. Some have run out and can be sent again.' : 'Sent, but not accepted yet'}
-                action="View invitations"
-                onAction={() => go('coaches', { view: 'invites' })}
-              />
-            )}
-          </div>
-        </section>
-        <section className="card cx-card">
-          <h2>Quick jobs</h2>
-          <ul className="cx-rows">
-            {org.can.leagues && season && <Row lead={<JobIcon d={JOB.teams} />} title="Add divisions and teams" sub={`In ${season.name}`} onClick={() => go('seasons')} />}
-            {org.can.leagues && <Row lead={<JobIcon d={JOB.season} />} title="Set up a new season" sub={season ? `After ${season.name}` : 'Then add its divisions and teams'} onClick={newSeason} />}
-            {org.can.leagues && season && <Row lead={<JobIcon d={JOB.signup} />} title="Sign up players" sub="Open the form for parents, or add them yourself" onClick={() => go('players')} />}
-            {org.can.leagues && org.leagues.length > 0 && <Row lead={<JobIcon d={JOB.schedule} />} title="Build a game schedule" sub="Pick the season and division first" onClick={() => setPicking(true)} />}
-            {org.can.people && <Row lead={<JobIcon d={JOB.invite} />} title="Invite coaches" sub={`${plural(left, 'seat')} available`} onClick={() => go('coaches', { view: 'invites' })} />}
-            {org.can.announce && <Row lead={<JobIcon d={JOB.announce} />} title="Send an announcement" sub="To everyone, or to one sport, division or team" onClick={() => go('announcements')} />}
-          </ul>
-        </section>
+      <PageHead eyebrow="Management / Overview" title={`Run ${c.name}`} sub={season ? `${season.name} · the season at a glance` : 'Your organization at a glance'} />
+      <div className="ov">
+        <div className="ov-main">
+          {!season && (
+            <section className="card cx-card">
+              <h2>No season running</h2>
+              <p className="muted">A season holds your divisions, teams, players and games. Start one to see it here.</p>
+              {org.can.leagues && (
+                <button type="button" className="btn primary" onClick={newSeason}>
+                  Set up a season
+                </button>
+              )}
+            </section>
+          )}
+          {season && (
+            <section className="card cx-card ov-season" aria-label={`${season.name} so far`}>
+              <header>
+                <div>
+                  <span className="ov-eyebrow">Active season</span>
+                  <h2>{season.name}</h2>
+                </div>
+                <span className="muted small">
+                  {plural(leagues.length, 'division')} · {plural(teams.length, 'team')}
+                </span>
+              </header>
+              <div className="ov-meters">
+                <Meter label="Players on teams" value={onTeams} of={signed} note={signed ? (signed - onTeams ? `${signed - onTeams} waiting for a team` : 'Everyone is on a team') : 'Nobody has signed up yet'} warn={signed - onTeams > 0} onClick={org.can.leagues ? () => go('players') : undefined} />
+                <Meter label="Teams with a head coach" value={withHead} of={teams.length} note={teams.length ? (noHead.length ? `${noHead.length} still ${noHead.length === 1 ? 'needs' : 'need'} one` : 'Every team has one') : 'No teams yet'} warn={noHead.length > 0} onClick={() => go('seasons')} />
+                <Meter label="Games played" value={finals.length} of={counted.length} note={counted.length ? `${plural(upcoming.length, 'game')} still to come` : 'No schedule yet'} onClick={() => go('schedule')} />
+              </div>
+            </section>
+          )}
+          {issues > 0 && (
+            <section className="card cx-card">
+              <h2>Needs attention</h2>
+              <div className="cx-alerts">
+                {org.waiting > 0 && (
+                  <Alert title={`${plural(org.waiting, 'player')} ${org.waiting === 1 ? 'is' : 'are'} waiting for a team`} sub="Signed up, and not on a roster yet." action="Put on teams" onAction={() => go('players', { view: 'waiting' })} />
+                )}
+                {noHead.length > 0 && (
+                  <Alert
+                    title={`${plural(noHead.length, 'team')} ${noHead.length === 1 ? 'needs' : 'need'} a head coach`}
+                    sub={noHead
+                      .slice(0, 3)
+                      .map((t) => `${leagueName(t.league_id)} ${t.name}`)
+                      .join(' · ') + (noHead.length > 3 ? ` · and ${noHead.length - 3} more` : '')}
+                    action={org.can.leagues ? 'Assign coaches' : undefined}
+                    onAction={() => go('seasons', { leagueId: noHead[0].league_id ?? undefined })}
+                  />
+                )}
+                {clashes.length > 0 && (
+                  <Alert
+                    title={`Booked twice on ${fmtDateShort(clashes[0].date)}${clashes[0].start_time ? ` at ${clock(clashes[0].start_time)}` : ''}`}
+                    sub={clashes[0].warnings[0] + (clashes.length > 1 ? ` · and ${plural(clashes.length - 1, 'other game')}` : '')}
+                    action="Fix booking"
+                    onAction={() => go('schedule')}
+                  />
+                )}
+                {unchecked.length > 0 && (
+                  <Alert
+                    title={`${plural(unchecked.length, 'coach', 'coaches')} ${unchecked.length === 1 ? 'has' : 'have'} missing checks`}
+                    sub={unchecked
+                      .slice(0, 3)
+                      .map((p) => p.name)
+                      .join(' · ') + (unchecked.length > 3 ? ` · and ${unchecked.length - 3} more` : '')}
+                    action="Review coaches"
+                    onAction={() => go('coaches', { view: 'requirements' })}
+                  />
+                )}
+                {org.invites.length > 0 && (
+                  <Alert
+                    title={`${plural(org.invites.length, 'invitation')} ${org.invites.length === 1 ? 'is' : 'are'} waiting`}
+                    sub={org.invites.some((i) => i.expired) ? 'Sent, but not accepted. Some have run out and can be sent again.' : 'Sent, but not accepted yet'}
+                    action="View invitations"
+                    onAction={() => go('coaches', { view: 'invites' })}
+                  />
+                )}
+              </div>
+            </section>
+          )}
+          {season && (
+            <section className="card cx-card" aria-label="The next two weeks">
+              <header className="ov-head">
+                <h2>The next two weeks</h2>
+                <button type="button" className="link" onClick={() => go('schedule')}>
+                  Full schedule
+                </button>
+              </header>
+              <div className="ov-days" role="group" aria-label="Days">
+                {days.map((x) => (
+                  <button
+                    key={x.iso}
+                    type="button"
+                    className={`ov-day ${x.iso === today ? 'today' : ''} ${day === x.iso ? 'on' : ''} ${x.games.length ? 'has' : ''}`}
+                    aria-pressed={day === x.iso}
+                    aria-label={`${x.d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}: ${plural(x.games.length, 'game')}`}
+                    onClick={() => setDay(day === x.iso ? '' : x.iso)}
+                  >
+                    <small>{x.d.toLocaleDateString(undefined, { weekday: 'short' })}</small>
+                    <b>{x.d.getDate()}</b>
+                    <span className="ov-day-bar" aria-hidden="true">
+                      {x.games.length > 0 && <i style={{ height: `${Math.round((x.games.length / most) * 100)}%` }} />}
+                    </span>
+                    <span className="ov-day-n">{x.games.length || ''}</span>
+                  </button>
+                ))}
+              </div>
+              <h3 className="ov-sub">{day ? `Games on ${fmtDateShort(day)}` : 'Coming up next'}</h3>
+              {listed.length === 0 ? (
+                <p className="muted small">{day ? 'No games that day.' : counted.length ? 'No games still to come.' : 'No games yet. Build a schedule from the quick jobs.'}</p>
+              ) : (
+                <ul className="ov-games">
+                  {listed.map((g) => (
+                    <li key={g.id}>
+                      <span className="ov-when">
+                        {!day && <b>{fmtDateShort(g.date)}</b>}
+                        <span className="muted small">{clock(g.start_time)}</span>
+                      </span>
+                      <span className="ov-teams">
+                        {g.away} <span className="muted">at</span> {g.home}
+                        <span className="muted small">
+                          {' '}
+                          · {leagueName(g.league_id)}
+                          {g.venue ? ` · ${g.venue}` : ''}
+                        </span>
+                      </span>
+                      {g.status === 'final' ? (
+                        <span className="ov-score">
+                          {g.away_score ?? '–'} – {g.home_score ?? '–'}
+                        </span>
+                      ) : g.status === 'postponed' ? (
+                        <Pill tone="warn">Postponed</Pill>
+                      ) : (
+                        g.warnings.length > 0 && <Pill tone="warn">Booked twice</Pill>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+          {season && divisions.length > 0 && (
+            <section className="card cx-card" aria-label="Divisions">
+              <header className="ov-head">
+                <h2>Divisions</h2>
+                <button type="button" className="link" onClick={() => go('seasons')}>
+                  Seasons &amp; teams
+                </button>
+              </header>
+              <div className="table-scroll">
+                <table className="table ov-divisions">
+                  <thead>
+                    <tr>
+                      <th>Division</th>
+                      <th className="num">Teams</th>
+                      <th className="num">Players</th>
+                      <th>Head coaches</th>
+                      <th>Games played</th>
+                      <th>Leading</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {divisions.map((x) => (
+                      <tr key={x.l.id} onClick={() => go('seasons', { leagueId: x.l.id })}>
+                        <td>
+                          <button type="button" className="link ov-division" onClick={() => go('seasons', { leagueId: x.l.id })}>
+                            {x.l.name}
+                          </button>
+                          <div className="muted small">{[x.l.sport, GENDER_WORD[x.l.gender]].filter(Boolean).join(' · ')}</div>
+                        </td>
+                        <td className="num">{x.teams}</td>
+                        <td className="num">
+                          {x.players}
+                          {x.waiting > 0 && <div className="ov-warn small">{x.waiting} waiting</div>}
+                        </td>
+                        <td>
+                          <Bar value={x.heads} of={x.teams} warn={x.heads < x.teams} />
+                        </td>
+                        <td>
+                          <Bar value={x.played} of={x.games} />
+                        </td>
+                        <td>
+                          {x.top ? (
+                            <>
+                              {x.top.team}
+                              <span className="muted small">
+                                {' '}
+                                {x.top.won}–{x.top.lost}
+                                {x.top.tied ? `–${x.top.tied}` : ''}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="muted small">No results yet</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+          {finals.length > 0 && (
+            <section className="card cx-card" aria-label="Latest results">
+              <h2>Latest results</h2>
+              <ul className="ov-games">
+                {finals
+                  .slice(-4)
+                  .reverse()
+                  .map((g) => (
+                    <li key={g.id}>
+                      <span className="ov-when">
+                        <b>{fmtDateShort(g.date)}</b>
+                      </span>
+                      <span className="ov-teams">
+                        <span className={(g.away_score ?? 0) > (g.home_score ?? 0) ? 'ov-won' : ''}>{g.away}</span> <span className="muted">at</span> <span className={(g.home_score ?? 0) > (g.away_score ?? 0) ? 'ov-won' : ''}>{g.home}</span>
+                        <span className="muted small"> · {leagueName(g.league_id)}</span>
+                      </span>
+                      <span className="ov-score">
+                        {g.away_score ?? '–'} – {g.home_score ?? '–'}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </section>
+          )}
+        </div>
+        <aside className="ov-side">
+          <section className="card ov-glance" aria-label="At a glance">
+            <div>
+              <strong className={issues ? 'ov-warn' : ''}>{issues}</strong>
+              <span>{issues === 1 ? 'Thing to fix' : 'Things to fix'}</span>
+              <small className="muted">{issues ? 'Listed under Needs attention' : 'Nothing needs fixing'}</small>
+            </div>
+            <button type="button" disabled={!org.can.people} onClick={() => go('coaches')}>
+              <strong>
+                {org.org.seats_used} / {org.org.seats}
+              </strong>
+              <span>Coach seats used</span>
+              <span className="ov-bar" aria-hidden="true">
+                <i className={left === 0 ? 'warn' : ''} style={{ width: `${org.org.seats ? Math.min(100, Math.round((org.org.seats_used / org.org.seats) * 100)) : 0}%` }} />
+              </span>
+              <small className={left === 0 ? 'ov-warn' : 'muted'}>{plural(left, 'seat')} available</small>
+            </button>
+          </section>
+          <section className="card cx-card">
+            <h2>Quick jobs</h2>
+            <ul className="cx-rows">
+              {org.can.leagues && season && <Row lead={<JobIcon d={JOB.teams} />} title="Add divisions and teams" sub={`In ${season.name}`} onClick={() => go('seasons')} />}
+              {org.can.leagues && <Row lead={<JobIcon d={JOB.season} />} title="Set up a new season" sub={season ? `After ${season.name}` : 'Then add its divisions and teams'} onClick={newSeason} />}
+              {org.can.leagues && season && <Row lead={<JobIcon d={JOB.signup} />} title="Sign up players" sub="Open the form for parents, or add them yourself" onClick={() => go('players')} />}
+              {org.can.leagues && org.leagues.length > 0 && <Row lead={<JobIcon d={JOB.schedule} />} title="Build a game schedule" sub="Pick the season and division first" onClick={() => setPicking(true)} />}
+              {org.can.people && <Row lead={<JobIcon d={JOB.invite} />} title="Invite coaches" sub={`${plural(left, 'seat')} available`} onClick={() => go('coaches', { view: 'invites' })} />}
+              {org.can.announce && <Row lead={<JobIcon d={JOB.announce} />} title="Send an announcement" sub="To everyone, or to one sport, division or team" onClick={() => go('announcements')} />}
+            </ul>
+          </section>
+        </aside>
       </div>
       {picking && <ScheduleFor org={org} seasonId={season?.id ?? 0} onClose={() => setPicking(false)} onPick={(leagueId, build) => go('seasons', { leagueId, build })} />}
     </>
