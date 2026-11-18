@@ -15789,3 +15789,40 @@ a.cx-row:hover .cx-row-text strong {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* What needs attention on the overview: small cards side by side, not a row each. */
+.ov-alerts {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+}
+.ov-alerts .cx-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 2px 8px;
+  padding: 8px 10px;
+}
+.ov-alerts .cx-alert-sign {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  font-size: 0.68rem;
+}
+.ov-alerts .cx-row-text {
+  gap: 0;
+}
+.ov-alerts .cx-row-text strong {
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+.ov-alerts .cx-row-text .small {
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-alerts .cx-alert-go {
+  grid-column: 2;
+  justify-self: start;
+  font-size: 0.76rem;
+}

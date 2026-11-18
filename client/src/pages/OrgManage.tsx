@@ -273,7 +273,7 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
           {issues > 0 && (
             <section className="card cx-card">
               <h2>Needs attention</h2>
-              <div className="cx-alerts">
+              <div className="cx-alerts ov-alerts">
                 {org.waiting > 0 && (
                   <Alert title={`${plural(org.waiting, 'player')} ${org.waiting === 1 ? 'is' : 'are'} waiting for a team`} sub="Signed up, and not on a roster yet." action="Put on teams" onAction={() => go('players', { view: 'waiting' })} />
                 )}
