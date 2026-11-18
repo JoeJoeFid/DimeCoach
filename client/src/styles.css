@@ -14989,3 +14989,21 @@ button.cx-row:hover .cx-job-icon {
   width: 100%;
   max-width: none;
 }
+
+/* A community's top tabs, drawn like the tabs on "Team & roster" */
+.cx-seg-tabs {
+  display: inline-flex;
+  max-width: 100%;
+  margin-bottom: 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cx-seg-tabs::-webkit-scrollbar {
+  display: none;
+}
+.cx-seg-tabs button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}

@@ -396,7 +396,7 @@ export default function CommunityPage() {
           <MoreMenu items={topMenu} label={`More for ${c.name}`} />
         </span>
       </header>
-      <nav className="cx-tabs" role="tablist" aria-label={side === 'manage' ? 'Management' : 'Community'}>
+      <nav className="seg team-tabs cx-seg-tabs" role="tablist" aria-label={side === 'manage' ? 'Management' : 'Community'}>
         {tabs.map(([t, label, count]) => (
           <button key={t} type="button" role="tab" className={onTab(t) ? 'on' : ''} aria-selected={onTab(t)} onClick={() => open(t)}>
             {label}
