@@ -439,14 +439,14 @@ function CheckModal({ entry, onClose, save }: { c: CommunityDetail; entry: { per
 // --- Leagues, teams and the schedule --------------------------------------------------
 const STATUS_WORD: Record<OrgGame['status'], string> = { scheduled: '', final: 'Final', postponed: 'Postponed', cancelled: 'Cancelled' };
 
-export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { focus?: { leagueId?: number } | null }) {
+export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { focus?: { leagueId?: number; /** Open straight on building that division's schedule. */ build?: boolean } | null }) {
   const app = useApp();
   const manage = org.can.leagues && !org.org.lapsed;
   const [seasonId, setSeasonId] = useState(() => org.leagues.find((l) => l.id === focus?.leagueId)?.season_id ?? 0);
   const [games, setGames] = useState<OrgGames | null>(null);
   const [coachFor, setCoachFor] = useState<OrgTeam | null>(null);
   const [editing, setEditing] = useState<{ league: OrgLeague; game: OrgGame | null } | null>(null);
-  const [building, setBuilding] = useState<OrgLeague | null>(null);
+  const [building, setBuilding] = useState<OrgLeague | null>(() => (focus?.build ? (org.leagues.find((l) => l.id === focus.leagueId) ?? null) : null));
   const [addLeague, setAddLeague] = useState(false);
   const [rolling, setRolling] = useState(false);
   /** The league being looked at in full. With none, the page is the overview of all of them. */
@@ -461,6 +461,8 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
   const sports = [...new Set(leagues.map((l) => l.sport))];
   const leagueTeams = open ? org.teams.filter((t) => t.league_id === open.id) : [];
   const team = leagueTeams.find((t) => t.id === teamId) ?? null;
+  /** The open division's teams a manager still has to find a head coach for. */
+  const needHead = manage && open ? leagueTeams.filter((t) => !t.coaches.some((x) => x.head)) : [];
   const seasonTeams = org.teams.filter((t) => leagues.some((l) => l.id === t.league_id));
   // Where you are, as selectors: each one also jumps sideways to another season, league or team.
   const crumbs: Crumb[] = [
@@ -623,7 +625,7 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
         </div>
       )}
       {open && !team && (
-        <>
+        <div className={`org-division ${needHead.length ? 'two' : ''}`}>
           <LeagueCard
             key={open.id}
             c={c}
@@ -641,12 +643,28 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
             openTeam={(t) => app.openTeam(true, t.id)}
             onTeam={(t) => setTeamId(t.id)}
           />
-          {manage &&
-            leagueTeams
-              .filter((t) => !t.coaches.some((s) => s.head))
-              .slice(0, 3)
-              .map((t) => <Alert key={t.id} title={`${t.name} has no head coach`} sub="Assign one so the team can be opened and planned for." action="Assign" onAction={() => setCoachFor(t)} />)}
-        </>
+          {needHead.length > 0 && (
+            <aside className="card org-attention" aria-label="Needs attention">
+              <header>
+                <span className="cx-alert-sign" aria-hidden="true">
+                  !
+                </span>
+                <div>
+                  <h2>Needs attention</h2>
+                  <span className="muted small">Teams that need a head coach assigned.</span>
+                </div>
+                <span className="org-attention-count" title={plural(needHead.length, 'team')}>
+                  {needHead.length}
+                </span>
+              </header>
+              <div className="cx-alerts">
+                {needHead.map((t) => (
+                  <Alert key={t.id} title={`${t.name} has no head coach`} sub="Assign one so the team can be opened and planned for." action="Assign" onAction={() => setCoachFor(t)} />
+                ))}
+              </div>
+            </aside>
+          )}
+        </div>
       )}
       {open && team && (
         <TeamPage
@@ -892,10 +910,13 @@ function LeagueCard({
       <header className="org-league-head">
         <div>
           <h2>{league.name}</h2>
-          <span className="muted small">
-            {[league.sport, GENDER_WORD[league.gender], league.age_group, plural(teams.length, 'team'), games.length ? plural(games.length, 'game') : ''].filter(Boolean).join(' · ')}
-          </span>
+          <p className="org-league-sub muted small">
+            <span>{[league.sport, GENDER_WORD[league.gender], league.age_group, plural(teams.length, 'team'), games.length ? plural(games.length, 'game') : ''].filter(Boolean).join(' · ')}</span>
+            <span>{manage ? 'Manage teams, schedule, and standings for this division.' : 'Teams, schedule, and standings for this division.'}</span>
+          </p>
         </div>
+      </header>
+      <div className="org-league-tabs">
         <div className="seg" role="tablist" aria-label={`${league.name} sections`}>
           {(['teams', 'schedule', 'standings'] as const).map((v) => (
             <button key={v} type="button" role="tab" aria-selected={view === v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
@@ -905,7 +926,7 @@ function LeagueCard({
           ))}
         </div>
         {manage && <MoreMenu items={leagueMenu} label={`More for ${league.name}`} />}
-      </header>
+      </div>
 
       {view === 'teams' && (
         <>

@@ -24,6 +24,7 @@ import { publicBase } from './invites.js';
 import { mailerStatus, sendMail } from './mailer.js';
 import { notify } from './notices.js';
 import { createWorkspace, seedSport } from './seed.js';
+import { mountSignups, mountSignupsPublic, seasonHasSignups, waitingCount } from './orgSignups.js';
 
 function addColumn(table, column, ddl) {
   const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
@@ -620,6 +621,8 @@ export function mountOrgs(app) {
       requirements: [],
       people: [],
       invites: [],
+      // Players signed up for a season still running who are not on a team yet.
+      waiting: p.leagues ? waitingCount(c.id) : 0,
     };
     // The list of people, their seats and their paperwork is for those who manage people or leagues.
     if (!p.people && !p.leagues) return out;
@@ -886,6 +889,7 @@ export function mountOrgs(app) {
     const s = get('SELECT * FROM org_seasons WHERE id=? AND community_id=?', Number(req.params.seasonId), at.c.id);
     if (!s) return res.status(404).json({ error: 'Not found' });
     if (get('SELECT 1 AS ok FROM org_leagues WHERE season_id=?', s.id)) return res.status(400).json({ error: 'This season still has divisions in it. Remove them first, or archive the season to keep it.' });
+    if (seasonHasSignups(s.id)) return res.status(400).json({ error: 'This season still has players signed up. Remove them first, or archive the season to keep it.' });
     run('DELETE FROM org_seasons WHERE id=?', s.id);
     audit(at.c, req, `Deleted the empty season "${s.name}"`);
     send(res, at);
@@ -1329,6 +1333,8 @@ export function mountOrgs(app) {
       teams: get('SELECT COUNT(*) AS n FROM teams WHERE community_id=?', c.id).n,
       plan: isOrg(c) ? 'organization' : 'group', seats: c.seats || 0, seats_used: seatsUsed(c.id), expires: c.plan_expires || '', lapsed: lapsed(c),
     }));
+  mountSignups(app, { orgEnter, audit, orgOut });
+
   app.get('/api/system/communities', systemOnly, (_req, res) => res.json(plansOut()));
   app.put('/api/system/communities/:id', systemOnly, (req, res) => {
     const c = get('SELECT * FROM communities WHERE id=?', Number(req.params.id));
@@ -1357,6 +1363,7 @@ export function mountOrgs(app) {
 // --- Open to anyone: the public schedule page and its calendar feed --------------------
 /** Mounted before sign-in is required. Shows only what the organization chose to publish: teams, games and results. */
 export function mountOrgPublic(app) {
+  mountSignupsPublic(app);
   const publicOrg = (slug) => {
     const c = get('SELECT * FROM communities WHERE public_slug=? AND public_on=1', str(slug, 60).toLowerCase());
     return c && isOrg(c) ? c : null;

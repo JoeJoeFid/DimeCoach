@@ -1,7 +1,7 @@
 // The management side of an organization, as its managers see it: what needs attention, every
 // game in one schedule, and how the organization is using Dime Coach.
 import { useEffect, useState } from 'react';
-import { api, type OrgGame, type OrgGames, type OrgLeague, type OrgUsage as Usage } from '../api';
+import { api, GENDER_WORD, type OrgGame, type OrgGames, type OrgLeague, type OrgUsage as Usage } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
 import { promptDialog } from '../components/dialogs';
@@ -19,6 +19,7 @@ const JOB = {
   schedule: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M8 14h.010M12 14h.010M16 14h.010M8 18h.010M12 18h.010',
   invite: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M19 8v6M22 11h-6',
   announce: 'm3 11 18-5v12L3 14v-3zM11.600 16.800a3 3 0 1 1-5.800-1.600',
+  signup: 'M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 11h8M8 15h5',
 };
 function JobIcon({ d }: { d: string }) {
   return (
@@ -31,11 +32,12 @@ function JobIcon({ d }: { d: string }) {
 }
 
 /** Where a manager can be sent from the overview. */
-export type ManageGo = (tab: 'seasons' | 'schedule' | 'coaches' | 'announcements', focus?: { leagueId?: number; view?: 'coaches' | 'invites' | 'requirements' }) => void;
+export type ManageGo = (tab: 'seasons' | 'players' | 'schedule' | 'coaches' | 'announcements', focus?: { leagueId?: number; build?: boolean; view?: 'coaches' | 'invites' | 'requirements' | 'waiting' | 'teams' }) => void;
 
 /** The first thing a manager sees: what needs fixing, each with the way to fix it, and the common jobs. */
 export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: ManageGo }) {
   const [games, setGames] = useState<OrgGames | null>(null);
+  const [picking, setPicking] = useState(false);
   useEffect(() => {
     api.orgGames(c.id).then(setGames).catch(fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,7 +50,7 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
   const clashes = (games?.games ?? []).filter((g) => g.date >= today && g.status === 'scheduled' && g.warnings.length > 0);
   const unchecked = org.people.filter((p) => p.coach && p.compliance.some((x) => x.state === 'missing' || x.state === 'expired'));
   const left = Math.max(0, org.org.seats - org.org.seats_used);
-  const issues = (noHead.length ? 1 : 0) + (clashes.length ? 1 : 0) + (unchecked.length ? 1 : 0) + (org.invites.length ? 1 : 0);
+  const issues = (noHead.length ? 1 : 0) + (clashes.length ? 1 : 0) + (unchecked.length ? 1 : 0) + (org.invites.length ? 1 : 0) + (org.waiting ? 1 : 0);
   const leagueName = (id: number | null) => org.leagues.find((l) => l.id === id)?.name ?? '';
 
   const newSeason = async () => {
@@ -70,6 +72,9 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
           <h2>Needs attention</h2>
           {issues === 0 && <p className="muted">Nothing right now. Every team has a head coach, no place is booked twice, and nobody is waiting on you.</p>}
           <div className="cx-alerts">
+            {org.waiting > 0 && (
+              <Alert title={`${plural(org.waiting, 'player')} ${org.waiting === 1 ? 'is' : 'are'} waiting for a team`} sub="Signed up, and not on a roster yet." action="Put on teams" onAction={() => go('players', { view: 'waiting' })} />
+            )}
             {noHead.length > 0 && (
               <Alert
                 title={`${plural(noHead.length, 'team')} ${noHead.length === 1 ? 'needs' : 'need'} a head coach`}
@@ -115,13 +120,66 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
           <ul className="cx-rows">
             {org.can.leagues && season && <Row lead={<JobIcon d={JOB.teams} />} title="Add divisions and teams" sub={`In ${season.name}`} onClick={() => go('seasons')} />}
             {org.can.leagues && <Row lead={<JobIcon d={JOB.season} />} title="Set up a new season" sub={season ? `After ${season.name}` : 'Then add its divisions and teams'} onClick={newSeason} />}
-            {org.can.leagues && leagues.length > 0 && <Row lead={<JobIcon d={JOB.schedule} />} title="Build a game schedule" sub="A round robin, or one game at a time" onClick={() => go('seasons', { leagueId: leagues[0].id })} />}
+            {org.can.leagues && season && <Row lead={<JobIcon d={JOB.signup} />} title="Sign up players" sub="Open the form for parents, or add them yourself" onClick={() => go('players')} />}
+            {org.can.leagues && org.leagues.length > 0 && <Row lead={<JobIcon d={JOB.schedule} />} title="Build a game schedule" sub="Pick the season and division first" onClick={() => setPicking(true)} />}
             {org.can.people && <Row lead={<JobIcon d={JOB.invite} />} title="Invite coaches" sub={`${plural(left, 'seat')} available`} onClick={() => go('coaches', { view: 'invites' })} />}
             {org.can.announce && <Row lead={<JobIcon d={JOB.announce} />} title="Send an announcement" sub="To everyone, or to one sport, division or team" onClick={() => go('announcements')} />}
           </ul>
         </section>
       </div>
+      {picking && <ScheduleFor org={org} seasonId={season?.id ?? 0} onClose={() => setPicking(false)} onPick={(leagueId, build) => go('seasons', { leagueId, build })} />}
     </>
+  );
+}
+
+/** Which season and division a schedule is to be built for. Nothing is chosen for the manager. */
+function ScheduleFor({ org, seasonId: first, onClose, onPick }: { org: OrgPanelProps['org']; seasonId: number; onClose: () => void; onPick: (leagueId: number, build: boolean) => void }) {
+  const seasons = org.seasons.filter((s) => !s.archived);
+  const [seasonId, setSeasonId] = useState(seasons.length === 1 ? seasons[0].id : 0);
+  const [leagueId, setLeagueId] = useState(0);
+  const leagues = org.leagues.filter((l) => l.season_id === seasonId).sort((a, b) => a.sport.localeCompare(b.sport) || a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const league = leagues.find((l) => l.id === leagueId) ?? null;
+  const count = league ? org.teams.filter((t) => t.league_id === league.id).length : 0;
+  return (
+    <Modal title="Build a game schedule" onClose={onClose}>
+      <form
+        className="fields stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (league) onPick(league.id, count >= 2);
+        }}
+      >
+        <label>
+          <span className="field-label">Season</span>
+          <select className="input" required autoFocus value={seasonId || ''} onChange={(e) => (setSeasonId(Number(e.target.value)), setLeagueId(0))}>
+            <option value="">Choose a season</option>
+            {seasons.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {s.id === first ? ' (current)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span className="field-label">Division</span>
+          <select className="input" required disabled={!seasonId || leagues.length === 0} value={leagueId || ''} onChange={(e) => setLeagueId(Number(e.target.value))}>
+            <option value="">{!seasonId ? 'Choose the season first' : leagues.length ? 'Choose a division' : 'This season has no divisions yet'}</option>
+            {leagues.map((l) => (
+              <option key={l.id} value={l.id}>
+                {[l.sport, l.name, GENDER_WORD[l.gender]].filter(Boolean).join(' · ')}
+              </option>
+            ))}
+          </select>
+        </label>
+        {league && count < 2 && <p className="muted small">{league.name} has {plural(count, 'team')}. A schedule needs at least two, so this opens the division for you to add teams first.</p>}
+        <div className="modal-actions">
+          <button className="btn primary" disabled={!league}>
+            {league && count < 2 ? 'Open the division' : 'Build the schedule'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

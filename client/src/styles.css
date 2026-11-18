@@ -14726,3 +14726,266 @@ button.cx-row:hover .cx-job-icon {
     grid-template-columns: 1fr;
   }
 }
+
+/* A division's page: the division, with what needs attention in its own box to the right */
+.org-division {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.org-division.two {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+}
+.org-league-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0 0;
+}
+.org-league-sub span + span {
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+.org-league-tabs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0 14px;
+}
+.org-league-tabs .seg {
+  flex: 1;
+  display: flex;
+}
+.org-league-tabs .seg button {
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+}
+.org-attention {
+  background: color-mix(in srgb, var(--warn-soft) 35%, var(--surface));
+}
+.org-attention > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.org-attention > header > div {
+  flex: 1;
+  min-width: 0;
+}
+.org-attention h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.org-attention-count {
+  flex: none;
+  min-width: 26px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+.org-attention .cx-alerts {
+  max-height: 520px;
+  overflow-y: auto;
+}
+.org-attention .cx-alert {
+  padding: 10px 12px;
+  gap: 10px;
+}
+@media (max-width: 1100px) {
+  .org-division.two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.org-attention .cx-alert {
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+.org-attention .cx-alert .cx-alert-sign {
+  width: 22px;
+  height: 22px;
+  font-size: 0.8rem;
+}
+.org-attention .cx-alert .small {
+  font-size: 0.78rem;
+}
+.org-attention .cx-alert-go {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  text-decoration: none;
+  font-size: 0.82rem;
+}
+.org-league .org-league-head h2 {
+  font-size: 1.4rem;
+}
+
+/* An organization's players: the list of sign-ups, the board of teams, and the sign-up form */
+.pl-bar .input[placeholder] {
+  flex: 1 1 200px;
+  max-width: 320px;
+}
+.pl-bar-end {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.pl-picked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface));
+}
+.pl-picked strong {
+  margin-right: 4px;
+}
+.pl-table td {
+  vertical-align: top;
+}
+.pl-check {
+  width: 28px;
+}
+.pl-more {
+  width: 44px;
+  text-align: right;
+}
+.pl-notes {
+  max-width: 320px;
+}
+.pl-board-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.pl-board-bar p {
+  margin: 0;
+}
+.pl-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.pl-col {
+  padding: 14px;
+  min-width: 0;
+}
+.pl-col.waiting {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--warn-soft) 30%, var(--surface));
+}
+.pl-col.droppable {
+  outline: 2px dashed var(--line);
+  outline-offset: -4px;
+}
+.pl-col > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pl-col h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.pl-count {
+  flex: none;
+  min-width: 26px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+.pl-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pl-col li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 4px 8px;
+  border-top: 1px solid var(--line);
+}
+.pl-col li[draggable='true'] {
+  cursor: grab;
+}
+.pl-kid {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pl-hand {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+.pl-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 12px 0;
+}
+.pl-form .res-share-link {
+  margin-bottom: 12px;
+}
+.pl-ideal {
+  max-width: 120px;
+}
+.pl-plan {
+  margin-top: 4px;
+}
+.su {
+  max-width: 560px;
+  padding-top: 20px;
+  padding-bottom: 40px;
+}
+.su h2 {
+  margin: 6px 0 0;
+  font-size: 1.1rem;
+}
+.su-trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+@media (max-width: 640px) {
+  .pl-bar-end {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+.su form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.su form .input {
+  width: 100%;
+  max-width: none;
+}

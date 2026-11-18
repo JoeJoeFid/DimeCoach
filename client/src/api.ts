@@ -298,6 +298,54 @@ export interface Org {
   requirements: { id: number; name: string }[];
   people: OrgPerson[];
   invites: OrgInvite[];
+  /** Players signed up for a season still running who are not on a team yet. */
+  waiting: number;
+}
+/** A player on a season's list, on a team or waiting for one. */
+export interface OrgSignup {
+  id: number;
+  league_id: number | null;
+  name: string;
+  grade: string;
+  team_id: number | null;
+  /** How they got on their team: put there by a manager, or dealt out automatically. */
+  placed: '' | 'manual' | 'auto';
+  /** Whether a parent sent the form, or a manager typed them in. */
+  source: 'form' | 'admin';
+  created_at: string;
+  parent_name: string;
+  parent_email: string;
+  parent_phone: string;
+  notes: string;
+}
+/** What dealing a division's waiting players out would do, team by team. */
+export interface SeedPlan {
+  teams: { id: number; name: string; before: number; kept: number; after: number }[];
+  pool: number;
+  placed: number;
+  waiting: number;
+  teams_short: number;
+}
+export interface OrgSignups {
+  season: { id: number; name: string; open: boolean; code: string };
+  /** Whether the caller may see parents' contact details and notes. */
+  contacts: boolean;
+  /** For each team, how many players its coach added to the roster themselves. */
+  others: Record<number, number>;
+  signups: OrgSignup[];
+  org: Org;
+  plan?: SeedPlan;
+}
+export type SignupDraft = { name: string; grade: string; parent_name: string; parent_email: string; parent_phone: string; notes: string; league_id: number | null };
+export type SeedOptions = { ideal: number; extras: 'spread' | 'wait'; redo: boolean };
+/** A season's sign-up form, as anyone with its link sees it. */
+export interface PublicSignup {
+  org: string;
+  image: string;
+  color: string;
+  season: string;
+  open: boolean;
+  divisions: { id: number; name: string; sport: string; age_group: string; gender: LeagueGender }[];
 }
 export interface OrgGame {
   id: number;
@@ -702,6 +750,17 @@ export const api = {
   orgRollover: (id: number, seasonId: number, b: { name: string; keep_coaches: boolean; archive: boolean }) => req<Org>('POST', `/communities/${id}/org/seasons/${seasonId}/rollover`, b),
   orgAddLeague: (id: number, b: { season_id: number; name: string; sport: string; age_group: string; gender: LeagueGender }) => req<Org>('POST', `/communities/${id}/org/leagues`, b),
   orgUpdateLeague: (id: number, leagueId: number, b: { name: string; age_group?: string; gender?: LeagueGender }) => req<Org>('PUT', `/communities/${id}/org/leagues/${leagueId}`, b),
+  orgSignups: (id: number, seasonId: number) => req<OrgSignups>('GET', `/communities/${id}/org/signups?season_id=${seasonId}`),
+  orgOpenSignups: (id: number, seasonId: number, open: boolean) => req<OrgSignups>('PUT', `/communities/${id}/org/seasons/${seasonId}/signups`, { open }),
+  orgAddSignup: (id: number, seasonId: number, b: Partial<SignupDraft> & { names?: string }) => req<OrgSignups>('POST', `/communities/${id}/org/signups`, { season_id: seasonId, ...b }),
+  orgUpdateSignup: (id: number, signupId: number, b: Partial<SignupDraft>) => req<OrgSignups>('PUT', `/communities/${id}/org/signups/${signupId}`, b),
+  orgDeleteSignup: (id: number, signupId: number) => req<OrgSignups>('DELETE', `/communities/${id}/org/signups/${signupId}`),
+  orgPlaceSignups: (id: number, ids: number[], teamId: number) => req<OrgSignups>('POST', `/communities/${id}/org/signups/place`, { ids, team_id: teamId }),
+  orgSeedPreview: (id: number, leagueId: number, b: SeedOptions) => req<{ plan: SeedPlan }>('POST', `/communities/${id}/org/leagues/${leagueId}/seed`, b),
+  orgSeed: (id: number, leagueId: number, b: SeedOptions) => req<OrgSignups>('POST', `/communities/${id}/org/leagues/${leagueId}/seed`, { ...b, apply: true }),
+  orgUnseed: (id: number, leagueId: number) => req<OrgSignups>('POST', `/communities/${id}/org/leagues/${leagueId}/unseed`),
+  publicSignup: (code: string) => req<PublicSignup>('GET', `/public/signup/${encodeURIComponent(code)}`),
+  sendPublicSignup: (code: string, b: Omit<SignupDraft, 'league_id'> & { league_id: number; website: string }) => req<{ ok: true }>('POST', `/public/signup/${encodeURIComponent(code)}`, b),
   orgDeleteLeague: (id: number, leagueId: number) => req<Org>('DELETE', `/communities/${id}/org/leagues/${leagueId}`),
   orgAddVenue: (id: number, b: { name: string; address: string }) => req<Org>('POST', `/communities/${id}/org/venues`, b),
   orgDeleteVenue: (id: number, venueId: number) => req<Org>('DELETE', `/communities/${id}/org/venues/${venueId}`),

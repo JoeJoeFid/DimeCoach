@@ -16,6 +16,7 @@ import Messages from './pages/Messages';
 import CoachLibraryPage from './pages/CoachLibrary';
 import CommunityPage from './pages/Community';
 import OrgPublic from './pages/OrgPublic';
+import SignUpForm from './pages/SignUpForm';
 import SharedPlan from './pages/SharedPlan';
 import Dashboard from './pages/Dashboard';
 import Plans from './pages/Plans';
@@ -164,6 +165,13 @@ export default function App() {
     view = (
       <Routes>
         <Route path="/o/:slug" element={<OrgPublic />} />
+      </Routes>
+    );
+  // So is a season's sign-up form, for parents.
+  else if (/^\/signup\/[^/]+\/?$/.test(pathname))
+    view = (
+      <Routes>
+        <Route path="/signup/:code" element={<SignUpForm />} />
       </Routes>
     );
   // So is a practice a coach sent by link. "Sign in" there shows the sign-in page, and comes back here.

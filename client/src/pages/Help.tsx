@@ -221,6 +221,19 @@ const TOPICS: Topic[] = [
   },
   {
     group: 'Organizations',
+    title: 'Sign players up and put them on teams',
+    steps: [
+      'In the organization, switch to "Manage" and open "Players". Choose the season at the top.',
+      'Under "Sign-up form", open sign-ups and send the link to parents. Each player they sign up lands in the list. You can also add players yourself, one at a time or by pasting a list of names.',
+      'Under "Put on teams", choose a division. Drag a player to a team, or use the "…" beside them to put them on a team, move them, or take them off.',
+      '"Place automatically" deals the waiting players out evenly. Set the ideal number of players on a team, look at what it would do, then place them.',
+      'Players you placed by hand are marked "by hand" and are never moved by automatic placing. "Undo automatic placing" sends only the automatic ones back to waiting.',
+    ],
+    tip: "A player on a team is on that team's roster, where its coach sees them. Parents' contact details are shown only to admins who may see rosters.",
+    words: 'signup sign-up register registration players kids roster seed place teams automatic division waiting form parents',
+  },
+  {
+    group: 'Organizations',
     title: 'Coach a team that belongs to an organization',
     steps: [
       'Use "Switch team" and choose the team under "Shared with you". It says which organization it is from.',

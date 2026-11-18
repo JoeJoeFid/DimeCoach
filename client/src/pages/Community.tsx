@@ -11,12 +11,13 @@ import { PlayDiagram } from '../components/PlayDiagram';
 import { EditBox, EditedMark, MentionArea, MentionText } from '../components/Mentions';
 import { LapsedBanner, OrgAnnouncements, OrgLibrarySettings, OrgLog, OrgVenues, OrgPeople, OrgPublicSettings, OrgTeams, PinnedAnnouncements } from './OrgPanels';
 import { ManageOverview, OrgSchedule, OrgUsage, type ManageGo } from './OrgManage';
+import { OrgPlayers } from './OrgPlayers';
 import { Badge, PageHead, Row } from '../components/cx';
 
 // A community has two sides. Everyone sees the community side: home, the shared library, the
 // discussions and the members. The people who run an organization also have the management side.
-type Tab = 'home' | 'library' | 'discussions' | 'members' | 'announcements' | 'overview' | 'seasons' | 'schedule' | 'coaches' | 'more' | 'venues' | 'usage' | 'log' | 'public' | 'settings';
-const TABS: Tab[] = ['home', 'library', 'discussions', 'members', 'announcements', 'overview', 'seasons', 'schedule', 'coaches', 'more', 'venues', 'usage', 'log', 'public', 'settings'];
+type Tab = 'home' | 'library' | 'discussions' | 'members' | 'announcements' | 'overview' | 'seasons' | 'players' | 'schedule' | 'coaches' | 'more' | 'venues' | 'usage' | 'log' | 'public' | 'settings';
+const TABS: Tab[] = ['home', 'library', 'discussions', 'members', 'announcements', 'overview', 'seasons', 'players', 'schedule', 'coaches', 'more', 'venues', 'usage', 'log', 'public', 'settings'];
 const COMMUNITY_TABS: Tab[] = ['home', 'library', 'discussions', 'members'];
 /** What sits behind "More" on the management side. */
 const MORE_TABS: Tab[] = ['more', 'announcements', 'venues', 'usage', 'log', 'public', 'settings'];
@@ -159,7 +160,7 @@ export default function CommunityPage() {
   const [thread, setThread] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   // Where the overview sent the manager: a league to open, or a part of the coaches page.
-  const [focus, setFocus] = useState<{ leagueId?: number; view?: 'coaches' | 'invites' | 'requirements' } | null>(null);
+  const [focus, setFocus] = useState<{ leagueId?: number; build?: boolean; view?: 'coaches' | 'invites' | 'requirements' | 'waiting' | 'teams' } | null>(null);
   // Set while the picker was opened from a reply: what is chosen is shared and handed to that reply.
   const [attachTo, setAttachTo] = useState<{ done: (p: Picked) => void } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -316,6 +317,7 @@ export default function CommunityPage() {
       ? [
           ['overview', 'Overview', 0],
           ['seasons', 'Seasons & teams', 0],
+          ['players', 'Players', org?.can.leagues ? org.waiting : 0],
           ['schedule', 'Schedule', 0],
           ['coaches', 'Coaches', 0],
           ['more', 'More', 0],
@@ -439,8 +441,9 @@ export default function CommunityPage() {
       {at === 'announcements' && orgProps && <OrgAnnouncements {...orgProps} />}
       {at === 'overview' && orgProps && <ManageOverview {...orgProps} go={go} />}
       {at === 'seasons' && orgProps && <OrgTeams key={`league-${focus?.leagueId ?? 0}`} {...orgProps} focus={focus} />}
+      {at === 'players' && orgProps && (may.leagues ? <OrgPlayers {...orgProps} focus={focus} /> : <div className="card">Players and teams are looked after by the admins who were given the Divisions job.</div>)}
       {at === 'schedule' && orgProps && <OrgSchedule {...orgProps} />}
-      {at === 'coaches' && orgProps && (may.people ? <OrgPeople key={focus?.view ?? 'coaches'} {...orgProps} initialView={focus?.view} /> : <div className="card">Coaches and seats are looked after by the admins who were given the People job.</div>)}
+      {at === 'coaches' && orgProps && (may.people ? <OrgPeople key={focus?.view ?? 'coaches'} {...orgProps} initialView={focus?.view === 'coaches' || focus?.view === 'invites' || focus?.view === 'requirements' ? focus.view : undefined} /> : <div className="card">Coaches and seats are looked after by the admins who were given the People job.</div>)}
       {at === 'venues' && orgProps && <OrgVenues {...orgProps} />}
       {at === 'usage' && orgProps && <OrgUsage c={c} fail={fail} go={go} />}
       {at === 'log' && orgProps && <OrgLog c={c} fail={fail} />}
