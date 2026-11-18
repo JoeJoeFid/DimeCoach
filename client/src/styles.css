@@ -14663,3 +14663,43 @@ button.cx-row:hover .cx-row-text strong {
   align-items: center;
   gap: 6px;
 }
+
+/* Adding a league: the form, with the season's other leagues in the same sport beside it */
+.league-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 280px);
+  gap: 24px;
+  align-items: start;
+}
+.league-add-side {
+  border-left: 1px solid var(--line);
+  padding-left: 24px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.league-add-side h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+.league-add-side ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.league-add-side li {
+  display: flex;
+  flex-direction: column;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 640px) {
+  .league-add {
+    grid-template-columns: 1fr;
+  }
+  .league-add-side {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 16px 0 0;
+    max-height: 220px;
+  }
+}

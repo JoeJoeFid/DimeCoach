@@ -281,7 +281,11 @@ export interface OrgLeague {
   name: string;
   sport: string;
   age_group: string;
+  /** Who it is for, or '' where nobody has said. */
+  gender: LeagueGender;
 }
+export type LeagueGender = '' | 'boys' | 'girls' | 'coed';
+export const GENDER_WORD: Record<LeagueGender, string> = { '': '', boys: 'Boys', girls: 'Girls', coed: 'Co-ed' };
 /** Everything about an organization the caller may see. People, invitations and requirements are empty for those who do not manage them. */
 export interface Org {
   plan: 'organization';
@@ -696,8 +700,8 @@ export const api = {
   orgUpdateSeason: (id: number, seasonId: number, b: { name?: string; archived?: boolean }) => req<Org>('PUT', `/communities/${id}/org/seasons/${seasonId}`, b),
   orgDeleteSeason: (id: number, seasonId: number) => req<Org>('DELETE', `/communities/${id}/org/seasons/${seasonId}`),
   orgRollover: (id: number, seasonId: number, b: { name: string; keep_coaches: boolean; archive: boolean }) => req<Org>('POST', `/communities/${id}/org/seasons/${seasonId}/rollover`, b),
-  orgAddLeague: (id: number, b: { season_id: number; name: string; sport: string; age_group: string }) => req<Org>('POST', `/communities/${id}/org/leagues`, b),
-  orgUpdateLeague: (id: number, leagueId: number, b: { name: string; age_group: string }) => req<Org>('PUT', `/communities/${id}/org/leagues/${leagueId}`, b),
+  orgAddLeague: (id: number, b: { season_id: number; name: string; sport: string; age_group: string; gender: LeagueGender }) => req<Org>('POST', `/communities/${id}/org/leagues`, b),
+  orgUpdateLeague: (id: number, leagueId: number, b: { name: string; age_group?: string; gender?: LeagueGender }) => req<Org>('PUT', `/communities/${id}/org/leagues/${leagueId}`, b),
   orgDeleteLeague: (id: number, leagueId: number) => req<Org>('DELETE', `/communities/${id}/org/leagues/${leagueId}`),
   orgAddVenue: (id: number, b: { name: string; address: string }) => req<Org>('POST', `/communities/${id}/org/venues`, b),
   orgDeleteVenue: (id: number, venueId: number) => req<Org>('DELETE', `/communities/${id}/org/venues/${venueId}`),

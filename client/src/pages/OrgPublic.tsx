@@ -2,7 +2,7 @@
 // Anyone with the link can open it, signed in or not. It shows no people.
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, type PublicOrg } from '../api';
+import { api, GENDER_WORD, type PublicOrg } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { CopyButton } from './OrgPanels';
 
@@ -97,7 +97,7 @@ export default function OrgPublic() {
                 </label>
               )}
               <label>
-                <span className="field-label">League</span>
+                <span className="field-label">Division</span>
                 <select
                   className="input"
                   value={league?.id ?? 0}
@@ -129,12 +129,12 @@ export default function OrgPublic() {
             </div>
             {!league ? (
               <div className="card">
-                <p className="muted">No leagues in {season.name} yet.</p>
+                <p className="muted">No divisions in {season.name} yet.</p>
               </div>
             ) : (
               <>
                 <p className="pub-sub">
-                  {[season.name, league.sport, league.age_group].filter(Boolean).join(' · ')}
+                  {[season.name, league.sport, GENDER_WORD[league.gender], league.age_group].filter(Boolean).join(' · ')}
                 </p>
                 <section className="card">
                   <h2>{team ? `${team.name}: games to come` : 'Games to come'}</h2>

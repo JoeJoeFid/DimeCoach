@@ -38,7 +38,7 @@ export function ManageOverview({ c, org, fail, go }: OrgPanelProps & { go: Manag
       <div className="cx-stats">
         <Stat value={issues} label={issues === 1 ? 'Thing to fix' : 'Things to fix'} note={issues ? 'Needs your attention' : 'Nothing needs fixing'} warn={issues > 0} />
         <Stat value={`${org.org.seats_used} / ${org.org.seats}`} label="Coach seats used" note={`${plural(left, 'seat')} available`} warn={left === 0} onClick={org.can.people ? () => go('coaches') : undefined} />
-        <Stat value={leagues.length} label={season ? `${leagues.length === 1 ? 'League' : 'Leagues'} this season` : 'Leagues'} note={`${plural(teams.length, 'team')} in all`} onClick={() => go('seasons')} />
+        <Stat value={leagues.length} label={season ? `${leagues.length === 1 ? 'Division' : 'Divisions'} this season` : 'Divisions'} note={`${plural(teams.length, 'team')} in all`} onClick={() => go('seasons')} />
       </div>
       <div className="cx-cols">
         <section className="card cx-card">
@@ -88,10 +88,10 @@ export function ManageOverview({ c, org, fail, go }: OrgPanelProps & { go: Manag
         <section className="card cx-card">
           <h2>Quick jobs</h2>
           <ul className="cx-rows">
-            {org.can.leagues && <Row title={season ? 'Add leagues and teams' : 'Set up a season'} sub={season ? `In ${season.name}` : 'Then add its leagues and teams'} onClick={() => go('seasons')} />}
+            {org.can.leagues && <Row title={season ? 'Add divisions and teams' : 'Set up a season'} sub={season ? `In ${season.name}` : 'Then add its divisions and teams'} onClick={() => go('seasons')} />}
             {org.can.leagues && leagues.length > 0 && <Row title="Build a game schedule" sub="A round robin, or one game at a time" onClick={() => go('seasons', { leagueId: leagues[0].id })} />}
             {org.can.people && <Row title="Invite coaches" sub={`${plural(left, 'seat')} available`} onClick={() => go('coaches', { view: 'invites' })} />}
-            {org.can.announce && <Row title="Send an announcement" sub="To everyone, or to one sport, league or team" onClick={() => go('announcements')} />}
+            {org.can.announce && <Row title="Send an announcement" sub="To everyone, or to one sport, division or team" onClick={() => go('announcements')} />}
           </ul>
         </section>
       </div>
@@ -152,7 +152,7 @@ export function OrgSchedule({ c, org, fail, say }: OrgPanelProps) {
 
   return (
     <>
-      <PageHead eyebrow="Management / Schedule" title="Schedule" sub="Games across every season, league and team.">
+      <PageHead eyebrow="Management / Schedule" title="Schedule" sub="Games across every season, division and team.">
         {manage && org.leagues.length > 0 && (
           <button type="button" className="btn primary" onClick={add}>
             + Add game
@@ -176,8 +176,8 @@ export function OrgSchedule({ c, org, fail, say }: OrgPanelProps) {
             ))}
           </select>
         )}
-        <select className="input" aria-label="League" value={leagueId} onChange={(e) => (setLeagueId(Number(e.target.value)), setTeamId(0))}>
-          <option value={0}>All leagues</option>
+        <select className="input" aria-label="Division" value={leagueId} onChange={(e) => (setLeagueId(Number(e.target.value)), setTeamId(0))}>
+          <option value={0}>All divisions</option>
           {leagues.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}
@@ -221,7 +221,7 @@ export function OrgSchedule({ c, org, fail, say }: OrgPanelProps) {
         <p className="muted">Loading…</p>
       ) : list.length === 0 ? (
         <div className="card cx-card">
-          <p className="muted">{shown.length ? 'No games to come. Tick "Show games already played" to see results.' : 'No games match. Build a schedule from a league under "Seasons & teams", or add one game here.'}</p>
+          <p className="muted">{shown.length ? 'No games to come. Tick "Show games already played" to see results.' : 'No games match. Build a schedule from a division under "Seasons & teams", or add one game here.'}</p>
         </div>
       ) : (
         [...byDate.entries()].map(([date, day]) => (
@@ -250,7 +250,7 @@ export function OrgSchedule({ c, org, fail, say }: OrgPanelProps) {
         ))
       )}
       {choosing && (
-        <Modal title="Which league is the game in?" onClose={() => setChoosing(false)}>
+        <Modal title="Which division is the game in?" onClose={() => setChoosing(false)}>
           <ul className="cx-rows">
             {leagues.map((l) => (
               <Row

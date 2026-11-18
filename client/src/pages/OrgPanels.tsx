@@ -2,7 +2,7 @@
 // announcements, requirements, the record of what admins did, and the public page.
 // Each panel is one tab (or part of one) on the community page.
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { api, type CommunityDetail, type Org, type OrgAnnouncement, type OrgAudience, type OrgCheck, type OrgGame, type OrgGames, type OrgLeague, type OrgPerson, type OrgTeam } from '../api';
+import { api, type CommunityDetail, type Org, type OrgAnnouncement, type OrgAudience, type OrgCheck, type OrgGame, type OrgGames, type OrgLeague, type OrgPerson, type OrgTeam, GENDER_WORD, type LeagueGender } from '../api';
 import { useApp } from '../App';
 import { SPORT_CHOICES } from '../sports';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
@@ -478,15 +478,16 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
     ...(leagues.length
       ? [
           {
-            label: 'League',
-            value: open?.name ?? 'All leagues',
+            label: 'Division',
+            // The sport goes with the name: two sports can each have a league called the same thing.
+            value: open ? (open.sport && !open.name.toLowerCase().includes(open.sport.toLowerCase()) ? `${open.name} · ${open.sport}` : open.name) : 'All divisions',
             options: leagues.map((l) => ({ id: l.id, label: l.name, note: l.sport })),
             current: open?.id ?? 0,
             onPick: (id: number) => {
               setOpenId(id);
               setTeamId(0);
             },
-            all: `All leagues in ${season?.name ?? 'the season'}`,
+            all: `All divisions in ${season?.name ?? 'the season'}`,
           },
         ]
       : []),
@@ -520,8 +521,8 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
   };
 
   const newSeason = async () => {
-    const name = await promptDialog({ title: 'Name the season', body: 'Such as "Winter 2026-27". Leagues and teams go inside it.', confirmLabel: 'Start season' });
-    if (name) act(() => api.orgAddSeason(c.id, name), `${name} is ready. Add its leagues next.`);
+    const name = await promptDialog({ title: 'Name the season', body: 'Such as "Winter 2026-27". Divisions and teams go inside it.', confirmLabel: 'Start season' });
+    if (name) act(() => api.orgAddSeason(c.id, name), `${name} is ready. Add its divisions next.`);
   };
   const seasonMenu: MenuItem[] = season
     ? [
@@ -541,11 +542,11 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
   if (!org.seasons.length)
     return (
       <div className="card org-empty">
-        <h2>Leagues and teams</h2>
+        <h2>Divisions and teams</h2>
         {manage ? (
           <>
             <p>
-              Start with a <strong>season</strong>, such as "Winter 2026-27". Inside it go your <strong>leagues</strong> (one for each sport and age group), and inside each league its <strong>teams</strong>. Then
+              Start with a <strong>season</strong>, such as "Winter 2026-27". Inside it go your <strong>divisions</strong> (one for each sport and age group), and inside each division its <strong>teams</strong>. Then
               assign coaches and build the schedule.
             </p>
             <button type="button" className="btn primary" onClick={newSeason}>
@@ -553,7 +554,7 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
             </button>
           </>
         ) : (
-          <p className="muted">{c.name} has not set up its leagues yet.</p>
+          <p className="muted">{c.name} has not set up its divisions yet.</p>
         )}
       </div>
     );
@@ -562,11 +563,11 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
     <>
       <Crumbs items={crumbs} />
       {!open && season && (
-        <PageHead eyebrow="Seasons & teams / Season" title={season.name} sub={`${plural(leagues.length, 'league')} · ${plural(seasonTeams.length, 'team')}${season.archived ? ' · archived' : ''}`}>
+        <PageHead eyebrow="Seasons & teams / Season" title={season.name} sub={`${plural(leagues.length, 'division')} · ${plural(seasonTeams.length, 'team')}${season.archived ? ' · archived' : ''}`}>
           {manage && (
             <>
               <button type="button" className="btn primary" onClick={() => setAddLeague(true)}>
-                + Add league
+                + Add division
               </button>
               <button type="button" className="btn" onClick={newSeason}>
                 New season
@@ -578,7 +579,7 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
       )}
       {!open && leagues.length === 0 && (
         <div className="card org-empty">
-          <p className="muted">{manage ? 'No leagues in this season yet. Add one for each sport and age group, such as "Boys 12 and under".' : 'No leagues in this season yet.'}</p>
+          <p className="muted">{manage ? 'No divisions in this season yet. Add one for each sport and age group, such as "Boys 12 and under".' : 'No divisions in this season yet.'}</p>
         </div>
       )}
       {/* The season: its leagues, grouped by sport. Choosing one opens it. */}
@@ -589,7 +590,7 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
             return (
               <section key={sport} className="card cx-card" aria-label={sport}>
                 <h2 className="cx-card-title">
-                  <SportIcon sport={sport} size={20} /> {sport} <span className="muted">· {plural(inSport.length, 'league')}</span>
+                  <SportIcon sport={sport} size={20} /> {sport} <span className="muted">· {plural(inSport.length, 'division')}</span>
                 </h2>
                 <ul className="cx-rows">
                   {inSport.map((l) => {
@@ -606,7 +607,7 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
                             {ts.some((t) => t.mine) && <span className="kind">Your team</span>}
                           </>
                         }
-                        sub={[l.age_group, plural(ts.length, 'team'), plural(coaches, 'coach', 'coaches')].filter(Boolean).join(' · ')}
+                        sub={[GENDER_WORD[l.gender], l.age_group, plural(ts.length, 'team'), plural(coaches, 'coach', 'coaches')].filter(Boolean).join(' · ')}
                         end={manage && bare > 0 ? <Pill tone="warn">{bare === 1 ? '1 team needs a coach' : `${bare} teams need a coach`}</Pill> : undefined}
                         onClick={() => {
                           setOpenId(l.id);
@@ -660,7 +661,7 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
         />
       )}
 
-      {addLeague && season && <LeagueModal c={c} seasonId={season.id} act={act} onClose={() => setAddLeague(false)} />}
+      {addLeague && season && <LeagueModal c={c} seasonId={season.id} seasonName={season.name} leagues={leagues} teams={org.teams} act={act} onClose={() => setAddLeague(false)} />}
       {rolling && season && <RolloverModal c={c} season={season} act={act} onClose={() => setRolling(false)} />}
       {coachFor && <CoachModal c={c} org={org} team={org.teams.find((t) => t.id === coachFor.id) ?? coachFor} act={act} onClose={() => setCoachFor(null)} />}
       {editing && (
@@ -741,7 +742,7 @@ function TeamPage({
         <section className="card cx-card">
           <h2>Team schedule</h2>
           {mine.length === 0 ? (
-            <p className="muted">No games yet. Build the schedule from the league's "Schedule".</p>
+            <p className="muted">No games yet. Build the schedule from the division's "Schedule".</p>
           ) : (
             <ul className="cx-rows">
               {upcoming.map((g) => (
@@ -824,6 +825,7 @@ function LeagueCard({
   const [view, setView] = useState<'teams' | 'schedule' | 'standings'>('teams');
   const [names, setNames] = useState('');
   const [past, setPast] = useState(false);
+  const [who, setWho] = useState(false);
   const today = todayISO();
   const upcoming = games.filter((g) => g.date >= today);
   const shown = past ? games : upcoming;
@@ -836,7 +838,7 @@ function LeagueCard({
     {
       label: 'Rename',
       onSelect: async () => {
-        const name = await promptDialog({ title: 'Rename the league', initial: league.name, confirmLabel: 'Rename' });
+        const name = await promptDialog({ title: 'Rename the division', initial: league.name, confirmLabel: 'Rename' });
         if (name) act(() => api.orgUpdateLeague(c.id, league.id, { name, age_group: league.age_group }));
       },
     },
@@ -847,7 +849,8 @@ function LeagueCard({
         if (age !== null) act(() => api.orgUpdateLeague(c.id, league.id, { name: league.name, age_group: age }));
       },
     },
-    ...(teams.length === 0 ? [{ label: 'Delete this league', danger: true, onSelect: () => act(() => api.orgDeleteLeague(c.id, league.id), 'The league was deleted.') }] : []),
+    { label: 'Boys, girls or co-ed', onSelect: () => setWho(true) },
+    ...(teams.length === 0 ? [{ label: 'Delete this division', danger: true, onSelect: () => act(() => api.orgDeleteLeague(c.id, league.id), 'The division was deleted.') }] : []),
   ];
   const teamMenu = (t: OrgTeam): MenuItem[] => [
     {
@@ -890,7 +893,7 @@ function LeagueCard({
         <div>
           <h2>{league.name}</h2>
           <span className="muted small">
-            {[league.sport, league.age_group, plural(teams.length, 'team'), games.length ? plural(games.length, 'game') : ''].filter(Boolean).join(' · ')}
+            {[league.sport, GENDER_WORD[league.gender], league.age_group, plural(teams.length, 'team'), games.length ? plural(games.length, 'game') : ''].filter(Boolean).join(' · ')}
           </span>
         </div>
         <div className="seg" role="tablist" aria-label={`${league.name} sections`}>
@@ -1079,6 +1082,26 @@ function LeagueCard({
             {!played && <p className="muted small">Standings fill in as results are recorded on the schedule.</p>}
           </>
         ))}
+      {who && (
+        <Modal title={`${league.name}: boys, girls or co-ed`} onClose={() => setWho(false)}>
+          <div className="fields stack">
+            <div className="seg" role="group" aria-label="Who the division is for">
+              {(['boys', 'girls', 'coed'] as const).map((g) => (
+                <button key={g} type="button" className={league.gender === g ? 'on' : ''} aria-pressed={league.gender === g} onClick={() => act(() => api.orgUpdateLeague(c.id, league.id, { name: league.name, gender: g })).then(() => setWho(false))}>
+                  {GENDER_WORD[g]}
+                </button>
+              ))}
+            </div>
+            {league.gender && (
+              <div className="modal-actions">
+                <button type="button" className="btn ghost" onClick={() => act(() => api.orgUpdateLeague(c.id, league.id, { name: league.name, gender: '' })).then(() => setWho(false))}>
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }
@@ -1172,44 +1195,78 @@ export function OrgVenues({ c, org, act }: OrgPanelProps) {
   );
 }
 
-function LeagueModal({ c, seasonId, act, onClose }: { c: CommunityDetail; seasonId: number; act: OrgPanelProps['act']; onClose: () => void }) {
+function LeagueModal({ c, seasonId, seasonName, leagues, teams, act, onClose }: { c: CommunityDetail; seasonId: number; seasonName: string; /** The season's divisions so far. */ leagues: OrgLeague[]; teams: OrgTeam[]; act: OrgPanelProps['act']; onClose: () => void }) {
   const [name, setName] = useState('');
   const [sport, setSport] = useState(SPORT_CHOICES[0]);
   const [other, setOther] = useState('');
   const [age, setAge] = useState('');
+  const [who, setWho] = useState<LeagueGender>('');
+  const chosen = (sport === 'Other' ? other : sport).trim();
+  // What the season already has in this sport, to see what is missing and avoid adding one twice.
+  const same = leagues.filter((l) => l.sport.toLowerCase() === chosen.toLowerCase());
+  const taken = same.some((l) => l.name.trim().toLowerCase() === name.trim().toLowerCase() && l.gender === who);
   return (
-    <Modal title="Add a league" onClose={onClose}>
-      <form
-        className="fields stack"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (await act(() => api.orgAddLeague(c.id, { season_id: seasonId, name, sport: sport === 'Other' ? other : sport, age_group: age }), `${name} was added. Add its teams next.`)) onClose();
-        }}
-      >
-        <Field label="Name">
-          <input className="input" required autoFocus maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="Boys 12 and under" />
-        </Field>
-        <Field label="Sport">
-          <select className="input" value={sport} onChange={(e) => setSport(e.target.value)}>
-            {SPORT_CHOICES.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-            <option>Other</option>
-          </select>
-        </Field>
-        {sport === 'Other' && (
-          <Field label="Which sport">
-            <input className="input" required maxLength={40} value={other} onChange={(e) => setOther(e.target.value)} />
+    <Modal title="Add a division" onClose={onClose} wide>
+      <div className="league-add">
+        <form
+          className="fields stack"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (await act(() => api.orgAddLeague(c.id, { season_id: seasonId, name, sport: chosen, age_group: age, gender: who }), `${name} was added. Add its teams next.`)) onClose();
+          }}
+        >
+          <Field label="Sport">
+            <select className="input" autoFocus value={sport} onChange={(e) => setSport(e.target.value)}>
+              {SPORT_CHOICES.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+              <option>Other</option>
+            </select>
           </Field>
-        )}
-        <Field label="Age group (optional)">
-          <input className="input" maxLength={40} value={age} onChange={(e) => setAge(e.target.value)} placeholder="U12" />
-        </Field>
-        <p className="muted small">The sport decides which drills and categories the league's teams start with, and cannot be changed later.</p>
-        <div className="modal-actions">
-          <button className="btn primary">Add league</button>
-        </div>
-      </form>
+          {sport === 'Other' && (
+            <Field label="Which sport">
+              <input className="input" required maxLength={40} value={other} onChange={(e) => setOther(e.target.value)} />
+            </Field>
+          )}
+          <Field label="Division name">
+            <input className="input" required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="Boys 12 and under" />
+          </Field>
+          <Field label="Boys, girls or co-ed">
+            <div className="seg" role="group" aria-label="Who the division is for">
+              {(['boys', 'girls', 'coed'] as const).map((g) => (
+                <button key={g} type="button" className={who === g ? 'on' : ''} aria-pressed={who === g} onClick={() => setWho(who === g ? '' : g)}>
+                  {GENDER_WORD[g]}
+                </button>
+              ))}
+            </div>
+          </Field>
+          {taken && <p className="error small">{seasonName} already has a {chosen} division with this name.</p>}
+          <Field label="Age group (optional)">
+            <input className="input" maxLength={40} value={age} onChange={(e) => setAge(e.target.value)} placeholder="U12" />
+          </Field>
+          <p className="muted small">The sport decides which drills and categories the division's teams start with, and cannot be changed later.</p>
+          <div className="modal-actions">
+            <button className="btn primary">Add division</button>
+          </div>
+        </form>
+        <aside className="league-add-side" aria-label={`${chosen || 'Other'} divisions in ${seasonName}`}>
+          <h3>
+            {chosen || 'This sport'} in {seasonName}
+          </h3>
+          {same.length === 0 ? (
+            <p className="muted small">{chosen ? `No ${chosen} divisions yet. This will be the first.` : 'Name the sport to see its divisions.'}</p>
+          ) : (
+            <ul>
+              {same.map((l) => (
+                <li key={l.id}>
+                  <strong>{l.name}</strong>
+                  <span className="muted small">{[GENDER_WORD[l.gender], l.age_group, plural(teams.filter((t) => t.league_id === l.id).length, 'team')].filter(Boolean).join(' · ')}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+      </div>
     </Modal>
   );
 }
@@ -1224,11 +1281,11 @@ function RolloverModal({ c, season, act, onClose }: { c: CommunityDetail; season
         className="fields stack"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (await act(() => api.orgRollover(c.id, season.id, { name, keep_coaches: keep, archive }), `${name} is ready, with the same leagues and teams.`)) onClose();
+          if (await act(() => api.orgRollover(c.id, season.id, { name, keep_coaches: keep, archive }), `${name} is ready, with the same divisions and teams.`)) onClose();
         }}
       >
         <p className="muted small">
-          The new season gets the same leagues and the same teams, new and empty. Rosters, practices and games are not carried over, since players move up: the old teams keep theirs.
+          The new season gets the same divisions and the same teams, new and empty. Rosters, practices and games are not carried over, since players move up: the old teams keep theirs.
         </p>
         <Field label="Name of the new season">
           <input className="input" required autoFocus maxLength={60} value={name} onChange={(e) => setName(e.target.value)} placeholder="Spring 2027" />
@@ -1474,7 +1531,7 @@ const AUDIENCES: [OrgAudience['kind'], string][] = [
   ['all', 'Everyone'],
   ['coaches', 'All coaches'],
   ['head', 'Head coaches only'],
-  ['leagues', 'Coaches in certain leagues'],
+  ['leagues', 'Coaches in certain divisions'],
   ['sport', 'Coaches of one sport'],
   ['age', 'Coaches of one age group'],
   ['admins', 'Admins only'],
@@ -1649,7 +1706,7 @@ function Compose({ c, org, onClose, send }: { c: CommunityDetail; org: Org; onCl
         )}
       </div>
       {kind === 'leagues' && (
-        <div className="org-times" role="group" aria-label="Leagues">
+        <div className="org-times" role="group" aria-label="Divisions">
           {leagues.map((l) => (
             <label key={l.id} className="check">
               <input type="checkbox" checked={ids.includes(l.id)} onChange={() => toggle(l.id)} /> {l.name}
@@ -1797,7 +1854,7 @@ export function OrgPublicSettings({ c, org, act }: Pick<OrgPanelProps, 'c' | 'or
         <Icon d={ICONS.globe} size={18} /> Public schedule page
       </h2>
       <p className="muted small">
-        A page anyone can open without an account, for parents and players: your leagues, teams, game times, results and standings, under your name, picture and color. It never shows coaches' names,
+        A page anyone can open without an account, for parents and players: your divisions, teams, game times, results and standings, under your name, picture and color. It never shows coaches' names,
         rosters or anything about players.
       </p>
       <form

@@ -36,7 +36,7 @@ const isAdminRole = (m) => !!m && m.status === 'active' && (m.role === 'creator'
 const COMMUNITY_PERMS = ['moderate', 'approve', 'settings', 'people', 'announce', 'leagues', 'rosters'];
 const POWER_WORDS = {
   moderate: 'remove messages and shared items', approve: 'approve what is shared', settings: 'change the settings', people: 'invite and remove people',
-  announce: 'send announcements', leagues: 'manage leagues, teams and schedules', rosters: "see players' contact details",
+  announce: 'send announcements', leagues: 'manage divisions, teams and schedules', rosters: "see players' contact details",
 };
 // Players are children, so seeing their families' details is never given along with the rest: it is turned on by itself.
 const GIVEN_WITH_ADMIN = (p) => p !== 'rosters';

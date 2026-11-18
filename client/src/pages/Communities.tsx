@@ -123,7 +123,7 @@ export default function Communities() {
       ) : mine.length === 0 ? (
         <div className="empty">
           <h2>You are not in a community yet</h2>
-          <p>Start one for your club, league or coaching friends, or join one by typing a code someone sent you into "Join with a code" above.</p>
+          <p>Start one for your club, organization or coaching friends, or join one by typing a code someone sent you into "Join with a code" above.</p>
           <button className="btn primary" onClick={() => setCreating(true)}>
             + New community
           </button>

@@ -170,7 +170,7 @@ const TOPICS: Topic[] = [
     title: 'Join or start a community',
     steps: ['Open "Communities".', 'To join one, type the code you were given at the top and press "Join".', 'To start one, press "+ New community", name it, and give its code to the coaches you want in it.'],
     go: ['/communities', 'Communities'],
-    words: 'group code league club invite',
+    words: 'group code league division club invite',
   },
   {
     group: 'Working with other coaches',
@@ -207,28 +207,28 @@ const TOPICS: Topic[] = [
   },
   {
     group: 'Organizations',
-    title: 'Run a club or league office as an organization',
+    title: 'Run a club or sports program as an organization',
     steps: [
       'Start a community under Communities, and ask the Dime Coach administrator to put it on the organization plan with the number of coach seats you need.',
       'Open the community and switch to "Manage". The overview lists what needs your attention, each with the way to fix it.',
       'Under "Coaches", invite your coaches by email. Each coach or assistant uses one seat.',
-      'Under "Seasons & teams", start a season, add a league for each sport and age group, and add its teams. The selectors at the top jump between seasons, leagues and teams.',
-      'Use "Assign a coach" on each team, then "Build the schedule" on the league.',
+      'Under "Seasons & teams", start a season, add a division for each sport and age group, and add its teams. The selectors at the top jump between seasons, divisions and teams.',
+      'Use "Assign a coach" on each team, then "Build the schedule" on the division.',
       '"Schedule" shows every game in one list. Under "More" are announcements, fields and gyms, usage, the activity log and settings.',
     ],
     tip: 'The organization owns its teams, so a team and its roster stay when a coach moves on. What the coach wrote is copied to their own account at that moment.',
-    words: 'organization club league office enterprise seats quota coaches teams schedule season announcement admin',
+    words: 'organization club league division office enterprise seats quota coaches teams schedule season announcement admin',
   },
   {
     group: 'Organizations',
     title: 'Coach a team that belongs to an organization',
     steps: [
       'Use "Switch team" and choose the team under "Shared with you". It says which organization it is from.',
-      'Plan practices as usual. League games set by the organization are already in "Practices & games", marked "League game".',
+      'Plan practices as usual. Division games set by the organization are already in "Practices & games", marked "Division game".',
       'Drills and plays are shared by every team in the organization: you can use all of them and change the ones you added.',
     ],
     tip: 'If you are taken off the team or leave, your drills, plays and practices are copied to your own account. The roster stays with the organization.',
-    words: 'organization coach assigned league game shared drills keep copy leave moved',
+    words: 'organization coach assigned league division game shared drills keep copy leave moved',
   },
   {
     group: 'Organizations',

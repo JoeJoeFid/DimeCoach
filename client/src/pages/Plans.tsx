@@ -303,7 +303,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           ) : (
             <span className="ps-title">{e.title}</span>
           )}
-          {!!e.event?.official && <span className="kind league" title="Set by your organization. It changes there, not here.">League game</span>}
+          {!!e.event?.official && <span className="kind league" title="Set by your organization. It changes there, not here.">Division game</span>}
           {ev?.gone && (
             <span className="kind warn" title="It was worked on in Dime Coach, so it is kept. To drop it, choose “Remove it here too” under the three dots.">
               No longer on the team calendar

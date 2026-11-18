@@ -47,7 +47,7 @@ const POWERS: [CommunityPower, string, string][] = [
 /** More jobs, in a community that is an organization. */
 const ORG_POWERS: [CommunityPower, string, string][] = [
   ['announce', 'Announce', 'Send announcements to everyone or to some'],
-  ['leagues', 'Leagues', 'Set up seasons, leagues and teams, assign coaches, build schedules, and open any team'],
+  ['leagues', 'Divisions', 'Set up seasons, divisions and teams, assign coaches, build schedules, and open any team'],
   ['rosters', 'Player details', 'See players’ parents and contact details when opening a team. Off unless you turn it on'],
 ];
 const initials = (name: string) =>
@@ -452,7 +452,7 @@ export default function CommunityPage() {
             <section className="card cx-card">
               <h2>Communications</h2>
               <ul className="cx-rows">
-                <Row lead={<Badge text="Announcements" />} title="Announcements" sub="Write to everyone, or to one sport, league or team" onClick={() => open('announcements')} />
+                <Row lead={<Badge text="Announcements" />} title="Announcements" sub="Write to everyone, or to one sport, division or team" onClick={() => open('announcements')} />
                 {may.settings && <Row lead={<Badge text="Public schedule" />} title="Public schedule" sub="A page of game times for parents and players" onClick={() => open('public')} />}
               </ul>
             </section>

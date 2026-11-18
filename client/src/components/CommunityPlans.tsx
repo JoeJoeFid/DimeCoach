@@ -20,7 +20,7 @@ export default function CommunityPlans() {
     <div className="card">
       <h2>Communities and organizations</h2>
       <p className="muted small">
-        Any coach can start a community to talk and share. Putting one on the <strong>organization</strong> plan lets its admins invite coaches up to a number of seats, set up leagues and teams, build
+        Any coach can start a community to talk and share. Putting one on the <strong>organization</strong> plan lets its admins invite coaches up to a number of seats, set up divisions and teams, build
         schedules and send announcements. You set the plan, the seats and an optional end date here. After the end date the organization can still be read, but not changed.
       </p>
       {error && <p className="error">{error}</p>}
@@ -109,7 +109,7 @@ function PlanModal({ row, onClose, save }: { row: CommunityPlanRow; onClose: () 
       >
         <Field label="Plan">
           <select className="input" value={plan} onChange={(e) => setPlan(e.target.value as 'group' | 'organization')}>
-            <option value="organization">Organization: seats, leagues, teams, schedules, announcements</option>
+            <option value="organization">Organization: seats, divisions, teams, schedules, announcements</option>
             <option value="group">Group: discussion and sharing only</option>
           </select>
         </Field>

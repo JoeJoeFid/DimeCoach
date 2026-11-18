@@ -49,7 +49,7 @@ export const MAIL_SAMPLES = [
   {
     id: 'announcement', label: 'An announcement from an organization',
     make: ({ me, base }) => ({
-      subject: 'Eastside Youth: Winter leagues start December 7',
+      subject: 'Eastside Youth: Winter divisions start December 7',
       text:
         `Hi Casey,\n\n${me.name} sent this to all basketball coaches of Eastside Youth.\n\n` +
         `Coach check-in is at 8:30 AM. Please bring your roster and any questions for the season.\n\n` +

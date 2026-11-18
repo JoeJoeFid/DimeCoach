@@ -29,6 +29,8 @@ function addColumn(table, column, ddl) {
   const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
   if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 }
+const GENDERS = ['boys', 'girls', 'coed'];
+const gender = (v) => (GENDERS.includes(v) ? v : '');
 // 'group' is a plain community. 'organization' turns on everything in this file.
 addColumn('communities', 'plan', "TEXT DEFAULT 'group'");
 addColumn('communities', 'seats', 'INTEGER DEFAULT 0');
@@ -128,6 +130,8 @@ CREATE TABLE IF NOT EXISTS org_keepsakes (
   PRIMARY KEY (user_id, kind, source_id)
 );
 `);
+// Who a league is for: 'boys', 'girls', 'coed', or '' where nobody has said.
+addColumn('org_leagues', 'gender', "TEXT NOT NULL DEFAULT ''");
 
 const INVITE_DAYS = 14;
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
@@ -463,7 +467,7 @@ function pushGame(c, gameId) {
   if (!g || g.status === 'cancelled') return;
   const prefix = g.status === 'postponed' ? 'Postponed: ' : '';
   const where = [g.venue, g.venue_address].filter(Boolean).join(', ');
-  const note = `League game set by ${c.name}.${g.notes ? ` ${g.notes}` : ''}`;
+  const note = `Division game set by ${c.name}.${g.notes ? ` ${g.notes}` : ''}`;
   for (const [teamId, title] of [[g.home_team_id, `${prefix}vs ${g.away ?? 'TBD'}`], [g.away_team_id, `${prefix}at ${g.home ?? 'TBD'}`]]) {
     const team = get('SELECT id, owner_id FROM teams WHERE id=?', teamId);
     if (team)
@@ -549,7 +553,7 @@ function audienceOf(c, a) {
     case 'admins':
       return { users: members.filter((m) => m.role !== 'member').map((m) => m.user_id), text: 'Admins' };
     case 'leagues':
-      return { users: only(staffOfTeams(ids.length ? teamIds(`t.league_id IN (${ids.join(',')})`) : [])), text: `Coaches in ${names('org_leagues', ids).join(', ') || 'no league'}` };
+      return { users: only(staffOfTeams(ids.length ? teamIds(`t.league_id IN (${ids.join(',')})`) : [])), text: `Coaches in ${names('org_leagues', ids).join(', ') || 'no division'}` };
     case 'teams':
       return { users: only(staffOfTeams(ids.length ? teamIds(`t.id IN (${ids.join(',')})`) : [])), text: `Coaches of ${names('teams', ids).join(', ') || 'no team'}` };
     case 'sport':
@@ -610,7 +614,7 @@ export function mountOrgs(app) {
       ...orgSummary(c),
       can: p,
       seasons: all('SELECT id, name, archived FROM org_seasons WHERE community_id=? ORDER BY archived, id DESC', c.id).map((s) => ({ ...s, archived: !!s.archived })),
-      leagues: all('SELECT id, season_id, name, sport, age_group FROM org_leagues WHERE community_id=? ORDER BY name COLLATE NOCASE', c.id),
+      leagues: all('SELECT id, season_id, name, sport, age_group, gender FROM org_leagues WHERE community_id=? ORDER BY name COLLATE NOCASE', c.id),
       teams,
       venues: all('SELECT id, name, address FROM org_venues WHERE community_id=? ORDER BY name COLLATE NOCASE', c.id),
       requirements: [],
@@ -881,7 +885,7 @@ export function mountOrgs(app) {
     if (!at) return;
     const s = get('SELECT * FROM org_seasons WHERE id=? AND community_id=?', Number(req.params.seasonId), at.c.id);
     if (!s) return res.status(404).json({ error: 'Not found' });
-    if (get('SELECT 1 AS ok FROM org_leagues WHERE season_id=?', s.id)) return res.status(400).json({ error: 'This season still has leagues in it. Remove them first, or archive the season to keep it.' });
+    if (get('SELECT 1 AS ok FROM org_leagues WHERE season_id=?', s.id)) return res.status(400).json({ error: 'This season still has divisions in it. Remove them first, or archive the season to keep it.' });
     run('DELETE FROM org_seasons WHERE id=?', s.id);
     audit(at.c, req, `Deleted the empty season "${s.name}"`);
     send(res, at);
@@ -901,7 +905,7 @@ export function mountOrgs(app) {
       const seasonId = lastId(run('INSERT INTO org_seasons (community_id, name) VALUES (?,?)', at.c.id, name));
       let teams = 0;
       for (const l of all('SELECT * FROM org_leagues WHERE season_id=?', s.id)) {
-        const leagueId = lastId(run('INSERT INTO org_leagues (community_id, season_id, name, sport, age_group) VALUES (?,?,?,?,?)', at.c.id, seasonId, l.name, l.sport, l.age_group));
+        const leagueId = lastId(run('INSERT INTO org_leagues (community_id, season_id, name, sport, age_group, gender) VALUES (?,?,?,?,?,?)', at.c.id, seasonId, l.name, l.sport, l.age_group, l.gender));
         for (const t of all('SELECT * FROM teams WHERE community_id=? AND league_id=?', at.c.id, l.id)) {
           const teamId = lastId(run('INSERT INTO teams (owner_id, sport_id, name, season, notes, community_id, league_id) VALUES (?,?,?,?,?,?,?)', t.owner_id, t.sport_id, t.name, name, '', at.c.id, leagueId));
           if (req.body.keep_coaches)
@@ -920,13 +924,13 @@ export function mountOrgs(app) {
     const at = orgEnter(req, res, { perm: 'leagues', write: true });
     if (!at) return;
     const s = get('SELECT * FROM org_seasons WHERE id=? AND community_id=?', Number(req.body.season_id), at.c.id);
-    if (!s) return res.status(400).json({ error: 'Choose the season this league plays in.' });
+    if (!s) return res.status(400).json({ error: 'Choose the season this division plays in.' });
     const name = str(req.body.name, 60).trim();
     const sport = str(req.body.sport, 40).trim();
-    if (!name) return res.status(400).json({ error: 'Name the league, such as "Boys 12 and under".' });
+    if (!name) return res.status(400).json({ error: 'Name the division, such as "Boys 12 and under".' });
     if (!sport) return res.status(400).json({ error: 'Choose the sport.' });
-    run('INSERT INTO org_leagues (community_id, season_id, name, sport, age_group) VALUES (?,?,?,?,?)', at.c.id, s.id, name, sport, str(req.body.age_group, 40).trim());
-    audit(at.c, req, `Added the league "${name}" to ${s.name}`);
+    run('INSERT INTO org_leagues (community_id, season_id, name, sport, age_group, gender) VALUES (?,?,?,?,?,?)', at.c.id, s.id, name, sport, str(req.body.age_group, 40).trim(), gender(req.body.gender));
+    audit(at.c, req, `Added the division "${name}" to ${s.name}`);
     send(res, at);
   });
   app.put('/api/communities/:id/org/leagues/:leagueId', (req, res) => {
@@ -935,7 +939,7 @@ export function mountOrgs(app) {
     const l = get('SELECT * FROM org_leagues WHERE id=? AND community_id=?', Number(req.params.leagueId), at.c.id);
     if (!l) return res.status(404).json({ error: 'Not found' });
     // The sport stays as it was: the teams' drills and categories are that sport's.
-    run('UPDATE org_leagues SET name=?, age_group=? WHERE id=?', str(req.body.name, 60).trim() || l.name, req.body.age_group === undefined ? l.age_group : str(req.body.age_group, 40).trim(), l.id);
+    run('UPDATE org_leagues SET name=?, age_group=?, gender=? WHERE id=?', str(req.body.name, 60).trim() || l.name, req.body.age_group === undefined ? l.age_group : str(req.body.age_group, 40).trim(), req.body.gender === undefined ? l.gender : gender(req.body.gender), l.id);
     send(res, at);
   });
   app.delete('/api/communities/:id/org/leagues/:leagueId', (req, res) => {
@@ -943,10 +947,10 @@ export function mountOrgs(app) {
     if (!at) return;
     const l = get('SELECT * FROM org_leagues WHERE id=? AND community_id=?', Number(req.params.leagueId), at.c.id);
     if (!l) return res.status(404).json({ error: 'Not found' });
-    if (get('SELECT 1 AS ok FROM teams WHERE community_id=? AND league_id=?', at.c.id, l.id)) return res.status(400).json({ error: 'This league still has teams in it. Remove or move them first.' });
+    if (get('SELECT 1 AS ok FROM teams WHERE community_id=? AND league_id=?', at.c.id, l.id)) return res.status(400).json({ error: 'This division still has teams in it. Remove or move them first.' });
     for (const g of all('SELECT id FROM org_games WHERE league_id=?', l.id)) run('DELETE FROM events WHERE uid=?', `league-${g.id}`);
     run('DELETE FROM org_leagues WHERE id=?', l.id);
-    audit(at.c, req, `Deleted the league "${l.name}"`);
+    audit(at.c, req, `Deleted the division "${l.name}"`);
     send(res, at);
   });
 
@@ -976,7 +980,7 @@ export function mountOrgs(app) {
     const at = orgEnter(req, res, { perm: 'leagues', write: true });
     if (!at) return;
     const l = get('SELECT l.*, s.name AS season FROM org_leagues l JOIN org_seasons s ON s.id=l.season_id WHERE l.id=? AND l.community_id=?', Number(req.body.league_id), at.c.id);
-    if (!l) return res.status(400).json({ error: 'Choose the league this team plays in.' });
+    if (!l) return res.status(400).json({ error: 'Choose the division this team plays in.' });
     // Several at once: one name to a line.
     const names = str(req.body.name, 4000).split(/\r?\n/).map((n) => n.trim().slice(0, 80)).filter(Boolean).slice(0, 40);
     if (!names.length) return res.status(400).json({ error: 'Name the team.' });
@@ -1073,11 +1077,11 @@ export function mountOrgs(app) {
   /** Reads a game from a request. Returns { error } or the values to save. */
   function gameFrom(c, b, old) {
     const league = get('SELECT * FROM org_leagues WHERE id=? AND community_id=?', Number(b.league_id ?? old?.league_id), c.id);
-    if (!league) return { error: 'Choose the league.' };
+    if (!league) return { error: 'Choose the division.' };
     const home = Number(b.home_team_id ?? old?.home_team_id);
     const away = Number(b.away_team_id ?? old?.away_team_id);
     const inLeague = (teamId) => get('SELECT 1 AS ok FROM teams WHERE id=? AND community_id=? AND league_id=?', teamId, c.id, league.id);
-    if (!inLeague(home) || !inLeague(away)) return { error: 'Choose two teams from this league.' };
+    if (!inLeague(home) || !inLeague(away)) return { error: 'Choose two teams from this division.' };
     if (home === away) return { error: 'A team cannot play itself.' };
     const date = b.date ?? old?.date;
     if (!isDate(date)) return { error: 'Choose the date.' };
@@ -1157,7 +1161,7 @@ export function mountOrgs(app) {
     if (!l) return res.status(404).json({ error: 'Not found' });
     const b = req.body;
     const teams = all('SELECT id FROM teams WHERE community_id=? AND league_id=? ORDER BY id', at.c.id, l.id).map((t) => t.id);
-    if (teams.length < 2) return res.status(400).json({ error: 'A league needs at least two teams before it can have a schedule.' });
+    if (teams.length < 2) return res.status(400).json({ error: 'A division needs at least two teams before it can have a schedule.' });
     if (!isDate(b.start_date)) return res.status(400).json({ error: 'Choose the date of the first games.' });
     const times = (Array.isArray(b.times) ? b.times : []).filter(isTime).slice(0, 12);
     if (!times.length) return res.status(400).json({ error: 'Give at least one start time.' });
@@ -1343,7 +1347,7 @@ export function mountOrgs(app) {
     });
     if (plan === 'organization' && !isOrg(c)) {
       run('INSERT INTO org_audit (community_id, user_id, user_name, text, at) VALUES (?,?,?,?,?)', c.id, req.user.id, req.user.name, `Put ${c.name} on the organization plan with ${seats} coach seats`, nowIso());
-      notify(c.created_by, { kind: 'community', link: `/communities/${c.id}?tab=teams`, title: `${c.name} is now an organization`, body: `It has ${seats} coach seats. You can invite coaches, set up leagues and teams, build schedules and send announcements.` });
+      notify(c.created_by, { kind: 'community', link: `/communities/${c.id}?tab=teams`, title: `${c.name} is now an organization`, body: `It has ${seats} coach seats. You can invite coaches, set up divisions and teams, build schedules and send announcements.` });
     } else if (isOrg(c) && (seats !== (c.seats || 0) || expires !== (c.plan_expires || '')))
       run('INSERT INTO org_audit (community_id, user_id, user_name, text, at) VALUES (?,?,?,?,?)', c.id, req.user.id, req.user.name, `Changed the plan: ${seats} coach seats${expires ? `, ending ${expires}` : ', no end date'}`, nowIso());
     res.json(plansOut());
@@ -1365,7 +1369,7 @@ export function mountOrgPublic(app) {
       name: c.name, description: c.description, image: c.image || '', color: c.brand_color || '',
       seasons: all('SELECT id, name FROM org_seasons WHERE community_id=? AND archived=0 ORDER BY id DESC', c.id).map((s) => ({
         ...s,
-        leagues: all('SELECT id, name, sport, age_group FROM org_leagues WHERE season_id=? ORDER BY name COLLATE NOCASE', s.id).map((l) => ({
+        leagues: all('SELECT id, name, sport, age_group, gender FROM org_leagues WHERE season_id=? ORDER BY name COLLATE NOCASE', s.id).map((l) => ({
           ...l,
           teams: all('SELECT id, name FROM teams WHERE community_id=? AND league_id=? ORDER BY name COLLATE NOCASE', c.id, l.id),
           games: games.filter((g) => g.league_id === l.id),
