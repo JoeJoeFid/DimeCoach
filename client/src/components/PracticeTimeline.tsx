@@ -73,6 +73,9 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
       // Measured without any glide still running, so a quick second click starts from the right place.
       node.getAnimations().forEach((a) => a.cancel());
       const r = node.getBoundingClientRect();
+      // A card left out on a narrower screen has no place. When it comes into view it fades in,
+      // like a new one, and does not glide from the corner it would otherwise be measured at.
+      if (r.width === 0 && r.height === 0) return;
       const at = { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height };
       now.set(node.dataset.key!, at);
       if (!animate) return;

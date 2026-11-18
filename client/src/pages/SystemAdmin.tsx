@@ -8,6 +8,7 @@ import SportIcon from '../components/SportIcon';
 import AccessibilityCard from '../components/AccessibilityCard';
 import CommunityPlans from '../components/CommunityPlans';
 import EmailLog from '../components/EmailLog';
+import EmailRules from '../components/EmailRules';
 import EmailSamples from '../components/EmailSamples';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
@@ -58,7 +59,12 @@ function StatusCell({ u }: { u: SystemUser }) {
     </span>
   );
   if (u.status === 'disabled') return pill('off', 'Turned off', 'The account is turned off and cannot sign in');
-  if (u.status === 'invited') return pill('waiting', 'Invited', 'Sent an invitation by email and has not chosen a password yet', 'has not finished setting up');
+  if (u.status === 'invited') {
+    // How long the invitation has been sitting there.
+    const ago = u.invited_at ? fmtAgo(u.invited_at) : '';
+    const sent = !ago ? 'has not finished setting up' : ago === 'Now' ? 'invitation sent just now' : `invitation sent ${ago}`;
+    return pill('waiting', 'Invited', 'Sent an invitation by email and has not chosen a password yet', sent);
+  }
   if (u.status === 'pending') return pill('waiting', 'Signing up', 'Signed up and has not opened the confirmation email yet', 'email not confirmed');
   const note = u.must_change_password ? 'still on the starting password' : '';
   if (u.presence === 'active') return pill('active', 'Active', 'Signed in, and did something in the last 5 minutes', note);
@@ -475,6 +481,7 @@ export default function SystemAdmin() {
             Email
           </h2>
           <EmailLog />
+          <EmailRules run={run} />
           <EmailSamples canSend={canEmail} run={run} />
             </>
           )}

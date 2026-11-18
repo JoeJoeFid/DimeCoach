@@ -294,6 +294,10 @@ db.exec(`UPDATE users SET
   WHERE COALESCE(first_name, '') = '' AND COALESCE(last_name, '') = '' AND COALESCE(name, '') <> ''`);
 // What the administrator wrote to go with an invitation, kept so that sending it again says the same.
 addColumn('users', 'invite_note', "TEXT DEFAULT ''");
+// When the invitation was last emailed. For invitations from before this was kept, it is worked
+// out from when their link runs out, which is fourteen days after it was sent.
+addColumn('users', 'invited_at', 'TEXT');
+db.exec("UPDATE users SET invited_at = COALESCE(strftime('%Y-%m-%dT%H:%M:%fZ', confirm_expires_at, '-14 days'), created_at) WHERE status='invited' AND invited_at IS NULL");
 // Target overrides per tracking period: {"practice": 20, "week": 15, ...}. Missing keys use target_pct.
 addColumn('tags', 'targets_json', "TEXT DEFAULT '{}'");
 // Pictures on an item or drill: [{id, width_pct, caption}].

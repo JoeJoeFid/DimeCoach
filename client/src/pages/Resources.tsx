@@ -8,7 +8,7 @@ import { useApp } from '../App';
 import { prepareImage } from '../components/ItemImages';
 import { normalizeUrl } from '../components/ItemMedia';
 import { ResourceThumb, fileUrl, searchText } from '../components/ResourcePicker';
-import { Modal } from '../components/bits';
+import { Modal, ShareIcon } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 
@@ -37,6 +37,7 @@ export default function Resources() {
   // Categories are the team's own: the ones of its sport. 0 is every category, -1 is filed under none.
   const { sportTags } = useApp();
   const [tagId, setTagId] = useState(0);
+  const [sharing, setSharing] = useState<Resource | null>(null);
   /** The key of the resource whose categories are being chosen. */
   const [tagging, setTagging] = useState('');
   const sportTagIds = useMemo(() => new Set(sportTags.map((t) => t.id)), [sportTags]);
@@ -234,7 +235,7 @@ export default function Resources() {
       ) : (
         <div className={`res-grid ${compact ? 'compact' : ''}`}>
           {shown.map((r) => (
-            <ResourceCard key={r.key} resource={r} tags={sportTags} onTag={() => setTagging(r.key)} onView={() => setViewing(r)} onRename={(title) => run(() => api.renameResource(r.resource_id!, title))} onRemove={() => remove(r)} />
+            <ResourceCard key={r.key} resource={r} tags={sportTags} onShare={() => setSharing(r)} onTag={() => setTagging(r.key)} onView={() => setViewing(r)} onRename={(title) => run(() => api.renameResource(r.resource_id!, title))} onRemove={() => remove(r)} />
           ))}
         </div>
       )}
@@ -268,6 +269,7 @@ export default function Resources() {
           </div>
         </Modal>
       )}
+      {sharing && <ShareResource resource={sharing} onClose={() => setSharing(null)} />}
       {viewing && (
         <Modal title={viewing.title} onClose={() => setViewing(null)} wide>
           {viewing.kind === 'image' ? <img className="res-full" src={fileUrl(viewing)} alt={viewing.title} /> : <video className="res-full" src={fileUrl(viewing)} controls autoPlay />}
@@ -277,7 +279,7 @@ export default function Resources() {
   );
 }
 
-function ResourceCard({ resource: r, tags, onTag, onView, onRename, onRemove }: { resource: Resource; tags: Tag[]; onTag: () => void; onView: () => void; onRename: (title: string) => void; onRemove: () => void }) {
+function ResourceCard({ resource: r, tags, onShare, onTag, onView, onRename, onRemove }: { resource: Resource; tags: Tag[]; onShare: () => void; onTag: () => void; onView: () => void; onRename: (title: string) => void; onRemove: () => void }) {
   const [title, setTitle] = useState(r.title);
   useEffect(() => setTitle(r.title), [r.title]);
   const saved = r.resource_id !== null;
@@ -348,6 +350,9 @@ function ResourceCard({ resource: r, tags, onTag, onView, onRename, onRemove }: 
               {r.kind === 'video' ? 'Play' : 'View'}
             </button>
           )}
+          <button className="btn small res-share" onClick={onShare} aria-label={`Share ${r.title}`} title="Share">
+            <ShareIcon size={16} />
+          </button>
           <button className="btn small" onClick={onTag} aria-label={`Categories for ${r.title}`}>
             Categories
           </button>
@@ -359,5 +364,130 @@ function ResourceCard({ resource: r, tags, onTag, onView, onRename, onRemove }: 
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Sharing one resource. A link can be emailed to other coaches, copied, or handed to the device's
+ * own share sheet. A picture or video is a private file, so it is handed over as the file itself:
+ * to the share sheet where the device has one, or saved to the device to send on.
+ */
+function ShareResource({ resource: r, onClose }: { resource: Resource; onClose: () => void }) {
+  const [emails, setEmails] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState('');
+  const [error, setError] = useState('');
+  const isLink = r.kind === 'link';
+  const typed = emails
+    .split(/[\s,;]+/)
+    .map((e) => e.trim())
+    .filter(Boolean);
+  const sheet = typeof navigator.share === 'function';
+  const fail = (e: unknown) => {
+    // Closing the share sheet without choosing anything is not a failure.
+    if ((e as Error).name !== 'AbortError') setError((e as Error).message);
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(r.url);
+      setSaid('Link copied.');
+      setError('');
+    } catch {
+      setError('The link could not be copied. Select it above and copy it yourself.');
+    }
+  };
+  const shareLink = () => navigator.share({ title: r.title, url: r.url }).catch(fail);
+  const shareFile = async () => {
+    setBusy(true);
+    try {
+      const blob = await (await fetch(fileUrl(r))).blob();
+      const ext = (blob.type.split('/')[1] || (r.kind === 'video' ? 'mp4' : 'jpg')).replace('quicktime', 'mov').replace('jpeg', 'jpg');
+      const file = new File([blob], `${r.title.replace(/[^\w .-]+/g, '').trim() || r.kind}.${ext}`, { type: blob.type });
+      if (sheet && navigator.canShare?.({ files: [file] })) await navigator.share({ title: r.title, files: [file] });
+      else {
+        // No share sheet for files here: save it, to attach to a message.
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(file);
+        a.download = file.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+        setSaid('Saved to this device. Attach it to a message to send it on.');
+      }
+      setError('');
+    } catch (e) {
+      fail(e);
+    }
+    setBusy(false);
+  };
+  const send = async () => {
+    setBusy(true);
+    setSaid('');
+    try {
+      const out = await api.sendResource(r.key, typed, note);
+      setSaid(out.failed.length ? `The email to ${out.failed.join(', ')} did not go through.${out.sent ? ` ${out.sent} did.` : ''}` : `Sent to ${out.sent} ${out.sent === 1 ? 'person' : 'people'}.`);
+      if (!out.failed.length) {
+        setEmails('');
+        setNote('');
+      }
+      setError('');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setBusy(false);
+  };
+  return (
+    <Modal title={`Share "${r.title}"`} onClose={onClose}>
+      <div className="res-share-box">
+        {error && <p className="error">{error}</p>}
+        {said && (
+          <p className="banner ok" role="status">
+            {said}
+          </p>
+        )}
+        {isLink ? (
+          <>
+            <div className="res-share-link">
+              <input className="input" readOnly aria-label="Link" value={r.url} onFocus={(e) => e.target.select()} />
+              <button type="button" className="btn" onClick={copy}>
+                Copy link
+              </button>
+              {sheet && (
+                <button type="button" className="btn" onClick={shareLink}>
+                  <ShareIcon size={16} /> Share…
+                </button>
+              )}
+            </div>
+            <label className="field">
+              <span className="field-label">Email it to coaches</span>
+              <input className="input" placeholder="Email addresses, separated by commas" value={emails} onChange={(e) => setEmails(e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field-label">Add a note (optional)</span>
+              <textarea className="input" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+            </label>
+          </>
+        ) : (
+          <>
+            <p className="muted small">
+              This {r.kind === 'video' ? 'video' : 'picture'} is a private file, so there is no link to it. {sheet ? 'Share the file itself with another app, such as Messages or Mail.' : 'Save it to this device, then attach it to a message.'}
+            </p>
+            <button type="button" className="btn primary" disabled={busy} onClick={shareFile}>
+              <ShareIcon size={16} /> {busy ? 'Getting the file…' : sheet ? `Share this ${r.kind === 'video' ? 'video' : 'picture'}…` : 'Save to this device'}
+            </button>
+          </>
+        )}
+      </div>
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Done
+        </button>
+        {isLink && (
+          <button type="button" className="btn primary" disabled={busy || typed.length === 0} onClick={send}>
+            <ShareIcon size={16} /> {busy ? 'Sending…' : typed.length > 1 ? `Send to ${typed.length} people` : 'Send'}
+          </button>
+        )}
+      </div>
+    </Modal>
   );
 }

@@ -210,10 +210,19 @@ function noteAction(userId) {
 const unfinished = (u) => u.status === 'pending' || u.status === 'invited';
 const SYSTEM_INVITE_DAYS = 14;
 /** Emails an invited person the link for finishing their account, with a fresh code each time. */
-function mailSystemInvite(req, user) {
+/**
+ * A new link for an invited person to finish their account with, replacing the one before it.
+ * `base` is the address of the site. The token must not be written down anywhere.
+ */
+export function freshInviteLink(user, base) {
   const token = crypto.randomBytes(32).toString('base64url');
   run('UPDATE users SET confirm_token_hash=?, confirm_expires_at=? WHERE id=?', sha256(token), new Date(Date.now() + SYSTEM_INVITE_DAYS * 86400_000).toISOString(), user.id);
+  return { token, link: `${base}/welcome?token=${token}` };
+}
+function mailSystemInvite(req, user) {
   const base = String(process.env.PP_PUBLIC_URL || `${req.protocol}://${req.headers.host}`).replace(/\/+$/, '');
+  const { token } = freshInviteLink(user, base);
+  run('UPDATE users SET invited_at=? WHERE id=?', new Date().toISOString(), user.id);
   return sendMail({
     to: user.email,
     subject: `${req.user.name} invited you to Dime Coach`,
@@ -608,7 +617,7 @@ export function mountAuth(app) {
   // Accounts and site settings are run from the System admin page, which only the system administrator can open.
   const admin = (req, res, next) => (isSystemAdmin(req.user) ? next() : res.status(403).json({ error: 'Only the system administrator can do this.' }));
   const adminUserOut = (u) => ({
-    ...userOut(u), status: u.status, created_at: u.created_at, last_login_at: u.last_login_at,
+    ...userOut(u), status: u.status, created_at: u.created_at, last_login_at: u.last_login_at, invited_at: u.invited_at || null,
     teams: get('SELECT COUNT(*) AS n FROM teams t JOIN memberships m ON m.owner_id=t.owner_id WHERE m.user_id=?', u.id).n,
   });
   const settingsOut = () => ({

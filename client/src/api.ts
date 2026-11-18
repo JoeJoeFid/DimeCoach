@@ -90,6 +90,8 @@ export interface AdminUser extends User {
   status: 'invited' | 'pending' | 'active' | 'disabled';
   created_at: string;
   last_login_at: string | null;
+  /** When their invitation was last emailed, for someone still 'invited'. */
+  invited_at: string | null;
   teams: number;
 }
 /** A person as the system administrator sees them, with their upload space. */
@@ -727,6 +729,13 @@ export const api = {
   communityPlans: () => req<CommunityPlanRow[]>('GET', '/system/communities'),
   setCommunityPlan: (id: number, b: { plan?: 'group' | 'organization'; seats?: number; expires?: string }) => req<CommunityPlanRow[]>('PUT', `/system/communities/${id}`, b),
   adminSetSettings: (b: { registration_mode?: AdminSettings['registration_mode']; keyboard_access?: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
+  mailRules: () => req<MailRules>('GET', '/admin/mail-rules'),
+  addMailRule: (d: MailRuleDraft) => req<MailRules>('POST', '/admin/mail-rules', d),
+  updateMailRule: (id: number, d: MailRuleDraft | { enabled: boolean }) => req<MailRules>('PUT', `/admin/mail-rules/${id}`, d),
+  deleteMailRule: (id: number) => req<MailRules>('DELETE', `/admin/mail-rules/${id}`),
+  previewMailRule: (d: MailRuleDraft) => req<MailRulePreview>('POST', '/admin/mail-rules/preview', d),
+  testMailRule: (id: number) => req<{ ok: true; to: string }>('POST', `/admin/mail-rules/${id}/test`, {}),
+  runMailRules: () => req<MailRules & { sent: number }>('POST', '/admin/mail-rules/run', {}),
   emailLog: (o: { q: string; days: number; day?: string }) =>
     req<{ days: EmailDay[]; messages?: EmailLogMessage[]; more?: boolean }>(
       'GET',
@@ -811,6 +820,7 @@ export const api = {
   resources: () => req<Resource[]>('GET', '/resources'),
   addResource: (b: { kind: Resource['kind']; title: string; url?: string; file_id?: number }) => req<Resource[]>('POST', '/resources', b),
   renameResource: (id: number, title: string) => req<Resource[]>('PUT', `/resources/${id}`, { title }),
+  sendResource: (key: string, emails: string[], note: string) => req<{ sent: number; failed: string[] }>('POST', '/resources/send', { key, emails, note }),
   tagResource: (key: string, tag_ids: number[]) => req<Resource[]>('PUT', '/resources/tags', { key, tag_ids }),
   deleteResource: (id: number) => req<Resource[]>('DELETE', `/resources/${id}`),
 
@@ -861,4 +871,35 @@ export interface EmailLogMessage {
   subject: string;
   at: string;
   sent: boolean;
+}
+
+/** An email that sends itself: who it is for, and what it says. */
+export interface MailRuleDraft {
+  id?: number;
+  name: string;
+  /** The state it watches for: one of MailRules.triggers. */
+  trigger: string;
+  days: number;
+  subject: string;
+  body: string;
+}
+export interface MailRule extends Required<MailRuleDraft> {
+  enabled: boolean;
+  /** How many times it has gone out, and when it last did. */
+  sent: number;
+  last_sent_at: string | null;
+  /** How many people fit it now and have not had it. */
+  waiting: number;
+}
+export interface MailRules {
+  rules: MailRule[];
+  triggers: { id: string; label: string; days: number; subject: string; body: string }[];
+  every_minutes: number;
+  can_send: boolean;
+}
+export interface MailRulePreview {
+  subject: string;
+  html: string;
+  waiting: number;
+  people: { name: string; email: string; days: number }[];
 }

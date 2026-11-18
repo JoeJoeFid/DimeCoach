@@ -17,6 +17,7 @@ import { mentionedIn, notify } from './notices.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
 import { cleanPlayIds, mountPlays } from './plays.js';
 import { mountResources } from './resources.js';
+import { mountMailRules } from './mailRules.js';
 import { mountLinkThumbs } from './linkThumbs.js';
 import { mountStaff, staffBootstrap } from './staff.js';
 
@@ -57,6 +58,7 @@ mountLive(app);
 mountPlays(app);
 mountLinkThumbs(app);
 mountResources(app);
+mountMailRules(app);
 
 const id = (v) => Number(v);
 const str = (v, d = '') => (v == null ? d : String(v));

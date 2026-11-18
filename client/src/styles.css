@@ -14485,3 +14485,148 @@ button.cx-row:hover .cx-row-text strong {
     padding: 22px 10px 8px;
   }
 }
+
+/* Practice header: the date and the start time never run into each other. Each keeps to its own
+   half of the row and may shrink, and when the row is too narrow for both the time goes under. */
+.plan-head .plan-when {
+  flex-wrap: wrap;
+}
+.plan-head .plan-when > .field {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.plan-head .plan-when > .field .input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+/* An iPad or iPhone draws these two as wide as their text unless told they are plain boxes. */
+@supports (-webkit-touch-callout: none) {
+  .plan-head .plan-when > .field input[type='date'],
+  .plan-head .plan-when > .field input[type='time'] {
+    -webkit-appearance: none;
+    appearance: none;
+    text-align: left;
+  }
+  .plan-head .plan-when > .field input::-webkit-date-and-time-value {
+    text-align: left;
+  }
+}
+
+/* System admin: emails that send themselves */
+.email-rules-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.email-rules-list > li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+.email-rules-what {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.email-rule-edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+}
+.email-rule-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.email-rule-form .input {
+  width: 100%;
+}
+.email-rule-form textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+.email-rule-when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.email-rule-days {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.email-rule-days .input {
+  width: 84px;
+}
+.email-rule-help {
+  margin: 0;
+}
+.email-rule-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.email-rule-preview p {
+  margin: 0;
+}
+.email-rule-frame {
+  height: 430px;
+}
+@media (max-width: 820px) {
+  .email-rule-edit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .email-rules-list > li {
+    flex-wrap: wrap;
+  }
+  .email-rules-what {
+    flex-basis: 100%;
+  }
+}
+
+/* Resources: sharing one */
+.res-share {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.res-share-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.res-share-box p {
+  margin: 0;
+}
+.res-share-box .input {
+  width: 100%;
+}
+.res-share-box .btn,
+.modal-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.res-share-box > .btn {
+  align-self: flex-start;
+}
+.res-share-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.res-share-link .input {
+  flex: 1 1 220px;
+  width: auto;
+}

@@ -162,13 +162,14 @@ async function viaResend({ to, subject, text }) {
 /**
  * Records the message and sends it. Resolves to { ok, error }: callers that do not need to know
  * the outcome (a confirmation link, say) can ignore the promise, and a failure is logged here.
- * `secret` is a code inside the text that must not be kept in the outbox.
+ * `secret` is a code inside the text that must not be kept in the outbox. `automatic` marks an
+ * email that sent itself, which is nobody's doing even when a person's request set it off.
  */
-export async function sendMail({ to, subject, text, secret = '' }) {
+export async function sendMail({ to, subject, text, secret = '', automatic = false }) {
   const kind = transport();
   // A link that signs someone in or changes a password is sent, but not written down here.
   const kept = secret ? text.split(secret).join('[code not kept]') : text;
-  const id = run('INSERT INTO outbox (to_email, subject, body, from_user) VALUES (?,?,?,?)', to, subject, kept, actor.getStore() ?? null).lastInsertRowid;
+  const id = run('INSERT INTO outbox (to_email, subject, body, from_user) VALUES (?,?,?,?)', to, subject, kept, automatic ? null : (actor.getStore() ?? null)).lastInsertRowid;
   if (kind === 'none') return { ok: false, error: 'No email service is connected.' };
   if (kind === 'log') {
     console.log(`\n--- email to ${to} ---\nSubject: ${subject}\n\n${text}\n--- end ---\n`);

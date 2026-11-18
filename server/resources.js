@@ -7,6 +7,7 @@
 import { all, get, run, tx } from './db.js';
 import { cleanLinks, deleteUpload } from './images.js';
 import { thumbStates } from './linkThumbs.js';
+import { mailerStatus, sendMail } from './mailer.js';
 
 const parse = (s, d) => {
   try {
@@ -93,7 +94,43 @@ function resourceList(ownerId) {
   return out.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
 }
 
+// Sending a link to other coaches by email: at most this many addresses in one go, and this many in an hour.
+const MAX_AT_ONCE = 20;
+const SEND_LIMIT = 40;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const sends = new Map();
+const sentLately = (userId) => (sends.get(userId) || []).filter((t) => Date.now() - t < 3600_000);
+
 export function mountResources(app) {
+  // Emails a saved link to the addresses given, with a note. Pictures and videos are private
+  // files, so they are shared from the device that is showing them, not from here.
+  app.post('/api/resources/send', async (req, res) => {
+    const r = resourceList(req.ownerId).find((x) => x.key === String(req.body.key ?? ''));
+    if (!r) return res.status(404).json({ error: 'That resource was not found.' });
+    if (r.kind !== 'link') return res.status(400).json({ error: 'Only links can be sent by email.' });
+    if (!mailerStatus().configured) return res.status(400).json({ error: 'Email is not set up on this site. Copy the link and send it yourself.' });
+    const to = [...new Set(list(req.body.emails).map((e) => str(e, 200).toLowerCase()).filter(Boolean))];
+    const bad = to.find((e) => !EMAIL.test(e));
+    if (bad) return res.status(400).json({ error: `${bad} does not look like an email address.` });
+    if (!to.length) return res.status(400).json({ error: 'Type at least one email address.' });
+    if (to.length > MAX_AT_ONCE) return res.status(400).json({ error: `Send to ${MAX_AT_ONCE} people at most in one go.` });
+    const lately = sentLately(req.user.id);
+    if (lately.length + to.length > SEND_LIMIT) return res.status(429).json({ error: 'You have sent a lot in the last hour. Try again a little later.' });
+    const note = str(req.body.note, 1000);
+    const failed = [];
+    for (const email of to) {
+      lately.push(Date.now());
+      const sent = await sendMail({
+        to: email,
+        subject: `${req.user.name} shared a link with you: ${r.title}`,
+        text: `Hi,\n\n${req.user.name} shared a link with you from Dime Coach: "${r.title}".\n\n` + (note ? `${req.user.name} wrote:\n${note}\n\n` : '') + `Open the link:\n\n${r.url}`,
+      });
+      if (!sent.ok) failed.push(email);
+    }
+    sends.set(req.user.id, lately);
+    res.json({ sent: to.length - failed.length, failed });
+  });
+
   app.get('/api/resources', (req, res) => res.json(resourceList(req.ownerId)));
 
   app.post('/api/resources', (req, res) => {
