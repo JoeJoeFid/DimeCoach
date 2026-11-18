@@ -14703,3 +14703,26 @@ button.cx-row:hover .cx-row-text strong {
     max-height: 220px;
   }
 }
+
+/* The organization overview: a narrower box of quick jobs, each with its picture */
+.cx-cols.cx-cols-jobs {
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+}
+.cx-job-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+button.cx-row:hover .cx-job-icon {
+  color: var(--ink);
+}
+@media (max-width: 900px) {
+  .cx-cols.cx-cols-jobs {
+    grid-template-columns: 1fr;
+  }
+}

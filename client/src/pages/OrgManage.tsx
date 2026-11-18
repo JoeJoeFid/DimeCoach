@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api, type OrgGame, type OrgGames, type OrgLeague, type OrgUsage as Usage } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
+import { promptDialog } from '../components/dialogs';
 import { Alert, Badge, PageHead, Pill, Row, Stat } from '../components/cx';
 import { GameModal, type OrgPanelProps } from './OrgPanels';
 
@@ -11,11 +12,29 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const clock = (t: string) => (t ? fmtClock(parseClock(t)) : 'Time not set');
 const longDay = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
+/** The pictures beside the quick jobs, as the lines of a 24 by 24 drawing. */
+const JOB = {
+  teams: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.870M16 3.130a4 4 0 0 1 0 7.750',
+  season: 'M8 2v4M16 2v4M3 10h18M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8M19 16v6M16 19h6',
+  schedule: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2M8 14h.010M12 14h.010M16 14h.010M8 18h.010M12 18h.010',
+  invite: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M19 8v6M22 11h-6',
+  announce: 'm3 11 18-5v12L3 14v-3zM11.600 16.800a3 3 0 1 1-5.800-1.600',
+};
+function JobIcon({ d }: { d: string }) {
+  return (
+    <span className="cx-job-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d={d} />
+      </svg>
+    </span>
+  );
+}
+
 /** Where a manager can be sent from the overview. */
 export type ManageGo = (tab: 'seasons' | 'schedule' | 'coaches' | 'announcements', focus?: { leagueId?: number; view?: 'coaches' | 'invites' | 'requirements' }) => void;
 
 /** The first thing a manager sees: what needs fixing, each with the way to fix it, and the common jobs. */
-export function ManageOverview({ c, org, fail, go }: OrgPanelProps & { go: ManageGo }) {
+export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: ManageGo }) {
   const [games, setGames] = useState<OrgGames | null>(null);
   useEffect(() => {
     api.orgGames(c.id).then(setGames).catch(fail);
@@ -32,6 +51,12 @@ export function ManageOverview({ c, org, fail, go }: OrgPanelProps & { go: Manag
   const issues = (noHead.length ? 1 : 0) + (clashes.length ? 1 : 0) + (unchecked.length ? 1 : 0) + (org.invites.length ? 1 : 0);
   const leagueName = (id: number | null) => org.leagues.find((l) => l.id === id)?.name ?? '';
 
+  const newSeason = async () => {
+    const name = await promptDialog({ title: 'Name the season', body: 'Such as "Winter 2026-27". Divisions and teams go inside it.', confirmLabel: 'Start season' });
+    // The new season is the one "Seasons & teams" opens on.
+    if (name && (await act(() => api.orgAddSeason(c.id, name), `${name} is ready. Add its divisions next.`))) go('seasons');
+  };
+
   return (
     <>
       <PageHead eyebrow="Management / Overview" title={`Run ${c.name}`} sub={season ? `${season.name} · your organization at a glance` : 'Your organization at a glance'} />
@@ -40,7 +65,7 @@ export function ManageOverview({ c, org, fail, go }: OrgPanelProps & { go: Manag
         <Stat value={`${org.org.seats_used} / ${org.org.seats}`} label="Coach seats used" note={`${plural(left, 'seat')} available`} warn={left === 0} onClick={org.can.people ? () => go('coaches') : undefined} />
         <Stat value={leagues.length} label={season ? `${leagues.length === 1 ? 'Division' : 'Divisions'} this season` : 'Divisions'} note={`${plural(teams.length, 'team')} in all`} onClick={() => go('seasons')} />
       </div>
-      <div className="cx-cols">
+      <div className="cx-cols cx-cols-jobs">
         <section className="card cx-card">
           <h2>Needs attention</h2>
           {issues === 0 && <p className="muted">Nothing right now. Every team has a head coach, no place is booked twice, and nobody is waiting on you.</p>}
@@ -88,10 +113,11 @@ export function ManageOverview({ c, org, fail, go }: OrgPanelProps & { go: Manag
         <section className="card cx-card">
           <h2>Quick jobs</h2>
           <ul className="cx-rows">
-            {org.can.leagues && <Row title={season ? 'Add divisions and teams' : 'Set up a season'} sub={season ? `In ${season.name}` : 'Then add its divisions and teams'} onClick={() => go('seasons')} />}
-            {org.can.leagues && leagues.length > 0 && <Row title="Build a game schedule" sub="A round robin, or one game at a time" onClick={() => go('seasons', { leagueId: leagues[0].id })} />}
-            {org.can.people && <Row title="Invite coaches" sub={`${plural(left, 'seat')} available`} onClick={() => go('coaches', { view: 'invites' })} />}
-            {org.can.announce && <Row title="Send an announcement" sub="To everyone, or to one sport, division or team" onClick={() => go('announcements')} />}
+            {org.can.leagues && season && <Row lead={<JobIcon d={JOB.teams} />} title="Add divisions and teams" sub={`In ${season.name}`} onClick={() => go('seasons')} />}
+            {org.can.leagues && <Row lead={<JobIcon d={JOB.season} />} title="Set up a new season" sub={season ? `After ${season.name}` : 'Then add its divisions and teams'} onClick={newSeason} />}
+            {org.can.leagues && leagues.length > 0 && <Row lead={<JobIcon d={JOB.schedule} />} title="Build a game schedule" sub="A round robin, or one game at a time" onClick={() => go('seasons', { leagueId: leagues[0].id })} />}
+            {org.can.people && <Row lead={<JobIcon d={JOB.invite} />} title="Invite coaches" sub={`${plural(left, 'seat')} available`} onClick={() => go('coaches', { view: 'invites' })} />}
+            {org.can.announce && <Row lead={<JobIcon d={JOB.announce} />} title="Send an announcement" sub="To everyone, or to one sport, division or team" onClick={() => go('announcements')} />}
           </ul>
         </section>
       </div>
