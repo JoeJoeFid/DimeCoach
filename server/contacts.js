@@ -2,9 +2,12 @@
 //
 // A coach adds them by name and email, says what they are to the team, and can link each one to
 // the players they belong to, then or later. Someone linked to nobody is a friend of the whole
-// team. An invitation is an email telling them they were added, by whom, to which team. They get
-// no account: this is a list of people to keep in touch with.
+// team. An invitation is an email telling them they were added, by whom, to which team, with a
+// link for making an account. With an account they can open the team's page (see family.js),
+// which shows what the coach lets their kind of follower see.
+import crypto from 'node:crypto';
 import { all, db, get, run } from './db.js';
+import { publicBase } from './invites.js';
 import { mailerStatus, sendMail } from './mailer.js';
 
 db.exec(`
@@ -19,6 +22,38 @@ CREATE TABLE IF NOT EXISTS team_contacts (
 );
 CREATE INDEX IF NOT EXISTS team_contacts_team ON team_contacts(team_id);
 `);
+
+const addColumn = (table, column, ddl) => {
+  if (!all(`PRAGMA table_info(${table})`).some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+};
+// The account of the person, once they have one, and the code in the link they were sent to make it.
+addColumn('team_contacts', 'user_id', 'INTEGER');
+addColumn('team_contacts', 'token_hash', 'TEXT');
+addColumn('team_contacts', 'token_expires', 'TEXT');
+// An account made from such a link follows teams, and cannot coach.
+addColumn('users', 'follower', 'INTEGER DEFAULT 0');
+db.exec('CREATE INDEX IF NOT EXISTS team_contacts_user ON team_contacts(user_id)');
+
+export const FAMILY_INVITE_DAYS = 30;
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const AS = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
+/** The account that goes with an address, when there is a finished one. */
+const accountFor = (email) => (email ? get("SELECT id FROM users WHERE lower(email)=? AND status='active'", String(email).toLowerCase()) : null);
+/** The invitation a link belongs to, in the shape the join page shows, or null when the link is wrong or too old. */
+export function familyInviteByToken(token) {
+  const c = token ? get('SELECT * FROM team_contacts WHERE token_hash=?', sha256(String(token))) : null;
+  if (!c || !c.email || !c.token_expires || c.token_expires < new Date().toISOString()) return null;
+  const team = get('SELECT t.name, t.season, (SELECT name FROM sports WHERE id=t.sport_id) AS sport FROM teams t WHERE t.id=?', c.team_id);
+  if (!team) return null;
+  return { family: true, email: c.email, name: c.name, team: team.name, sport: team.sport || '', season: team.season || '', inviter: get('SELECT name FROM users WHERE id=?', c.invited_by)?.name || 'A coach', title: AS[c.kind] || AS.friend };
+}
+/**
+ * Ties every list this address is on to the person's account. Only call this when the address is
+ * known to be theirs. Returns how many teams they now follow because of it.
+ */
+export function claimFamily(userId, email) {
+  return run('UPDATE team_contacts SET user_id=?, token_hash=NULL, token_expires=NULL WHERE lower(email)=? AND user_id IS NULL', userId, String(email).toLowerCase()).changes;
+}
 
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 const KINDS = ['parent', 'family', 'friend'];
@@ -60,7 +95,7 @@ export function mountContacts(app) {
     mail: mailerStatus().configured,
     contacts: all('SELECT * FROM team_contacts WHERE team_id=? ORDER BY name COLLATE NOCASE, id', team.id).map((c) => {
       const known = new Set(playersOf(team).map((p) => p.id));
-      return { id: c.id, name: c.name, email: c.email, kind: c.kind, player_ids: parse(c.player_ids_json).filter((id) => known.has(id)), invited_at: c.invited_at || null };
+      return { id: c.id, name: c.name, email: c.email, kind: c.kind, player_ids: parse(c.player_ids_json).filter((id) => known.has(id)), invited_at: c.invited_at || null, joined: !!c.user_id };
     }),
   });
   /** The fields of a contact as sent, checked. Null, with the request answered, when something is wrong. */
@@ -88,7 +123,13 @@ export function mountContacts(app) {
     const kids = playersOf(team)
       .filter((p) => parse(c.player_ids_json).includes(p.id))
       .map((p) => p.name);
-    const as = c.kind === 'parent' ? 'a parent' : c.kind === 'family' ? 'family' : 'a friend of the team';
+    const as = AS[c.kind] || AS.friend;
+    // Someone with an account already has the team's page as soon as they are on the list. Anyone else gets a link to make one.
+    const account = accountFor(c.email);
+    const token = account ? '' : crypto.randomBytes(32).toString('base64url');
+    if (account) run('UPDATE team_contacts SET user_id=? WHERE id=?', account.id, c.id);
+    else run('UPDATE team_contacts SET token_hash=?, token_expires=? WHERE id=?', sha256(token), new Date(Date.now() + FAMILY_INVITE_DAYS * 86400_000).toISOString(), c.id);
+    const base = publicBase(req);
     const r = await sendMail({
       to: c.email,
       subject: `${req.user.name} added you to ${team.name} on Dime Coach`,
@@ -96,8 +137,12 @@ export function mountContacts(app) {
         `Hi${c.name ? ` ${c.name}` : ''},\n\n` +
         `${req.user.name} added you to the parents, family and friends of ${team.name}, as ${as}${kids.length ? ` of ${kids.join(' and ')}` : ''}.\n\n` +
         (note ? `${req.user.name} wrote:\n${note}\n\n` : '') +
-        `Dime Coach is where the coaches of ${team.name} plan practices and games. Being on this list means they can send you practice plans, schedules and news at this address. You do not need an account.\n\n` +
+        `Dime Coach is where the coaches of ${team.name} plan practices and games. The team has a page there for its parents, family and friends, with what the coaches choose to share, such as the schedule and news from them.\n\n` +
+        (account
+          ? `You already have a Dime Coach account for this address. Sign in to open the team's page:\n\n${base}/family\n\n`
+          : `Make your account to open the team's page:\n\n${base}/join?token=${token}\n\nThe link works for ${FAMILY_INVITE_DAYS} days.\n\n`) +
         `If you would rather not be on the list, write to ${req.user.name} at ${req.user.email}.`,
+      ...(token ? { secret: token } : {}),
     });
     if (r.ok) run('UPDATE team_contacts SET invited_at=?, invited_by=? WHERE id=?', new Date().toISOString(), req.user.id, c.id);
     return r;
@@ -112,7 +157,7 @@ export function mountContacts(app) {
     const f = team && fields(req, res, team);
     if (!f) return;
     if (f.email && get('SELECT id FROM team_contacts WHERE team_id=? AND email=?', team.id, f.email)) return res.status(400).json({ error: 'Someone with that email address is already on the list.' });
-    const id = Number(run('INSERT INTO team_contacts (team_id, name, email, kind, player_ids_json) VALUES (?,?,?,?,?)', team.id, f.name, f.email, f.kind, JSON.stringify(f.players)).lastInsertRowid);
+    const id = Number(run('INSERT INTO team_contacts (team_id, name, email, kind, player_ids_json, user_id) VALUES (?,?,?,?,?,?)', team.id, f.name, f.email, f.kind, JSON.stringify(f.players), accountFor(f.email)?.id ?? null).lastInsertRowid);
     let warning = '';
     if (req.body.invite) {
       const r = await invite(req, team, get('SELECT * FROM team_contacts WHERE id=?', id), str(req.body.note, 1000).trim());
@@ -127,6 +172,8 @@ export function mountContacts(app) {
     const f = team && fields(req, res, team);
     if (!f) return;
     if (f.email && get('SELECT id FROM team_contacts WHERE team_id=? AND email=? AND id<>?', team.id, f.email, c.id)) return res.status(400).json({ error: 'Someone with that email address is already on the list.' });
+    // A new address is a different person: the page goes to whoever has that address, and the old link stops working.
+    if (f.email !== c.email) run('UPDATE team_contacts SET user_id=?, token_hash=NULL, token_expires=NULL WHERE id=?', accountFor(f.email)?.id ?? null, c.id);
     run('UPDATE team_contacts SET name=?, email=?, kind=?, player_ids_json=? WHERE id=?', f.name, f.email, f.kind, JSON.stringify(f.players), c.id);
     res.json(out(team));
   });

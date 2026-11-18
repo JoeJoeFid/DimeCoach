@@ -99,6 +99,19 @@ const TOPICS: Topic[] = [
     words: 'pdf paper handout export email parents',
   },
   {
+    group: 'Parents and family',
+    title: 'Give parents, family and friends a page for the team',
+    steps: [
+      'Open "Team & roster", then "Parents & family".',
+      'Add each person with their email address, say whether they are a parent, family or a friend, and link parents to their players. Leave "invite" ticked.',
+      'They get an email with a link for making an account. With it they open a page for the team, and nothing else.',
+      'Under "Who sees what", tick the parts of the page each kind of person gets: the schedule, announcements, the message board, homework, the playbook, resources and the roster.',
+      'Under "Shared plays" and "Shared resources", tick the ones they may see. Under "Announcements & board", write to them.',
+    ],
+    tip: 'To begin with a parent sees everything, family sees the schedule, announcements and resources, and a friend sees only the schedule. They never see parents’ contact details or your notes, and cannot change anything about the team.',
+    words: 'parents family friends guardian page view access permissions announcements message board schedule playbook homework resources invite account followers',
+  },
+  {
     group: 'Practices',
     title: 'See the whole season',
     steps: ['Open "Practices & games".', 'The list shows every practice, game and event in date order, opening on what is next. Use "Jump to a month…" to move around, or switch to the calendar view.', 'On the calendar, hover over anything to see a summary.'],
@@ -212,7 +225,7 @@ const TOPICS: Topic[] = [
       'Start a community under Communities, and ask the Dime Coach administrator to put it on the organization plan with the number of coach seats you need.',
       'Open the community and switch to "Manage". The overview lists what needs your attention, each with the way to fix it.',
       'Under "Coaches", invite your coaches by email. Each coach or assistant uses one seat.',
-      'Under "Seasons & teams", start a season, add a division for each sport and age group, and add its teams. The selectors at the top jump between seasons, divisions and teams.',
+      'Under "Seasons & teams", start a season, add its sports, add a division to each sport for each age group, and add the teams. The selectors at the top jump between seasons, sports, divisions and teams.',
       'Use "Assign a coach" on each team, then "Build the schedule" on the division.',
       '"Schedule" shows every game in one list. Under "More" are announcements, fields and gyms, usage, the activity log and settings.',
     ],

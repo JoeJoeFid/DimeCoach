@@ -58,7 +58,7 @@ function attachments(ownerId) {
 }
 
 /** The merged list the Resources page and the pickers show. */
-function resourceList(ownerId) {
+export function resourceList(ownerId) {
   const byKey = new Map();
   const entry = (kind, key, init) => {
     if (!byKey.has(key)) byKey.set(key, { key, kind, title: '', url: '', file_id: null, resource_id: null, created_at: '', uses: [], tag_ids: [], ...init });

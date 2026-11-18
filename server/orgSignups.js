@@ -46,6 +46,10 @@ CREATE INDEX IF NOT EXISTS idx_org_signups_season ON org_signups(season_id);
   const cols = db.prepare('PRAGMA table_info(org_seasons)').all().map((c) => c.name);
   if (!cols.includes('signup_open')) db.exec('ALTER TABLE org_seasons ADD COLUMN signup_open INTEGER DEFAULT 0');
   if (!cols.includes('signup_code')) db.exec("ALTER TABLE org_seasons ADD COLUMN signup_code TEXT DEFAULT ''");
+  // A second parent or guardian, and the line they have among the team's parents once the player is on a team.
+  const mine = db.prepare('PRAGMA table_info(org_signups)').all().map((c) => c.name);
+  for (const col of ['parent2_name', 'parent2_email', 'parent2_phone']) if (!mine.includes(col)) db.exec(`ALTER TABLE org_signups ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+  if (!mine.includes('contact_id')) db.exec('ALTER TABLE org_signups ADD COLUMN contact_id INTEGER');
   ready = true;
 }
 
@@ -54,6 +58,12 @@ CREATE INDEX IF NOT EXISTS idx_org_signups_season ON org_signups(season_id);
  * coach removed them or the team was deleted, is waiting for a team again.
  */
 function reconcile(communityId) {
+  for (const g of all(
+    `SELECT id FROM org_signups WHERE community_id=? AND contact_id IS NOT NULL
+        AND (team_id IS NULL OR player_id IS NULL OR player_id NOT IN (SELECT id FROM players WHERE team_id=org_signups.team_id))`,
+    communityId,
+  ))
+    syncSecondParent(g.id, null, null);
   run(
     `UPDATE org_signups SET team_id=NULL, placed='', player_id=NULL
       WHERE community_id=? AND (placed<>'' OR player_id IS NOT NULL)
@@ -74,6 +84,19 @@ export function seasonHasSignups(seasonId) {
   return !!get('SELECT 1 AS ok FROM org_signups WHERE season_id=?', seasonId);
 }
 
+/**
+ * The roster holds one parent for a player. A second one goes on the team's list of parents,
+ * linked to the player, so the coach has both. It follows the player from team to team.
+ */
+function syncSecondParent(signupId, teamId, playerId) {
+  const g = get('SELECT * FROM org_signups WHERE id=?', signupId);
+  if (g.contact_id) run('DELETE FROM team_contacts WHERE id=?', g.contact_id);
+  let contactId = null;
+  if (teamId && playerId && (g.parent2_name || g.parent2_email))
+    contactId = lastId(run("INSERT INTO team_contacts (team_id, name, email, kind, player_ids_json) VALUES (?,?,?,'parent',?)", teamId, g.parent2_name || g.parent2_email, g.parent2_email, JSON.stringify([playerId])));
+  run('UPDATE org_signups SET contact_id=? WHERE id=?', contactId, g.id);
+}
+
 /** Puts a player on a team's roster, or moves their roster line there. */
 function putOn(g, team, how) {
   const line = g.player_id ? get('SELECT id FROM players WHERE id=?', g.player_id) : null;
@@ -84,9 +107,11 @@ function putOn(g, team, how) {
       run('INSERT INTO players (owner_id, team_id, name, grade, parent_name, parent_email, parent_phone) VALUES (?,?,?,?,?,?,?)', team.owner_id, team.id, g.name, g.grade, g.parent_name, g.parent_email, g.parent_phone),
     );
   run('UPDATE org_signups SET team_id=?, league_id=?, placed=?, player_id=? WHERE id=?', team.id, team.league_id, how, playerId, g.id);
+  syncSecondParent(g.id, team.id, playerId);
 }
 function takeOff(g) {
   if (g.player_id) run('DELETE FROM players WHERE id=?', g.player_id);
+  syncSecondParent(g.id, null, null);
   run("UPDATE org_signups SET team_id=NULL, placed='', player_id=NULL WHERE id=?", g.id);
 }
 
@@ -174,6 +199,7 @@ export function mountSignups(app, { orgEnter, audit, orgOut }) {
       signups: rows.map((g) => ({
         id: g.id, league_id: g.league_id, name: g.name, grade: g.grade, team_id: g.team_id, placed: g.placed, source: g.source, created_at: g.created_at,
         parent_name: contacts ? g.parent_name : '', parent_email: contacts ? g.parent_email : '', parent_phone: contacts ? g.parent_phone : '', notes: contacts ? g.notes : '',
+        parent2_name: contacts ? g.parent2_name : '', parent2_email: contacts ? g.parent2_email : '', parent2_phone: contacts ? g.parent2_phone : '',
       })),
     };
   }
@@ -213,12 +239,15 @@ export function mountSignups(app, { orgEnter, audit, orgOut }) {
     if (get('SELECT COUNT(*) AS n FROM org_signups WHERE season_id=?', season.id).n + names.length > SEASON_MAX) return res.status(400).json({ error: `A season holds ${SEASON_MAX} players at most.` });
     const email = str(req.body.parent_email, 200).toLowerCase();
     if (email && !EMAIL.test(email)) return res.status(400).json({ error: 'That email address does not look right.' });
+    const email2 = str(req.body.parent2_email, 200).toLowerCase();
+    if (email2 && !EMAIL.test(email2)) return res.status(400).json({ error: 'The second email address does not look right.' });
     const one = names.length === 1;
     tx(() => {
       for (const name of names)
         run(
-          'INSERT INTO org_signups (community_id, season_id, league_id, name, grade, parent_name, parent_email, parent_phone, notes, source, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+          'INSERT INTO org_signups (community_id, season_id, league_id, name, grade, parent_name, parent_email, parent_phone, notes, source, created_at, parent2_name, parent2_email, parent2_phone) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
           at.c.id, season.id, league?.id ?? null, name, one ? str(req.body.grade, 40) : '', one ? str(req.body.parent_name, 80) : '', one ? email : '', one ? str(req.body.parent_phone, 40) : '', one ? str(req.body.notes, 1000) : '', 'admin', nowIso(),
+          one ? str(req.body.parent2_name, 80) : '', one ? email2 : '', one ? str(req.body.parent2_phone, 40) : '',
         );
     });
     audit(at.c, req, `Added ${one ? `the player "${names[0]}"` : `${names.length} players`} to ${season.name}${league ? `, ${league.name}` : ''}`);
@@ -237,6 +266,8 @@ export function mountSignups(app, { orgEnter, audit, orgOut }) {
     if (!name) return res.status(400).json({ error: 'Type the player’s name.' });
     const email = contacts && b.parent_email !== undefined ? str(b.parent_email, 200).toLowerCase() : g.parent_email;
     if (email && !EMAIL.test(email)) return res.status(400).json({ error: 'That email address does not look right.' });
+    const email2 = contacts && b.parent2_email !== undefined ? str(b.parent2_email, 200).toLowerCase() : g.parent2_email;
+    if (email2 && !EMAIL.test(email2)) return res.status(400).json({ error: 'The second email address does not look right.' });
     let leagueId = g.league_id;
     if (b.league_id !== undefined) {
       const league = b.league_id ? leagueOf(at.c, b.league_id) : null;
@@ -248,13 +279,19 @@ export function mountSignups(app, { orgEnter, audit, orgOut }) {
       parent_name: contacts && b.parent_name !== undefined ? str(b.parent_name, 80) : g.parent_name,
       parent_phone: contacts && b.parent_phone !== undefined ? str(b.parent_phone, 40) : g.parent_phone,
       notes: contacts && b.notes !== undefined ? str(b.notes, 1000) : g.notes,
+      parent2_email: email2,
+      parent2_name: contacts && b.parent2_name !== undefined ? str(b.parent2_name, 80) : g.parent2_name,
+      parent2_phone: contacts && b.parent2_phone !== undefined ? str(b.parent2_phone, 40) : g.parent2_phone,
     };
     tx(() => {
       if (leagueId !== g.league_id && g.team_id) takeOff(g);
-      run('UPDATE org_signups SET league_id=?, name=?, grade=?, parent_name=?, parent_email=?, parent_phone=?, notes=? WHERE id=?', leagueId, next.name, next.grade, next.parent_name, next.parent_email, next.parent_phone, next.notes, g.id);
+      run('UPDATE org_signups SET league_id=?, name=?, grade=?, parent_name=?, parent_email=?, parent_phone=?, notes=?, parent2_name=?, parent2_email=?, parent2_phone=? WHERE id=?', leagueId, next.name, next.grade, next.parent_name, next.parent_email, next.parent_phone, next.notes, next.parent2_name, next.parent2_email, next.parent2_phone, g.id);
       // The roster line follows, so the coach sees the same name and contact details.
       const now = signupOf(at.c, g.id);
-      if (now.player_id) run('UPDATE players SET name=?, grade=?, parent_name=?, parent_email=?, parent_phone=? WHERE id=?', next.name, next.grade, next.parent_name, next.parent_email, next.parent_phone, now.player_id);
+      if (now.player_id) {
+        run('UPDATE players SET name=?, grade=?, parent_name=?, parent_email=?, parent_phone=? WHERE id=?', next.name, next.grade, next.parent_name, next.parent_email, next.parent_phone, now.player_id);
+        syncSecondParent(now.id, now.team_id, now.player_id);
+      }
     });
     send(res, at, seasonOf(at.c, g.season_id));
   });
@@ -374,6 +411,8 @@ export function mountSignupsPublic(app) {
     if (!name) return res.status(400).json({ error: 'Type the player’s name.' });
     if (!parent) return res.status(400).json({ error: 'Type the name of a parent or guardian.' });
     if (!EMAIL.test(email)) return res.status(400).json({ error: 'Type an email address we can reach you at.' });
+    const email2 = str(b.parent2_email, 200).toLowerCase();
+    if (email2 && !EMAIL.test(email2)) return res.status(400).json({ error: 'The second email address does not look right.' });
     const league = b.league_id ? get('SELECT id FROM org_leagues WHERE id=? AND season_id=?', Number(b.league_id), s.id) : null;
     if (b.league_id && !league) return res.status(400).json({ error: 'Choose a division from the list.' });
     // The same player sent twice by the same parent is kept once.
@@ -381,8 +420,9 @@ export function mountSignupsPublic(app) {
     if (tooManyForms(req.ip)) return res.status(429).json({ error: 'That is a lot of sign-ups from one place. Try again in an hour.' });
     if (get('SELECT COUNT(*) AS n FROM org_signups WHERE season_id=?', s.id).n >= SEASON_MAX) return res.status(403).json({ error: 'This season is full. Get in touch with the organization.' });
     run(
-      'INSERT INTO org_signups (community_id, season_id, league_id, name, grade, parent_name, parent_email, parent_phone, notes, source, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO org_signups (community_id, season_id, league_id, name, grade, parent_name, parent_email, parent_phone, notes, source, created_at, parent2_name, parent2_email, parent2_phone) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       s.community_id, s.id, league?.id ?? null, name, str(b.grade, 40), parent, email, str(b.parent_phone, 40), str(b.notes, 1000), 'form', nowIso(),
+      str(b.parent2_name, 80), email2, str(b.parent2_phone, 40),
     );
     res.json({ ok: true });
   });

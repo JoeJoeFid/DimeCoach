@@ -43,6 +43,8 @@ export interface Bootstrap {
   tags: Tag[];
   /** The signed-in person's own teams, wherever they are working right now. */
   own_teams: (Pick<Team, 'id' | 'name' | 'season'> & { sport: string })[];
+  /** How many teams this person follows as a parent, family or a friend. */
+  following: number;
   shared_teams: SharedTeam[];
   /** Null in your own workspace. */
   access: TeamAccess | null;
@@ -72,6 +74,8 @@ export interface User {
   /** The one account that runs the whole system: other people's accounts and their upload space. */
   is_system_admin: boolean;
   must_change_password: boolean;
+  /** An account that follows teams as a parent, family or a friend, and coaches nothing. */
+  follower: boolean;
   /** Personal display preferences, saved with the account. */
   prefs: { heat_color?: string; /** True once the welcome tour has been finished or skipped. */ tour_done?: boolean; /** True once the introduction to drawing plays has been seen. */ play_intro_done?: boolean };
 }
@@ -287,11 +291,18 @@ export interface OrgLeague {
 export type LeagueGender = '' | 'boys' | 'girls' | 'coed';
 export const GENDER_WORD: Record<LeagueGender, string> = { '': '', boys: 'Boys', girls: 'Girls', coed: 'Co-ed' };
 /** Everything about an organization the caller may see. People, invitations and requirements are empty for those who do not manage them. */
+/** A sport a season plays. Its divisions go inside it. */
+export interface OrgSport {
+  id: number;
+  season_id: number;
+  name: string;
+}
 export interface Org {
   plan: 'organization';
   org: OrgSummary;
   can: CommunityPowers;
   seasons: { id: number; name: string; archived: boolean }[];
+  sports: OrgSport[];
   leagues: OrgLeague[];
   teams: OrgTeam[];
   venues: { id: number; name: string; address: string }[];
@@ -316,6 +327,10 @@ export interface OrgSignup {
   parent_name: string;
   parent_email: string;
   parent_phone: string;
+  /** A second parent or guardian, where one was given. */
+  parent2_name: string;
+  parent2_email: string;
+  parent2_phone: string;
   notes: string;
 }
 /** What dealing a division's waiting players out would do, team by team. */
@@ -336,7 +351,7 @@ export interface OrgSignups {
   org: Org;
   plan?: SeedPlan;
 }
-export type SignupDraft = { name: string; grade: string; parent_name: string; parent_email: string; parent_phone: string; notes: string; league_id: number | null };
+export type SignupDraft = { name: string; grade: string; parent_name: string; parent_email: string; parent_phone: string; parent2_name: string; parent2_email: string; parent2_phone: string; notes: string; league_id: number | null };
 export type SeedOptions = { ideal: number; extras: 'spread' | 'wait'; redo: boolean };
 /** A season's sign-up form, as anyone with its link sees it. */
 export interface PublicSignup {
@@ -616,6 +631,65 @@ export interface TeamContact {
   /** The players they belong to. Empty for a friend of the whole team, or someone not linked yet. */
   player_ids: number[];
   invited_at: string | null;
+  /** They have an account, and so can open the team's page. */
+  joined: boolean;
+}
+export type FamilyKind = TeamContact['kind'];
+export type FamilySection = 'schedule' | 'news' | 'board' | 'homework' | 'playbook' | 'resources' | 'roster';
+/** Something written on a team's page: an announcement from a coach, or a message on the board. */
+export interface TeamPost {
+  id: number;
+  kind: 'news' | 'board';
+  title: string;
+  body: string;
+  author: string;
+  role: 'coach' | FamilyKind;
+  at: string;
+  mine: boolean;
+}
+/** What a team's page shows its followers, as its coaches set it. */
+export interface FamilySettings {
+  access: Record<FamilyKind, Record<FamilySection, boolean>>;
+  /** The plays and resources picked out for the followers. */
+  plays: number[];
+  resources: string[];
+  all_plays: { id: number; name: string; category: string }[];
+  all_resources: { key: string; kind: 'link' | 'image' | 'video'; title: string; url: string }[];
+  /** How many of each kind have an account. */
+  joined: Record<FamilyKind, number>;
+  news: TeamPost[];
+  board: TeamPost[];
+}
+export interface FollowedTeam {
+  id: number;
+  name: string;
+  sport: string;
+  season: string;
+  kind: FamilyKind;
+  /** The players this person belongs to. */
+  players: string[];
+}
+export interface FamilyDay {
+  key: string;
+  kind: 'practice' | 'game' | 'other';
+  title: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  location: string;
+}
+/** A team as one of its followers sees it. A part they may not see comes back empty. */
+export interface FamilyTeam {
+  team: { id: number; name: string; sport: string; season: string; organization: string; coaches: { name: string; title: string }[] };
+  me: { kind: FamilyKind; players: string[] };
+  can: Record<FamilySection, boolean>;
+  schedule: FamilyDay[];
+  news: TeamPost[];
+  board: TeamPost[];
+  homework: { id: number; title: string; date: string; for: string[]; content: SharedPlan }[];
+  plays: SharedPlay[];
+  resources: { key: string; kind: 'link' | 'image' | 'video'; title: string; url: string; file_id: number | null }[];
+  roster: { name: string; number: string; position: string }[];
 }
 export interface TeamContacts {
   /** Whether this site can send email, and so invitations. */
@@ -748,6 +822,8 @@ export const api = {
   orgUpdateSeason: (id: number, seasonId: number, b: { name?: string; archived?: boolean }) => req<Org>('PUT', `/communities/${id}/org/seasons/${seasonId}`, b),
   orgDeleteSeason: (id: number, seasonId: number) => req<Org>('DELETE', `/communities/${id}/org/seasons/${seasonId}`),
   orgRollover: (id: number, seasonId: number, b: { name: string; keep_coaches: boolean; archive: boolean }) => req<Org>('POST', `/communities/${id}/org/seasons/${seasonId}/rollover`, b),
+  orgAddSport: (id: number, seasonId: number, name: string) => req<Org>('POST', `/communities/${id}/org/seasons/${seasonId}/sports`, { name }),
+  orgDeleteSport: (id: number, sportId: number) => req<Org>('DELETE', `/communities/${id}/org/sports/${sportId}`),
   orgAddLeague: (id: number, b: { season_id: number; name: string; sport: string; age_group: string; gender: LeagueGender }) => req<Org>('POST', `/communities/${id}/org/leagues`, b),
   orgUpdateLeague: (id: number, leagueId: number, b: { name: string; age_group?: string; gender?: LeagueGender }) => req<Org>('PUT', `/communities/${id}/org/leagues/${leagueId}`, b),
   orgSignups: (id: number, seasonId: number) => req<OrgSignups>('GET', `/communities/${id}/org/signups?season_id=${seasonId}`),
@@ -843,6 +919,14 @@ export const api = {
 
   players: (teamId: number) => req<Player[]>('GET', `/teams/${teamId}/players`),
   teamContacts: (teamId: number) => req<TeamContacts>('GET', `/teams/${teamId}/contacts`),
+  teamFamily: (teamId: number) => req<FamilySettings>('GET', `/teams/${teamId}/family`),
+  saveTeamFamily: (teamId: number, b: { access?: Partial<Record<FamilyKind, Partial<Record<FamilySection, boolean>>>>; plays?: number[]; resources?: string[] }) => req<FamilySettings>('PUT', `/teams/${teamId}/family`, b),
+  teamFamilyPost: (teamId: number, b: { kind: 'news' | 'board'; title: string; body: string }) => req<FamilySettings>('POST', `/teams/${teamId}/family/posts`, b),
+  deleteTeamFamilyPost: (teamId: number, postId: number) => req<FamilySettings>('DELETE', `/teams/${teamId}/family/posts/${postId}`),
+  followedTeams: () => req<FollowedTeam[]>('GET', '/family/teams'),
+  familyTeam: (teamId: number) => req<FamilyTeam>('GET', `/family/teams/${teamId}`),
+  familyPost: (teamId: number, body: string) => req<TeamPost[]>('POST', `/family/teams/${teamId}/board`, { body }),
+  familyDeletePost: (teamId: number, postId: number) => req<TeamPost[]>('DELETE', `/family/teams/${teamId}/board/${postId}`),
   addTeamContact: (teamId: number, b: ContactFields & { invite: boolean; note: string }) => req<TeamContacts>('POST', `/teams/${teamId}/contacts`, b),
   updateTeamContact: (teamId: number, id: number, b: ContactFields) => req<TeamContacts>('PUT', `/teams/${teamId}/contacts/${id}`, b),
   removeTeamContact: (teamId: number, id: number) => req<TeamContacts>('DELETE', `/teams/${teamId}/contacts/${id}`),

@@ -25,6 +25,7 @@ import PrintView from './pages/PrintView';
 import Library from './pages/Library';
 import Tags from './pages/Tags';
 import Teams from './pages/Teams';
+import { FamilyApp, FamilyHome, FamilyTeamPage } from './pages/Family';
 import ImportPlans from './pages/ImportPlans';
 import Playbook from './pages/Playbook';
 import Resources from './pages/Resources';
@@ -209,6 +210,8 @@ export default function App() {
     );
   }
   else if (auth.user.must_change_password) view = <PasswordForm forced onDone={refresh} />;
+  // Someone who follows teams as a parent, family or a friend has the teams' pages and nothing else.
+  else if (auth.user.follower) view = <FamilyApp user={auth.user} onChanged={refresh} />;
   else view = <SignedIn key={auth.user.id} user={auth.user} onChanged={refresh} choosingTeam={justSignedIn} onTeamChosen={() => setJustSignedIn(false)} />;
   return (
     <>
@@ -474,6 +477,8 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     <Routes>
       <Route path="/teams" element={<Teams />} />
       <Route path="/account" element={<Account onChanged={onChanged} />} />
+      <Route path="/family" element={<FamilyHome name={user.name} />} />
+      <Route path="/family/:teamId" element={<FamilyTeamPage />} />
       <Route path="/help" element={<Help />} />
       {/* The old Administration page was folded into System admin. An old link to it lands there. */}
       {user.is_system_admin && <Route path="/admin" element={<Navigate to="/system" replace />} />}
@@ -573,6 +578,8 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
                   {g.items.map(navLink)}
                 </div>
               ))}
+              {/* For a coach who is also a parent on someone else's team. */}
+              {!!data?.following && navLink({ to: '/family', label: 'Teams I follow', icon: icons.teams })}
             </nav>
             <div className="side-foot">
               <UserMenu

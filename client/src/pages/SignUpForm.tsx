@@ -11,7 +11,7 @@ const initials = (name: string) =>
     .map((w) => w[0])
     .join('')
     .toUpperCase();
-const EMPTY = { name: '', grade: '', league_id: 0, parent_name: '', parent_email: '', parent_phone: '', notes: '', website: '' };
+const EMPTY = { name: '', grade: '', league_id: 0, parent_name: '', parent_email: '', parent_phone: '', parent2_name: '', parent2_email: '', parent2_phone: '', notes: '', website: '' };
 
 export default function SignUpForm() {
   const { code = '' } = useParams();
@@ -23,6 +23,8 @@ export default function SignUpForm() {
   /** The names of the players sent so far from this page. */
   const [sent, setSent] = useState<string[]>([]);
   const [done, setDone] = useState(false);
+  /** Whether the fields for a second parent are showing. */
+  const [second, setSecond] = useState(false);
   useEffect(() => {
     api
       .publicSignup(code)
@@ -51,7 +53,7 @@ export default function SignUpForm() {
     e.preventDefault();
     setBusy(true);
     try {
-      await api.sendPublicSignup(code, b);
+      await api.sendPublicSignup(code, second ? b : { ...b, parent2_name: '', parent2_email: '', parent2_phone: '' });
       setSent((list) => [...list, b.name.trim()]);
       setDone(true);
       setProblem('');
@@ -137,6 +139,32 @@ export default function SignUpForm() {
               <span className="field-label">Phone number (optional)</span>
               <input className="input" type="tel" maxLength={40} autoComplete="tel" value={b.parent_phone} onChange={set('parent_phone')} />
             </label>
+            {second ? (
+              <>
+                <div className="su-second">
+                  <h2>A second parent or guardian</h2>
+                  <button type="button" className="link small" onClick={() => setSecond(false)}>
+                    Remove
+                  </button>
+                </div>
+                <label>
+                  <span className="field-label">Their name</span>
+                  <input className="input" maxLength={80} value={b.parent2_name} onChange={set('parent2_name')} />
+                </label>
+                <label>
+                  <span className="field-label">Email address (optional)</span>
+                  <input className="input" type="email" maxLength={200} value={b.parent2_email} onChange={set('parent2_email')} />
+                </label>
+                <label>
+                  <span className="field-label">Phone number (optional)</span>
+                  <input className="input" type="tel" maxLength={40} value={b.parent2_phone} onChange={set('parent2_phone')} />
+                </label>
+              </>
+            ) : (
+              <button type="button" className="link su-add" onClick={() => setSecond(true)}>
+                + Add a second parent or guardian
+              </button>
+            )}
             <label>
               <span className="field-label">Anything the coach should know (optional)</span>
               <textarea className="input" rows={3} maxLength={1000} value={b.notes} onChange={set('notes')} />

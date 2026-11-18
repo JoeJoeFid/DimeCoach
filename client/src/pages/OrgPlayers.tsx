@@ -14,11 +14,14 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const day = (at: string) => new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 const divisionLabel = (l: OrgLeague) => [l.name, GENDER_WORD[l.gender]].filter(Boolean).join(' · ');
 
-export function OrgPlayers({ c, org, act, fail, focus }: OrgPanelProps & { focus?: { view?: string } | null }) {
+export function OrgPlayers({ c, org, act, fail, focus }: OrgPanelProps & { focus?: { view?: string; leagueId?: number } | null }) {
   const manage = org.can.leagues && !org.org.lapsed;
-  const [seasonId, setSeasonId] = useState(() => (org.seasons.find((s) => !s.archived) ?? org.seasons[0])?.id ?? 0);
-  const [leagueId, setLeagueId] = useState(0);
-  const [view, setView] = useState<View>(focus?.view === 'teams' ? 'teams' : 'list');
+  /** The division this was opened for, when it was opened from one. */
+  const from = org.leagues.find((l) => l.id === focus?.leagueId) ?? null;
+  const [seasonId, setSeasonId] = useState(() => from?.season_id ?? (org.seasons.find((s) => !s.archived) ?? org.seasons[0])?.id ?? 0);
+  const [sportId, setSportId] = useState(0);
+  const [leagueId, setLeagueId] = useState(from?.id ?? 0);
+  const [view, setView] = useState<View>(focus?.view === 'teams' ? 'teams' : focus?.view === 'form' ? 'form' : 'list');
   const [data, setData] = useState<OrgSignups | null>(null);
   const [q, setQ] = useState('');
   const [show, setShow] = useState<Show>(focus?.view === 'waiting' ? 'waiting' : 'all');
@@ -49,6 +52,10 @@ export function OrgPlayers({ c, org, act, fail, focus }: OrgPanelProps & { focus
     [org.leagues, seasonId],
   );
   const league = leagues.find((l) => l.id === leagueId) ?? null;
+  const seasonSports = org.sports.filter((s) => s.season_id === seasonId);
+  const sportOf = (l: OrgLeague) => seasonSports.find((s) => s.name.toLowerCase() === l.sport.toLowerCase()) ?? null;
+  const sport = league ? sportOf(league) : (seasonSports.find((s) => s.id === sportId) ?? null);
+  const inSport = sport ? leagues.filter((l) => l.sport.toLowerCase() === sport.name.toLowerCase()) : leagues;
   const teamsOf = (id: number | null) => org.teams.filter((t) => t.league_id === id).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   const seasonTeams = org.teams.filter((t) => leagues.some((l) => l.id === t.league_id));
   const teamName = (id: number | null) => org.teams.find((t) => t.id === id)?.name ?? '';
@@ -56,11 +63,11 @@ export function OrgPlayers({ c, org, act, fail, focus }: OrgPanelProps & { focus
 
   const all = data?.signups ?? [];
   // -1 stands for the players who did not choose a division.
-  const inDivision = leagueId === -1 ? all.filter((g) => !g.league_id) : league ? all.filter((g) => g.league_id === league.id) : all;
+  const inDivision = leagueId === -1 ? all.filter((g) => !g.league_id) : league ? all.filter((g) => g.league_id === league.id) : sport ? all.filter((g) => inSport.some((l) => l.id === g.league_id)) : all;
   const noDivision = all.filter((g) => !g.league_id).length;
   const waiting = inDivision.filter((g) => !g.team_id);
   const term = q.trim().toLowerCase();
-  const shown = inDivision.filter((g) => (show === 'all' || (show === 'waiting' ? !g.team_id : !!g.team_id)) && (!term || `${g.name} ${g.grade} ${g.parent_name} ${g.parent_email} ${teamName(g.team_id)}`.toLowerCase().includes(term)));
+  const shown = inDivision.filter((g) => (show === 'all' || (show === 'waiting' ? !g.team_id : !!g.team_id)) && (!term || `${g.name} ${g.grade} ${g.parent_name} ${g.parent_email} ${g.parent2_name} ${g.parent2_email} ${teamName(g.team_id)}`.toLowerCase().includes(term)));
   const pickedRows = all.filter((g) => picked.includes(g.id));
 
   const crumbs: Crumb[] = [
@@ -71,22 +78,41 @@ export function OrgPlayers({ c, org, act, fail, focus }: OrgPanelProps & { focus
       current: season?.id ?? 0,
       onPick: (id) => {
         setSeasonId(id);
+        setSportId(0);
         setLeagueId(0);
       },
     },
+    ...(seasonSports.length
+      ? [
+          {
+            label: 'Sport',
+            value: sport?.name ?? 'All sports',
+            options: seasonSports.map((s) => ({ id: s.id, label: s.name, note: plural(leagues.filter((l) => l.sport.toLowerCase() === s.name.toLowerCase()).length, 'division') })),
+            current: sport?.id ?? 0,
+            onPick: (id: number) => {
+              setSportId(id);
+              setLeagueId(0);
+              setPicked([]);
+            },
+            all: `All sports in ${season?.name ?? 'the season'}`,
+          },
+        ]
+      : []),
     {
       label: 'Division',
       value: leagueId === -1 ? 'No division chosen' : league ? divisionLabel(league) : 'All divisions',
       options: [
-        ...leagues.map((l) => ({ id: l.id, label: divisionLabel(l), note: `${l.sport} · ${plural(all.filter((g) => g.league_id === l.id).length, 'player')}` })),
-        ...(noDivision ? [{ id: -1, label: 'No division chosen', note: plural(noDivision, 'player') }] : []),
+        ...inSport.map((l) => ({ id: l.id, label: divisionLabel(l), note: `${sport ? '' : `${l.sport} · `}${plural(all.filter((g) => g.league_id === l.id).length, 'player')}` })),
+        ...(noDivision && !sport ? [{ id: -1, label: 'No division chosen', note: plural(noDivision, 'player') }] : []),
       ],
       current: leagueId,
       onPick: (id) => {
+        const l = leagues.find((x) => x.id === id);
+        if (l) setSportId(sportOf(l)?.id ?? 0);
         setLeagueId(id);
         setPicked([]);
       },
-      all: `All divisions in ${season?.name ?? 'the season'}`,
+      all: `All divisions in ${sport?.name ?? season?.name ?? 'the season'}`,
     },
   ];
 
@@ -233,6 +259,12 @@ export function OrgPlayers({ c, org, act, fail, focus }: OrgPanelProps & { focus
                         <td>
                           {g.parent_name}
                           {(g.parent_email || g.parent_phone) && <div className="muted small">{[g.parent_email, g.parent_phone].filter(Boolean).join(' · ')}</div>}
+                          {(g.parent2_name || g.parent2_email || g.parent2_phone) && (
+                            <div className="pl-second-parent">
+                              {g.parent2_name}
+                              <div className="muted small">{[g.parent2_email, g.parent2_phone].filter(Boolean).join(' · ')}</div>
+                            </div>
+                          )}
                         </td>
                       )}
                       <td className="muted small">
@@ -341,10 +373,10 @@ export function OrgPlayers({ c, org, act, fail, focus }: OrgPanelProps & { focus
           </p>
           <div className="pl-form-row">
             <div className="seg" role="group" aria-label="Sign-ups">
-              <button type="button" className={data.season.open ? 'on' : ''} aria-pressed={data.season.open} disabled={!manage || season.archived} onClick={() => !data.season.open && run(() => api.orgOpenSignups(c.id, season.id, true), `Sign-ups for ${season.name} are open.`)}>
+              <button type="button" className={data.season.open ? 'on' : ''} aria-pressed={data.season.open} disabled={!manage || season.archived} onClick={() => !data.season.open && run(() => api.orgOpenSignups(c.id, season.id, true))}>
                 Open
               </button>
-              <button type="button" className={data.season.open ? '' : 'on'} aria-pressed={!data.season.open} disabled={!manage} onClick={() => data.season.open && run(() => api.orgOpenSignups(c.id, season.id, false), `Sign-ups for ${season.name} are closed.`)}>
+              <button type="button" className={data.season.open ? '' : 'on'} aria-pressed={!data.season.open} disabled={!manage} onClick={() => data.season.open && run(() => api.orgOpenSignups(c.id, season.id, false))}>
                 Closed
               </button>
             </div>
@@ -438,9 +470,11 @@ function DivisionSelect({ leagues, value, onChange, none }: { leagues: OrgLeague
 function PlayerModal({ player, leagues, leagueId, contacts, save, onClose }: { player: OrgSignup | null; leagues: OrgLeague[]; leagueId: number | null; contacts: boolean; save: (b: SignupDraft) => Promise<void>; onClose: () => void }) {
   const [b, setB] = useState<SignupDraft>({
     name: player?.name ?? '', grade: player?.grade ?? '', parent_name: player?.parent_name ?? '', parent_email: player?.parent_email ?? '', parent_phone: player?.parent_phone ?? '', notes: player?.notes ?? '',
+    parent2_name: player?.parent2_name ?? '', parent2_email: player?.parent2_email ?? '', parent2_phone: player?.parent2_phone ?? '',
     league_id: player ? player.league_id : leagueId,
   });
   const set = (k: keyof SignupDraft) => (e: { target: { value: string } }) => setB((old) => ({ ...old, [k]: e.target.value }));
+  const [second, setSecond] = useState(!!(player?.parent2_name || player?.parent2_email || player?.parent2_phone));
   const moving = !!player?.team_id && b.league_id !== player.league_id;
   return (
     <Modal title={player ? `Edit ${player.name}` : 'Add a player'} onClose={onClose}>
@@ -472,6 +506,23 @@ function PlayerModal({ player, leagues, leagueId, contacts, save, onClose }: { p
             <Field label="Their phone number (optional)">
               <input className="input" type="tel" maxLength={40} value={b.parent_phone} onChange={set('parent_phone')} />
             </Field>
+            {second ? (
+              <>
+                <Field label="Second parent or guardian (optional)">
+                  <input className="input" maxLength={80} value={b.parent2_name} onChange={set('parent2_name')} />
+                </Field>
+                <Field label="Their email address (optional)">
+                  <input className="input" type="email" maxLength={200} value={b.parent2_email} onChange={set('parent2_email')} />
+                </Field>
+                <Field label="Their phone number (optional)">
+                  <input className="input" type="tel" maxLength={40} value={b.parent2_phone} onChange={set('parent2_phone')} />
+                </Field>
+              </>
+            ) : (
+              <button type="button" className="link small pl-second" onClick={() => setSecond(true)}>
+                + Add a second parent or guardian
+              </button>
+            )}
             <Field label="Notes (optional)">
               <textarea className="input" rows={2} maxLength={1000} value={b.notes} onChange={set('notes')} />
             </Field>

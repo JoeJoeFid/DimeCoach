@@ -14,6 +14,7 @@ import { MAIL_SAMPLES } from './mailSamples.js';
 import { notify } from './notices.js';
 import { RESET_MINUTES, claimInvites, clearResets, inviteByToken, mailReset, resetByToken } from './invites.js';
 import { claimOrgInvites, orgInviteByToken } from './orgs.js';
+import { claimFamily, familyInviteByToken } from './contacts.js';
 import { isActive, markActive } from './live.js';
 import { recentActivity, trackActivity } from './activity.js';
 import { MAX_CAP_MB, capMbFor, defaultCapMb, parseCapMb, usageOf } from './quota.js';
@@ -153,6 +154,8 @@ function nameFrom(body) {
 const userOut = (u) => ({
   id: u.id, email: u.email, name: u.name, first_name: u.first_name || '', last_name: u.last_name || '', is_admin: !!u.is_admin, can_import: !!u.can_import, is_system_admin: isSystemAdmin(u),
   must_change_password: !!u.must_change_password, prefs: prefsOf(u),
+  // An account that follows teams as a parent, family or a friend, and coaches nothing.
+  follower: !!u.follower,
 });
 
 // --- Failed sign-in throttle (in memory; resets when the server restarts) ---
@@ -237,8 +240,11 @@ function mailSystemInvite(req, user) {
 const userCount = () => get('SELECT COUNT(*) AS n FROM users').n;
 /** Everything waiting for an address that is now known to belong to this person: teams shared with it, and organizations it was invited to. */
 function claimAll(userId, email) {
-  const joined = claimInvites(userId, email);
-  return joined + claimOrgInvites(userId, email);
+  const joined = claimInvites(userId, email) + claimOrgInvites(userId, email);
+  claimFamily(userId, email);
+  // Someone who followed teams and is now asked to coach one gets the whole of Dime Coach.
+  if (joined) run('UPDATE users SET follower=0 WHERE id=?', userId);
+  return joined;
 }
 
 // Asking for a password link: a few times an hour from one place, and for one address.
@@ -515,15 +521,15 @@ export function mountAuth(app) {
   // --- An invitation to a team, for someone with no account yet ---
   const BAD_INVITE = 'This invitation is not valid any more. Ask the person who invited you to send it again.';
   app.get('/api/auth/invite', (req, res) => {
-    const inv = inviteByToken(str(req.query.token)) || orgInviteByToken(str(req.query.token));
+    const inv = inviteByToken(str(req.query.token)) || orgInviteByToken(str(req.query.token)) || familyInviteByToken(str(req.query.token));
     if (!inv) return res.status(400).json({ error: BAD_INVITE });
     const existing = get('SELECT status FROM users WHERE email=?', inv.email);
-    res.json({ email: inv.email, team: inv.team, community: inv.community || '', name: inv.name || '', sport: inv.sport || '', season: inv.season || '', inviter: inv.inviter || 'A coach', title: inv.title, has_account: !!existing && !unfinished(existing) });
+    res.json({ family: !!inv.family, email: inv.email, team: inv.team, community: inv.community || '', name: inv.name || '', sport: inv.sport || '', season: inv.season || '', inviter: inv.inviter || 'A coach', title: inv.title, has_account: !!existing && !unfinished(existing) });
   });
   // Opening the link shows the address is theirs, so the account needs no further confirming,
   // and it is made whether or not sign-up is open to everyone.
   app.post('/api/auth/invite/accept', (req, res) => {
-    const inv = inviteByToken(str(req.body.token)) || orgInviteByToken(str(req.body.token));
+    const inv = inviteByToken(str(req.body.token)) || orgInviteByToken(str(req.body.token)) || familyInviteByToken(str(req.body.token));
     if (!inv) return res.status(400).json({ error: BAD_INVITE });
     const existing = get('SELECT * FROM users WHERE email=?', inv.email);
     if (existing && !unfinished(existing)) {
@@ -545,7 +551,8 @@ export function mountAuth(app) {
         run("INSERT INTO memberships (user_id, owner_id, role) VALUES (?,?,'owner')", existing.id, createWorkspace(`${name}'s workspace`));
         id = existing.id;
       } else id = createUser({ email: inv.email, name, password: str(req.body.password) });
-      claimAll(id, inv.email);
+      // An account made from a parent's link follows teams. It coaches only if it was also asked to.
+      if (!claimAll(id, inv.email) && inv.family) run('UPDATE users SET follower=1 WHERE id=?', id);
       return id;
     });
     startSession(req, res, userId);
@@ -558,6 +565,8 @@ export function mountAuth(app) {
     if (!user) return res.status(401).json({ error: 'Sign in to continue.' });
     const membership = get('SELECT owner_id, role FROM memberships WHERE user_id=? ORDER BY owner_id LIMIT 1', user.id);
     if (!membership) return res.status(403).json({ error: 'This account has no workspace. Contact the administrator.' });
+    // A follower's account opens the teams they follow, and nothing a coach uses.
+    if (user.follower && !/^\/(auth|family|live)(\/|$)/.test(req.path)) return res.status(403).json({ error: 'This account follows teams as a parent, family or a friend. It cannot be used to coach.' });
     req.user = user;
     req.ownerId = membership.owner_id;
     noteMailActor(user.id);

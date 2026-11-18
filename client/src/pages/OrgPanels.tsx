@@ -2,7 +2,7 @@
 // announcements, requirements, the record of what admins did, and the public page.
 // Each panel is one tab (or part of one) on the community page.
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { api, type CommunityDetail, type Org, type OrgAnnouncement, type OrgAudience, type OrgCheck, type OrgGame, type OrgGames, type OrgLeague, type OrgPerson, type OrgTeam, GENDER_WORD, type LeagueGender } from '../api';
+import { api, type CommunityDetail, type Org, type OrgAnnouncement, type OrgAudience, type OrgCheck, type OrgGame, type OrgGames, type OrgLeague, type OrgPerson, type OrgSignup, type OrgSport, type OrgTeam, GENDER_WORD, type LeagueGender } from '../api';
 import { useApp } from '../App';
 import { SPORT_CHOICES } from '../sports';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
@@ -48,6 +48,13 @@ const ICONS = {
   plus: 'M12 5v14M5 12h14',
   cal: 'M5 6h14v14H5zM5 10h14M9 3.500V7M15 3.500V7',
   globe: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM3 12h18M12 3c2.500 2.700 2.500 15.300 0 18M12 3c-2.500 2.700-2.500 15.300 0 18',
+  group: 'M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19M10 10.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM20 19v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.65a3 3 0 0 1 0 5.7',
+  shuffle: 'M4 7h3c2 0 3.300 1 4.300 2.500l1.400 5c1 1.500 2.300 2.500 4.300 2.500h3M4 17h3c1.300 0 2.300-.500 3.100-1.300M13.900 8.300c.800-.800 1.800-1.300 3.100-1.300h3M17.500 4.500 20 7l-2.500 2.500M17.500 14.500 20 17l-2.500 2.500',
+  person: 'M12 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM5 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1',
+  bolt: 'M13 3 5 14h6l-1 7 8-11h-6z',
+  check: 'm5 12.500 4.500 4.500L19 7.500',
+  down: 'm6 9 6 6 6-6',
+  arrow: 'M5 12h14M13 6l6 6-6 6',
 };
 
 /** How many coach seats are taken, as a bar and a sentence. */
@@ -439,7 +446,7 @@ function CheckModal({ entry, onClose, save }: { c: CommunityDetail; entry: { per
 // --- Leagues, teams and the schedule --------------------------------------------------
 const STATUS_WORD: Record<OrgGame['status'], string> = { scheduled: '', final: 'Final', postponed: 'Postponed', cancelled: 'Cancelled' };
 
-export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { focus?: { leagueId?: number; /** Open straight on building that division's schedule. */ build?: boolean } | null }) {
+export function OrgTeams({ c, org, act, fail, say, focus, toPlayers }: OrgPanelProps & { focus?: { leagueId?: number; /** Open straight on building that division's schedule. */ build?: boolean } | null; /** Goes to putting a division's players on teams. */ toPlayers?: (leagueId: number) => void }) {
   const app = useApp();
   const manage = org.can.leagues && !org.org.lapsed;
   const [seasonId, setSeasonId] = useState(() => org.leagues.find((l) => l.id === focus?.leagueId)?.season_id ?? 0);
@@ -447,7 +454,20 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
   const [coachFor, setCoachFor] = useState<OrgTeam | null>(null);
   const [editing, setEditing] = useState<{ league: OrgLeague; game: OrgGame | null } | null>(null);
   const [building, setBuilding] = useState<OrgLeague | null>(() => (focus?.build ? (org.leagues.find((l) => l.id === focus.leagueId) ?? null) : null));
-  const [addLeague, setAddLeague] = useState(false);
+  /** The sport a division is being added to, '' for one still to choose, or null when nothing is being added. */
+  const [addLeague, setAddLeague] = useState<string | null>(null);
+  const [addSport, setAddSport] = useState(false);
+  /** The division teams are being made for. */
+  const [teamsFor, setTeamsFor] = useState<OrgLeague | null>(null);
+  /** The sport being looked at. With none, the page is the whole season. */
+  const [sportId, setSportId] = useState(() => {
+    const l = org.leagues.find((x) => x.id === focus?.leagueId);
+    return (l && org.sports.find((s) => s.season_id === l.season_id && s.name.toLowerCase() === l.sport.toLowerCase())?.id) || 0;
+  });
+  const [by, setBy] = useState<'sport' | 'all'>('sport');
+  /** The sports that are unfolded. Until one is pressed, it is the first. */
+  const [unfolded, setUnfolded] = useState<number[] | null>(null);
+  const [signups, setSignups] = useState<OrgSignup[] | null>(null);
   const [rolling, setRolling] = useState(false);
   /** The league being looked at in full. With none, the page is the overview of all of them. */
   const [openId, setOpenId] = useState(focus?.leagueId ?? 0);
@@ -458,7 +478,16 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
     ? org.leagues.filter((l) => l.season_id === season.id).sort((a, b) => a.sport.localeCompare(b.sport) || a.name.localeCompare(b.name, undefined, { numeric: true }))
     : [];
   const open = leagues.find((l) => l.id === openId) ?? null;
-  const sports = [...new Set(leagues.map((l) => l.sport))];
+  const seasonSports: OrgSport[] = season ? org.sports.filter((s) => s.season_id === season.id) : [];
+  const sportOf = (l: OrgLeague) => seasonSports.find((s) => s.name.toLowerCase() === l.sport.toLowerCase()) ?? null;
+  const sport = open ? sportOf(open) : (seasonSports.find((s) => s.id === sportId) ?? null);
+  const inSport = sport ? leagues.filter((l) => l.sport.toLowerCase() === sport.name.toLowerCase()) : leagues;
+  const pickDivision = (id: number) => {
+    const l = leagues.find((x) => x.id === id);
+    if (l) setSportId(sportOf(l)?.id ?? 0);
+    setOpenId(id);
+    setTeamId(0);
+  };
   const leagueTeams = open ? org.teams.filter((t) => t.league_id === open.id) : [];
   const team = leagueTeams.find((t) => t.id === teamId) ?? null;
   /** The open division's teams a manager still has to find a head coach for. */
@@ -473,23 +502,37 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
       current: season?.id ?? 0,
       onPick: (id) => {
         setSeasonId(id);
+        setSportId(0);
+        setUnfolded(null);
         setOpenId(0);
         setTeamId(0);
       },
     },
-    ...(leagues.length
+    ...(seasonSports.length
+      ? [
+          {
+            label: 'Sport',
+            value: sport?.name ?? 'All sports',
+            options: seasonSports.map((s) => ({ id: s.id, label: s.name, note: plural(leagues.filter((l) => l.sport.toLowerCase() === s.name.toLowerCase()).length, 'division') })),
+            current: sport?.id ?? 0,
+            onPick: (id: number) => {
+              setSportId(id);
+              setOpenId(0);
+              setTeamId(0);
+            },
+            all: `All sports in ${season?.name ?? 'the season'}`,
+          },
+        ]
+      : []),
+    ...(inSport.length
       ? [
           {
             label: 'Division',
-            // The sport goes with the name: two sports can each have a league called the same thing.
-            value: open ? (open.sport && !open.name.toLowerCase().includes(open.sport.toLowerCase()) ? `${open.name} · ${open.sport}` : open.name) : 'All divisions',
-            options: leagues.map((l) => ({ id: l.id, label: l.name, note: l.sport })),
+            value: open ? open.name : 'All divisions',
+            options: inSport.map((l) => ({ id: l.id, label: l.name, note: sport ? [GENDER_WORD[l.gender], l.age_group].filter(Boolean).join(' · ') || undefined : l.sport })),
             current: open?.id ?? 0,
-            onPick: (id: number) => {
-              setOpenId(id);
-              setTeamId(0);
-            },
-            all: `All divisions in ${season?.name ?? 'the season'}`,
+            onPick: pickDivision,
+            all: `All divisions in ${sport?.name ?? season?.name ?? 'the season'}`,
           },
         ]
       : []),
@@ -511,6 +554,138 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
     api.orgGames(c.id).then(setGames).catch(fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c.id, org.teams.length]);
+  // How many signed up for each division, for the people who look after the divisions.
+  useEffect(() => {
+    setSignups(null);
+    if (!season || !org.can.leagues) return;
+    api
+      .orgSignups(c.id, season.id)
+      .then((d) => setSignups(d.signups))
+      .catch(() => setSignups([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.id, season?.id, org.waiting, org.teams.length]);
+  /** Where each division stands: its teams, its sign-ups, and the next thing it needs. */
+  const rows = inSport.map((l) => {
+    const ts = org.teams.filter((t) => t.league_id === l.id);
+    const regs = (signups ?? []).filter((g) => g.league_id === l.id);
+    const waiting = regs.filter((g) => !g.team_id).length;
+    const bare = ts.filter((t) => !t.coaches.some((x) => x.head));
+    const state: 'teams' | 'seed' | 'coach' | 'ready' = ts.length === 0 ? 'teams' : waiting > 0 ? 'seed' : bare.length ? 'coach' : 'ready';
+    return { l, f: { ts, regs: regs.length, waiting, bare, state } };
+  });
+  type DivisionRow = (typeof rows)[number];
+  /** What a manager still has to do, one line for each division and job. */
+  const todo: { key: string; kind: 'teams' | 'seed' | 'coach'; title: string; sub: string; run: () => void }[] =
+    manage && !open
+      ? rows.flatMap(({ l, f }) => {
+          if (f.state === 'teams') return [{ key: `t${l.id}`, kind: 'teams' as 'teams' | 'seed' | 'coach', title: `${l.name} – create teams`, sub: `${l.sport} · ${f.regs ? `${plural(f.regs, 'sign-up')} waiting` : 'No teams yet'}`, run: () => setTeamsFor(l) }];
+          return [
+            ...(f.waiting ? [{ key: `s${l.id}`, kind: 'seed' as 'teams' | 'seed' | 'coach', title: `${l.name} – ${plural(f.waiting, 'player')} not on a team`, sub: `${l.sport} · Ready for seeding`, run: () => toPlayers?.(l.id) }] : []),
+            ...(f.bare.length
+              ? [{ key: `c${l.id}`, kind: 'coach' as 'teams' | 'seed' | 'coach', title: `${l.name} – assign ${f.bare.length === 1 ? 'a coach' : 'coaches'}`, sub: `${l.sport} · ${f.bare.length === 1 ? `${f.bare[0].name} has no head coach` : `${f.bare.length} teams have no head coach`}`, run: () => setCoachFor(f.bare[0]) }]
+              : []),
+          ];
+        })
+      : [];
+  const needTeams = todo.filter((x) => x.kind === 'teams');
+  const seedJob = todo.find((x) => x.kind === 'seed');
+  const coachJob = todo.find((x) => x.kind === 'coach');
+  const toSeed = rows.reduce((n, { f }) => n + (f.ts.length ? f.waiting : 0), 0);
+  const coachIssues = rows.reduce((n, { f }) => n + f.bare.length, 0);
+  const next = [
+    ...(needTeams.length ? [{ icon: ICONS.group, label: `Create teams for ${plural(needTeams.length, 'division')}`, run: needTeams[0].run }] : []),
+    ...(toSeed && seedJob ? [{ icon: ICONS.shuffle, label: `Seed ${plural(toSeed, 'sign-up')}`, run: seedJob.run }] : []),
+    ...(coachIssues && coachJob ? [{ icon: ICONS.person, label: `Resolve ${plural(coachIssues, 'coach issue')}`, run: coachJob.run }] : []),
+  ];
+  const shown = unfolded ?? (seasonSports[0] ? [seasonSports[0].id] : []);
+  const rowMenu = ({ l, f }: DivisionRow): MenuItem[] => [
+    { label: 'Open division', onSelect: () => pickDivision(l.id) },
+    { label: 'Add teams', onSelect: () => setTeamsFor(l) },
+    ...(f.ts.length >= 2 ? [{ label: 'Build the schedule', onSelect: () => setBuilding(l) }] : []),
+    {
+      label: 'Rename',
+      onSelect: async () => {
+        const name = await promptDialog({ title: 'Rename the division', initial: l.name, confirmLabel: 'Rename' });
+        if (name) act(() => api.orgUpdateLeague(c.id, l.id, { name, age_group: l.age_group }));
+      },
+    },
+    ...(f.ts.length === 0 ? [{ label: 'Delete this division', danger: true, onSelect: () => act(() => api.orgDeleteLeague(c.id, l.id), 'The division was deleted.') }] : []),
+  ];
+  /** Divisions as a table: one line each, with what it has and the next thing to do for it. */
+  const table = (list: DivisionRow[], withSport: boolean) => (
+    <div className="sd-scroll">
+      <table className="sd-table">
+        <thead>
+          <tr>
+            <th>Division</th>
+            {withSport && <th>Sport</th>}
+            {manage && <th className="num">Sign-ups</th>}
+            <th className="num">Teams</th>
+            <th className="sd-wide">Coach</th>
+            {manage && <th>Status</th>}
+            <th aria-label="What to do next" />
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((row) => {
+            const { l, f } = row;
+            return (
+              <tr key={l.id}>
+                <td>
+                  <button type="button" className="link sd-name" onClick={() => pickDivision(l.id)}>
+                    {l.name}
+                  </button>
+                  {f.ts.some((t) => t.mine) && <span className="kind">Your team</span>}
+                  {(l.gender || l.age_group) && <span className="muted small sd-about">{[GENDER_WORD[l.gender], l.age_group].filter(Boolean).join(' · ')}</span>}
+                </td>
+                {withSport && <td>{l.sport}</td>}
+                {manage && <td className="num" data-label="Sign-ups">{signups ? f.regs : '…'}</td>}
+                <td className="num" data-label="Teams">{f.ts.length || <span className="muted">—</span>}</td>
+                <td className="sd-wide">
+                  {f.ts.length === 0 ? (
+                    <span className="muted">—</span>
+                  ) : f.bare.length === 0 ? (
+                    <span className="sd-ok">
+                      <Icon d={ICONS.check} size={14} /> {f.ts.length === 1 ? 'Coach assigned' : 'All assigned'}
+                    </span>
+                  ) : (
+                    `${f.ts.length - f.bare.length} of ${f.ts.length}`
+                  )}
+                </td>
+                {manage && (
+                  <td>
+                    {f.state === 'teams' ? <Pill tone="warn">Needs teams</Pill> : f.state === 'seed' ? <Pill tone="ok">Ready for seeding</Pill> : f.state === 'coach' ? <Pill tone="bad">Coach missing</Pill> : <Pill tone="ok">Ready</Pill>}
+                  </td>
+                )}
+                <td className="sd-acts">
+                  <span>
+                    {manage && f.state === 'teams' ? (
+                      <button type="button" className="btn small primary" onClick={() => setTeamsFor(l)}>
+                        <Icon d={ICONS.group} size={15} /> Create teams
+                      </button>
+                    ) : manage && f.state === 'seed' && toPlayers ? (
+                      <button type="button" className="btn small" onClick={() => toPlayers(l.id)}>
+                        <Icon d={ICONS.shuffle} size={15} /> Seed sign-ups
+                      </button>
+                    ) : manage && f.state === 'coach' ? (
+                      <button type="button" className="btn small" onClick={() => setCoachFor(f.bare[0])}>
+                        <Icon d={ICONS.person} size={15} /> Assign coach
+                      </button>
+                    ) : (
+                      <button type="button" className="btn small" onClick={() => pickDivision(l.id)}>
+                        <Icon d={ICONS.open} size={14} /> Open division
+                      </button>
+                    )}
+                    {manage && <MoreMenu items={rowMenu(row)} label={`More for ${l.name}`} />}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
   const actGames = async (fn: () => Promise<OrgGames>, done = '') => {
     try {
       setGames(await fn());
@@ -524,7 +699,7 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
 
   const newSeason = async () => {
     const name = await promptDialog({ title: 'Name the season', body: 'Such as "Winter 2026-27". Divisions and teams go inside it.', confirmLabel: 'Start season' });
-    if (name) act(() => api.orgAddSeason(c.id, name), `${name} is ready. Add its divisions next.`);
+    if (name) act(() => api.orgAddSeason(c.id, name), `${name} is ready. Add its sports and divisions next.`);
   };
   const seasonMenu: MenuItem[] = season
     ? [
@@ -548,7 +723,7 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
         {manage ? (
           <>
             <p>
-              Start with a <strong>season</strong>, such as "Winter 2026-27". Inside it go your <strong>divisions</strong> (one for each sport and age group), and inside each division its <strong>teams</strong>. Then
+              Start with a <strong>season</strong>, such as "Winter 2026-27". Inside it go your <strong>sports</strong>, inside each sport its <strong>divisions</strong> (one for each age group), and inside each division its <strong>teams</strong>. Then
               assign coaches and build the schedule.
             </p>
             <button type="button" className="btn primary" onClick={newSeason}>
@@ -564,12 +739,15 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
   return (
     <>
       <Crumbs items={crumbs} />
-      {!open && season && (
-        <PageHead eyebrow="Seasons & teams / Season" title={season.name} sub={`${plural(leagues.length, 'division')} · ${plural(seasonTeams.length, 'team')}${season.archived ? ' · archived' : ''}`}>
+      {!open && season && !sport && (
+        <PageHead eyebrow="Seasons & teams / Season" title={season.name} sub={`${plural(seasonSports.length, 'sport')} · ${plural(leagues.length, 'division')} · ${plural(seasonTeams.length, 'team')}${season.archived ? ' · archived' : ''}`}>
           {manage && (
             <>
-              <button type="button" className="btn primary" onClick={() => setAddLeague(true)}>
+              <button type="button" className="btn primary" onClick={() => setAddLeague('')}>
                 + Add division
+              </button>
+              <button type="button" className="btn" onClick={() => setAddSport(true)}>
+                + Add sport
               </button>
               <button type="button" className="btn" onClick={newSeason}>
                 New season
@@ -579,49 +757,156 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
           )}
         </PageHead>
       )}
-      {!open && leagues.length === 0 && (
-        <div className="card org-empty">
-          <p className="muted">{manage ? 'No divisions in this season yet. Add one for each sport and age group, such as "Boys 12 and under".' : 'No divisions in this season yet.'}</p>
-        </div>
+      {!open && season && sport && (
+        <PageHead
+          eyebrow="Seasons & teams / Sport"
+          title={sport.name}
+          sub={`${season.name} · ${plural(inSport.length, 'division')} · ${plural(org.teams.filter((t) => inSport.some((l) => l.id === t.league_id)).length, 'team')}`}
+        >
+          {manage && (
+            <>
+              <button type="button" className="btn primary" onClick={() => setAddLeague(sport.name)}>
+                + Add division
+              </button>
+              {inSport.length === 0 && (
+                <MoreMenu
+                  items={[
+                    {
+                      label: `Take ${sport.name} out of ${season.name}`,
+                      danger: true,
+                      onSelect: async () => {
+                        if (await act(() => api.orgDeleteSport(c.id, sport.id), `${sport.name} was taken out of ${season.name}.`)) setSportId(0);
+                      },
+                    },
+                  ]}
+                  label={`More for ${sport.name}`}
+                />
+              )}
+            </>
+          )}
+        </PageHead>
       )}
-      {/* The season: its leagues, grouped by sport. Choosing one opens it. */}
-      {!open && leagues.length > 0 && (
-        <div className="cx-pair">
-          {sports.map((sport) => {
-            const inSport = leagues.filter((l) => l.sport === sport);
-            return (
-              <section key={sport} className="card cx-card" aria-label={sport}>
-                <h2 className="cx-card-title">
-                  <SportIcon sport={sport} size={20} /> {sport} <span className="muted">· {plural(inSport.length, 'division')}</span>
-                </h2>
-                <ul className="cx-rows">
-                  {inSport.map((l) => {
-                    const ts = org.teams.filter((t) => t.league_id === l.id);
-                    const coaches = new Set(ts.flatMap((t) => t.coaches.map((s) => s.user_id))).size;
-                    const bare = ts.filter((t) => t.coaches.length === 0).length;
-                    return (
+      {/* The season: its sports, each with its divisions. A line opens the division, or does the next thing it needs. */}
+      {!open && season && (
+        <div className={`sd ${manage && leagues.length > 0 ? 'two' : ''}`}>
+          <section className="card cx-card sd-main" aria-label="Sports and divisions">
+            <div className="sd-head">
+              <h2>{sport ? 'Divisions' : 'Sports & divisions'}</h2>
+              {!sport && leagues.length > 0 && (
+                <div className="seg" role="group" aria-label="How the divisions are listed">
+                  <button type="button" className={by === 'sport' ? 'on' : ''} aria-pressed={by === 'sport'} onClick={() => setBy('sport')}>
+                    By sport
+                  </button>
+                  <button type="button" className={by === 'all' ? 'on' : ''} aria-pressed={by === 'all'} onClick={() => setBy('all')}>
+                    All divisions
+                  </button>
+                </div>
+              )}
+            </div>
+            {seasonSports.length === 0 && <p className="muted">{manage ? 'No sports in this season yet. Add a sport, then a division in it for each age group, such as "Boys 12 and under".' : 'No divisions in this season yet.'}</p>}
+            {sport &&
+              (rows.length ? (
+                table(rows, false)
+              ) : (
+                <p className="muted">{manage ? `No ${sport.name} divisions yet. Add one for each age group, such as "Boys 12 and under".` : `No ${sport.name} divisions yet.`}</p>
+              ))}
+            {!sport && by === 'all' && rows.length > 0 && table(rows, true)}
+            {!sport &&
+              (by === 'sport' || rows.length === 0) &&
+              seasonSports.map((sp) => {
+                const mine = rows.filter(({ l }) => l.sport.toLowerCase() === sp.name.toLowerCase());
+                const on = shown.includes(sp.id);
+                return (
+                  <div key={sp.id} className={`sd-sport ${on ? 'open' : ''}`}>
+                    <button type="button" className="sd-sport-head" aria-expanded={on} onClick={() => setUnfolded(on ? shown.filter((id) => id !== sp.id) : [...shown, sp.id])}>
+                      <SportIcon sport={sp.name} size={22} />
+                      <strong>{sp.name}</strong>
+                      <span className="muted small">
+                        {plural(mine.length, 'division')}
+                        {manage && signups ? ` · ${plural(mine.reduce((n, { f }) => n + f.regs, 0), 'sign-up')}` : ''}
+                      </span>
+                      <span className="sd-chev">
+                        <Icon d={ICONS.down} size={18} />
+                      </span>
+                    </button>
+                    {on && mine.length > 0 && table(mine, false)}
+                    {on && mine.length === 0 && <p className="muted sd-none">No divisions in {sp.name} yet.</p>}
+                    {on && manage && (
+                      <div className="sd-foot">
+                        <button type="button" className="link small" onClick={() => setAddLeague(sp.name)}>
+                          + Add a {sp.name} division
+                        </button>
+                        {mine.length === 0 && (
+                          <button type="button" className="link small" onClick={() => act(() => api.orgDeleteSport(c.id, sp.id), `${sp.name} was taken out of ${season.name}.`)}>
+                            Take {sp.name} out of this season
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </section>
+          {manage && leagues.length > 0 && (
+            <aside className="sd-side">
+              {todo.length > 0 && (
+                <section className="card org-attention" aria-label="Needs attention">
+                  <header>
+                    <span className="cx-alert-sign" aria-hidden="true">
+                      !
+                    </span>
+                    <div>
+                      <h2>Needs attention</h2>
+                    </div>
+                    <span className="org-attention-count" title={plural(todo.length, 'thing')}>
+                      {todo.length}
+                    </span>
+                  </header>
+                  <ul className="cx-rows">
+                    {todo.slice(0, 6).map((x) => (
                       <Row
-                        key={l.id}
-                        lead={<Badge text={l.name} />}
-                        title={
-                          <>
-                            {l.name}
-                            {ts.some((t) => t.mine) && <span className="kind">Your team</span>}
-                          </>
+                        key={x.key}
+                        lead={
+                          <span className={`sd-sign ${x.kind === 'seed' ? '' : 'warn'}`} aria-hidden="true">
+                            <Icon d={x.kind === 'coach' ? ICONS.person : ICONS.group} size={18} />
+                          </span>
                         }
-                        sub={[GENDER_WORD[l.gender], l.age_group, plural(ts.length, 'team'), plural(coaches, 'coach', 'coaches')].filter(Boolean).join(' · ')}
-                        end={manage && bare > 0 ? <Pill tone="warn">{bare === 1 ? '1 team needs a coach' : `${bare} teams need a coach`}</Pill> : undefined}
-                        onClick={() => {
-                          setOpenId(l.id);
-                          setTeamId(0);
-                        }}
+                        title={x.title}
+                        sub={x.sub}
+                        onClick={x.run}
                       />
-                    );
-                  })}
-                </ul>
+                    ))}
+                  </ul>
+                  {todo.length > 6 && <p className="muted small sd-more">And {todo.length - 6} more. Each division's line on the left says what it needs.</p>}
+                </section>
+              )}
+              <section className="card cx-card sd-next" aria-label="Recommended next actions">
+                <div className="sd-next-head">
+                  <span className="sd-sign" aria-hidden="true">
+                    <Icon d={ICONS.bolt} size={18} />
+                  </span>
+                  <h2>Recommended next actions</h2>
+                </div>
+                {next.length === 0 ? (
+                  <p className="muted small">Nothing to do right now: every division {sport ? `in ${sport.name} ` : ''}has its teams, its players are on them, and each team has a head coach.</p>
+                ) : (
+                  <>
+                    <p className="muted small">
+                      Keep {sport ? `${sport.name} in ` : ''}
+                      {season.name} on track with these next steps.
+                    </p>
+                    {next.map((n, i) => (
+                      <button key={n.label} type="button" className={`btn sd-action ${i === 0 ? 'primary' : ''}`} onClick={n.run}>
+                        <Icon d={n.icon} size={16} />
+                        <span>{n.label}</span>
+                        <Icon d={ICONS.arrow} size={15} />
+                      </button>
+                    ))}
+                  </>
+                )}
               </section>
-            );
-          })}
+            </aside>
+          )}
         </div>
       )}
       {open && !team && (
@@ -659,7 +944,7 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
               </header>
               <div className="cx-alerts">
                 {needHead.map((t) => (
-                  <Alert key={t.id} title={`${t.name} has no head coach`} sub="Assign one so the team can be opened and planned for." action="Assign" onAction={() => setCoachFor(t)} />
+                  <Alert key={t.id} title={`${t.name} has no head coach`} action="Assign" onAction={() => setCoachFor(t)} />
                 ))}
               </div>
             </aside>
@@ -679,7 +964,9 @@ export function OrgTeams({ c, org, act, fail, say, focus }: OrgPanelProps & { fo
         />
       )}
 
-      {addLeague && season && <LeagueModal c={c} seasonId={season.id} seasonName={season.name} leagues={leagues} teams={org.teams} act={act} onClose={() => setAddLeague(false)} />}
+      {addLeague !== null && season && <LeagueModal c={c} seasonId={season.id} seasonName={season.name} sport={addLeague} leagues={leagues} teams={org.teams} act={act} onClose={() => setAddLeague(null)} />}
+      {addSport && season && <SportModal c={c} seasonId={season.id} seasonName={season.name} have={seasonSports.map((s) => s.name)} act={act} onClose={() => setAddSport(false)} />}
+      {teamsFor && <TeamsModal c={c} league={teamsFor} signedUp={(signups ?? []).filter((g) => g.league_id === teamsFor.id).length} act={act} onClose={() => setTeamsFor(null)} />}
       {rolling && season && <RolloverModal c={c} season={season} act={act} onClose={() => setRolling(false)} />}
       {coachFor && <CoachModal c={c} org={org} team={org.teams.find((t) => t.id === coachFor.id) ?? coachFor} act={act} onClose={() => setCoachFor(null)} />}
       {editing && (
@@ -1216,10 +1503,78 @@ export function OrgVenues({ c, org, act }: OrgPanelProps) {
   );
 }
 
-function LeagueModal({ c, seasonId, seasonName, leagues, teams, act, onClose }: { c: CommunityDetail; seasonId: number; seasonName: string; /** The season's divisions so far. */ leagues: OrgLeague[]; teams: OrgTeam[]; act: OrgPanelProps['act']; onClose: () => void }) {
-  const [name, setName] = useState('');
-  const [sport, setSport] = useState(SPORT_CHOICES[0]);
+/** Adds a sport to a season, ready for its divisions. */
+function SportModal({ c, seasonId, seasonName, have, act, onClose }: { c: CommunityDetail; seasonId: number; seasonName: string; /** The sports the season already has. */ have: string[]; act: OrgPanelProps['act']; onClose: () => void }) {
+  const free = SPORT_CHOICES.filter((s) => !have.some((h) => h.toLowerCase() === s.toLowerCase()));
+  const [sport, setSport] = useState(free[0] ?? 'Other');
   const [other, setOther] = useState('');
+  const chosen = (sport === 'Other' ? other : sport).trim();
+  return (
+    <Modal title={`Add a sport to ${seasonName}`} onClose={onClose}>
+      <form
+        className="fields stack"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (await act(() => api.orgAddSport(c.id, seasonId, chosen), `${chosen} was added. Add its divisions next.`)) onClose();
+        }}
+      >
+        <Field label="Sport">
+          <select className="input" autoFocus value={sport} onChange={(e) => setSport(e.target.value)}>
+            {free.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+            <option>Other</option>
+          </select>
+        </Field>
+        {sport === 'Other' && (
+          <Field label="Which sport">
+            <input className="input" required maxLength={40} value={other} onChange={(e) => setOther(e.target.value)} />
+          </Field>
+        )}
+        <p className="muted small">Divisions go inside a sport, one for each age group. The sport decides which drills and categories its teams start with.</p>
+        <div className="modal-actions">
+          <button className="btn primary">Add sport</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Makes a division's teams, several at a time. */
+function TeamsModal({ c, league, signedUp, act, onClose }: { c: CommunityDetail; league: OrgLeague; /** How many players signed up for the division. */ signedUp: number; act: OrgPanelProps['act']; onClose: () => void }) {
+  const [names, setNames] = useState('');
+  const count = names.split('\n').filter((n) => n.trim()).length;
+  return (
+    <Modal title={`Create teams for ${league.name}`} onClose={onClose}>
+      <form
+        className="fields stack"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (await act(() => api.orgAddTeams(c.id, league.id, names), `${plural(count, 'team')} ${count === 1 ? 'was' : 'were'} added to ${league.name}.`)) onClose();
+        }}
+      >
+        <Field label="Team names, one on each line">
+          <textarea className="input" rows={5} autoFocus value={names} onChange={(e) => setNames(e.target.value)} placeholder={'Hawks\nOwls'} />
+        </Field>
+        {signedUp > 0 && (
+          <p className="muted small">
+            {plural(signedUp, 'player')} signed up for {league.name}. Once it has teams, put the players on them under "Players".
+          </p>
+        )}
+        <div className="modal-actions">
+          <button className="btn primary" disabled={!count}>
+            {count > 1 ? `Create ${count} teams` : 'Create team'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function LeagueModal({ c, seasonId, seasonName, sport: first = '', leagues, teams, act, onClose }: { c: CommunityDetail; seasonId: number; seasonName: string; /** The sport it is being added to, when that is known. */ sport?: string; /** The season's divisions so far. */ leagues: OrgLeague[]; teams: OrgTeam[]; act: OrgPanelProps['act']; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [sport, setSport] = useState(!first ? SPORT_CHOICES[0] : SPORT_CHOICES.includes(first) ? first : 'Other');
+  const [other, setOther] = useState(first && !SPORT_CHOICES.includes(first) ? first : '');
   const [age, setAge] = useState('');
   const [who, setWho] = useState<LeagueGender>('');
   const chosen = (sport === 'Other' ? other : sport).trim();

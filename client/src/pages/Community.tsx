@@ -160,7 +160,7 @@ export default function CommunityPage() {
   const [thread, setThread] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   // Where the overview sent the manager: a league to open, or a part of the coaches page.
-  const [focus, setFocus] = useState<{ leagueId?: number; build?: boolean; view?: 'coaches' | 'invites' | 'requirements' | 'waiting' | 'teams' } | null>(null);
+  const [focus, setFocus] = useState<{ leagueId?: number; build?: boolean; view?: 'coaches' | 'invites' | 'requirements' | 'waiting' | 'teams' | 'form' } | null>(null);
   // Set while the picker was opened from a reply: what is chosen is shared and handed to that reply.
   const [attachTo, setAttachTo] = useState<{ done: (p: Picked) => void } | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -440,7 +440,7 @@ export default function CommunityPage() {
       )}
       {at === 'announcements' && orgProps && <OrgAnnouncements {...orgProps} />}
       {at === 'overview' && orgProps && <ManageOverview {...orgProps} go={go} />}
-      {at === 'seasons' && orgProps && <OrgTeams key={`league-${focus?.leagueId ?? 0}`} {...orgProps} focus={focus} />}
+      {at === 'seasons' && orgProps && <OrgTeams key={`league-${focus?.leagueId ?? 0}`} {...orgProps} focus={focus} toPlayers={(leagueId) => go('players', { leagueId, view: 'teams' })} />}
       {at === 'players' && orgProps && (may.leagues ? <OrgPlayers {...orgProps} focus={focus} /> : <div className="card">Players and teams are looked after by the admins who were given the Divisions job.</div>)}
       {at === 'schedule' && orgProps && <OrgSchedule {...orgProps} />}
       {at === 'coaches' && orgProps && (may.people ? <OrgPeople key={focus?.view ?? 'coaches'} {...orgProps} initialView={focus?.view === 'coaches' || focus?.view === 'invites' || focus?.view === 'requirements' ? focus.view : undefined} /> : <div className="card">Coaches and seats are looked after by the admins who were given the People job.</div>)}

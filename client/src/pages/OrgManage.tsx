@@ -6,7 +6,7 @@ import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
 import { promptDialog } from '../components/dialogs';
 import { Alert, Badge, PageHead, Pill, Row, Stat } from '../components/cx';
-import { GameModal, type OrgPanelProps } from './OrgPanels';
+import { CopyButton, GameModal, type OrgPanelProps } from './OrgPanels';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const clock = (t: string) => (t ? fmtClock(parseClock(t)) : 'Time not set');
@@ -28,6 +28,110 @@ function JobIcon({ d }: { d: string }) {
         <path d={d} />
       </svg>
     </span>
+  );
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const pad = (n: number) => String(n).padStart(2, '0');
+const isoOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+/** How many games a day shows before the rest are counted. */
+const DAY_GAMES = 3;
+/**
+ * The season's games on a month grid, drawn like the calendar a coach has for their team.
+ * Choosing a day lists its games underneath.
+ */
+function SeasonCalendar({ games, today, picked, onPick }: { games: OrgGame[]; today: string; picked: string; onPick: (date: string) => void }) {
+  // Open on the month of the next game, or this month.
+  const next = games.find((g) => g.date >= today && g.status === 'scheduled')?.date ?? today;
+  const home: [number, number] = [Number(next.slice(0, 4)), Number(next.slice(5, 7)) - 1];
+  const [[year, month], setMonth] = useState<[number, number]>(home);
+  const shift = (by: number) => {
+    const d = new Date(year, month + by, 1);
+    setMonth([d.getFullYear(), d.getMonth()]);
+  };
+  const first = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  // Whole weeks: leading days from last month and trailing days from the next fill the grid.
+  const cells: { date: string; inMonth: boolean; day: number }[] = [];
+  for (let i = -first.getDay(); cells.length % 7 !== 0 || i < daysInMonth; i++) {
+    const d = new Date(year, month, 1 + i);
+    cells.push({ date: isoOf(d), inMonth: d.getMonth() === month, day: d.getDate() });
+  }
+  const title = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const shown = games.filter((g) => g.status !== 'cancelled');
+  const inMonth = shown.filter((g) => g.date.startsWith(`${year}-${pad(month + 1)}`));
+  const atHome = year === home[0] && month === home[1];
+  return (
+    <div className="cal ov-cal">
+      <div className="cal-head">
+        <div className="cal-nav">
+          <button type="button" className="tl-arrow" aria-label="Previous month" onClick={() => shift(-1)}>
+            ‹
+          </button>
+          <h3 className="cal-title">{title}</h3>
+          <button type="button" className="tl-arrow" aria-label="Next month" onClick={() => shift(1)}>
+            ›
+          </button>
+          {!atHome && (
+            <button type="button" className="link small" onClick={() => setMonth(home)}>
+              Back to next up
+            </button>
+          )}
+        </div>
+        <span className="muted small">{inMonth.length ? plural(inMonth.length, 'game') : 'No games this month'}</span>
+      </div>
+      <div className="cal-grid" role="grid" aria-label={title}>
+        {WEEKDAYS.map((d) => (
+          <div key={d} className="cal-weekday" role="columnheader">
+            {d}
+          </div>
+        ))}
+        {cells.map((c) => {
+          const list = shown.filter((g) => g.date === c.date);
+          return (
+            <div key={c.date} role="gridcell" className={`cal-day ${c.inMonth ? '' : 'out'} ${c.date === today ? 'today' : ''} ${c.date < today ? 'past' : ''} ${picked === c.date ? 'picked' : ''}`}>
+              <div className="cal-day-top">
+                <span className="cal-num">{c.day}</span>
+              </div>
+              {list.slice(0, DAY_GAMES).map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  className={`cal-chip game ${g.status === 'final' ? 'done' : ''} ${g.status === 'postponed' ? 'unplanned' : ''}`}
+                  aria-label={`${g.away} at ${g.home}, ${fmtDateShort(g.date)}, ${clock(g.start_time)}${g.status === 'final' ? '. Played' : g.status === 'postponed' ? '. Postponed' : ''}`}
+                  onClick={() => onPick(c.date)}
+                >
+                  {g.status === 'final' && (
+                    <span className="cal-check" aria-hidden="true">
+                      ✓
+                    </span>
+                  )}
+                  {g.start_time && <span className="cal-time">{clock(g.start_time)}</span>}
+                  <span className="cal-name">
+                    {g.away} at {g.home}
+                  </span>
+                </button>
+              ))}
+              {list.length > DAY_GAMES && (
+                <button type="button" className="link small ov-cal-more" onClick={() => onPick(c.date)}>
+                  + {list.length - DAY_GAMES} more
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="cal-legend muted small">
+        <span className="cal-chip game">Game</span>
+        <span className="cal-chip game done">
+          <span className="cal-check" aria-hidden="true">
+            ✓
+          </span>
+          Played
+        </span>
+        <span className="cal-chip game unplanned">Postponed</span>
+      </div>
+    </div>
   );
 }
 
@@ -70,20 +174,22 @@ function Bar({ value, of, warn }: { value: number; of: number; warn?: boolean })
 }
 
 /** Where a manager can be sent from the overview. */
-export type ManageGo = (tab: 'seasons' | 'players' | 'schedule' | 'coaches' | 'announcements', focus?: { leagueId?: number; build?: boolean; view?: 'coaches' | 'invites' | 'requirements' | 'waiting' | 'teams' }) => void;
+export type ManageGo = (tab: 'seasons' | 'players' | 'schedule' | 'coaches' | 'announcements', focus?: { leagueId?: number; build?: boolean; view?: 'coaches' | 'invites' | 'requirements' | 'waiting' | 'teams' | 'form' }) => void;
 
 /** The first thing a manager sees: what needs fixing, each with the way to fix it, and the common jobs. */
 export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: ManageGo }) {
   const [games, setGames] = useState<OrgGames | null>(null);
   const [picking, setPicking] = useState(false);
   const [signups, setSignups] = useState<OrgSignup[] | null>(null);
+  /** Whether the season's sign-up form is open, and the code in its link. */
+  const [form, setForm] = useState<{ open: boolean; code: string } | null>(null);
   /** The day picked on the calendar, or none for what comes next. */
   const [day, setDay] = useState('');
   const season = org.seasons.find((s) => !s.archived) ?? null;
   useEffect(() => {
     api.orgGames(c.id).then(setGames).catch(fail);
     // Who signed up is for those who look after divisions.
-    if (season && org.can.leagues) api.orgSignups(c.id, season.id).then((r) => setSignups(r.signups)).catch(fail);
+    if (season && org.can.leagues) api.orgSignups(c.id, season.id).then((r) => (setSignups(r.signups), setForm(r.season))).catch(fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [c.id, season?.id, org.waiting]);
   const leagues = season ? org.leagues.filter((l) => l.season_id === season.id) : [];
@@ -110,15 +216,7 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
   const withHead = teams.length - noHead.length;
   const signed = signups?.length ?? 0;
   const onTeams = signups?.filter((g) => g.team_id).length ?? 0;
-  // The fortnight ahead, a day to a square.
-  const days = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(`${today}T12:00:00`);
-    d.setDate(d.getDate() + i);
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return { iso, d, games: seasonGames.filter((g) => g.date === iso && g.status !== 'cancelled') };
-  });
-  const most = Math.max(1, ...days.map((x) => x.games.length));
-  const listed = day ? (days.find((x) => x.iso === day)?.games ?? []) : upcoming.slice(0, 5);
+  const listed = day ? seasonGames.filter((g) => g.date === day) : upcoming.slice(0, 5);
   const divisions = leagues
     .slice()
     .sort((x, y) => x.sport.localeCompare(y.sport) || x.name.localeCompare(y.name, undefined, { numeric: true }))
@@ -221,32 +319,14 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
             </section>
           )}
           {season && (
-            <section className="card cx-card" aria-label="The next two weeks">
+            <section className="card cx-card" aria-label="Calendar">
               <header className="ov-head">
-                <h2>The next two weeks</h2>
+                <h2>Calendar</h2>
                 <button type="button" className="link" onClick={() => go('schedule')}>
                   Full schedule
                 </button>
               </header>
-              <div className="ov-days" role="group" aria-label="Days">
-                {days.map((x) => (
-                  <button
-                    key={x.iso}
-                    type="button"
-                    className={`ov-day ${x.iso === today ? 'today' : ''} ${day === x.iso ? 'on' : ''} ${x.games.length ? 'has' : ''}`}
-                    aria-pressed={day === x.iso}
-                    aria-label={`${x.d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}: ${plural(x.games.length, 'game')}`}
-                    onClick={() => setDay(day === x.iso ? '' : x.iso)}
-                  >
-                    <small>{x.d.toLocaleDateString(undefined, { weekday: 'short' })}</small>
-                    <b>{x.d.getDate()}</b>
-                    <span className="ov-day-bar" aria-hidden="true">
-                      {x.games.length > 0 && <i style={{ height: `${Math.round((x.games.length / most) * 100)}%` }} />}
-                    </span>
-                    <span className="ov-day-n">{x.games.length || ''}</span>
-                  </button>
-                ))}
-              </div>
+              <SeasonCalendar games={seasonGames} today={today} picked={day} onPick={(d) => setDay(d === day ? '' : d)} />
               <h3 className="ov-sub">{day ? `Games on ${fmtDateShort(day)}` : 'Coming up next'}</h3>
               {listed.length === 0 ? (
                 <p className="muted small">{day ? 'No games that day.' : counted.length ? 'No games still to come.' : 'No games yet. Build a schedule from the quick jobs.'}</p>
@@ -385,6 +465,20 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
               <small className={left === 0 ? 'ov-warn' : 'muted'}>{plural(left, 'seat')} available</small>
             </button>
           </section>
+          {season && form && org.can.leagues && (
+            <section className={`card ov-signups ${form.open ? 'open' : ''}`} aria-label="Sign-ups">
+              <strong>
+                Sign-ups for {season.name} are {form.open ? 'open' : 'closed'}.
+              </strong>
+              <small className="muted">{form.open ? `${plural(signups?.length ?? 0, 'player')} signed up so far. Anyone with the link can sign a player up.` : 'Parents cannot sign players up until the form is opened.'}</small>
+              <span className="ov-signups-acts">
+                {form.open && form.code && <CopyButton text={`${window.location.origin}/signup/${form.code}`} label="Copy link" />}
+                <button type="button" className="link small" onClick={() => go('players', { view: 'form' })}>
+                  {form.open ? 'Sign-up form' : 'Open sign-ups'} →
+                </button>
+              </span>
+            </section>
+          )}
           <section className="card cx-card">
             <h2>Quick jobs</h2>
             <ul className="cx-rows">
@@ -403,12 +497,16 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
   );
 }
 
-/** Which season and division a schedule is to be built for. Nothing is chosen for the manager. */
+/** Which season, sport and division a schedule is to be built for. Nothing is chosen for the manager. */
 function ScheduleFor({ org, seasonId: first, onClose, onPick }: { org: OrgPanelProps['org']; seasonId: number; onClose: () => void; onPick: (leagueId: number, build: boolean) => void }) {
   const seasons = org.seasons.filter((s) => !s.archived);
   const [seasonId, setSeasonId] = useState(seasons.length === 1 ? seasons[0].id : 0);
+  const [picked, setPicked] = useState('');
   const [leagueId, setLeagueId] = useState(0);
-  const leagues = org.leagues.filter((l) => l.season_id === seasonId).sort((a, b) => a.sport.localeCompare(b.sport) || a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const sports = org.sports.filter((s) => s.season_id === seasonId);
+  // A season with one sport has nothing to choose.
+  const sport = sports.length === 1 ? sports[0].name : picked;
+  const leagues = org.leagues.filter((l) => l.season_id === seasonId && l.sport.toLowerCase() === sport.toLowerCase()).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   const league = leagues.find((l) => l.id === leagueId) ?? null;
   const count = league ? org.teams.filter((t) => t.league_id === league.id).length : 0;
   return (
@@ -422,7 +520,7 @@ function ScheduleFor({ org, seasonId: first, onClose, onPick }: { org: OrgPanelP
       >
         <label>
           <span className="field-label">Season</span>
-          <select className="input" required autoFocus value={seasonId || ''} onChange={(e) => (setSeasonId(Number(e.target.value)), setLeagueId(0))}>
+          <select className="input" required autoFocus value={seasonId || ''} onChange={(e) => (setSeasonId(Number(e.target.value)), setPicked(''), setLeagueId(0))}>
             <option value="">Choose a season</option>
             {seasons.map((s) => (
               <option key={s.id} value={s.id}>
@@ -433,12 +531,23 @@ function ScheduleFor({ org, seasonId: first, onClose, onPick }: { org: OrgPanelP
           </select>
         </label>
         <label>
+          <span className="field-label">Sport</span>
+          <select className="input" required disabled={!seasonId || sports.length === 0} value={sport} onChange={(e) => (setPicked(e.target.value), setLeagueId(0))}>
+            <option value="">{!seasonId ? 'Choose the season first' : sports.length ? 'Choose a sport' : 'This season has no sports yet'}</option>
+            {sports.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           <span className="field-label">Division</span>
-          <select className="input" required disabled={!seasonId || leagues.length === 0} value={leagueId || ''} onChange={(e) => setLeagueId(Number(e.target.value))}>
-            <option value="">{!seasonId ? 'Choose the season first' : leagues.length ? 'Choose a division' : 'This season has no divisions yet'}</option>
+          <select className="input" required disabled={!sport || leagues.length === 0} value={leagueId || ''} onChange={(e) => setLeagueId(Number(e.target.value))}>
+            <option value="">{!sport ? 'Choose the sport first' : leagues.length ? 'Choose a division' : `${sport} has no divisions yet`}</option>
             {leagues.map((l) => (
               <option key={l.id} value={l.id}>
-                {[l.sport, l.name, GENDER_WORD[l.gender]].filter(Boolean).join(' · ')}
+                {[l.name, GENDER_WORD[l.gender]].filter(Boolean).join(' · ')}
               </option>
             ))}
           </select>

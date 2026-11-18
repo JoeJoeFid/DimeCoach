@@ -359,6 +359,8 @@ export interface InviteInfo {
   title: string;
   /** The invited address already has an account, so there is nothing to create. */
   has_account: boolean;
+  /** An invitation to follow a team as a parent, family or a friend, not to coach it. */
+  family?: boolean;
 }
 /** Someone a team is shared with, as its owner sees them. */
 export interface StaffMember {

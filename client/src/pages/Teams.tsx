@@ -10,6 +10,7 @@ import PageTitle from '../components/PageTitle';
 import { fmtSynced, roomyScreen } from '../util';
 import { SPORT_CHOICES, sportKind, surfaceWord } from '../sports';
 import { confirmDialog } from '../components/dialogs';
+import { FamilyPageCard } from './TeamFamily';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 
 type Cell = string | number | boolean | Date | null | undefined;
@@ -277,8 +278,8 @@ function FamilyCard({ team, players, canSee, canEdit }: { team: Team; players: P
                         )}
                       </td>
                       <td>
-                        {c.invited_at ? <span className="muted small">Sent {fmtDay(c.invited_at)}</span> : <span className="muted small">Not invited</span>}
-                        {canEdit && data.mail && c.email && (
+                        {c.joined ? <span className="kind">Has an account</span> : c.invited_at ? <span className="muted small">Sent {fmtDay(c.invited_at)}</span> : <span className="muted small">Not invited</span>}
+                        {canEdit && data.mail && c.email && !c.joined && (
                           <>
                             {' '}
                             <button type="button" className="link small" disabled={busy} onClick={() => act(() => api.inviteTeamContact(team.id, c.id, ''), `An invitation was sent to ${c.name || c.email}.`)}>
@@ -694,10 +695,11 @@ export function NewTeam({ onClose, onCreated }: { onClose: () => void; onCreated
   );
 }
 
-type TeamTab = 'team' | 'people' | 'schedule';
+type TeamTab = 'team' | 'people' | 'family' | 'schedule';
 const TABS: [TeamTab, string][] = [
   ['team', 'Team info & roster'],
   ['people', 'Coaches & helpers'],
+  ['family', 'Parents & family'],
   ['schedule', 'Schedule integration'],
 ];
 
@@ -832,7 +834,13 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
               <p className="muted small">{app.access?.owner_name} decides who this team is shared with.</p>
             </div>
           )}
+        </>
+      )}
+
+      {tab === 'family' && (
+        <>
           <FamilyCard team={team} players={players} canSee={app.can('contacts')} canEdit={app.can('roster')} />
+          <FamilyPageCard team={team} canEdit={app.can('roster')} />
         </>
       )}
 

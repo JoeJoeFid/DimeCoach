@@ -11,6 +11,7 @@ import { mountCoachLibrary } from './coachLibrary.js';
 import { mountCommunities } from './communities.js';
 import { mountOrgPublic, mountOrgs } from './orgs.js';
 import { mountPlanSends, mountPlanSendsPublic } from './planSends.js';
+import { followingCount, mountFamily, mountFamilyCoach } from './family.js';
 import { mountContacts } from './contacts.js';
 import { mountLive } from './live.js';
 import { mentionedIn, notify } from './notices.js';
@@ -47,7 +48,9 @@ mountOrgPublic(app);
 // So is a practice opened from a link a coach sent.
 mountPlanSendsPublic(app);
 mountAuth(app);
+mountFamily(app);
 mountStaff(app);
+mountFamilyCoach(app);
 mountImages(app);
 mountCommunities(app);
 mountOrgs(app);
@@ -96,6 +99,8 @@ app.get('/api/bootstrap', (req, res) => {
     // Turned on by an administrator for sites where people work without a mouse: adds buttons for
     // things that are otherwise done by dragging.
     keyboard_access: get("SELECT value FROM system_settings WHERE key='keyboard_access'")?.value === '1',
+    // The teams this person follows as a parent, family or a friend.
+    following: followingCount(req.user.id),
     ...staffBootstrap(req),
   });
 });

@@ -104,7 +104,7 @@ export function Alert({ title, sub, action, onAction }: { title: ReactNode; sub?
 }
 
 /** A short word about the state of something. */
-export const Pill = ({ tone = 'plain', children }: { tone?: 'ok' | 'warn' | 'plain'; children: ReactNode }) => <span className={`cx-pill ${tone}`}>{children}</span>;
+export const Pill = ({ tone = 'plain', children }: { tone?: 'ok' | 'warn' | 'bad' | 'plain'; children: ReactNode }) => <span className={`cx-pill ${tone}`}>{children}</span>;
 
 /** A day, as the month over the number. */
 export function DateBlock({ date }: { date: string }) {

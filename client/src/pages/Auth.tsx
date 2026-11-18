@@ -443,7 +443,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
     onSignedIn();
   });
   const enter = () => {
-    navigate('/', { replace: true });
+    navigate(info?.family ? '/family' : '/', { replace: true });
     onSignedIn();
   };
 
@@ -469,7 +469,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
       {info.team && info.community && <span className="muted small">{info.community}</span>}
       {what && <span className="muted small">{what}</span>}
       <span className="muted small">
-        Invited by {info.inviter} · you join as {info.title}
+        {info.family ? `Added by ${info.inviter} · you are ${info.title}` : `Invited by ${info.inviter} · you join as ${info.title}`}
       </span>
     </div>
   );
@@ -494,7 +494,11 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
         lead={
           !added
             ? undefined
-            : !info.team
+            : info.family
+              ? signedInAs
+                ? 'You will find its page under "Teams I follow".'
+                : `You already have a Dime Coach account for ${info.email}. Sign in to open the team's page.`
+              : !info.team
               ? signedInAs
                 ? `You will find ${info.community} under Communities.`
                 : `You already have a Dime Coach account for ${info.email}. Sign in and you will find ${info.community} under Communities.`
@@ -507,7 +511,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
         {added &&
           (signedInAs ? (
             <button type="button" className="btn primary" onClick={enter}>
-              Choose a team
+              {info.family ? 'Open the team’s page' : 'Choose a team'}
             </button>
           ) : (
             <Link className="btn primary" to="/">
@@ -517,7 +521,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
       </AuthShell>
     );
   return (
-    <AuthShell title={`${info.inviter} invited you to ${info.community || 'a team'}`} lead="Create your Dime Coach account to join it.">
+    <AuthShell title={info.family ? `${info.inviter} added you to ${info.team}` : `${info.inviter} invited you to ${info.community || 'a team'}`} lead={info.family ? 'Make your Dime Coach account to open the team’s page: its schedule, and what its coaches share with you.' : 'Create your Dime Coach account to join it.'}>
       {card}
       <form className="fields stack" onSubmit={submit}>
         {error && <p className="error">{error}</p>}
@@ -529,11 +533,11 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
           <input className="input" type="password" required minLength={MIN_PASSWORD} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
         </Field>
         <button className="btn primary" disabled={busy}>
-          {busy ? 'Creating…' : 'Create account and join'}
+          {busy ? 'Creating…' : info.family ? 'Create account and open the page' : 'Create account and join'}
         </button>
       </form>
       <p className="muted small auth-foot">
-        Already have an account under another email? Ask {info.inviter} to invite that address instead.
+        Already have an account under another email? Ask {info.inviter} to {info.family ? 'add' : 'invite'} that address instead.
       </p>
     </AuthShell>
   );

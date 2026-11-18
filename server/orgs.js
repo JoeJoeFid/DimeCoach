@@ -133,6 +133,25 @@ CREATE TABLE IF NOT EXISTS org_keepsakes (
 `);
 // Who a league is for: 'boys', 'girls', 'coed', or '' where nobody has said.
 addColumn('org_leagues', 'gender', "TEXT NOT NULL DEFAULT ''");
+// A season's sports: the step between a season and its divisions. A sport can be there before it has any divisions.
+db.exec(`
+CREATE TABLE IF NOT EXISTS org_sports (
+  id INTEGER PRIMARY KEY,
+  community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+  season_id INTEGER NOT NULL REFERENCES org_seasons(id) ON DELETE CASCADE,
+  name TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_org_sports ON org_sports(season_id);
+`);
+/** The sport as the season spells it. It is added to the season the first time a division plays it. */
+function seasonSport(communityId, seasonId, name) {
+  const hit = get('SELECT name FROM org_sports WHERE season_id=? AND lower(name)=lower(?)', seasonId, name);
+  if (hit) return hit.name;
+  run('INSERT INTO org_sports (community_id, season_id, name) VALUES (?,?,?)', communityId, seasonId, name);
+  return name;
+}
+// Divisions from before sports were a step of their own.
+for (const l of all('SELECT DISTINCT community_id, season_id, sport FROM org_leagues')) seasonSport(l.community_id, l.season_id, l.sport);
 
 const INVITE_DAYS = 14;
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
@@ -615,6 +634,7 @@ export function mountOrgs(app) {
       ...orgSummary(c),
       can: p,
       seasons: all('SELECT id, name, archived FROM org_seasons WHERE community_id=? ORDER BY archived, id DESC', c.id).map((s) => ({ ...s, archived: !!s.archived })),
+      sports: all('SELECT id, season_id, name FROM org_sports WHERE community_id=? ORDER BY name COLLATE NOCASE', c.id),
       leagues: all('SELECT id, season_id, name, sport, age_group, gender FROM org_leagues WHERE community_id=? ORDER BY name COLLATE NOCASE', c.id),
       teams,
       venues: all('SELECT id, name, address FROM org_venues WHERE community_id=? ORDER BY name COLLATE NOCASE', c.id),
@@ -890,6 +910,7 @@ export function mountOrgs(app) {
     if (!s) return res.status(404).json({ error: 'Not found' });
     if (get('SELECT 1 AS ok FROM org_leagues WHERE season_id=?', s.id)) return res.status(400).json({ error: 'This season still has divisions in it. Remove them first, or archive the season to keep it.' });
     if (seasonHasSignups(s.id)) return res.status(400).json({ error: 'This season still has players signed up. Remove them first, or archive the season to keep it.' });
+    run('DELETE FROM org_sports WHERE season_id=?', s.id);
     run('DELETE FROM org_seasons WHERE id=?', s.id);
     audit(at.c, req, `Deleted the empty season "${s.name}"`);
     send(res, at);
@@ -908,6 +929,7 @@ export function mountOrgs(app) {
     const made = tx(() => {
       const seasonId = lastId(run('INSERT INTO org_seasons (community_id, name) VALUES (?,?)', at.c.id, name));
       let teams = 0;
+      for (const sp of all('SELECT name FROM org_sports WHERE season_id=?', s.id)) seasonSport(at.c.id, seasonId, sp.name);
       for (const l of all('SELECT * FROM org_leagues WHERE season_id=?', s.id)) {
         const leagueId = lastId(run('INSERT INTO org_leagues (community_id, season_id, name, sport, age_group, gender) VALUES (?,?,?,?,?,?)', at.c.id, seasonId, l.name, l.sport, l.age_group, l.gender));
         for (const t of all('SELECT * FROM teams WHERE community_id=? AND league_id=?', at.c.id, l.id)) {
@@ -924,15 +946,40 @@ export function mountOrgs(app) {
     send(res, at);
   });
 
+  // A season's sports. Divisions go inside a sport.
+  app.post('/api/communities/:id/org/seasons/:seasonId/sports', (req, res) => {
+    const at = orgEnter(req, res, { perm: 'leagues', write: true });
+    if (!at) return;
+    const s = get('SELECT * FROM org_seasons WHERE id=? AND community_id=?', Number(req.params.seasonId), at.c.id);
+    if (!s) return res.status(404).json({ error: 'Not found' });
+    const name = str(req.body.name, 40).trim();
+    if (!name) return res.status(400).json({ error: 'Choose the sport.' });
+    if (get('SELECT 1 AS ok FROM org_sports WHERE season_id=? AND lower(name)=lower(?)', s.id, name)) return res.status(400).json({ error: `${s.name} already has ${name}.` });
+    seasonSport(at.c.id, s.id, name);
+    audit(at.c, req, `Added ${name} to ${s.name}`);
+    send(res, at);
+  });
+  app.delete('/api/communities/:id/org/sports/:sportId', (req, res) => {
+    const at = orgEnter(req, res, { perm: 'leagues', write: true });
+    if (!at) return;
+    const sp = get('SELECT sp.*, s.name AS season FROM org_sports sp JOIN org_seasons s ON s.id=sp.season_id WHERE sp.id=? AND sp.community_id=?', Number(req.params.sportId), at.c.id);
+    if (!sp) return res.status(404).json({ error: 'Not found' });
+    if (get('SELECT 1 AS ok FROM org_leagues WHERE season_id=? AND lower(sport)=lower(?)', sp.season_id, sp.name)) return res.status(400).json({ error: `${sp.name} still has divisions in ${sp.season}. Remove them first.` });
+    run('DELETE FROM org_sports WHERE id=?', sp.id);
+    audit(at.c, req, `Took ${sp.name} out of ${sp.season}`);
+    send(res, at);
+  });
+
   app.post('/api/communities/:id/org/leagues', (req, res) => {
     const at = orgEnter(req, res, { perm: 'leagues', write: true });
     if (!at) return;
     const s = get('SELECT * FROM org_seasons WHERE id=? AND community_id=?', Number(req.body.season_id), at.c.id);
     if (!s) return res.status(400).json({ error: 'Choose the season this division plays in.' });
     const name = str(req.body.name, 60).trim();
-    const sport = str(req.body.sport, 40).trim();
+    const asked = str(req.body.sport, 40).trim();
     if (!name) return res.status(400).json({ error: 'Name the division, such as "Boys 12 and under".' });
-    if (!sport) return res.status(400).json({ error: 'Choose the sport.' });
+    if (!asked) return res.status(400).json({ error: 'Choose the sport.' });
+    const sport = seasonSport(at.c.id, s.id, asked);
     run('INSERT INTO org_leagues (community_id, season_id, name, sport, age_group, gender) VALUES (?,?,?,?,?,?)', at.c.id, s.id, name, sport, str(req.body.age_group, 40).trim(), gender(req.body.gender));
     audit(at.c, req, `Added the division "${name}" to ${s.name}`);
     send(res, at);
