@@ -752,6 +752,8 @@ export function mountAuth(app) {
       /** The last thing they did. Before this was kept, the last time their page was open stands in. */
       last_active_at: u.last_action_at || seen.last || u.last_login_at || null,
       presence: presenceOf(u.id),
+      // The teams this person is on as a parent, family or a friend.
+      follows: all('SELECT t.name AS team, c.kind FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id=? ORDER BY t.name COLLATE NOCASE', u.id),
       used_bytes: used.bytes, files: used.files,
       /** This person's own cap, or null when the default applies. */
       upload_cap_mb: u.upload_cap_mb === null || u.upload_cap_mb === undefined ? null : Number(u.upload_cap_mb),
@@ -763,6 +765,10 @@ export function mountAuth(app) {
     const ago = (ms) => new Date(Date.now() - ms).toISOString();
     return {
       default_cap_mb: defaultCapMb(), max_cap_mb: MAX_CAP_MB, total_bytes: get('SELECT COALESCE(SUM(bytes), 0) AS n FROM images').n, users,
+      // Parents, family and friends a coach has put on a team's list who have no account yet.
+      family_waiting: all(
+        "SELECT c.id, c.name, c.email, c.kind, c.invited_at, c.created_at, t.name AS team FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id IS NULL AND c.email<>'' ORDER BY c.created_at, c.id",
+      ),
       /** People who did something in the last few minutes. */
       online_now: get('SELECT COUNT(DISTINCT user_id) AS n FROM logins WHERE ended_at IS NULL AND last_seen_at > ?', ago(IDLE_SECONDS * 1000)).n,
       sign_ins_7d: get('SELECT COUNT(*) AS n FROM logins WHERE started_at > ?', ago(7 * 86400_000)).n,

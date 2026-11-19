@@ -49,6 +49,10 @@ function lastActive(u: SystemUser) {
   return ago === 'Now' ? 'A few minutes ago' : ago;
 }
 /** One status for each person: what state the account is in, and for a working account whether they are here now. */
+const FAMILY_WORD = { parent: 'Parent', family: 'Family', friend: 'Friend' } as const;
+/** On a team as a parent, family or a friend, whether or not they coach as well. */
+const isFamily = (u: SystemUser) => u.follower || u.follows.length > 0;
+
 function StatusCell({ u }: { u: SystemUser }) {
   const pill = (cls: string, text: string, title: string, note = '') => (
     <span className="status-cell">
@@ -95,6 +99,7 @@ export default function SystemAdmin() {
   const [state, setState] = useState<SystemState | null>(null);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   /** The person whose sign-ins and activity are open. */
+  const [who, setWho] = useState<'all' | 'coaches' | 'family'>('all');
   const [viewing, setViewing] = useState<SystemUser | null>(null);
   /** The person being given a new password. */
   const [passwordFor, setPasswordFor] = useState<SystemUser | null>(null);
@@ -251,6 +256,10 @@ export default function SystemAdmin() {
 
   const gone = usePendingDeletes();
   const users = (state?.users ?? []).filter((u) => !gone.has(`user:${u.id}`));
+  // Who the list shows: everyone, the coaches, or the parents, family and friends of teams. Someone who coaches one team and follows another is both.
+  const waiting = state?.family_waiting ?? [];
+  const shownUsers = who === 'all' ? users : who === 'coaches' ? users.filter((u) => !u.follower) : users.filter(isFamily);
+  const shownWaiting = who === 'coaches' ? [] : waiting;
   const over = users.filter((u) => u.used_bytes >= u.cap_mb * MB && u.used_bytes > 0).length;
 
   return (
@@ -377,8 +386,21 @@ export default function SystemAdmin() {
           <div className="card">
             <div className="card-head">
               <h2>
-                Everyone <span className="muted">({users.length})</span>
+                {who === 'all' ? 'Everyone' : who === 'coaches' ? 'Coaches' : 'Parents, family & friends'} <span className="muted">({shownUsers.length + shownWaiting.length})</span>
               </h2>
+              <div className="seg" role="group" aria-label="Who to show">
+                {(
+                  [
+                    ['all', 'Everyone', users.length + waiting.length],
+                    ['coaches', 'Coaches', users.filter((u) => !u.follower).length],
+                    ['family', 'Family & friends', users.filter(isFamily).length + waiting.length],
+                  ] as [typeof who, string, number][]
+                ).map(([id, label, n]) => (
+                  <button key={id} type="button" className={who === id ? 'on' : ''} aria-pressed={who === id} onClick={() => setWho(id)}>
+                    {label} <span className="muted">{n}</span>
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="table-scroll people-scroll">
               <table className="table">
@@ -395,7 +417,7 @@ export default function SystemAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {shownUsers.map((u) => (
                     <tr key={u.id}>
                       <td>
                         <span className="sys-person">
@@ -407,6 +429,11 @@ export default function SystemAdmin() {
                             {u.is_system_admin && <span className="kind system">System admin</span>}
                             {u.can_import && <span className="kind">Plan import</span>}
                             {u.id === me.id && <span className="kind">You</span>}
+                            {u.follows.map((f, i) => (
+                              <span key={i} className="kind">
+                                {FAMILY_WORD[f.kind]} · {f.team}
+                              </span>
+                            ))}
                           </span>
                         </span>
                       </td>
@@ -416,10 +443,12 @@ export default function SystemAdmin() {
                       <td>{lastActive(u)}</td>
                       <td className="num">{u.sign_ins}</td>
                       <td className="num">{fmtSpan(u.active_seconds)}</td>
+                      {/* Someone who only follows teams uploads nothing, so has no space to show or cap. */}
+                      <td>{u.follower ? <span className="muted">—</span> : <SpaceMeter used={u.used_bytes} cap={u.cap_mb * MB} files={u.files} />}</td>
                       <td>
-                        <SpaceMeter used={u.used_bytes} cap={u.cap_mb * MB} files={u.files} />
-                      </td>
-                      <td>
+                        {u.follower ? (
+                          <span className="muted">—</span>
+                        ) : (
                         <span className="cap-edit">
                           <input
                             className="input"
@@ -436,6 +465,7 @@ export default function SystemAdmin() {
                           />
                           <span className="muted small">{u.upload_cap_mb === null ? 'Default' : 'Own cap'}</span>
                         </span>
+                        )}
                       </td>
                       <td className="num">
                         <MoreMenu
@@ -444,7 +474,7 @@ export default function SystemAdmin() {
                             { label: 'Details', onSelect: () => setViewing(u) },
                             ...(u.status === 'invited' && canEmail ? [{ label: 'Send invitation again', onSelect: () => resendInvite(u) }] : []),
                             ...(u.id !== me.id && u.status !== 'invited' ? [{ label: 'Set password', onSelect: () => setPasswordFor(u) }] : []),
-                            { label: u.can_import ? 'Stop plan import' : 'Allow plan import', onSelect: () => setImport(u, !u.can_import) },
+                            ...(u.follower ? [] : [{ label: u.can_import ? 'Stop plan import' : 'Allow plan import', onSelect: () => setImport(u, !u.can_import) }]),
                             ...(!u.is_system_admin && u.status !== 'pending' && u.status !== 'invited'
                               ? [{ label: u.status === 'active' ? 'Turn off account' : 'Turn on account', onSelect: () => setStatus(u, u.status === 'active' ? 'disabled' : 'active') }]
                               : []),
@@ -454,6 +484,43 @@ export default function SystemAdmin() {
                       </td>
                     </tr>
                   ))}
+                  {/* On a team's list, and not signed up yet. There is no account to act on: the team's coach invites them. */}
+                  {shownWaiting.map((w) => (
+                    <tr key={`w${w.id}`} className="sys-waiting">
+                      <td>
+                        <span className="sys-person">
+                          <strong className="sys-name">{w.name || w.email}</strong>
+                          <span className="muted small">{w.email}</span>
+                          <span className="badges">
+                            <span className="kind">
+                              {FAMILY_WORD[w.kind]} · {w.team}
+                            </span>
+                          </span>
+                        </span>
+                      </td>
+                      <td>
+                        <span className="status-cell">
+                          <span className="presence waiting" title={w.invited_at ? 'Sent an invitation by the team’s coach and has not made an account yet' : 'On the team’s list, and not sent an invitation'}>
+                            {w.invited_at ? 'Invited' : 'Not invited'}
+                          </span>
+                          <span className="muted small">{w.invited_at ? `invitation sent ${fmtAgo(w.invited_at) === 'Now' ? 'just now' : fmtAgo(w.invited_at)}` : 'no account yet'}</span>
+                        </span>
+                      </td>
+                      <td className="muted">Never</td>
+                      <td className="num muted">—</td>
+                      <td className="num muted">—</td>
+                      <td className="muted">—</td>
+                      <td className="muted">—</td>
+                      <td />
+                    </tr>
+                  ))}
+                  {shownUsers.length + shownWaiting.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="muted">
+                        Nobody here yet.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

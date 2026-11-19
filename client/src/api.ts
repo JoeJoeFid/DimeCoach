@@ -111,6 +111,8 @@ export interface SystemUser extends AdminUser {
   /** How many times they have signed in, and the seconds they have spent using the app. */
   /** Signed in and did something in the last five minutes, signed in but idle, or not signed in. */
   presence: 'active' | 'inactive' | 'out';
+  /** The teams they are on as a parent, family or a friend. */
+  follows: { team: string; kind: FamilyKind }[];
   sign_ins: number;
   active_seconds: number;
   /** The last time their open page was in touch, or null if never. */
@@ -160,6 +162,8 @@ export interface SystemState {
   max_cap_mb: number;
   total_bytes: number;
   users: SystemUser[];
+  /** Parents, family and friends on a team's list who have not made an account yet. */
+  family_waiting: { id: number; name: string; email: string; kind: FamilyKind; team: string; invited_at: string | null; created_at: string }[];
   online_now: number;
   sign_ins_7d: number;
   active_people_7d: number;
