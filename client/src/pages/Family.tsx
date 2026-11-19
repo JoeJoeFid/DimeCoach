@@ -1,6 +1,6 @@
 // A team's page for its parents, family and friends: what is coming up, what the coaches say,
 // and whatever else the coach lets their kind of follower see. Nothing here changes the team.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type FamilyDay, type FamilyKind, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
@@ -9,7 +9,8 @@ import { SharedPreview } from '../components/community';
 import { DateBlock, PageHead, Row } from '../components/cx';
 import SportIcon from '../components/SportIcon';
 import { PasswordForm } from './Auth';
-import { FollowedTeams } from '../components/TeamPicker';
+import { FollowedTeams, NEW_TEAM_KEY } from '../components/TeamPicker';
+import { NAV_ICONS } from '../App';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const AS: Record<FamilyKind, string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
@@ -23,56 +24,212 @@ const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'sh
 /** "a parent of Ava and Ben", or how else this person is on the team's list. */
 const asWhat = (kind: FamilyKind, players: string[]) => `${AS[kind]}${players.length ? ` of ${players.join(' and ')}` : ''}`;
 
-/** Everything a follower's account sees: a bar across the top, and the teams they follow. */
+/** What the frame around a follower's pages needs: who they are, and what its buttons do. */
+interface Frame {
+  user: User;
+  onNewTeam: () => void;
+  onPassword: () => void;
+  onSignOut: () => void;
+}
+
+/** Everything a follower's account sees: choosing a team, the team's pages, and the way into coaching. */
 export function FamilyApp({ user, onChanged }: { user: User; onChanged: () => void }) {
   const [changing, setChanging] = useState(false);
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
   const signOut = async () => {
     await api.logout().catch(() => {});
     onChanged();
   };
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
+  // A team of their own is for someone who coaches. An account marked as paid becomes a coach's
+  // account on the spot. Anyone else is shown how to get started.
+  const newTeam = async () => {
+    if (!user.paid) return navigate('/family/coach');
+    try {
+      await api.startCoaching();
+      sessionStorage.setItem(NEW_TEAM_KEY, '1');
+      navigate('/');
+      onChanged();
+    } catch {
+      navigate('/family/coach');
+    }
+  };
+  const frame: Frame = { user, onNewTeam: newTeam, onPassword: () => setChanging(true), onSignOut: signOut };
+  if (changing)
+    return (
+      <div className="auth team-pick">
+        <div className="auth-card">
+          <h1>Change your password</h1>
+          <PasswordForm onDone={() => {}} />
+          <p className="muted small auth-foot team-pick-foot">
+            <button type="button" className="link" onClick={() => setChanging(false)}>
+              Back
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  if (pathname === '/family/coach') return <StartCoaching user={user} onBack={() => navigate('/family')} onSignOut={signOut} />;
   // Choosing a team comes first, as it does for a coach: after signing in, and whenever "Switch team" is pressed.
-  if (!changing && !/^\/family\/[^/]+/.test(pathname)) return <FamilyPicker name={user.name} onPick={(slug) => navigate(`/family/${slug}`)} onPassword={() => setChanging(true)} onSignOut={signOut} />;
+  if (!/^\/family\/[^/]+/.test(pathname)) return <FamilyPicker name={user.name} onPick={(slug) => navigate(`/family/${slug}`)} onNewTeam={newTeam} onPassword={() => setChanging(true)} onSignOut={signOut} />;
   return (
-    <div className="fam-shell">
-      <header className="fam-top">
-        <Link to="/family" className="brand" onClick={() => setChanging(false)}>
+    <Routes>
+      <Route path="/family/:teamId" element={<FamilyTeamPage frame={frame} />} />
+      <Route path="*" element={<Navigate to="/family" replace />} />
+    </Routes>
+  );
+}
+
+/**
+ * Where someone who follows teams finds out about coaching one. For now it says what a coach gets
+ * and who turns it on. Paying for it will go here.
+ */
+function StartCoaching({ user, onBack, onSignOut }: { user: User; onBack: () => void; onSignOut: () => void }) {
+  return (
+    <div className="auth team-pick start-coach">
+      <div className="auth-card">
+        <div className="brand auth-brand">
           <span className="brand-mark" aria-hidden="true" />
           Dime Coach
-        </Link>
-        <span className="fam-who muted small">{user.name}</span>
-        <MoreMenu
-          label="Your account"
-          items={[
-            { label: 'Change password', onSelect: () => setChanging(true) },
-            { label: 'Sign out', onSelect: signOut },
-          ]}
-        />
+        </div>
+        <h1>Get started as a coach</h1>
+        <p className="muted auth-lead">Your account follows teams as a parent, family or a friend. A team of your own needs a coach's account.</p>
+        <ul className="start-coach-list">
+          <li>
+            <strong>Plan practices and games</strong>
+            <span className="muted small">Build each practice from your own drills, minute by minute.</span>
+          </li>
+          <li>
+            <strong>Draw and animate plays</strong>
+            <span className="muted small">A playbook your team can watch, step by step.</span>
+          </li>
+          <li>
+            <strong>Keep your team in the loop</strong>
+            <span className="muted small">A page for parents, family and friends, like the ones you already follow.</span>
+          </li>
+        </ul>
+        <div className="start-coach-how">
+          <strong>Coaching is not turned on for your account yet.</strong>
+          <p className="muted small">Ask the person who runs this site to turn it on for {user.email}. Once they have, "+ New team" will start your first team.</p>
+        </div>
+        <p className="muted small auth-foot team-pick-foot">
+          <button type="button" className="link" onClick={onBack}>
+            Back to your teams
+          </button>
+          <button type="button" className="link" onClick={onSignOut}>
+            Sign out
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** The parts of a team's page in the menu at the side, grouped as a coach's menu is. */
+// Worked out when it is drawn: the icons belong to the app's own file, which is still loading when this one is read.
+const sideGroups = (): { title: string; items: [Tab, string][] }[] => [
+  { title: 'Plan', items: [['schedule', NAV_ICONS.practices], ['homework', NAV_ICONS.homework]] },
+  { title: 'Library', items: [['drills', NAV_ICONS.library], ['playbook', NAV_ICONS.playbook], ['resources', NAV_ICONS.resources]] },
+  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['messages', NAV_ICONS.messages]] },
+];
+
+/**
+ * The frame around a follower's team: the same menu down the side that a coach has, with only
+ * the parts of the team's page the coaches have opened to them.
+ */
+function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; team?: FamilyTeam['team']; tabs: [Tab, string, number?][]; tab: Tab; go: (t: Tab) => void; children: ReactNode }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const has = (t: Tab) => tabs.find(([id]) => id === t);
+  const item = (t: Tab, icon: string) => {
+    const found = has(t);
+    if (!found) return null;
+    return (
+      <a
+        key={t}
+        href={t === 'home' ? '?' : `?tab=${t}`}
+        className={tab === t ? 'active' : ''}
+        aria-current={tab === t ? 'page' : undefined}
+        onClick={(e) => {
+          e.preventDefault();
+          setMenuOpen(false);
+          go(t);
+        }}
+      >
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d={icon} />
+        </svg>
+        {found[1]}
+      </a>
+    );
+  };
+  return (
+    <div className={`shell fam-frame ${menuOpen ? 'menu-open' : ''}`}>
+      <header className="mobile-bar">
+        <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label="Menu">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
+        <span className="brand-mark" aria-hidden="true" />
+        <span className="mobile-team">{team?.name ?? 'Dime Coach'}</span>
       </header>
-      <main className="fam-main">
-        {changing ? (
-          <section className="card fam-password">
-            <h2>Change your password</h2>
-            <PasswordForm onDone={() => {}} />
-            <button type="button" className="link small" onClick={() => setChanging(false)}>
-              Back to your teams
-            </button>
-          </section>
-        ) : (
-          <Routes>
-            <Route path="/family" element={<FamilyHome name={user.name} />} />
-            <Route path="/family/:teamId" element={<FamilyTeamPage />} />
-            <Route path="*" element={<Navigate to="/family" replace />} />
-          </Routes>
-        )}
-      </main>
+      {menuOpen && <div className="menu-scrim" onClick={() => setMenuOpen(false)} />}
+      <aside className="sidebar">
+        <div className="side-top">
+          <Link to="/family" className="brand">
+            <span className="brand-mark" aria-hidden="true" />
+            Dime Coach
+          </Link>
+          <button type="button" className="menu-close" onClick={() => setMenuOpen(false)} aria-label="Close the menu">
+            ✕
+          </button>
+        </div>
+        <div className="team-now">
+          <strong>{team?.name ?? 'Your teams'}</strong>
+          {team && <span className="muted small">{[team.sport, team.season].filter(Boolean).join(' · ')}</span>}
+          <button type="button" className="btn small" onClick={() => navigate('/family')}>
+            Switch team
+          </button>
+        </div>
+        <nav className="side-nav" aria-label="Main">
+          {item('home', NAV_ICONS.dashboard)}
+          {sideGroups().map((g) => {
+            const links = g.items.map(([t, icon]) => item(t, icon)).filter(Boolean);
+            return links.length ? (
+              <div className="nav-group" key={g.title} role="group" aria-label={g.title}>
+                <span className="side-label">{g.title}</span>
+                {links}
+              </div>
+            ) : null;
+          })}
+        </nav>
+        <div className="side-foot fam-foot">
+          <button type="button" className="btn small" onClick={frame.onNewTeam}>
+            + New team
+          </button>
+          <span className="fam-foot-who">
+            <span className="user-avatar" aria-hidden="true">
+              {(frame.user.name.trim()[0] || '?').toUpperCase()}
+            </span>
+            <span className="user-chip-name">{frame.user.name}</span>
+            <MoreMenu
+              label="Your account"
+              items={[
+                { label: 'Change password', onSelect: frame.onPassword },
+                { label: 'Sign out', onSelect: frame.onSignOut },
+              ]}
+            />
+          </span>
+        </div>
+      </aside>
+      <main className="main">{children}</main>
     </div>
   );
 }
 
 /** Choosing which team to open, for someone who only follows teams. It looks and works as a coach's does. */
-function FamilyPicker({ name, onPick, onPassword, onSignOut }: { name: string; onPick: (slug: string) => void; onPassword: () => void; onSignOut: () => void }) {
+function FamilyPicker({ name, onPick, onNewTeam, onPassword, onSignOut }: { name: string; onPick: (slug: string) => void; onNewTeam: () => void; onPassword: () => void; onSignOut: () => void }) {
   const [count, setCount] = useState<number | null>(null);
   const first = name.trim().split(/\s+/)[0];
   return (
@@ -85,6 +242,9 @@ function FamilyPicker({ name, onPick, onPassword, onSignOut }: { name: string; o
         <h1>{count === 0 ? `Hello${first ? `, ${first}` : ''}` : `Which team${first ? `, ${first}` : ''}?`}</h1>
         {count === 0 && <p className="muted auth-lead">You are not following a team right now. A coach adds you to their team's parents, family and friends, and the team then shows here.</p>}
         <FollowedTeams onPick={onPick} onCount={setCount} />
+        <button type="button" className="btn team-pick-new" onClick={onNewTeam}>
+          + New team
+        </button>
         <p className="muted small auth-foot team-pick-foot">
           <button type="button" className="link" onClick={onPassword}>
             Change password
@@ -139,7 +299,7 @@ export function FamilyHome({ name }: { name: string }) {
 type Tab = 'home' | 'schedule' | 'messages' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
 
 /** One team, as a follower sees it. */
-export function FamilyTeamPage() {
+export function FamilyTeamPage({ frame }: { /** Present for an account that only follows teams: the page then wears the menu at the side. */ frame?: Frame } = {}) {
   const { teamId: id = '' } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState<FamilyTeam | null>(null);
@@ -158,8 +318,16 @@ export function FamilyTeamPage() {
     load();
     api.followedTeams().then((t) => setOthers(t.length - 1), () => {});
   }, [load]);
+  const framed = (inner: ReactNode, team?: FamilyTeam['team'], tabs: [Tab, string, number?][] = [], tab: Tab = 'home', go: (t: Tab) => void = () => {}) =>
+    frame ? (
+      <FamilyFrame frame={frame} team={team} tabs={tabs} tab={tab} go={go}>
+        {inner}
+      </FamilyFrame>
+    ) : (
+      <>{inner}</>
+    );
   if (error)
-    return (
+    return framed(
       <div className="page cx fam">
         <div className="card">
           <h2>This team's page is not open to you</h2>
@@ -168,9 +336,9 @@ export function FamilyTeamPage() {
             Your teams
           </Link>
         </div>
-      </div>
+      </div>,
     );
-  if (!data) return <p className="muted">Loading…</p>;
+  if (!data) return framed(<p className="page muted">Loading…</p>);
   const { team, can } = data;
   const tabs: [Tab, string, number?][] = [
     ['home', 'Home'],
@@ -189,20 +357,21 @@ export function FamilyTeamPage() {
   const coming = data.schedule.filter((d) => d.date >= today);
   const next = coming[0];
 
-  return (
+  return framed(
     <div className="page cx fam">
       <PageHead
         eyebrow={[team.organization, team.sport, team.season].filter(Boolean).join(' · ') || 'Team'}
         title={team.name}
         sub={`You are here as ${asWhat(data.me.kind, data.me.players)}.`}
       >
-        {others > 0 && (
+        {others > 0 && !frame && (
           <Link className="btn" to="/family">
             Switch team
           </Link>
         )}
       </PageHead>
-      {tabs.length > 1 && (
+      {/* In the frame, the parts of the page are in the menu at the side. */}
+      {tabs.length > 1 && !frame && (
         <nav className="seg team-tabs cx-seg-tabs" aria-label={`Parts of ${team.name}`}>
           {tabs.map(([t, label, count]) => (
             <button key={t} type="button" className={tab === t ? 'on' : ''} aria-current={tab === t ? 'page' : undefined} onClick={() => go(t)}>
@@ -392,7 +561,11 @@ export function FamilyTeamPage() {
           </section>
         </div>
       )}
-    </div>
+    </div>,
+    team,
+    tabs,
+    tab,
+    (t) => go(t),
   );
 }
 

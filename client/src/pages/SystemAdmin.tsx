@@ -188,6 +188,7 @@ export default function SystemAdmin() {
     run(() => api.systemSetDefaults({ default_cap_mb: value }), `The default upload space is now ${fmtSpace(value * MB)}.`);
   };
   /** Plan import runs Claude on the computer hosting Dime Coach, so it is granted person by person. */
+  const setPaid = (u: SystemUser, on: boolean) => run(() => api.adminUpdateUser(u.id, { paid: on }), on ? `${u.name} is marked as paid, and can coach.` : `${u.name} is no longer marked as paid.`);
   const setImport = (u: SystemUser, on: boolean) => run(() => api.adminUpdateUser(u.id, { can_import: on }), on ? `${u.name} can now import plans.` : `${u.name} can no longer import plans.`);
   const setStatus = async (u: SystemUser, status: 'active' | 'disabled') => {
     if (status === 'disabled') {
@@ -449,6 +450,7 @@ export default function SystemAdmin() {
                           <span className="muted small">{u.email}</span>
                           <span className="badges">
                             {u.is_system_admin && <span className="kind system">System admin</span>}
+                            {u.paid && <span className="kind paid">Paid</span>}
                             {u.can_import && <span className="kind">Plan import</span>}
                             {u.id === me.id && <span className="kind">You</span>}
                             {u.follows.map((f, i) => (
@@ -496,6 +498,7 @@ export default function SystemAdmin() {
                             { label: 'Details', onSelect: () => setViewing(u) },
                             ...(u.status === 'invited' && canEmail ? [{ label: 'Send invitation again', onSelect: () => resendInvite(u) }] : []),
                             ...(u.id !== me.id && u.status !== 'invited' ? [{ label: 'Set password', onSelect: () => setPasswordFor(u) }] : []),
+                            { label: u.paid ? 'Remove paid status' : 'Mark as paid', onSelect: () => setPaid(u, !u.paid) },
                             ...(u.follower ? [] : [{ label: u.can_import ? 'Stop plan import' : 'Allow plan import', onSelect: () => setImport(u, !u.can_import) }]),
                             ...(!u.is_system_admin && u.status !== 'pending' && u.status !== 'invited'
                               ? [{ label: u.status === 'active' ? 'Turn off account' : 'Turn on account', onSelect: () => setStatus(u, u.status === 'active' ? 'disabled' : 'active') }]

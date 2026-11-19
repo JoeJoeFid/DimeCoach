@@ -16227,3 +16227,80 @@ button.fam-day.next {
 .disk-stat.low .disk-bar span {
   background: var(--danger);
 }
+
+/* A follower's pages in the same frame a coach has. */
+.fam-frame .main > .page {
+  max-width: 1360px;
+}
+.fam-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fam-foot-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.fam-foot-who .user-chip-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kind.paid {
+  border-color: var(--good);
+}
+.start-coach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.start-coach-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.start-coach-how {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  text-align: left;
+}
+.start-coach-how p {
+  margin: 4px 0 0;
+}
+
+/* The playbook: smaller cards, and a green tick under a play that has been shared. */
+.play-grid {
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
+}
+.play-card .paper {
+  padding: 6px;
+}
+.play-card-info {
+  padding: 9px 11px 11px;
+}
+/* Shared: a green edge, a green tint and a green tick, the same on a resource and on a play. */
+.shared-with-line {
+  border-color: var(--good);
+  background: var(--ok-soft);
+  color: var(--ink);
+}
+.shared-with-line svg {
+  color: var(--good);
+}
+.play-card .shared-with-line {
+  margin-top: 4px;
+  cursor: inherit;
+}

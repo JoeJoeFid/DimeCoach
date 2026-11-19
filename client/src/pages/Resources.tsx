@@ -9,7 +9,7 @@ import { prepareImage } from '../components/ItemImages';
 import { normalizeUrl } from '../components/ItemMedia';
 import { ResourceThumb, fileUrl, searchText } from '../components/ResourcePicker';
 import { Modal, ShareIcon } from '../components/bits';
-import { ShareItemDialog, SharedWithBox, useShareSummary } from '../components/ShareItem';
+import { ShareItemDialog, SharedWithBox, SharedWithLine, useShareSummary } from '../components/ShareItem';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 
@@ -345,15 +345,7 @@ function ResourceCard({ resource: r, tags, sharedWith, onShare, onTag, onView, o
             {r.uses.length > 4 && <li className="muted small">and {r.uses.length - 4} more</li>}
           </ul>
         )}
-        {sharedWith.length > 0 && (
-          <button type="button" className="shared-with-line" onClick={onShare} title="See or change who this is shared with">
-            <ShareIcon size={14} />
-            <span>
-              <strong>Shared with</strong> {sharedWith.slice(0, 3).join(', ')}
-              {sharedWith.length > 3 && ` and ${sharedWith.length - 3} more`}
-            </span>
-          </button>
-        )}
+        <SharedWithLine names={sharedWith} onClick={onShare} />
         <div className="res-actions">
           {r.kind === 'link' ? (
             <a className="btn small" href={r.url} target="_blank" rel="noopener noreferrer" title={r.url}>

@@ -65,7 +65,7 @@ interface AppState extends Bootstrap {
 const Ctx = createContext<AppState | null>(null);
 export const useApp = () => useContext(Ctx)!;
 
-const icons = {
+export const NAV_ICONS = {
   dashboard: 'M4 4h7v9H4zM13 4h7v5h-7zM13 11h7v9h-7zM4 15h7v5H4z',
   practices: 'M9 4h6v3H9zM9 5.5H6v15h12v-15h-3M9 12h6M9 16h4',
   homework: 'M4 6.5c2.5-1.2 5.2-1.2 8 0v13c-2.8-1.2-5.5-1.2-8 0zM12 6.5c2.8-1.2 5.5-1.2 8 0v13c-2.5-1.2-5.2-1.2-8 0',
@@ -79,6 +79,7 @@ const icons = {
   messages: 'M4 6h16v12H4zM4 7.500l8 6 8-6',
   coachLibrary: 'M5 4v16M9 4v16M13 5l5 15M5 4h4M5 20h4M3 20h18',
 };
+const icons = NAV_ICONS;
 interface NavItem {
   to: string;
   label: string;

@@ -215,6 +215,13 @@ function sharedResources(team, settings) {
 }
 
 export function mountFamily(app) {
+  // Someone who only follows teams becomes a coach as well, and can then make a team of their own.
+  // It is for accounts the system administrator has marked as paid.
+  app.post('/api/family/start-coaching', (req, res) => {
+    if (!req.user.paid) return res.status(402).json({ error: 'Coaching is not turned on for your account yet.' });
+    run('UPDATE users SET follower=0 WHERE id=?', req.user.id);
+    res.json({ ok: true });
+  });
   app.get('/api/family/teams', (req, res) => {
     const rows = all('SELECT DISTINCT team_id FROM team_contacts WHERE user_id=?', req.user.id);
     res.json(

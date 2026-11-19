@@ -11,7 +11,7 @@ import { playBuilderSupports } from '../util';
 import { sportKind } from '../sports';
 import PlayIntro from '../components/PlayIntro';
 import { ShareIcon } from '../components/bits';
-import { ShareItemDialog } from '../components/ShareItem';
+import { ShareItemDialog, SharedWithLine, useShareSummary } from '../components/ShareItem';
 
 const resourceLabel = (n: number) => (n > 0 ? `${n} resource${n === 1 ? '' : 's'}` : '');
 
@@ -60,6 +60,9 @@ export default function Playbook() {
 
   // A play printed as a PDF by another play designer, read into a new play. Offered to those it is turned on for.
   const [sharing, setSharing] = useState<Play | null>(null);
+  // Where each play has been shared, read again whenever the share box closes.
+  const [shareVersion, setShareVersion] = useState(0);
+  const sharedWith = useShareSummary('play', shareVersion);
   const pdfInput = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState(false);
   const importPdf = async (file?: File) => {
@@ -141,7 +144,7 @@ export default function Playbook() {
       {/* Shown by itself the first time, and again when asked for. */}
       {showIntro ? <PlayIntro force onClose={() => setShowIntro(false)} /> : <PlayIntro />}
       {error && <p className="error">{error}</p>}
-      {sharing && <ShareItemDialog what={{ kind: 'play', id: sharing.id, title: sharing.name || 'Play' }} onClose={() => setSharing(null)} />}
+      {sharing && <ShareItemDialog what={{ kind: 'play', id: sharing.id, title: sharing.name || 'Play' }} onClose={() => (setSharing(null), setShareVersion((v) => v + 1))} />}
       {fromCommunity && <CommunityPicker kind="play" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plays/${id}`)} />}
 
       {plays === null ? (
@@ -209,6 +212,7 @@ export default function Playbook() {
                         ))}
                       </span>
                     )}
+                    <SharedWithLine names={sharedWith[p.id] || []} />
                   </div>
                 </Link>
                   <button type="button" className="btn small icon-btn play-share" aria-label={`Share ${p.name}`} title="Share" onClick={() => setSharing(p)}>

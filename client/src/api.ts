@@ -75,6 +75,8 @@ export interface User {
   can_import: boolean;
   /** The one account that runs the whole system: other people's accounts and their upload space. */
   is_system_admin: boolean;
+  /** May coach, as set by the system administrator. Lets an account that only follows teams start a team of its own. */
+  paid: boolean;
   must_change_password: boolean;
   /** An account that follows teams as a parent, family or a friend, and coaches nothing. */
   follower: boolean;
@@ -778,7 +780,7 @@ export const api = {
   adminCreateUser: (b: { name: string; first_name?: string; last_name?: string; email: string; password: string; can_import: boolean }) => req<AdminUser>('POST', '/admin/users', b),
   adminInvite: (b: { name: string; first_name?: string; last_name?: string; email: string; can_import: boolean; note: string }) => req<AdminUser>('POST', '/admin/invites', b),
   adminResendInvite: (id: number) => req<{ ok: true }>('POST', `/admin/invites/${id}/resend`, {}),
-  adminUpdateUser: (id: number, b: { can_import?: boolean; status?: 'active' | 'disabled'; password?: string }) =>
+  adminUpdateUser: (id: number, b: { can_import?: boolean; paid?: boolean; status?: 'active' | 'disabled'; password?: string }) =>
     req<AdminUser>('PUT', `/admin/users/${id}`, b),
   adminSettings: () => req<AdminSettings>('GET', '/admin/settings'),
   system: () => req<SystemState>('GET', '/system'),
@@ -982,6 +984,8 @@ export const api = {
   saveTeamFamily: (teamId: number, b: { access?: Partial<Record<FamilyKind, Partial<Record<FamilySection, boolean>>>>; plays?: number[]; drills?: number[]; resources?: string[] }) => req<FamilySettings>('PUT', `/teams/${teamId}/family`, b),
   teamFamilyPost: (teamId: number, b: { kind: 'news' | 'board'; title: string; body: string }) => req<FamilySettings>('POST', `/teams/${teamId}/family/posts`, b),
   deleteTeamFamilyPost: (teamId: number, postId: number) => req<FamilySettings>('DELETE', `/teams/${teamId}/family/posts/${postId}`),
+  /** Turns an account that only follows teams into one that can coach too. Refused unless it is marked as paid. */
+  startCoaching: () => req<{ ok: true }>('POST', '/family/start-coaching', {}),
   followedTeams: () => req<FollowedTeam[]>('GET', '/family/teams'),
   familyTeam: (teamId: string) => req<FamilyTeam>('GET', `/family/teams/${teamId}`),
   familyPost: (teamId: string, body: string) => req<TeamPost[]>('POST', `/family/teams/${teamId}/board`, { body }),

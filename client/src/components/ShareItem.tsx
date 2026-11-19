@@ -309,6 +309,34 @@ export function SharedWithBox({ what, version = 0, onShare }: { what: ShareWhat;
   );
 }
 
+/**
+ * One line for a card in a list: a green tick and the first few places a thing has been shared.
+ * With `onClick` it is a button that opens the sharing; without, it is only words.
+ */
+export function SharedWithLine({ names, onClick }: { names: string[]; onClick?: () => void }) {
+  if (!names.length) return null;
+  const inner = (
+    <>
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M5 12.5l4.5 4.5L19 7.5" />
+      </svg>
+      <span>
+        <strong>Shared with</strong> {names.slice(0, 3).join(', ')}
+        {names.length > 3 && ` and ${names.length - 3} more`}
+      </span>
+    </>
+  );
+  return onClick ? (
+    <button type="button" className="shared-with-line" onClick={onClick} title="See or change who this is shared with">
+      {inner}
+    </button>
+  ) : (
+    <span className="shared-with-line" title={`Shared with ${names.join(', ')}`}>
+      {inner}
+    </span>
+  );
+}
+
 /** For a list of drills, plays or resources: the names of where each one has been shared, by its number or key. */
 export function useShareSummary(kind: ShareItemKind, version = 0) {
   const [map, setMap] = useState<Record<string, string[]>>({});

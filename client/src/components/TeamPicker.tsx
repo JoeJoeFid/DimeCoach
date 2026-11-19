@@ -6,6 +6,8 @@ import { NewTeam } from '../pages/Teams';
 import { confirmDialog } from './dialogs';
 import SportIcon from './SportIcon';
 
+/** Set just before the app reloads for someone who has started coaching, so the form for a new team opens. */
+export const NEW_TEAM_KEY = 'practiceplan.newTeam';
 const AS: Record<FamilyKind, string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
 /**
  * The teams someone follows as a parent, family or a friend, to choose from. They sit in the same
@@ -76,7 +78,12 @@ export default function TeamPicker({
   // Someone who only follows teams has teams to choose from, though none to run.
   const none = ownTeams.length + sharedTeams.length === 0 && !app.following;
   // With no team at all, the form for making the first one opens by itself.
-  const [adding, setAdding] = useState(none);
+  // Someone who has just started coaching came here to make a team, so its form is open for them.
+  const [adding, setAdding] = useState(() => {
+    const asked = sessionStorage.getItem(NEW_TEAM_KEY) === '1';
+    sessionStorage.removeItem(NEW_TEAM_KEY);
+    return none || asked;
+  });
   const [error, setError] = useState('');
   const first = name.trim().split(/\s+/)[0];
   const leave = async (id: number, teamName: string) => {

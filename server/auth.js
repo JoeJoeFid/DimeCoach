@@ -156,6 +156,8 @@ const userOut = (u) => ({
   must_change_password: !!u.must_change_password, prefs: prefsOf(u),
   // An account that follows teams as a parent, family or a friend, and coaches nothing.
   follower: !!u.follower,
+  // May coach: set by the system administrator. It is what lets a follower's account start a team.
+  paid: !!u.paid,
 });
 
 // --- Failed sign-in throttle (in memory; resets when the server restarts) ---
@@ -714,6 +716,7 @@ export function mountAuth(app) {
       if (problem) return res.status(400).json({ error: problem });
     }
     tx(() => {
+      if (typeof b.paid === 'boolean' && isSystemAdmin(req.user)) run('UPDATE users SET paid=? WHERE id=?', b.paid ? 1 : 0, target.id);
       if (typeof b.can_import === 'boolean') {
         run('UPDATE users SET can_import=? WHERE id=?', b.can_import ? 1 : 0, target.id);
         if (b.can_import !== !!target.can_import && target.id !== req.user.id)

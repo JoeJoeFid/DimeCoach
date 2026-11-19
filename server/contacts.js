@@ -32,6 +32,8 @@ addColumn('team_contacts', 'token_hash', 'TEXT');
 addColumn('team_contacts', 'token_expires', 'TEXT');
 // An account made from such a link follows teams, and cannot coach.
 addColumn('users', 'follower', 'INTEGER DEFAULT 0');
+// Set by the system administrator: this person may coach, so an account that only follows teams can start a team of its own.
+addColumn('users', 'paid', 'INTEGER DEFAULT 0');
 db.exec('CREATE INDEX IF NOT EXISTS team_contacts_user ON team_contacts(user_id)');
 
 export const FAMILY_INVITE_DAYS = 30;
