@@ -80,9 +80,9 @@ const TOPICS: Topic[] = [
   {
     group: 'Practices',
     title: 'Create a practice',
-    steps: ['Open "Practices & games" and press "+ New practice".', 'Set the date, start time and location at the top.', 'Press "+ Item" and pick "Choose a drill", "Custom item" or "From a community". On a wide screen you can also drag drills in from the list on the left.', 'Set how long each item runs. Each one starts when the one before it ends.'],
+    steps: ['Open "Schedule" and press "+ New practice".', 'Set the date, start time and location at the top.', 'Press "+ Item" and pick "Choose a drill", "Custom item" or "From a community". On a wide screen you can also drag drills in from the list on the left.', 'Set how long each item runs. Each one starts when the one before it ends.'],
     tip: 'Changes save on their own as you go.',
-    go: ['/practices', 'Practices & games'],
+    go: ['/practices', 'Schedule'],
     words: 'plan schedule new build add items break',
   },
   {
@@ -114,8 +114,8 @@ const TOPICS: Topic[] = [
   {
     group: 'Practices',
     title: 'See the whole season',
-    steps: ['Open "Practices & games".', 'The list shows every practice, game and event in date order, opening on what is next. Use "Jump to a month…" to move around, or switch to the calendar view.', 'On the calendar, hover over anything to see a summary.'],
-    go: ['/practices', 'Practices & games'],
+    steps: ['Open "Schedule".', 'The list shows every practice, game and event in date order, opening on what is next. Use "Jump to a month…" to move around, or switch to the calendar view.', 'On the calendar, hover over anything to see a summary.'],
+    go: ['/practices', 'Schedule'],
     words: 'calendar list month schedule upcoming view',
   },
   {
@@ -136,7 +136,7 @@ const TOPICS: Topic[] = [
   {
     group: 'Games',
     title: 'Plan a game',
-    steps: ['Open the event from "Practices & games", or create a new one.', 'Switch "Practice" to "Game" at the top.', 'Fill in the opponent, home or away, and when to arrive. Mark who is here.', 'In "Lineup and playing time", set who is in for each stretch and which position they play. The charts beside it show each player\'s time.'],
+    steps: ['Open the event from "Schedule", or create a new one.', 'Switch "Practice" to "Game" at the top.', 'Fill in the opponent, home or away, and when to arrive. Mark who is here.', 'In "Lineup and playing time", set who is in for each stretch and which position they play. The charts beside it show each player\'s time.'],
     tip: 'Switching between Practice and Game never loses anything: both are kept.',
     words: 'lineup substitutions subs playing time minutes opponent bench rotation',
   },
@@ -250,7 +250,7 @@ const TOPICS: Topic[] = [
     title: 'Coach a team that belongs to an organization',
     steps: [
       'Use "Switch team" and choose the team under "Shared with you". It says which organization it is from.',
-      'Plan practices as usual. Division games set by the organization are already in "Practices & games", marked "Division game".',
+      'Plan practices as usual. Division games set by the organization are already in "Schedule", marked "Division game".',
       'Drills and plays are shared by every team in the organization: you can use all of them and change the ones you added.',
     ],
     tip: 'If you are taken off the team or leave, your drills, plays and practices are copied to your own account. The roster stays with the organization.',
