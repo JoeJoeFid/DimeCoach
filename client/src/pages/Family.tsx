@@ -1,7 +1,7 @@
 // A team's page for its parents, family and friends: what is coming up, what the coaches say,
 // and whatever else the coach lets their kind of follower see. Nothing here changes the team.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type FamilyDay, type FamilyKind, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal, MoreMenu } from '../components/bits';
@@ -9,6 +9,7 @@ import { SharedPreview } from '../components/community';
 import { DateBlock, PageHead, Row } from '../components/cx';
 import SportIcon from '../components/SportIcon';
 import { PasswordForm } from './Auth';
+import { FollowedTeams } from '../components/TeamPicker';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const AS: Record<FamilyKind, string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
@@ -29,6 +30,10 @@ export function FamilyApp({ user, onChanged }: { user: User; onChanged: () => vo
     await api.logout().catch(() => {});
     onChanged();
   };
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  // Choosing a team comes first, as it does for a coach: after signing in, and whenever "Switch team" is pressed.
+  if (!changing && !/^\/family\/[^/]+/.test(pathname)) return <FamilyPicker name={user.name} onPick={(slug) => navigate(`/family/${slug}`)} onPassword={() => setChanging(true)} onSignOut={signOut} />;
   return (
     <div className="fam-shell">
       <header className="fam-top">
@@ -66,7 +71,34 @@ export function FamilyApp({ user, onChanged }: { user: User; onChanged: () => vo
   );
 }
 
-/** The teams a person follows. With only one, it opens. */
+/** Choosing which team to open, for someone who only follows teams. It looks and works as a coach's does. */
+function FamilyPicker({ name, onPick, onPassword, onSignOut }: { name: string; onPick: (slug: string) => void; onPassword: () => void; onSignOut: () => void }) {
+  const [count, setCount] = useState<number | null>(null);
+  const first = name.trim().split(/\s+/)[0];
+  return (
+    <div className="auth team-pick">
+      <div className="auth-card">
+        <div className="brand auth-brand">
+          <span className="brand-mark" aria-hidden="true" />
+          Dime Coach
+        </div>
+        <h1>{count === 0 ? `Hello${first ? `, ${first}` : ''}` : `Which team${first ? `, ${first}` : ''}?`}</h1>
+        {count === 0 && <p className="muted auth-lead">You are not following a team right now. A coach adds you to their team's parents, family and friends, and the team then shows here.</p>}
+        <FollowedTeams onPick={onPick} onCount={setCount} />
+        <p className="muted small auth-foot team-pick-foot">
+          <button type="button" className="link" onClick={onPassword}>
+            Change password
+          </button>
+          <button type="button" className="link" onClick={onSignOut}>
+            Sign out
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** The teams a person follows, inside a coach's app. With only one, it opens. */
 export function FamilyHome({ name }: { name: string }) {
   const [teams, setTeams] = useState<FollowedTeam[] | null>(null);
   const [error, setError] = useState('');
@@ -166,7 +198,7 @@ export function FamilyTeamPage() {
       >
         {others > 0 && (
           <Link className="btn" to="/family">
-            Your other teams
+            Switch team
           </Link>
         )}
       </PageHead>

@@ -1,10 +1,51 @@
-import { useState } from 'react';
-import { api } from '../api';
+import { useEffect, useState } from 'react';
+import { api, type FamilyKind, type FollowedTeam } from '../api';
 import { useApp } from '../App';
 import type { Team } from '../types';
 import { NewTeam } from '../pages/Teams';
 import { confirmDialog } from './dialogs';
 import SportIcon from './SportIcon';
+
+const AS: Record<FamilyKind, string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
+/**
+ * The teams someone follows as a parent, family or a friend, to choose from. They sit in the same
+ * list as the teams a coach runs, since one person can coach one team and have a child on another.
+ */
+export function FollowedTeams({ label, onPick, onCount }: { /** A heading, when these come after other teams. */ label?: string; onPick: (slug: string) => void; onCount?: (n: number) => void }) {
+  const [teams, setTeams] = useState<FollowedTeam[] | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.followedTeams().then(
+      (t) => {
+        setTeams(t);
+        onCount?.(t.length);
+      },
+      (e) => setError((e as Error).message),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (error) return <p className="error">{error}</p>;
+  if (!teams) return <p className="muted">Loading…</p>;
+  if (!teams.length) return null;
+  return (
+    <>
+      {label && <h2 className="side-label team-pick-label">{label}</h2>}
+      <ul className="team-pick-list" aria-label="Teams you follow">
+        {teams.map((t) => (
+          <li key={t.id}>
+            <button type="button" className="team-pick-card followed" onClick={() => onPick(t.slug)}>
+              <SportIcon sport={t.sport} />
+              <span>
+                <strong>{t.name}</strong>
+                <span className="muted small">{[t.sport, t.season, `You are ${AS[t.kind]}${t.players.length ? ` of ${t.players.join(' and ')}` : ''}`].filter(Boolean).join(' · ')}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 /**
  * Where a team is chosen: after signing in, and whenever "Switch team" is pressed. It is the only
@@ -14,6 +55,7 @@ export default function TeamPicker({
   name,
   current,
   onPick,
+  onFollow,
   onCreated,
   onBack,
   onSignOut,
@@ -22,6 +64,8 @@ export default function TeamPicker({
   /** The team being worked on when this was opened from inside the app. */
   current?: number;
   onPick: (shared: boolean, id: number) => void;
+  /** A team this person follows as a parent, family or a friend was chosen. */
+  onFollow: (slug: string) => void;
   onCreated: (t: Team) => void;
   /** Present when there is a team to go back to without choosing again. */
   onBack?: () => void;
@@ -29,7 +73,8 @@ export default function TeamPicker({
 }) {
   const app = useApp();
   const { own_teams: ownTeams, shared_teams: sharedTeams } = app;
-  const none = ownTeams.length + sharedTeams.length === 0;
+  // Someone who only follows teams has teams to choose from, though none to run.
+  const none = ownTeams.length + sharedTeams.length === 0 && !app.following;
   // With no team at all, the form for making the first one opens by itself.
   const [adding, setAdding] = useState(none);
   const [error, setError] = useState('');
@@ -90,6 +135,7 @@ export default function TeamPicker({
             </ul>
           </>
         )}
+        {app.following > 0 && <FollowedTeams label={ownTeams.length + sharedTeams.length ? 'Teams you follow' : undefined} onPick={onFollow} />}
         <button type="button" className="btn team-pick-new" onClick={() => setAdding(true)}>
           + New team
         </button>

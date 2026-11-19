@@ -447,6 +447,9 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
 
   if (leaving) return <div className="page muted">Loading…</div>;
   // Choosing a team comes first: after signing in, when asked for from the menu, and whenever no team is chosen.
+  // Someone with no team of their own who is on a team they follow stays there.
+  const following = !state.team && !picking && /^\/family\/[^/]+/.test(location.pathname);
+  if (following) return <FamilyApp user={user} onChanged={onChanged} />;
   if (!printing && (picking || !state.team)) {
     const pick = (shared: boolean, id: number) => {
       if (shared) {
@@ -463,6 +466,10 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           name={user.name}
           current={picking ? state.team?.id : undefined}
           onPick={pick}
+          onFollow={(slug) => {
+            donePicking();
+            navigate(`/family/${slug}`);
+          }}
           onCreated={(t) => {
             setTeamId(t.id);
             donePicking();
