@@ -16204,3 +16204,26 @@ button.fam-day.next {
   width: auto;
   cursor: default;
 }
+
+/* How full the disk is, among the system page's figures. */
+.disk-stat .value small {
+  color: var(--muted);
+  font-size: 0.55em;
+  font-weight: 600;
+}
+.disk-bar {
+  height: 6px;
+  margin: 8px 0 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.disk-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--good);
+}
+.disk-stat.low .disk-bar span {
+  background: var(--danger);
+}

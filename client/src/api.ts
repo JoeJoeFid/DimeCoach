@@ -161,6 +161,8 @@ export interface SystemState {
   default_cap_mb: number;
   max_cap_mb: number;
   total_bytes: number;
+  /** The disk the data is on: its size, what is left, and how much is this site's own. Null when the host will not say. `own_disk` is false when the data shares the program's disk, null when that cannot be told. */
+  disk: { total_bytes: number; free_bytes: number; site_bytes: number; own_disk: boolean | null } | null;
   users: SystemUser[];
   /** Parents, family and friends on a team's list who have not made an account yet. */
   family_waiting: { id: number; name: string; email: string; kind: FamilyKind; team: string; invited_at: string | null; created_at: string }[];

@@ -760,11 +760,45 @@ export function mountAuth(app) {
       cap_mb: capMbFor(u),
     };
   };
+  /**
+   * The disk the data is kept on: how big it is, how much is left, and how much of it is this
+   * site's own (the database and the uploads). The size is whatever the host gave the folder: on a
+   * host with a disk attached for the data, that is the size of that disk. `own_disk` says whether
+   * the data has a disk to itself, or shares the one the program runs from, which a host may wipe.
+   */
+  const diskOut = () => {
+    const dir = path.dirname(dbPath);
+    const sizeOf = (at) => {
+      let total = 0;
+      for (const f of fs.readdirSync(at, { withFileTypes: true })) {
+        const full = path.join(at, f.name);
+        try {
+          total += f.isDirectory() ? sizeOf(full) : fs.statSync(full).size;
+        } catch {
+          /* gone since it was listed */
+        }
+      }
+      return total;
+    };
+    try {
+      const s = fs.statfsSync(dir);
+      let ownDisk = null;
+      try {
+        ownDisk = process.platform === 'win32' ? null : fs.statSync(dir).dev !== fs.statSync('/').dev;
+      } catch {
+        /* cannot tell */
+      }
+      return { total_bytes: s.bsize * s.blocks, free_bytes: s.bsize * s.bavail, site_bytes: sizeOf(dir), own_disk: ownDisk };
+    } catch {
+      return null;
+    }
+  };
   const systemOut = () => {
     const users = all('SELECT * FROM users ORDER BY created_at, id').map(systemUserOut);
     const ago = (ms) => new Date(Date.now() - ms).toISOString();
     return {
       default_cap_mb: defaultCapMb(), max_cap_mb: MAX_CAP_MB, total_bytes: get('SELECT COALESCE(SUM(bytes), 0) AS n FROM images').n, users,
+      disk: diskOut(),
       // Parents, family and friends a coach has put on a team's list who have no account yet.
       family_waiting: all(
         "SELECT c.id, c.name, c.email, c.kind, c.invited_at, c.created_at, t.name AS team FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id IS NULL AND c.email<>'' ORDER BY c.created_at, c.id",

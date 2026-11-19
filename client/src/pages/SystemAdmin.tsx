@@ -314,6 +314,28 @@ export default function SystemAdmin() {
               <div className="value">{fmtSpace(state.total_bytes)}</div>
               <div className="label">Uploaded in total</div>
             </div>
+            <div className={`sys-tile disk-stat ${state.disk && state.disk.free_bytes < state.disk.total_bytes * 0.1 ? 'low' : ''}`}>
+              {state.disk ? (
+                <>
+                  <div className="value">
+                    {fmtSpace(state.disk.total_bytes - state.disk.free_bytes)} <small>of {fmtSpace(state.disk.total_bytes)}</small>
+                  </div>
+                  <div className="label">Disk used</div>
+                  <div className="disk-bar" role="img" aria-label={`${Math.round(((state.disk.total_bytes - state.disk.free_bytes) / state.disk.total_bytes) * 100)}% of the disk is used`}>
+                    <span style={{ width: `${Math.min(100, ((state.disk.total_bytes - state.disk.free_bytes) / state.disk.total_bytes) * 100)}%` }} />
+                  </div>
+                  <div className="muted small">
+                    {fmtSpace(state.disk.site_bytes)} is this site's data. {fmtSpace(state.disk.free_bytes)} free.
+                    {state.disk.own_disk === false && ' The data is not on a disk of its own, so it may not outlast a redeploy.'}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="value">—</div>
+                  <div className="label">Disk used</div>
+                </>
+              )}
+            </div>
             <div className="sys-tile">
               <div className="value">{over}</div>
               <div className="label">At their cap</div>
