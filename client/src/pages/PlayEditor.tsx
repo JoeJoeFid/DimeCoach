@@ -29,7 +29,9 @@ import {
   Apron,
   Grain,
   courtClass,
-  viewBoxFor,
+  Surface,
+  isSideways,
+  viewBoxOf,
 } from '../components/PlayDiagram';
 import PlayAnimation from '../components/PlayAnimation';
 import { ShareDialog } from '../components/community';
@@ -62,7 +64,7 @@ const TEXT_FONT_CHOICES: { id: '' | NonNullable<PlayMark['font']>; label: string
 ];
 const NEW_CATEGORY = '\u0000new';
 /** The most steps a play can hold. */
-const MAX_STEPS = 20;
+const MAX_STEPS = 80;
 type ShapeKind = PlayShape['shape'];
 type Tool = 'select' | 'o' | 'x' | 'cone' | 'text' | 'cut' | 'pass' | 'dribble' | 'screen' | ShapeKind;
 const TOOLS: { id: Tool; label: string; hint: string; group: 'pointer' | 'mark' | 'line' | 'shape' }[] = [
@@ -214,6 +216,8 @@ export default function PlayEditor() {
   const sportOf = (sportId: number | undefined) => sportKind(app.sports.find((x) => x.id === sportId)?.name) ?? 'basketball';
 
   const svg = useRef<SVGSVGElement>(null);
+  /** The court itself inside the drawing, which is turned a quarter turn when it is seen sideways. */
+  const stage = useRef<SVGGElement>(null);
   const drag = useRef<Drag | null>(null);
   const latest = useRef<Play | null>(null);
   const version = useRef(0);
@@ -376,7 +380,7 @@ export default function PlayEditor() {
 
   // --- Pointer handling ------------------------------------------------------
   const point = (e: { clientX: number; clientY: number }): Pt => {
-    const m = svg.current!.getScreenCTM()!.inverse();
+    const m = (stage.current ?? svg.current)!.getScreenCTM()!.inverse();
     const x = e.clientX * m.a + e.clientY * m.c + m.e;
     const y = e.clientX * m.b + e.clientY * m.d + m.f;
     // A little past each sideline, and out past each baseline as far as the drawing shows.
@@ -624,7 +628,7 @@ export default function PlayEditor() {
       // The box stays centered on the label: its width is twice the distance from the middle to the pointer.
       const first = !d.moved;
       d.moved = true;
-      setObjects((os) => os.map((o) => (o.id === d.id && isMark(o) ? { ...o, w: Math.round(Math.min(60, Math.max(2, Math.abs(p[0] - o.x) * 2)) * 10) / 10 } : o)), first);
+      setObjects((os) => os.map((o) => (o.id === d.id && isMark(o) ? { ...o, w: Math.round(Math.min(60, Math.max(2, Math.abs(isSideways(play) ? p[1] - o.y : p[0] - o.x) * 2)) * 10) / 10 } : o)), first);
     } else {
       const dx = p[0] - d.last[0];
       const dy = p[1] - d.last[1];
@@ -979,6 +983,11 @@ export default function PlayEditor() {
                 Flip court
               </button>
             )}
+            {(play.court === 'half' || play.court === 'full') && (
+              <button className="btn" onClick={() => update({ upright: !play.upright })} title={play.upright ? 'See the court sideways, with the baskets left and right' : 'See the court up and down, with the baskets top and bottom'}>
+                {play.upright ? 'View sideways' : 'View up and down'}
+              </button>
+            )}
             {lineups(play.court).map((l) => (
               <button key={l.id} className="btn" onClick={() => addLineup(l)} title="Places everyone in their usual starting spots on this step. Drag them where you want them.">
                 {l.label}
@@ -1253,7 +1262,7 @@ export default function PlayEditor() {
           <svg
             ref={svg}
             className={`play-svg editing tool-${tool} ${aim ? 'aiming' : ''} ${carry ? 'drop-ready' : ''} ${courtClass(play.theme)}`}
-            viewBox={viewBoxFor(h)}
+            viewBox={viewBoxOf(play)}
             onPointerDownCapture={(e) => {
               // Words on the page that were swept up in a text selection (the court's own labels among
               // them) would be picked up and dragged by the browser at this press, and nothing on the
@@ -1270,6 +1279,7 @@ export default function PlayEditor() {
             role="application"
             aria-label={`Court for step ${index + 1}`}
           >
+            <Surface play={play} gRef={stage}>
             <Apron h={h} />
             <Court court={play.court} flipped={play.flipped} />
             {play.theme === 'wood' && <Grain h={h} />}
@@ -1303,7 +1313,7 @@ export default function PlayEditor() {
                   return (
                     <g key={`order-${l.id}`} className="order-badge" aria-hidden="true">
                       <circle cx={mid[0]} cy={mid[1]} r={0.95} />
-                      <text x={mid[0]} y={mid[1]} textAnchor="middle" dominantBaseline="central">
+                      <text x={mid[0]} y={mid[1]} textAnchor="middle" dominantBaseline="central" transform={isSideways(play) ? `rotate(90 ${mid[0]} ${mid[1]})` : undefined}>
                         {b + 1}
                       </text>
                     </g>
@@ -1337,6 +1347,7 @@ export default function PlayEditor() {
                   <rect
                     key={side}
                     className="corner-dot text-edge"
+                    transform={isSideways(play) ? `rotate(90 ${selMark.x} ${selMark.y})` : undefined}
                     x={selMark.x + side * (box.width / 2 + 0.5) - 0.55}
                     y={selMark.y - 0.9}
                     width={1.1}
@@ -1349,6 +1360,7 @@ export default function PlayEditor() {
             {selShape &&
               tool === 'select' &&
               shapeHandles(selShape).map((q, i) => <rect key={i} className="corner-dot" x={q[0] - 0.7} y={q[1] - 0.7} width={1.4} height={1.4} onPointerDown={(e) => onCornerDown(e, selShape.id, i)} />)}
+            </Surface>
           </svg>
         </div>
 

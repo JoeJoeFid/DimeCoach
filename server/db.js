@@ -313,6 +313,8 @@ addColumn('drills', 'extras_json', "TEXT DEFAULT '{}'");
 addColumn('plays', 'attachments_json', "TEXT DEFAULT '{}'");
 // How the court is colored: '' as the app draws it, 'wood' or 'dark'.
 addColumn('plays', 'theme', "TEXT DEFAULT ''");
+// A basketball court is drawn sideways, baskets left and right, unless a play is set to be seen up and down.
+addColumn('plays', 'upright', 'INTEGER DEFAULT 0');
 
 // Callouts used to be a separate one-line field under an item. They now live in the notes:
 // any that exist are moved to the end of the notes as a bold line, and the field is emptied.

@@ -4,7 +4,9 @@
 // step. Coordinates are in feet from the top-left corner of the court, so a drawing is independent
 // of screen size. The drawing itself is opaque to the server: it only checks shape and size.
 import { all, get, run, tx } from './db.js';
+import { isSystemAdmin } from './auth.js';
 import { cleanImages, cleanLinks, cleanVideos } from './images.js';
+import { MAX_IMPORT_STEPS, PlayPdfError, playFromPdf } from './playPdf.js';
 
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 const num = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v) * 100) / 100 : 0);
@@ -18,7 +20,8 @@ const parse = (s, d) => {
 
 const MARKS = ['o', 'x', 'ball', 'cone', 'text'];
 const LINES = ['cut', 'pass', 'dribble', 'screen'];
-const MAX_FRAMES = 20;
+// A play drawn by hand rarely passes a dozen steps. One brought in from another designer can run to several dozen.
+const MAX_FRAMES = MAX_IMPORT_STEPS;
 const MAX_OBJECTS = 80;
 
 const SHAPES = { rect: 4, ellipse: 2, triangle: 3 };
@@ -90,7 +93,7 @@ const attachmentsJson = (b, ownerId) =>
 const playOut = (p) => ({
   ...attachmentsOut(p),
   id: p.id, sport_id: p.sport_id, name: p.name, category: p.category, labels: parse(p.labels_json, []),
-  court: p.court, flipped: !!p.flipped, theme: p.theme || '', notes: p.notes, frames: parse(p.frames_json, [{ note: '', objects: [] }]),
+  court: p.court, flipped: !!p.flipped, upright: !!p.upright, theme: p.theme || '', notes: p.notes, frames: parse(p.frames_json, [{ note: '', objects: [] }]),
   updated_at: p.updated_at,
 });
 
@@ -110,8 +113,49 @@ export function cleanPlayIds(list, ownerId) {
   return out.slice(0, 8);
 }
 
+/**
+ * Bringing a play in from another designer's PDF is the system administrator's to begin with, who
+ * can open it to everyone. See "Play import" on the system page.
+ */
+export const playImportOpen = () => get("SELECT value FROM system_settings WHERE key='play_import'")?.value === '1';
+export const canImportPlays = (user) => isSystemAdmin(user) || playImportOpen();
+const MAX_PDF_BYTES = 15 * 1024 * 1024;
+
 export function mountPlays(app) {
   const own = (req) => get('SELECT * FROM plays WHERE id=? AND owner_id=?', Number(req.params.id), req.ownerId);
+
+  // A play printed as a PDF by another play designer, read into a new play: a step for each diagram.
+  app.post('/api/plays/import-pdf', async (req, res) => {
+    if (!canImportPlays(req.user)) return res.status(403).json({ error: 'Bringing in a play from a PDF is not turned on. Ask the administrator.' });
+    const sport = get('SELECT id, name FROM sports WHERE id=? AND owner_id=?', Number(req.body.sport_id), req.ownerId);
+    if (!sport) return res.status(400).json({ error: 'Unknown sport' });
+    const encoded = String(req.body.file ?? '').replace(/^data:[^,]*,/, '');
+    if (!encoded) return res.status(400).json({ error: 'Choose a PDF file.' });
+    const bytes = Buffer.from(encoded, 'base64');
+    if (bytes.length > MAX_PDF_BYTES) return res.status(413).json({ error: 'That PDF is too large. Up to 15 MB can be read.' });
+    if (bytes.subarray(0, 1024).indexOf('%PDF-') < 0) return res.status(400).json({ error: 'That file is not a PDF.' });
+    let read;
+    try {
+      read = await playFromPdf(bytes, str(req.body.name, 200));
+    } catch (e) {
+      if (e instanceof PlayPdfError) return res.status(400).json({ error: e.message });
+      console.error('Play import failed:', e);
+      return res.status(400).json({ error: 'That PDF could not be read as a play.' });
+    }
+    const frames = JSON.stringify(cleanFrames(read.frames));
+    if (frames.length > 400_000) return res.status(413).json({ error: 'That play is too large to bring in.' });
+    const r = run(
+      'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, upright, notes, frames_json, attachments_json, theme) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      req.ownerId, sport.id, str(read.name, 120).trim() || 'Imported play', '', '[]', read.court, read.flipped ? 1 : 0, read.upright ? 1 : 0, '', frames, '{}', '',
+    );
+    res.json({
+      play: playOut(get('SELECT * FROM plays WHERE id=?', Number(r.lastInsertRowid))),
+      steps: read.frames.length,
+      // Diagrams past the most a play can hold, and drawings in them that were not understood.
+      left_out: read.left_out,
+      unknown: read.unknown,
+    });
+  });
 
   app.get('/api/plays', (req, res) => {
     res.json(all('SELECT * FROM plays WHERE owner_id=? ORDER BY name COLLATE NOCASE, id', req.ownerId).filter((p) => !req.sportIds || req.sportIds.has(p.sport_id)).map(playOut));
@@ -129,10 +173,10 @@ export function mountPlays(app) {
     const src = b.from_play_id ? get('SELECT * FROM plays WHERE id=? AND owner_id=?', Number(b.from_play_id), req.ownerId) : null;
     if (b.from_play_id && !src) return res.status(400).json({ error: 'Unknown play to copy' });
     const r = run(
-      'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, notes, frames_json, attachments_json, theme) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, upright, notes, frames_json, attachments_json, theme) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
       req.ownerId, Number(b.sport_id), str(b.name ?? (src ? `${src.name} (copy)` : 'New play'), 120).trim() || 'New play',
       str(b.category ?? src?.category, 60).trim(), src ? src.labels_json : JSON.stringify(cleanLabels(b.labels)),
-      cleanCourt(b.court ?? src?.court, defaultCourt(sport.name)), src?.flipped ? 1 : 0, str(src?.notes, 2000),
+      cleanCourt(b.court ?? src?.court, defaultCourt(sport.name)), src?.flipped ? 1 : 0, src?.upright ? 1 : 0, str(src?.notes, 2000),
       src ? src.frames_json : JSON.stringify(cleanFrames(b.frames)),
       src ? src.attachments_json : '{}',
       cleanTheme(b.theme ?? src?.theme),
@@ -147,9 +191,9 @@ export function mountPlays(app) {
     if (frames.length > 400_000) return res.status(413).json({ error: 'This play is too large to save. Remove some steps or objects.' });
     tx(() =>
       run(
-        `UPDATE plays SET name=?, category=?, labels_json=?, court=?, flipped=?, notes=?, frames_json=?, attachments_json=?, theme=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        `UPDATE plays SET name=?, category=?, labels_json=?, court=?, flipped=?, upright=?, notes=?, frames_json=?, attachments_json=?, theme=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         str(b.name, 120).trim() || 'Untitled play', str(b.category, 60).trim(), JSON.stringify(cleanLabels(b.labels)),
-        cleanCourt(b.court, p.court), b.flipped ? 1 : 0, str(b.notes, 2000), frames, attachmentsJson(b, req.ownerId), cleanTheme(b.theme, p.theme || ''), p.id,
+        cleanCourt(b.court, p.court), b.flipped ? 1 : 0, (b.upright === undefined ? p.upright : b.upright) ? 1 : 0, str(b.notes, 2000), frames, attachmentsJson(b, req.ownerId), cleanTheme(b.theme, p.theme || ''), p.id,
       ),
     );
     res.json(playOut(get('SELECT * FROM plays WHERE id=?', p.id)));

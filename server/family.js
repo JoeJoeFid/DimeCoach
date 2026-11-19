@@ -4,6 +4,7 @@
 // the schedule, news from the coaches, the message board, homework, the plays and resources the
 // coach picked out for them, and the roster. A follower sees a team only while they are on its
 // list of parents, family and friends. Nothing here lets them change the team.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { all, db, dbPath, get, run } from './db.js';
@@ -16,6 +17,8 @@ const addColumn = (table, column, ddl) => {
   if (!all(`PRAGMA table_info(${table})`).some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 };
 addColumn('teams', 'family_json', "TEXT NOT NULL DEFAULT ''");
+// A few random letters that stand for the team in the address of its page, so the address gives away nothing about how many teams there are.
+addColumn('teams', 'family_code', "TEXT NOT NULL DEFAULT ''");
 db.exec(`
 CREATE TABLE IF NOT EXISTS team_posts (
   id INTEGER PRIMARY KEY,
@@ -30,12 +33,13 @@ CREATE INDEX IF NOT EXISTS idx_team_posts ON team_posts(team_id, kind, id);
 `);
 
 export const FAMILY_KINDS = ['parent', 'family', 'friend'];
-export const FAMILY_SECTIONS = ['schedule', 'news', 'board', 'homework', 'playbook', 'resources', 'roster'];
+// 'games' and 'practices' say how much of the schedule is told: when and where games are, and what a practice covers.
+export const FAMILY_SECTIONS = ['schedule', 'games', 'practices', 'news', 'board', 'homework', 'playbook', 'resources', 'roster'];
 // A parent sees most things, family a little, and a friend the schedule, until a coach says otherwise.
 const DEFAULTS = {
-  parent: { schedule: true, news: true, board: true, homework: true, playbook: true, resources: true, roster: true },
-  family: { schedule: true, news: true, board: false, homework: false, playbook: false, resources: true, roster: false },
-  friend: { schedule: true, news: false, board: false, homework: false, playbook: false, resources: false, roster: false },
+  parent: { schedule: true, games: true, practices: false, news: true, board: true, homework: true, playbook: true, resources: true, roster: true },
+  family: { schedule: true, games: true, practices: false, news: true, board: false, homework: false, playbook: false, resources: true, roster: false },
+  friend: { schedule: true, games: true, practices: false, news: false, board: false, homework: false, playbook: false, resources: false, roster: false },
 };
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 const parse = (s, fallback) => {
@@ -83,8 +87,35 @@ function addPost(team, user, role, kind, b) {
 export const followingCount = (userId) => get('SELECT COUNT(DISTINCT team_id) AS n FROM team_contacts WHERE user_id=?', userId).n;
 
 // --- For the followers ------------------------------------------------------------
+/** The team's code for the address of its page, made the first time it is needed. It always starts with a letter. */
+function codeOf(team) {
+  if (team.family_code) return team.family_code;
+  const letters = 'abcdefghjkmnpqrstuvwxyz';
+  const rest = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let code;
+  do {
+    const bytes = crypto.randomBytes(6);
+    code = letters[bytes[0] % letters.length] + [...bytes.subarray(1)].map((b) => rest[b % rest.length]).join('');
+  } while (get('SELECT 1 AS ok FROM teams WHERE family_code=?', code));
+  run('UPDATE teams SET family_code=? WHERE id=?', code, team.id);
+  team.family_code = code;
+  return code;
+}
+/** How a team is named in the address of its page: its name, then its code. Only the code is looked up, so a renamed team keeps its old links. */
+const slugOf = (team) => {
+  const name = String(team.name || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  return `${name || 'team'}-${codeOf(team)}`;
+};
+/** The team an address names. A bare number is how the address used to be written, and still works. */
+function teamIdOf(ref) {
+  const text = String(ref ?? '');
+  if (/^\d+$/.test(text)) return Number(text);
+  const code = text.split('-').pop();
+  return (code && get('SELECT id FROM teams WHERE family_code=?', code)?.id) || 0;
+}
 /** The team and how this person is on its list, or null when they are not. */
-function follow(userId, teamId) {
+function follow(userId, ref) {
+  const teamId = typeof ref === 'number' ? ref : teamIdOf(ref);
   const c = get('SELECT * FROM team_contacts WHERE user_id=? AND team_id=? ORDER BY id LIMIT 1', userId, Number(teamId));
   const team = c && get('SELECT * FROM teams WHERE id=?', c.team_id);
   if (!team) return null;
@@ -99,8 +130,18 @@ const coachesOf = (team) => {
   const owners = team.community_id ? [] : all("SELECT u.name, 'Coach' AS title FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.owner_id=? AND m.role='owner' AND u.status='active'", team.owner_id);
   return [...owners, ...staff].map((s) => ({ name: s.name, title: s.title || 'Coach' }));
 };
-/** The team's days: what is on its calendar, and the practices and games planned for days the calendar does not have. */
-function scheduleOf(team) {
+/** What a practice covers, for a parent: its parts and how long each runs. None of the coach's notes. */
+function practiceSummary(planId) {
+  const items = all('SELECT kind, title, duration_min FROM plan_items WHERE plan_id=? ORDER BY position, id', planId).map((it) => ({
+    title: it.title || (it.kind === 'break' ? 'Break' : 'Practice item'), minutes: Number(it.duration_min) || 0, rest: it.kind === 'break',
+  }));
+  return items.length ? { minutes: items.reduce((n, it) => n + it.minutes, 0), items } : null;
+}
+/**
+ * The team's days: what is on its calendar, and the practices and games planned for days the calendar does not have.
+ * `can.games` says whether a game's time and place are told, and `can.practices` whether a practice comes with what it covers.
+ */
+function scheduleOf(team, can) {
   const since = new Date();
   since.setDate(since.getDate() - 60);
   const from = isoDay(since);
@@ -113,7 +154,15 @@ function scheduleOf(team) {
   const plans = all("SELECT id, title, date, start_time, location, is_game FROM plans WHERE team_id=? AND kind='practice' AND is_template=0 AND date>=?", team.id, from)
     .map((p) => ({ key: `p${p.id}`, kind: p.is_game ? 'game' : 'practice', title: p.title || (p.is_game ? 'Game' : 'Practice'), date: p.date, start_time: p.start_time || '', end_time: '', location: p.location || '' }))
     .filter((p) => !taken.has(`${p.date} ${p.kind}`));
-  return [...events, ...plans].sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
+  const written = all("SELECT id, date FROM plans WHERE team_id=? AND kind='practice' AND is_template=0 AND is_game=0 AND date>=? ORDER BY id", team.id, from);
+  return [...events, ...plans]
+    .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time))
+    .map((d) => {
+      // Without the details, a game is only a game on its day.
+      if (d.kind === 'game' && !can.games) return { key: d.key, kind: d.kind, title: 'Game', date: d.date, start_time: '', end_time: '', location: '', summary: null };
+      const plan = d.kind === 'practice' && can.practices ? (d.key.startsWith('p') ? Number(d.key.slice(1)) : written.find((p) => p.date === d.date)?.id) : 0;
+      return { ...d, summary: plan ? practiceSummary(plan) : null };
+    });
 }
 /** Homework for the whole team, and for this person's own players. */
 function homeworkOf(team, players) {
@@ -141,7 +190,7 @@ export function mountFamily(app) {
       rows
         .map((r) => follow(req.user.id, r.team_id))
         .filter(Boolean)
-        .map((f) => ({ id: f.team.id, name: f.team.name, sport: sportOf(f.team), season: f.team.season || '', kind: f.kind, players: f.players.map((p) => p.name) }))
+        .map((f) => ({ id: f.team.id, slug: slugOf(f.team), name: f.team.name, sport: sportOf(f.team), season: f.team.season || '', kind: f.kind, players: f.players.map((p) => p.name) }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     );
   });
@@ -155,10 +204,10 @@ export function mountFamily(app) {
     if (!f) return;
     const { team, can, settings } = f;
     res.json({
-      team: { id: team.id, name: team.name, sport: sportOf(team), season: team.season || '', organization: team.community_id ? get('SELECT name FROM communities WHERE id=?', team.community_id)?.name || '' : '', coaches: coachesOf(team) },
+      team: { id: team.id, slug: slugOf(team), name: team.name, sport: sportOf(team), season: team.season || '', organization: team.community_id ? get('SELECT name FROM communities WHERE id=?', team.community_id)?.name || '' : '', coaches: coachesOf(team) },
       me: { kind: f.kind, players: f.players.map((p) => p.name) },
       can,
-      schedule: can.schedule ? scheduleOf(team) : [],
+      schedule: can.schedule ? scheduleOf(team, can) : [],
       news: can.news ? postsOf(team.id, 'news', req.user.id) : [],
       board: can.board ? postsOf(team.id, 'board', req.user.id) : [],
       homework: can.homework ? homeworkOf(team, f.players) : [],

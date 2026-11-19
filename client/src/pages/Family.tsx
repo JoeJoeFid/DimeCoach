@@ -1,7 +1,7 @@
 // A team's page for its parents, family and friends: what is coming up, what the coaches say,
 // and whatever else the coach lets their kind of follower see. Nothing here changes the team.
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link, Navigate, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type FamilyDay, type FamilyKind, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { MoreMenu } from '../components/bits';
@@ -75,7 +75,7 @@ export function FamilyHome({ name }: { name: string }) {
   }, []);
   if (error) return <p className="error">{error}</p>;
   if (!teams) return <p className="muted">Loading…</p>;
-  if (teams.length === 1) return <Navigate to={`/family/${teams[0].id}`} replace />;
+  if (teams.length === 1) return <Navigate to={`/family/${teams[0].slug}`} replace />;
   return (
     <div className="page cx fam">
       <PageHead eyebrow="Your teams" title={`Hello, ${name.split(' ')[0]}`} sub={teams.length ? 'Choose a team to see its schedule and what its coaches have shared.' : undefined} />
@@ -88,7 +88,7 @@ export function FamilyHome({ name }: { name: string }) {
           <ul className="cx-rows">
             {teams.map((t) => (
               <li key={t.id}>
-                <Link className="cx-row fam-team-row" to={`/family/${t.id}`}>
+                <Link className="cx-row fam-team-row" to={`/family/${t.slug}`}>
                   <SportIcon sport={t.sport} size={26} />
                   <span className="cx-row-text">
                     <strong>{t.name}</strong>
@@ -108,13 +108,18 @@ type Tab = 'home' | 'schedule' | 'messages' | 'homework' | 'playbook' | 'resourc
 
 /** One team, as a follower sees it. */
 export function FamilyTeamPage() {
-  const { teamId = '' } = useParams();
-  const id = Number(teamId);
+  const { teamId: id = '' } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState<FamilyTeam | null>(null);
   const [error, setError] = useState('');
   const [others, setOthers] = useState(0);
   const [params, setParams] = useSearchParams();
   const load = useCallback(() => api.familyTeam(id).then(setData, (e) => setError((e as Error).message)), [id]);
+  // An address written the old way, or with the team's old name, is put right once the team is known.
+  const slug = data?.team.slug;
+  useEffect(() => {
+    if (slug && slug !== id) navigate({ pathname: `/family/${slug}`, search: window.location.search }, { replace: true });
+  }, [slug, id, navigate]);
   useEffect(() => {
     setData(null);
     setError('');
@@ -334,7 +339,22 @@ function DayList({ days }: { days: FamilyDay[] }) {
           key={d.key}
           lead={<DateBlock date={d.date} />}
           title={d.title}
-          sub={[KIND_WORD[d.kind], [clock(d.start_time), clock(d.end_time)].filter(Boolean).join(' – '), d.location].filter(Boolean).join(' · ')}
+          sub={
+            <>
+              {[KIND_WORD[d.kind], [clock(d.start_time), clock(d.end_time)].filter(Boolean).join(' – '), d.location].filter(Boolean).join(' · ')}
+              {d.summary && (
+                <span className="fam-summary">
+                  <span className="fam-summary-total">{d.summary.minutes} minutes planned</span>
+                  {d.summary.items.map((it, i) => (
+                    <span key={i} className={it.rest ? 'rest' : ''}>
+                      {it.title}
+                      <small>{it.minutes} min</small>
+                    </span>
+                  ))}
+                </span>
+              )}
+            </>
+          }
         />
       ))}
     </ul>
@@ -448,7 +468,7 @@ function Post({ post, onDelete }: { post: TeamPost; onDelete?: () => void }) {
 }
 
 /** What the coaches announced, and the board where the team's people talk. */
-function Messages({ teamId, data, start, setBoard }: { teamId: number; data: FamilyTeam; start: 'news' | 'board'; setBoard: (posts: TeamPost[]) => void }) {
+function Messages({ teamId, data, start, setBoard }: { teamId: string; data: FamilyTeam; start: 'news' | 'board'; setBoard: (posts: TeamPost[]) => void }) {
   const both = data.can.news && data.can.board;
   const [show, setShow] = useState<'news' | 'board'>(start);
   const [body, setBody] = useState('');

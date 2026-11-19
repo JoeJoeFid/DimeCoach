@@ -5,7 +5,7 @@ import { useApp } from '../App';
 import { Field, Modal, MoreMenu, NameFields } from '../components/bits';
 import RegistrationCard from '../components/RegistrationCard';
 import SportIcon from '../components/SportIcon';
-import AccessibilityCard from '../components/AccessibilityCard';
+import AccessibilityCard, { PlayImportCard } from '../components/AccessibilityCard';
 import CommunityPlans from '../components/CommunityPlans';
 import EmailLog from '../components/EmailLog';
 import EmailRules from '../components/EmailRules';
@@ -561,6 +561,7 @@ export default function SystemAdmin() {
             Accessibility
           </h2>
           {settings && <AccessibilityCard settings={settings} run={run} />}
+          {settings && <PlayImportCard settings={settings} run={run} />}
             </>
           )}
         </>

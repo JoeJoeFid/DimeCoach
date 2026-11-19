@@ -16,7 +16,7 @@ import { mountContacts } from './contacts.js';
 import { mountLive } from './live.js';
 import { mentionedIn, notify } from './notices.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
-import { cleanPlayIds, mountPlays } from './plays.js';
+import { canImportPlays, cleanPlayIds, mountPlays } from './plays.js';
 import { mountResources } from './resources.js';
 import { mountMailRules } from './mailRules.js';
 import { mountLinkThumbs } from './linkThumbs.js';
@@ -29,7 +29,7 @@ const app = express();
 // Plan imports carry a whole file as base64, so that one route gets a larger body limit.
 const jsonSmall = express.json({ limit: '5mb' });
 const jsonLarge = express.json({ limit: '45mb' });
-const LARGE_BODY = ['/api/ai/import-plan', '/api/images'];
+const LARGE_BODY = ['/api/ai/import-plan', '/api/images', '/api/plays/import-pdf'];
 app.use((req, res, next) => (LARGE_BODY.includes(req.path) ? jsonLarge : jsonSmall)(req, res, next));
 app.use((req, _res, next) => {
   req.body ??= {};
@@ -99,6 +99,8 @@ app.get('/api/bootstrap', (req, res) => {
     // Turned on by an administrator for sites where people work without a mouse: adds buttons for
     // things that are otherwise done by dragging.
     keyboard_access: get("SELECT value FROM system_settings WHERE key='keyboard_access'")?.value === '1',
+    // Whether this person may bring a play in from another designer's PDF.
+    play_import: canImportPlays(req.user),
     // The teams this person follows as a parent, family or a friend.
     following: followingCount(req.user.id),
     ...staffBootstrap(req),

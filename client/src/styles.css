@@ -15891,3 +15891,35 @@ a.cx-row:hover .cx-row-text strong {
   background: var(--series);
   color: var(--surface);
 }
+
+/* What a practice covers, under its line on a team's page for parents. */
+.fam-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-top: 6px;
+}
+.fam-summary > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 0.76rem;
+}
+.fam-summary > span.rest {
+  border-style: dashed;
+}
+.fam-summary > .fam-summary-total {
+  border-color: transparent;
+  background: none;
+  padding-left: 0;
+  font-weight: 600;
+  color: var(--ink);
+}
+.fam-summary small {
+  color: var(--muted);
+}

@@ -50,6 +50,8 @@ export interface Bootstrap {
   access: TeamAccess | null;
   /** On when an administrator has turned on keyboard accessibility: buttons appear for things otherwise done by dragging. */
   keyboard_access: boolean;
+  /** Whether this person may bring a play in from another play designer's PDF. */
+  play_import: boolean;
 }
 
 /** Whether the Claude Code program is installed on this computer for automatic plan import. */
@@ -510,7 +512,7 @@ export interface CommunityShare {
   item_id?: number;
   shared_at: string;
   /** What to draw on its card: a play's first step, or the first lines of a practice. */
-  art?: { play?: Pick<Play, 'court' | 'flipped'> & { frame: Play['frames'][number] }; lines?: { kind: 'item' | 'break'; title: string; duration_min: number }[]; text?: string };
+  art?: { play?: Pick<Play, 'court' | 'flipped' | 'upright'> & { frame: Play['frames'][number] }; lines?: { kind: 'item' | 'break'; title: string; duration_min: number }[]; text?: string };
   tags: { name: string; color: string }[];
   /** The sport it belongs to, by name. */
   sport: string;
@@ -519,7 +521,7 @@ export interface CommunityShare {
 }
 type SharedLink = { url: string; label: string };
 type SharedTag = { name: string; color: string };
-export interface SharedPlay extends Pick<Play, 'id' | 'name' | 'category' | 'labels' | 'court' | 'flipped' | 'notes' | 'frames'> {
+export interface SharedPlay extends Pick<Play, 'id' | 'name' | 'category' | 'labels' | 'court' | 'flipped' | 'upright' | 'notes' | 'frames'> {
   links: SharedLink[];
 }
 export interface SharedDrill {
@@ -637,7 +639,7 @@ export interface TeamContact {
   joined: boolean;
 }
 export type FamilyKind = TeamContact['kind'];
-export type FamilySection = 'schedule' | 'news' | 'board' | 'homework' | 'playbook' | 'resources' | 'roster';
+export type FamilySection = 'schedule' | 'games' | 'practices' | 'news' | 'board' | 'homework' | 'playbook' | 'resources' | 'roster';
 /** Something written on a team's page: an announcement from a coach, or a message on the board. */
 export interface TeamPost {
   id: number;
@@ -664,6 +666,8 @@ export interface FamilySettings {
 }
 export interface FollowedTeam {
   id: number;
+  /** How the team is named in the address of its page: its name and a few random letters. */
+  slug: string;
   name: string;
   sport: string;
   season: string;
@@ -679,10 +683,12 @@ export interface FamilyDay {
   start_time: string;
   end_time: string;
   location: string;
+  /** What a practice covers, when the coach shares that: its parts and how long each runs. */
+  summary: { minutes: number; items: { title: string; minutes: number; rest: boolean }[] } | null;
 }
 /** A team as one of its followers sees it. A part they may not see comes back empty. */
 export interface FamilyTeam {
-  team: { id: number; name: string; sport: string; season: string; organization: string; coaches: { name: string; title: string }[] };
+  team: { id: number; slug: string; name: string; sport: string; season: string; organization: string; coaches: { name: string; title: string }[] };
   me: { kind: FamilyKind; players: string[] };
   can: Record<FamilySection, boolean>;
   schedule: FamilyDay[];
@@ -703,6 +709,8 @@ type ContactFields = Pick<TeamContact, 'name' | 'email' | 'kind' | 'player_ids'>
 export interface AdminSettings {
   registration_mode: 'closed' | 'open' | 'verify';
   keyboard_access: boolean;
+  /** Bringing a play in from a PDF: on for everyone, or only for the system administrator. */
+  play_import: boolean;
   registration_enabled: boolean;
   registration_open: boolean;
   mailer: { configured: boolean; transport: string };
@@ -869,7 +877,7 @@ export const api = {
   /** For the system administrator: every community and the plan it is on. */
   communityPlans: () => req<CommunityPlanRow[]>('GET', '/system/communities'),
   setCommunityPlan: (id: number, b: { plan?: 'group' | 'organization'; seats?: number; expires?: string }) => req<CommunityPlanRow[]>('PUT', `/system/communities/${id}`, b),
-  adminSetSettings: (b: { registration_mode?: AdminSettings['registration_mode']; keyboard_access?: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
+  adminSetSettings: (b: { registration_mode?: AdminSettings['registration_mode']; keyboard_access?: boolean; play_import?: boolean }) => req<AdminSettings>('PUT', '/admin/settings', b),
   mailRules: () => req<MailRules>('GET', '/admin/mail-rules'),
   addMailRule: (d: MailRuleDraft) => req<MailRules>('POST', '/admin/mail-rules', d),
   updateMailRule: (id: number, d: MailRuleDraft | { enabled: boolean }) => req<MailRules>('PUT', `/admin/mail-rules/${id}`, d),
@@ -926,9 +934,9 @@ export const api = {
   teamFamilyPost: (teamId: number, b: { kind: 'news' | 'board'; title: string; body: string }) => req<FamilySettings>('POST', `/teams/${teamId}/family/posts`, b),
   deleteTeamFamilyPost: (teamId: number, postId: number) => req<FamilySettings>('DELETE', `/teams/${teamId}/family/posts/${postId}`),
   followedTeams: () => req<FollowedTeam[]>('GET', '/family/teams'),
-  familyTeam: (teamId: number) => req<FamilyTeam>('GET', `/family/teams/${teamId}`),
-  familyPost: (teamId: number, body: string) => req<TeamPost[]>('POST', `/family/teams/${teamId}/board`, { body }),
-  familyDeletePost: (teamId: number, postId: number) => req<TeamPost[]>('DELETE', `/family/teams/${teamId}/board/${postId}`),
+  familyTeam: (teamId: string) => req<FamilyTeam>('GET', `/family/teams/${teamId}`),
+  familyPost: (teamId: string, body: string) => req<TeamPost[]>('POST', `/family/teams/${teamId}/board`, { body }),
+  familyDeletePost: (teamId: string, postId: number) => req<TeamPost[]>('DELETE', `/family/teams/${teamId}/board/${postId}`),
   addTeamContact: (teamId: number, b: ContactFields & { invite: boolean; note: string }) => req<TeamContacts>('POST', `/teams/${teamId}/contacts`, b),
   updateTeamContact: (teamId: number, id: number, b: ContactFields) => req<TeamContacts>('PUT', `/teams/${teamId}/contacts/${id}`, b),
   removeTeamContact: (teamId: number, id: number) => req<TeamContacts>('DELETE', `/teams/${teamId}/contacts/${id}`),
@@ -979,6 +987,8 @@ export const api = {
   play: (id: number) => req<Play>('GET', `/plays/${id}`),
   createPlay: (b: { sport_id: number; name?: string; category?: string; from_play_id?: number }) => req<Play>('POST', '/plays', b),
   updatePlay: (p: Play) => req<Play>('PUT', `/plays/${p.id}`, p),
+  /** Reads a play printed as a PDF by another play designer into a new play. `file` is the PDF as base64. */
+  importPlayPdf: (b: { sport_id: number; file: string; name: string }) => req<{ play: Play; steps: number; left_out: number; unknown: number }>('POST', '/plays/import-pdf', b),
   deletePlay: (id: number) => req('DELETE', `/plays/${id}`),
 
   drills: () => req<Drill[]>('GET', '/drills'),

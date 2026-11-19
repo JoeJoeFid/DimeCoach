@@ -1,20 +1,22 @@
 import PageTitle from '../components/PageTitle';
 import { CommunityPicker } from '../components/community';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { useCompletedDeletes, usePendingDeletes } from '../components/toasts';
+import { showUndo, useCompletedDeletes, usePendingDeletes } from '../components/toasts';
 import { useApp } from '../App';
 import type { Play } from '../types';
 import { PlayDiagram } from '../components/PlayDiagram';
 import { playBuilderSupports } from '../util';
+import { sportKind } from '../sports';
 import PlayIntro from '../components/PlayIntro';
 
 const resourceLabel = (n: number) => (n > 0 ? `${n} resource${n === 1 ? '' : 's'}` : '');
 
 /** The playbook: every diagrammed play for the current team's sport, filterable by category and tag. */
 export default function Playbook() {
-  const { sport } = useApp();
+  const app = useApp();
+  const { sport } = app;
   const navigate = useNavigate();
   const [plays, setPlays] = useState<Play[] | null>(null);
   const [error, setError] = useState('');
@@ -54,6 +56,37 @@ export default function Playbook() {
       (!q.trim() || `${p.name} ${p.category} ${p.labels.join(' ')} ${p.notes}`.toLowerCase().includes(q.trim().toLowerCase())),
   );
 
+  // A play printed as a PDF by another play designer, read into a new play. Offered to those it is turned on for.
+  const pdfInput = useRef<HTMLInputElement>(null);
+  const [reading, setReading] = useState(false);
+  const importPdf = async (file?: File) => {
+    if (!file || !sport) return;
+    setError('');
+    setReading(true);
+    try {
+      if (file.size > 15 * 1024 * 1024) throw new Error('That PDF is too large. Up to 15 MB can be read.');
+      const data = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(',')[1] || '');
+        r.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+        r.readAsDataURL(file);
+      });
+      const made = await api.importPlayPdf({ sport_id: sport.id, file: data, name: file.name });
+      const notes = [
+        `Brought in "${made.play.name}" with ${made.steps} ${made.steps === 1 ? 'step' : 'steps'}.`,
+        made.left_out ? `${made.left_out} more ${made.left_out === 1 ? 'diagram was' : 'diagrams were'} left out: a play holds ${made.steps} steps.` : '',
+        made.unknown ? `${made.unknown} ${made.unknown === 1 ? 'drawing was' : 'drawings were'} not understood and left off.` : '',
+      ];
+      showUndo({ message: notes.filter(Boolean).join(' '), onUndo: () => {}, onExpire: () => {}, action: 'OK', seconds: 12 });
+      navigate(`/plays/${made.play.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setReading(false);
+      if (pdfInput.current) pdfInput.current.value = '';
+    }
+  };
+
   const create = async () => {
     if (!sport) return;
     try {
@@ -89,6 +122,14 @@ export default function Playbook() {
           <button className="btn" onClick={() => setFromCommunity(true)}>
             From a community
           </button>
+          {app.play_import && sportKind(sport?.name) === 'basketball' && (
+            <>
+              <input ref={pdfInput} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => importPdf(e.target.files?.[0])} />
+              <button className="btn" disabled={reading} onClick={() => pdfInput.current?.click()} title="Reads a play printed as a PDF by another play designer: a step for each diagram, with its players, lines and labels">
+                {reading ? 'Reading the PDF…' : 'Import a PDF'}
+              </button>
+            </>
+          )}
           <button className="btn primary" onClick={create}>
             + New play
           </button>

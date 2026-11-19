@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Play } from '../types';
 import { beatsOf, locate, ordinal, snapshot, timeline } from '../playAnimation';
-import { Apron, Court, Grain, LineShape, MarkShape, ShapeView, courtClass, courtHeight, isLine, isShape, viewBoxFor } from './PlayDiagram';
+import { Apron, Court, Grain, LineShape, MarkShape, ShapeView, Surface, courtClass, courtHeight, isLine, isShape, viewBoxOf } from './PlayDiagram';
 
 const SPEEDS = [0.5, 1, 2];
 
@@ -9,7 +9,7 @@ const SPEEDS = [0.5, 1, 2];
  * Plays a play: each step in turn, and within a step each group of movement in its order.
  * Players run their lines, the ball flies on passes, and the circle moves to whoever has it.
  */
-export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Play, 'frames' | 'court' | 'flipped' | 'theme'>; startFrame?: number }) {
+export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Play, 'frames' | 'court' | 'flipped' | 'upright' | 'theme'>; startFrame?: number }) {
   const { segments, total } = useMemo(() => timeline(play, startFrame), [play, startFrame]);
   const [ms, setMs] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -52,7 +52,8 @@ export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Pla
 
   return (
     <div className="anim">
-      <svg className={`play-svg anim-court ${courtClass(play.theme)}`} viewBox={viewBoxFor(h)} role="img" aria-label={`Animation, ${caption}`}>
+      <svg className={`play-svg anim-court ${courtClass(play.theme)}`} viewBox={viewBoxOf(play)} role="img" aria-label={`Animation, ${caption}`}>
+        <Surface play={play}>
         <Apron h={h} />
         <Court court={play.court} flipped={play.flipped} />
         {play.theme === 'wood' && <Grain h={h} />}
@@ -71,6 +72,7 @@ export default function PlayAnimation({ play, startFrame = 0 }: { play: Pick<Pla
         {shot.flying.map((p, i) => (
           <MarkShape key={`fly${i}`} mark={{ id: `fly${i}`, type: 'ball', x: p[0], y: p[1], label: '' }} court={play.court} />
         ))}
+        </Surface>
       </svg>
 
       <div className="anim-bar">

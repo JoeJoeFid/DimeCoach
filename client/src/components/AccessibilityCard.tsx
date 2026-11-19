@@ -34,3 +34,36 @@ export default function AccessibilityCard({ settings, run }: { settings: AdminSe
     </div>
   );
 }
+
+/** Who may bring a play in from another play designer's PDF: only the system administrator, or everyone. */
+export function PlayImportCard({ settings, run }: { settings: AdminSettings; run: (fn: () => Promise<unknown>, done?: string) => void }) {
+  const app = useApp();
+  return (
+    <div className="card">
+      <h2>Play import</h2>
+      <label className="check setting">
+        <input
+          type="checkbox"
+          checked={settings.play_import}
+          onChange={(e) =>
+            run(
+              async () => {
+                await api.adminSetSettings({ play_import: e.target.checked });
+                await app.reload();
+              },
+              e.target.checked ? 'Everyone can now bring in a play from a PDF.' : 'Bringing in a play from a PDF is back to you alone.',
+            )
+          }
+        />
+        <span>
+          <strong>Everyone can import a play from a PDF</strong>
+          <span className="muted small">
+            {' '}
+            Adds "Import a PDF" to the basketball playbook. It reads the sheet another play designer prints, and makes a play with a step for each
+            diagram. With this off, only you see it.
+          </span>
+        </span>
+      </label>
+    </div>
+  );
+}

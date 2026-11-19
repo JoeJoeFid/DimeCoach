@@ -12,7 +12,9 @@ const KINDS: [FamilyKind, string][] = [
   ['friend', 'Friends'],
 ];
 const SECTIONS: [FamilySection, string, string][] = [
-  ['schedule', 'Schedule', 'Practices, games and events, with their times and places.'],
+  ['schedule', 'Schedule', 'Practices, games and events on their days.'],
+  ['games', 'Game details', 'The time, place and opponent of each game. Without this a game shows only as a game on its day. Needs the schedule.'],
+  ['practices', 'Practice summaries', 'What each practice covers: its parts and how long each runs. Never your coach notes. Needs the schedule.'],
   ['news', 'Announcements', 'What the coaches post for the people around the team.'],
   ['board', 'Message board', 'Reading it and writing on it.'],
   ['homework', 'Homework', 'Sheets set for the whole team, and for their own players.'],

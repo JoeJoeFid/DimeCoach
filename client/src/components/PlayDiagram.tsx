@@ -1,6 +1,6 @@
 // Drawing a play: the court, and the shapes, lines and marks on it. Everything is in feet, so the
 // same drawing scales to a thumbnail, the editor or a printed sheet.
-import type { CSSProperties, ReactNode } from 'react';
+import { createContext, useContext, type CSSProperties, type ReactNode, type Ref } from 'react';
 import type { Play, PlayFrame, PlayLine, PlayMark, PlayObject, PlayShape } from '../types';
 import { DIAMONDS, GRIDIRONS, METER, VOLLEY_COURTS, VOLLEY_LEFT, YARD, isDiamond, isGridiron, isVolley } from '../sports';
 
@@ -16,6 +16,34 @@ export const VIEW_PAD = PAD;
 export const OUT = 4.5;
 /** The part of the drawing that is shown: the court, a sliver at each side, and the room past each baseline. */
 export const viewBoxFor = (h: number) => `${-PAD} ${-OUT} ${COURT.width + PAD * 2} ${h + OUT * 2}`;
+/** A basketball court is seen sideways, baskets left and right, unless the play asks to be seen up and down. */
+export const isSideways = (play: Pick<Play, 'court' | 'upright'>) => (play.court === 'half' || play.court === 'full') && !play.upright;
+/** The part of the drawing that is shown for a play, whichever way its court is turned. */
+export const viewBoxOf = (play: Pick<Play, 'court' | 'upright'>) => {
+  const h = courtHeight(play.court);
+  return isSideways(play) ? `${-OUT} ${-PAD} ${h + OUT * 2} ${COURT.width + PAD * 2}` : viewBoxFor(h);
+};
+const Sideways = createContext(false);
+/**
+ * Everything drawn for a play goes inside this. A court seen sideways is the same drawing turned a
+ * quarter turn, so nothing about where things are changes. Letters and numbers are turned back by
+ * whatever draws them, so they still read left to right.
+ */
+export function Surface({ play, children, gRef }: { play: Pick<Play, 'court' | 'upright'>; children: ReactNode; /** For turning a place on the screen into a place on the court. */ gRef?: Ref<SVGGElement> }) {
+  const sideways = isSideways(play);
+  return (
+    <Sideways.Provider value={sideways}>
+      <g ref={gRef} transform={sideways ? `translate(0 ${COURT.width}) rotate(-90)` : undefined}>
+        {children}
+      </g>
+    </Sideways.Provider>
+  );
+}
+/** Turns lettering at a spot back upright on a court that is seen sideways. */
+export const useUpright = () => {
+  const sideways = useContext(Sideways);
+  return (x: number, y: number) => (sideways ? `rotate(90 ${x} ${y})` : undefined);
+};
 /** The class that colors the court for a play's chosen look. */
 export const courtClass = (theme?: string) => (theme === 'wood' ? 'court-wood' : theme === 'dark' ? 'court-dark' : '');
 export const MARK_R = 1.5;
@@ -501,17 +529,18 @@ export function Ball({ court, r = 0.8 }: { court?: Play['court']; r?: number }) 
 
 export function MarkShape({ mark, selected, court }: { mark: PlayMark; selected?: boolean; /** The surface, which says what kind of ball this sport plays with. */ court?: Play['court'] }) {
   const cls = `play-mark ${mark.type} ${mark.hasBall ? 'has-ball' : ''} ${selected ? 'selected' : ''}`;
+  const turn = useUpright()(mark.x, mark.y);
   if (mark.type === 'ball')
     return (
-      <g className={cls} transform={`translate(${mark.x} ${mark.y})`}>
+      <g className={cls} transform={`translate(${mark.x} ${mark.y})${turn ? ' rotate(90)' : ''}`}>
         <Ball court={court} />
       </g>
     );
-  if (mark.type === 'cone') return <path className={cls} d={`M ${mark.x} ${mark.y - 1} L ${mark.x + 0.9} ${mark.y + 0.8} L ${mark.x - 0.9} ${mark.y + 0.8} Z`} />;
+  if (mark.type === 'cone') return <path className={cls} transform={turn} d={`M ${mark.x} ${mark.y - 1} L ${mark.x + 0.9} ${mark.y + 0.8} L ${mark.x - 0.9} ${mark.y + 0.8} Z`} />;
   if (mark.type === 'text') {
     const box = textBox(mark);
     return (
-      <g className={cls}>
+      <g className={cls} transform={turn}>
         {/* The label's box: what is grabbed to move it, and outlined while it is selected. */}
         <rect className="text-box" x={mark.x - box.width / 2 - 0.5} y={mark.y - box.height / 2 - 0.25} width={box.width + 1} height={box.height + 0.5} rx={0.4} />
         <text x={mark.x} y={mark.y - box.height / 2 + box.lineHeight / 2} textAnchor="middle" dominantBaseline="central" style={textStyle(mark)}>
@@ -530,7 +559,7 @@ export function MarkShape({ mark, selected, court }: { mark: PlayMark; selected?
     <g className={cls} style={style}>
       {/* Only the player with the ball is circled. Everyone else is a bare label, with an invisible disc so it is easy to grab. */}
       <circle cx={mark.x} cy={mark.y} r={MARK_R} className={mark.hasBall ? 'ring' : 'grab'} />
-      <text x={mark.x} y={mark.y} textAnchor="middle" dominantBaseline="central">
+      <text x={mark.x} y={mark.y} textAnchor="middle" dominantBaseline="central" transform={turn}>
         {mark.label}
       </text>
     </g>
@@ -538,22 +567,24 @@ export function MarkShape({ mark, selected, court }: { mark: PlayMark; selected?
 }
 
 /** A finished, non-interactive drawing of one step. Shapes sit under the lines, and marks on top. */
-export function PlayDiagram({ play, frame, className = '' }: { play: Pick<Play, 'court' | 'flipped' | 'theme'>; frame: PlayFrame; className?: string }) {
+export function PlayDiagram({ play, frame, className = '' }: { play: Pick<Play, 'court' | 'flipped' | 'upright' | 'theme'>; frame: PlayFrame; className?: string }) {
   const h = courtHeight(play.court);
   return (
-    <svg className={`play-svg ${courtClass(play.theme)} ${className}`} viewBox={viewBoxFor(h)} role="img" aria-label={frame.note || 'Play diagram'}>
-      <Apron h={h} />
-      <Court court={play.court} flipped={play.flipped} />
-      {play.theme === 'wood' && <Grain h={h} />}
-      {frame.objects.filter(isShape).map((o) => (
-        <ShapeView key={o.id} shape={o} />
-      ))}
-      {frame.objects.filter(isLine).map((o) => (
-        <LineShape key={o.id} line={o} objects={frame.objects} />
-      ))}
-      {frame.objects.filter(isMark).map((o) => (
-        <MarkShape key={o.id} mark={o} court={play.court} />
-      ))}
+    <svg className={`play-svg ${courtClass(play.theme)} ${className}`} viewBox={viewBoxOf(play)} role="img" aria-label={frame.note || 'Play diagram'}>
+      <Surface play={play}>
+        <Apron h={h} />
+        <Court court={play.court} flipped={play.flipped} />
+        {play.theme === 'wood' && <Grain h={h} />}
+        {frame.objects.filter(isShape).map((o) => (
+          <ShapeView key={o.id} shape={o} />
+        ))}
+        {frame.objects.filter(isLine).map((o) => (
+          <LineShape key={o.id} line={o} objects={frame.objects} />
+        ))}
+        {frame.objects.filter(isMark).map((o) => (
+          <MarkShape key={o.id} mark={o} court={play.court} />
+        ))}
+      </Surface>
     </svg>
   );
 }
@@ -561,7 +592,8 @@ export function PlayDiagram({ play, frame, className = '' }: { play: Pick<Play, 
 /** Every step of a play side by side, each with its number and note. Used on printed sheets and previews. */
 export function PlaySteps({ play, columns, only }: { play: Play; columns?: number; /** Step numbers to show, counting from 1. Left out, every step is shown. */ only?: Set<number> }) {
   const shown = play.frames.map((f, i) => ({ f, i })).filter(({ i }) => !only || only.has(i + 1));
-  const cols = columns ?? Math.min(play.frames.length, play.court === 'full' ? 4 : 3);
+  // A full court seen sideways is wide, so fewer fit across.
+  const cols = columns ?? Math.min(play.frames.length, play.court === 'full' ? (isSideways(play) ? 2 : 4) : 3);
   return (
     <div className="play-steps" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, cols)}, minmax(0, 1fr))`, gap: '10px' }}>
       {shown.map(({ f, i }) => (

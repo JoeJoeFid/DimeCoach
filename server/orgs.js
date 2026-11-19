@@ -307,8 +307,8 @@ export function keepWork(userId, team, communityName) {
     if (have) return have;
     const id = lastId(
       run(
-        'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, notes, frames_json, attachments_json) VALUES (?,?,?,?,?,?,?,?,?,?)',
-        home, sportId, p.name, p.category, p.labels_json, p.court, p.flipped ? 1 : 0, p.notes, p.frames_json, JSON.stringify({ images: [], videos: [], links: linksOnly(p.attachments_json) }),
+        'INSERT INTO plays (owner_id, sport_id, name, category, labels_json, court, flipped, upright, notes, frames_json, attachments_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        home, sportId, p.name, p.category, p.labels_json, p.court, p.flipped ? 1 : 0, p.upright ? 1 : 0, p.notes, p.frames_json, JSON.stringify({ images: [], videos: [], links: linksOnly(p.attachments_json) }),
       ),
     );
     remember('play', p.id, id);

@@ -140,6 +140,8 @@ export interface Play {
   theme?: '' | 'wood' | 'dark';
   /** Half court only: true when the basket is drawn at the bottom. */
   flipped: boolean;
+  /** Basketball only: true when the court is seen up and down. Otherwise it is seen sideways, baskets left and right. */
+  upright?: boolean;
   notes: string;
   frames: PlayFrame[];
   images: ItemImage[];
