@@ -75,6 +75,8 @@ const ICON = {
   megaphone: 'M4 10v4h3l8 4V6l-8 4zM18 9.500a3.500 3.500 0 0 1 0 5M7.500 14l1 5h2.500l-1-4',
   log: 'M6 4h12v16H6zM9 8h6M9 12h6M9 16h3',
   talk: 'M4 5h16v11H10l-4 3.500V16H4z',
+  talks: 'M3 4h12v8H8l-3 2.500V12H3zM18 9h3v8h-2v2.500L16 17h-5v-2',
+  shared: 'M12 3v11M8 7l4-4 4 4M5 12v7h14v-7M9 16.500h6',
   library: 'M12 4 3.500 8.500 12 13l8.500-4.500zM3.500 12.500 12 17l8.500-4.500M3.500 16.500 12 21l8.500-4.500',
   people: 'M9 11a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM2.500 20c.600-3.600 3.200-5.500 6.500-5.500s5.900 1.900 6.500 5.500M16 4.300a3.500 3.500 0 0 1 0 6.400M18 14.900c1.900.700 3.100 2.400 3.500 5.100',
   settings: 'M12 15.500a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM12 3v2.500M12 18.500V21M3 12h2.500M18.500 12H21M5.600 5.600l1.800 1.800M16.600 16.600l1.800 1.800M5.600 18.400l1.800-1.800M16.600 7.400l1.800-1.800',
@@ -1847,7 +1849,12 @@ function CommunityHome({
       <div className="cx-cols">
         <section className="card cx-card">
           <div className="cx-card-head">
-            <h2>{mine.length && sport ? `Shared for ${sport.name.toLowerCase()} coaches` : 'Shared by members'}</h2>
+            <h2 className="cx-card-title">
+              <span className="cx-head-icon for-shared" aria-hidden="true">
+                <Svg d={ICON.shared} size={18} />
+              </span>
+              {mine.length && sport ? `Shared for ${sport.name.toLowerCase()} coaches` : 'Shared by members'}
+            </h2>
             <button type="button" className="link" onClick={() => onOpen('library')}>
               Open library →
             </button>
@@ -1878,7 +1885,12 @@ function CommunityHome({
         <div className="cx-stack">
           <section className="card cx-card">
             <div className="cx-card-head">
-              <h2>Conversations worth joining</h2>
+              <h2 className="cx-card-title">
+                <span className="cx-head-icon for-talks" aria-hidden="true">
+                  <Svg d={ICON.talks} size={18} />
+                </span>
+                Conversations worth joining
+              </h2>
               <button type="button" className="link" onClick={() => onOpen('discussions')}>
                 See discussions →
               </button>

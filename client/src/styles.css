@@ -15870,3 +15870,24 @@ a.cx-row:hover .cx-row-text strong {
   justify-self: start;
   font-size: 0.76rem;
 }
+
+/* A small picture beside the heading of a box on a community's home page. */
+.cx-card-head:has(.cx-head-icon) {
+  align-items: center;
+}
+.cx-head-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+.cx-head-icon.for-shared {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.cx-head-icon.for-talks {
+  background: var(--series);
+  color: var(--surface);
+}
