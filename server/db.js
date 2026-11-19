@@ -351,6 +351,8 @@ addColumn('community_members', 'perms_json', "TEXT DEFAULT '{}'");
 addColumn('communities', 'image', "TEXT DEFAULT ''");
 // When each member last looked at a community, so what has arrived since can be pointed out.
 addColumn('community_members', 'seen_at', 'TEXT');
+// Whether ordinary members may see who else is in a community. Off until those who run it turn it on.
+addColumn('communities', 'show_members', 'INTEGER DEFAULT 0');
 
 // Messages the app itself sends a person: added to a team, removed from a community, and so on.
 // `ref` names what a message is about, so a newer one of the same kind replaces an unread older one.

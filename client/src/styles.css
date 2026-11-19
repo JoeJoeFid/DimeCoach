@@ -15555,26 +15555,70 @@ button.ov-meter:hover {
 
 /* Whether the season is taking sign-ups, under the two figures on the overview. */
 .ov-signups {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
   padding: 14px 16px;
 }
 .ov-signups.open {
+  border-color: var(--good);
   background: var(--ok-soft);
+}
+/* A padlock, undone and green while sign-ups are open, shut and red while they are closed. */
+.ov-signups-sign {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.ov-signups.open .ov-signups-sign {
+  background: var(--good);
+  color: var(--surface);
+}
+.ov-signups-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.ov-signups-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.ov-signups-state i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.ov-signups.open .ov-signups-state i {
+  background: var(--good);
+  box-shadow: 0 0 0 3px var(--surface);
 }
 .ov-signups strong {
   font-size: 0.92rem;
+  line-height: 1.25;
 }
 .ov-signups small {
+  grid-column: 1 / -1;
   font-size: 0.78rem;
 }
 .ov-signups-acts {
   display: flex;
   flex-wrap: wrap;
+  grid-column: 1 / -1;
   align-items: center;
   gap: 6px 14px;
-  margin-top: 6px;
 }
 
 /* A team's page for its parents, family and friends. */

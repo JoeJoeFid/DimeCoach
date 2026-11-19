@@ -51,7 +51,7 @@ const ICONS = {
   group: 'M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19M10 10.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM20 19v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.65a3 3 0 0 1 0 5.7',
   shuffle: 'M4 7h3c2 0 3.300 1 4.300 2.500l1.400 5c1 1.500 2.300 2.500 4.300 2.500h3M4 17h3c1.300 0 2.300-.500 3.100-1.300M13.900 8.300c.800-.800 1.800-1.300 3.100-1.300h3M17.500 4.500 20 7l-2.500 2.500M17.500 14.500 20 17l-2.500 2.500',
   person: 'M12 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM5 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1',
-  bolt: 'M13 3 5 14h6l-1 7 8-11h-6z',
+  forward: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12h8M13 8.5l3.5 3.5-3.5 3.5',
   check: 'm5 12.500 4.500 4.500L19 7.500',
   down: 'm6 9 6 6 6-6',
   arrow: 'M5 12h14M13 6l6 6-6 6',
@@ -883,7 +883,7 @@ export function OrgTeams({ c, org, act, fail, say, focus, toPlayers }: OrgPanelP
               <section className="card cx-card sd-next" aria-label="Recommended next actions">
                 <div className="sd-next-head">
                   <span className="sd-sign" aria-hidden="true">
-                    <Icon d={ICONS.bolt} size={18} />
+                    <Icon d={ICONS.forward} size={18} />
                   </span>
                   <h2>Recommended next actions</h2>
                 </div>

@@ -276,6 +276,8 @@ export default function CommunityPage() {
   const orgProps = org ? { c, org, act: actOrg, fail, say: (m: string) => (setError(''), setNotice(m)) } : null;
   const kinds = KINDS.filter((k) => sharesKind(c, k));
   const active = c.people.filter((p) => p.status === 'active');
+  // Who is in the community is for those who run it, unless they have opened it to every member.
+  const seesMembers = c.role !== 'member' || c.show_members;
   const approved = (shares || []).filter((s) => s.status === 'approved');
   const roleOf = (userId: number) => active.find((p) => p.id === userId)?.role;
   const startShare = () => {
@@ -310,7 +312,7 @@ export default function CommunityPage() {
   ];
   // The management side is for those who help run an organization.
   const managing = isOrg && c.role !== 'member';
-  const at: Tab = COMMUNITY_TABS.includes(tab) || managing || tab === 'settings' || (tab === 'announcements' && isOrg) ? tab : 'home';
+  const at: Tab = (COMMUNITY_TABS.includes(tab) && (tab !== 'members' || seesMembers)) || managing || tab === 'settings' || (tab === 'announcements' && isOrg) ? tab : 'home';
   const side = managing && !COMMUNITY_TABS.includes(at) ? 'manage' : 'community';
   const tabs: [Tab, string, number][] =
     side === 'manage'
@@ -326,7 +328,7 @@ export default function CommunityPage() {
           ['home', 'Home', 0],
           ['library', 'Library', c.pending_shares],
           ['discussions', 'Discussions', 0],
-          ['members', 'Members', 0],
+          ...(seesMembers ? [['members', 'Members', 0] as [Tab, string, number]] : []),
         ];
   const onTab = (t: Tab) => t === at || (t === 'more' && side === 'manage' && MORE_TABS.includes(at));
   const open = (t: Tab) => {
@@ -379,7 +381,7 @@ export default function CommunityPage() {
         <div className="cx-top-name">
           <h1>{c.name}</h1>
           <span className="muted small">
-            {isOrg ? 'Organization' : 'Community'} · {plural(active.length, 'member')}
+            {isOrg ? 'Organization' : 'Community'} · {plural(c.members, 'member')}
           </span>
         </div>
         {managing && (
@@ -480,7 +482,7 @@ export default function CommunityPage() {
           admin={may.approve}
           shares={shares}
           posts={everyPost}
-          active={active}
+          active={seesMembers ? active : []}
           onShare={startShare}
           onPreview={setPreview}
           onCopy={copy}
@@ -595,7 +597,7 @@ export default function CommunityPage() {
                 <button
                   className="btn danger"
                   onClick={async () => {
-                    const others = active.length - 1;
+                    const others = c.members - 1;
                     if (
                       !(await confirmDialog({
                         title: `Delete ${c.name}?`,
@@ -1540,24 +1542,26 @@ function Library({
               </ul>
             )}
           </RailCard>
-          <RailCard
-            icon={ICON.people}
-            title={
-              <>
-                People <span className="muted">({active.length})</span>
-              </>
-            }
-          >
-            <ul className="cm-members">
-              {active.slice(0, 8).map((p) => (
-                <li key={p.id}>
-                  <Avatar name={p.name} />
-                  <span>{p.name}</span>
-                  <RoleBadge role={p.role} />
-                </li>
-              ))}
-            </ul>
-          </RailCard>
+          {active.length > 0 && (
+            <RailCard
+              icon={ICON.people}
+              title={
+                <>
+                  People <span className="muted">({active.length})</span>
+                </>
+              }
+            >
+              <ul className="cm-members">
+                {active.slice(0, 8).map((p) => (
+                  <li key={p.id}>
+                    <Avatar name={p.name} />
+                    <span>{p.name}</span>
+                    <RoleBadge role={p.role} />
+                  </li>
+                ))}
+              </ul>
+            </RailCard>
+          )}
         </aside>
       </div>
     </div>
@@ -1697,7 +1701,7 @@ function Invite({ c, run }: { c: CommunityDetail; run: (fn: () => Promise<unknow
 function Settings({ c, run }: { c: CommunityDetail; run: (fn: () => Promise<unknown>, done?: string) => Promise<boolean> }) {
   const [name, setName] = useState(c.name);
   const [description, setDescription] = useState(c.description);
-  const flag = (key: 'share_drills' | 'share_plays' | 'share_plans' | 'require_approval', label: string, hint: string) => (
+  const flag = (key: 'share_drills' | 'share_plays' | 'share_plans' | 'require_approval' | 'show_members', label: string, hint: string) => (
     <label className="check setting">
       <input type="checkbox" checked={c[key]} onChange={(e) => run(() => api.updateCommunity(c.id, { [key]: e.target.checked }))} />
       <span>
@@ -1779,6 +1783,12 @@ function Settings({ c, run }: { c: CommunityDetail; run: (fn: () => Promise<unkn
         <h2>Approval</h2>
         <div className="settings-list">
           {flag('require_approval', 'An admin approves each shared item', 'before other members can see it. Admins\' own shares go straight in.')}
+        </div>
+      </div>
+      <div className="card">
+        <h2>Members</h2>
+        <div className="settings-list">
+          {flag('show_members', 'Members can see who else is here', 'on a "Members" page. When this is off, only the people who run it see the list.')}
         </div>
       </div>
     </>

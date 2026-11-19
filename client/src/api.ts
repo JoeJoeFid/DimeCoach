@@ -204,6 +204,8 @@ export interface Community {
   share_plays: boolean;
   share_plans: boolean;
   require_approval: boolean;
+  /** Whether ordinary members may see who else is in it. Those who run it always can. */
+  show_members: boolean;
   /** The caller's place in it. */
   role: 'creator' | 'admin' | 'member';
   status: 'active' | 'invited';
@@ -759,7 +761,7 @@ export const api = {
   createCommunity: (b: { name: string; description: string }) => req<CommunityDetail>('POST', '/communities', b),
   joinCommunity: (code: string) => req<Community>('POST', '/communities/join', { code }),
   community: (id: number) => req<CommunityDetail>('GET', `/communities/${id}`),
-  updateCommunity: (id: number, b: Partial<Pick<Community, 'name' | 'description' | 'share_drills' | 'share_plays' | 'share_plans' | 'require_approval' | 'image'>>) =>
+  updateCommunity: (id: number, b: Partial<Pick<Community, 'name' | 'description' | 'share_drills' | 'share_plays' | 'share_plans' | 'require_approval' | 'show_members' | 'image'>>) =>
     req<CommunityDetail>('PUT', `/communities/${id}`, b),
   /** `confirm` is the community's name, typed out. */
   deleteCommunity: (id: number, confirm: string) => req<{ ok: true }>('DELETE', `/communities/${id}`, { confirm }),

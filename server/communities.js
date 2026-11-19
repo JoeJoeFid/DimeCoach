@@ -210,7 +210,7 @@ const pokeMembers = (communityId, exceptUserId) =>
 export function mountCommunities(app) {
   const communityOut = (c, m) => ({
     id: c.id, name: c.name, description: c.description,
-    share_drills: !!c.share_drills, share_plays: !!c.share_plays, share_plans: !!c.share_plans, require_approval: !!c.require_approval,
+    share_drills: !!c.share_drills, share_plays: !!c.share_plays, share_plans: !!c.share_plans, require_approval: !!c.require_approval, show_members: !!c.show_members,
     role: m.role, status: m.status, image: c.image || '', can: permsOf(m),
     ...orgSummary(c),
     members: get("SELECT COUNT(*) AS n FROM community_members WHERE community_id=? AND status='active'", c.id).n,
@@ -218,6 +218,9 @@ export function mountCommunities(app) {
   });
   const detailOut = (c, m) => {
     const admin = can(m, 'people');
+    // Ordinary members see who else is here only once that is turned on. Until then they are given
+    // themselves and the people who run the community, so they know who to ask.
+    const sees = m.role !== 'member' || !!c.show_members;
     return {
       ...communityOut(c, m),
       // The join code and people's email addresses are for those who manage the people.
@@ -228,6 +231,7 @@ export function mountCommunities(app) {
         c.id,
       )
         .filter((p) => admin || p.status === 'active')
+        .filter((p) => sees || p.role !== 'member' || p.id === m.user_id)
         .map((p) => ({ id: p.id, name: p.name, email: admin ? p.email : undefined, role: p.role, status: p.status, perms: permsOf(p) })),
       pending_shares: can(m, 'approve') ? get("SELECT COUNT(*) AS n FROM community_shares WHERE community_id=? AND status='pending'", c.id).n : 0,
     };
@@ -338,9 +342,9 @@ export function mountCommunities(app) {
         return res.status(400).json({ error: 'That picture could not be used. Choose a JPG, PNG or WebP image.' });
     }
     run(
-      'UPDATE communities SET name=?, description=?, share_drills=?, share_plays=?, share_plans=?, require_approval=?, image=? WHERE id=?',
+      'UPDATE communities SET name=?, description=?, share_drills=?, share_plays=?, share_plans=?, require_approval=?, show_members=?, image=? WHERE id=?',
       name, b.description === undefined ? at.c.description : str(b.description, 600).trim(),
-      flag('share_drills'), flag('share_plays'), flag('share_plans'), flag('require_approval'), image, at.c.id,
+      flag('share_drills'), flag('share_plays'), flag('share_plans'), flag('require_approval'), flag('show_members'), image, at.c.id,
     );
     // Turning approval off lets everything waiting through.
     if (b.require_approval === false) run("UPDATE community_shares SET status='approved' WHERE community_id=?", at.c.id);

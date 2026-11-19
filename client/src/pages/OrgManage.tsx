@@ -466,10 +466,22 @@ export function ManageOverview({ c, org, act, fail, go }: OrgPanelProps & { go: 
             </button>
           </section>
           {season && form && org.can.leagues && (
-            <section className={`card ov-signups ${form.open ? 'open' : ''}`} aria-label="Sign-ups">
-              <strong>
-                Sign-ups for {season.name} are {form.open ? 'open' : 'closed'}.
-              </strong>
+            <section className={`card ov-signups ${form.open ? 'open' : 'closed'}`} aria-label="Sign-ups">
+              <span className="ov-signups-sign" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="5" y="11" width="14" height="9" rx="2" />
+                  <path d={form.open ? 'M8 11V7a4 4 0 0 1 7.5-2' : 'M8 11V7a4 4 0 0 1 8 0v4'} />
+                </svg>
+              </span>
+              <span className="ov-signups-head">
+                <span className="ov-signups-state">
+                  <i aria-hidden="true" />
+                  {form.open ? 'Open' : 'Closed'}
+                </span>
+                <strong>
+                  Sign-ups for {season.name} are {form.open ? 'open' : 'closed'}.
+                </strong>
+              </span>
               <small className="muted">{form.open ? `${plural(signups?.length ?? 0, 'player')} signed up so far. Anyone with the link can sign a player up.` : 'Parents cannot sign players up until the form is opened.'}</small>
               <span className="ov-signups-acts">
                 {form.open && form.code && <CopyButton text={`${window.location.origin}/signup/${form.code}`} label="Copy link" />}
