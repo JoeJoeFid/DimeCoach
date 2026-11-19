@@ -142,7 +142,7 @@ function ToPeople({ what, st, isFile, teamId, act }: { what: ShareWhat; st: Item
           </label>
           <p className="muted small">
             {joined ? `${plural(joined, 'person')} on the team's list ${joined === 1 ? 'has' : 'have'} an account.` : 'Nobody on the team’s list has an account yet.'} Who sees the {PART[kind]} is set under{' '}
-            <Link to="/teams?tab=family">Team &amp; roster, Parents &amp; family</Link>.
+            <Link to="/teams?tab=family">Team, Parents &amp; family</Link>.
           </p>
         </div>
       )}

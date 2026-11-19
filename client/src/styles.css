@@ -16367,3 +16367,37 @@ button.play-card {
   transform: translateY(-50%);
   box-shadow: none;
 }
+
+/* The top of the system page's People tab: the figures at a glance on one half, adding a person on the other. */
+.sys-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+.sys-top > .card {
+  margin: 0;
+  height: 100%;
+}
+.sys-glance .sys-tiles {
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+}
+.sys-glance .sys-tile {
+  background: var(--surface-2);
+  box-shadow: none;
+  padding: 10px 12px;
+}
+.sys-glance .sys-tile .value {
+  font-size: 1.3rem;
+}
+.sys-glance .disk-stat {
+  grid-column: span 2;
+}
+@media (max-width: 1100px) {
+  .sys-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

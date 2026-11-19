@@ -409,7 +409,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     <div className={`page ${calendar ? '' : 'plans-page'}`}>
       <div className="page-head ps-head">
         <div>
-          <PageTitle>{kind === 'practice' ? 'Practice schedule' : 'Homework'}</PageTitle>
+          <PageTitle>{kind === 'practice' ? 'Schedule' : 'Homework'}</PageTitle>
         </div>
         <div className="head-actions">
           {!calendar && months.length > 1 && (

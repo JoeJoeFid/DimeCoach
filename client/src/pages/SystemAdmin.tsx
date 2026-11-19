@@ -286,6 +286,9 @@ export default function SystemAdmin() {
           </nav>
           {tab === 'people' && (
             <>
+          <div className="sys-top">
+          <div className="card sys-glance">
+            <h2>At a glance</h2>
           <div className="sys-tiles">
             <div className="sys-tile">
               <div className="value">{users.length}</div>
@@ -342,11 +345,8 @@ export default function SystemAdmin() {
               <div className="label">At their cap</div>
             </div>
           </div>
-
-          <h2 className="sys-section" id="people">
-            People
-          </h2>
-          <div className="card">
+          </div>
+          <div className="card sys-add">
             <h2>Add a person</h2>
             <div className="seg add-how" role="group" aria-label="How to add them">
               <button type="button" className={inviting ? 'on' : ''} aria-pressed={inviting} disabled={!canEmail} onClick={() => setAdding('invite')}>
@@ -406,6 +406,10 @@ export default function SystemAdmin() {
               <button className="btn primary">{inviting ? 'Send invitation' : 'Create account'}</button>
             </form>
           </div>
+          </div>
+          <h2 className="sys-section" id="people">
+            People
+          </h2>
           <div className="card">
             <div className="card-head">
               <h2>

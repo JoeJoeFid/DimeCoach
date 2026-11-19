@@ -86,7 +86,7 @@ export default function Teams() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Team &amp; roster</PageTitle>
+          <PageTitle>Team</PageTitle>
           <p className="muted">This team's details, who helps coach it, its schedule link and its players. To work on another team, use "Switch team" at the top of the menu.</p>
         </div>
       </div>

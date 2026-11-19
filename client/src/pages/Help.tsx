@@ -21,12 +21,12 @@ const TOPICS: Topic[] = [
     group: 'Getting started',
     title: 'Set up your team and roster',
     steps: [
-      'Open "Team & roster" in the menu.',
+      'Open "Team" in the menu.',
       'On "Team info & roster", fill in the team name and season.',
       'Press "Add player" for each player, or "Upload roster (CSV or Excel)" to bring in a whole list at once.',
     ],
     tip: 'To add another team, press "Switch team" at the top of the menu, then "+ New team".',
-    go: ['/teams', 'Team & roster'],
+    go: ['/teams', 'Team'],
     words: 'players kids names numbers spreadsheet new team create',
   },
   {
@@ -102,7 +102,7 @@ const TOPICS: Topic[] = [
     group: 'Parents and family',
     title: 'Give parents, family and friends a page for the team',
     steps: [
-      'Open "Team & roster", then "Parents & family".',
+      'Open "Team", then "Parents & family".',
       'Add each person with their email address, say whether they are a parent, family or a friend, and link parents to their players. Leave "invite" ticked.',
       'They get an email with a link for making an account. With it they open a page for the team, and nothing else.',
       'Under "Who sees what", tick the parts of the page each kind of person gets: the schedule, announcements, the message board, homework, the playbook, resources and the roster.',
@@ -121,8 +121,8 @@ const TOPICS: Topic[] = [
   {
     group: 'Practices',
     title: 'Pull games and practices in from your team calendar',
-    steps: ['Open "Team & roster" and go to "Schedule integration".', 'Paste the calendar link from your scheduling app and save.', 'Events from that calendar now appear on your schedule, ready to be planned.'],
-    go: ['/teams', 'Team & roster'],
+    steps: ['Open "Team" and go to "Schedule integration".', 'Paste the calendar link from your scheduling app and save.', 'Events from that calendar now appear on your schedule, ready to be planned.'],
+    go: ['/teams', 'Team'],
     words: 'gamechanger teamsnap ical sync link import schedule',
   },
   {
@@ -166,9 +166,9 @@ const TOPICS: Topic[] = [
   {
     group: 'Working with other coaches',
     title: 'Share a team with an assistant coach',
-    steps: ['Open "Team & roster" and go to "Coaches & helpers".', 'Add the coach by their email address.', 'Choose what they may change: practices, drills, plays, resources.'],
+    steps: ['Open "Team" and go to "Coaches & helpers".', 'Add the coach by their email address.', 'Choose what they may change: practices, drills, plays, resources.'],
     tip: 'Someone without a Dime Coach account is emailed an invitation, and joins the team once they have created one. Until then they are listed as "Invited", where you can send the invitation again or cancel it.',
-    go: ['/teams', 'Team & roster'],
+    go: ['/teams', 'Team'],
     words: 'invite helper staff permissions access collaborate add coach',
   },
   {

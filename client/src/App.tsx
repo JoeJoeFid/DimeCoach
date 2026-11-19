@@ -110,7 +110,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     // Occasional setup: who is on the team, and what gets tracked.
     title: 'Team',
     items: [
-      { to: '/teams', label: 'Team & roster', icon: icons.teams },
+      { to: '/teams', label: 'Team', icon: icons.teams },
       { to: '/tags', label: 'Categories', icon: icons.tags },
     ],
   },
