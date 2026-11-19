@@ -34,12 +34,12 @@ import {
   viewBoxOf,
 } from '../components/PlayDiagram';
 import PlayAnimation from '../components/PlayAnimation';
-import { ShareDialog } from '../components/community';
+import { ShareItemDialog, SharedWithBox } from '../components/ShareItem';
 import { beatsOf, describeLine, ordinal, sequenceOf, withOrder, withSequence, type SequenceItem } from '../playAnimation';
 import { END, HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, sources, syncEnds, targets, withEnd } from '../playLogic';
 import Attachments from '../components/Attachments';
 import PlayIntro from '../components/PlayIntro';
-import { Field, Modal } from '../components/bits';
+import { Field, Modal, ShareIcon } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater } from '../components/toasts';
 import { TAG_COLORS } from '../util';
@@ -185,6 +185,8 @@ export default function PlayEditor() {
   /** Two or more things selected together, by dragging an area or shift-clicking. Empty otherwise. */
   const [multi, setMulti] = useState<string[]>([]);
   const [sharing, setSharing] = useState(false);
+  /** Goes up each time the share box closes, so the list of where the play is shared is read again. */
+  const [shareVersion, setShareVersion] = useState(0);
   /** Whether the animated playback is open. */
   const [watching, setWatching] = useState(false);
   // On a phone the details are one line until asked for, so the court comes first.
@@ -972,8 +974,8 @@ export default function PlayEditor() {
             <button className="btn" onClick={duplicate}>
               Duplicate
             </button>
-            <button className="btn" onClick={() => setSharing(true)}>
-              Share
+            <button className="btn share-btn" onClick={() => setSharing(true)}>
+              <ShareIcon size={16} /> Share
             </button>
             <button className="btn" onClick={() => setWatching(true)} title="Watch the play move, step by step">
               ▶ Play animation
@@ -1446,10 +1448,19 @@ export default function PlayEditor() {
               onChange={(e) => update({ frames: play.frames.map((f, i) => (i === index ? { ...f, note: e.target.value } : f)) })}
             />
           </Field>
+          <SharedWithBox what={{ kind: 'play', id: play.id, title: play.name || 'Play' }} version={shareVersion} onShare={() => setSharing(true)} />
         </div>
       </div>
 
-      {sharing && <ShareDialog kind="play" itemId={play.id} title={play.name || 'Play'} onClose={() => setSharing(false)} />}
+      {sharing && (
+        <ShareItemDialog
+          what={{ kind: 'play', id: play.id, title: play.name || 'Play' }}
+          onClose={() => {
+            setSharing(false);
+            setShareVersion((v) => v + 1);
+          }}
+        />
+      )}
       {watching && (
         <Modal title={play.name || 'Play'} onClose={() => setWatching(false)} wide>
           <PlayAnimation play={play} />

@@ -616,6 +616,36 @@ export interface PlanSendState {
   result?: { mailed: number; messaged: number; failed: string[]; total: number };
 }
 /** A practice opened from a link. */
+/** The kinds of thing that are shared the same way: to coaches and the team, to communities, or by link. */
+export type ShareItemKind = 'drill' | 'play' | 'resource';
+/** One place a thing has been shared. */
+export interface SharedWithRow {
+  key: string;
+  type: 'team' | 'coach' | 'email' | 'community' | 'link';
+  label: string;
+  detail: string;
+}
+export interface ItemShareState {
+  /** Whether this site can send email. */
+  mail: boolean;
+  people: { id: number; name: string; where: string }[];
+  sent: { id: number; to: string; created_at: string }[];
+  /** The link anyone can open, for a drill or a play. */
+  link: { id: number; url: string } | null;
+  /** The caller's team, and whether this is on its page for parents, family and friends. `words` names who sees that part. */
+  team: { id: number; name: string; shared: boolean; sees: Record<FamilyKind, boolean>; words: string; joined: Record<FamilyKind, number> } | null;
+  with: SharedWithRow[];
+  result?: { mailed: number; messaged: number; failed: string[]; total: number };
+}
+/** A drill or a play someone sent by link. */
+export interface SharedItemPage {
+  kind: 'drill' | 'play';
+  title: string;
+  by: string;
+  sport: string;
+  note: string;
+  content: SharedDrill | SharedPlay;
+}
 export interface SharedPlanPage {
   title: string;
   noun: string;
@@ -639,7 +669,7 @@ export interface TeamContact {
   joined: boolean;
 }
 export type FamilyKind = TeamContact['kind'];
-export type FamilySection = 'schedule' | 'games' | 'practices' | 'news' | 'board' | 'homework' | 'playbook' | 'resources' | 'roster';
+export type FamilySection = 'schedule' | 'games' | 'practices' | 'news' | 'board' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
 /** Something written on a team's page: an announcement from a coach, or a message on the board. */
 export interface TeamPost {
   id: number;
@@ -654,10 +684,12 @@ export interface TeamPost {
 /** What a team's page shows its followers, as its coaches set it. */
 export interface FamilySettings {
   access: Record<FamilyKind, Record<FamilySection, boolean>>;
-  /** The plays and resources picked out for the followers. */
+  /** The plays, drills and resources picked out for the followers. */
   plays: number[];
+  drills: number[];
   resources: string[];
   all_plays: { id: number; name: string; category: string }[];
+  all_drills: { id: number; name: string }[];
   all_resources: { key: string; kind: 'link' | 'image' | 'video'; title: string; url: string }[];
   /** How many of each kind have an account. */
   joined: Record<FamilyKind, number>;
@@ -696,8 +728,9 @@ export interface FamilyTeam {
   board: TeamPost[];
   homework: { id: number; title: string; date: string; for: string[]; content: SharedPlan }[];
   plays: SharedPlay[];
+  drills: (SharedDrill & { id: number })[];
   resources: { key: string; kind: 'link' | 'image' | 'video'; title: string; url: string; file_id: number | null }[];
-  roster: { name: string; number: string; position: string }[];
+  roster: { name: string; number: string }[];
 }
 export interface TeamContacts {
   /** Whether this site can send email, and so invitations. */
@@ -793,6 +826,16 @@ export const api = {
   sendPlan: (planId: number, b: { user_ids: number[]; emails: string[]; note: string }) => req<PlanSendState>('POST', `/plans/${planId}/sends`, b),
   planSendLink: (planId: number) => req<PlanSendState>('POST', `/plans/${planId}/sends/link`, {}),
   removePlanSend: (planId: number, sendId: number) => req<PlanSendState>('DELETE', `/plans/${planId}/sends/${sendId}`),
+  itemShares: (kind: ShareItemKind, ref: string, teamId: number) => req<ItemShareState>('GET', `/shares/${kind}?ref=${encodeURIComponent(ref)}&team_id=${teamId}`),
+  shareWithTeam: (kind: ShareItemKind, ref: string, teamId: number, shared: boolean) => req<ItemShareState>('PUT', `/shares/${kind}/team`, { ref, team_id: teamId, shared }),
+  sendItem: (kind: ShareItemKind, ref: string, b: { team_id: number; user_ids: number[]; emails: string[]; note: string }) => req<ItemShareState>('POST', `/shares/${kind}/send`, { ref, ...b }),
+  itemShareLink: (kind: ShareItemKind, ref: string, teamId: number) => req<ItemShareState>('POST', `/shares/${kind}/link`, { ref, team_id: teamId }),
+  itemSharePosted: (kind: ShareItemKind, ref: string, communityId: number, teamId: number) => req<ItemShareState>('POST', `/shares/${kind}/posted`, { ref, community_id: communityId, team_id: teamId }),
+  removeItemSend: (kind: ShareItemKind, ref: string, sendId: number, teamId: number) => req<ItemShareState>('DELETE', `/shares/${kind}/sends/${sendId}?ref=${encodeURIComponent(ref)}&team_id=${teamId}`),
+  /** For each shared thing of a kind, the names of where it went, by its number or key. */
+  shareSummary: (kind: ShareItemKind) => req<Record<string, string[]>>('GET', `/shares/${kind}/summary`),
+  sharedItem: (token: string) => req<SharedItemPage>('GET', `/public/items/${encodeURIComponent(token)}`),
+  copySharedItem: (token: string, b: { team_id: number }) => req<{ kind: 'drill' | 'play'; id: number }>('POST', `/item-links/${encodeURIComponent(token)}/copy`, b),
   sharedPlan: (token: string) => req<SharedPlanPage>('GET', `/public/plans/${encodeURIComponent(token)}`),
   copySharedPlan: (token: string, b: { team_id: number; date: string }) => req<{ id: number }>('POST', `/plan-links/${encodeURIComponent(token)}/copy`, b),
   myShares: (kind: ShareKind, itemId: number) => req<MyShareState[]>('GET', `/community-shares/mine?kind=${kind}&item_id=${itemId}`),
@@ -930,7 +973,7 @@ export const api = {
   players: (teamId: number) => req<Player[]>('GET', `/teams/${teamId}/players`),
   teamContacts: (teamId: number) => req<TeamContacts>('GET', `/teams/${teamId}/contacts`),
   teamFamily: (teamId: number) => req<FamilySettings>('GET', `/teams/${teamId}/family`),
-  saveTeamFamily: (teamId: number, b: { access?: Partial<Record<FamilyKind, Partial<Record<FamilySection, boolean>>>>; plays?: number[]; resources?: string[] }) => req<FamilySettings>('PUT', `/teams/${teamId}/family`, b),
+  saveTeamFamily: (teamId: number, b: { access?: Partial<Record<FamilyKind, Partial<Record<FamilySection, boolean>>>>; plays?: number[]; drills?: number[]; resources?: string[] }) => req<FamilySettings>('PUT', `/teams/${teamId}/family`, b),
   teamFamilyPost: (teamId: number, b: { kind: 'news' | 'board'; title: string; body: string }) => req<FamilySettings>('POST', `/teams/${teamId}/family/posts`, b),
   deleteTeamFamilyPost: (teamId: number, postId: number) => req<FamilySettings>('DELETE', `/teams/${teamId}/family/posts/${postId}`),
   followedTeams: () => req<FollowedTeam[]>('GET', '/family/teams'),

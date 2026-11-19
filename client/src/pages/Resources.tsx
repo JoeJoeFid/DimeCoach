@@ -9,7 +9,7 @@ import { prepareImage } from '../components/ItemImages';
 import { normalizeUrl } from '../components/ItemMedia';
 import { ResourceThumb, fileUrl, searchText } from '../components/ResourcePicker';
 import { Modal, ShareIcon } from '../components/bits';
-import ShareResource from '../components/ShareResource';
+import { ShareItemDialog, SharedWithBox, useShareSummary } from '../components/ShareItem';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
 
@@ -39,6 +39,8 @@ export default function Resources() {
   const { sportTags } = useApp();
   const [tagId, setTagId] = useState(0);
   const [sharing, setSharing] = useState<Resource | null>(null);
+  const [shareVersion, setShareVersion] = useState(0);
+  const sharedWith = useShareSummary('resource', shareVersion);
   /** The key of the resource whose categories are being chosen. */
   const [tagging, setTagging] = useState('');
   const sportTagIds = useMemo(() => new Set(sportTags.map((t) => t.id)), [sportTags]);
@@ -236,7 +238,7 @@ export default function Resources() {
       ) : (
         <div className={`res-grid ${compact ? 'compact' : ''}`}>
           {shown.map((r) => (
-            <ResourceCard key={r.key} resource={r} tags={sportTags} onShare={() => setSharing(r)} onTag={() => setTagging(r.key)} onView={() => setViewing(r)} onRename={(title) => run(() => api.renameResource(r.resource_id!, title))} onRemove={() => remove(r)} />
+            <ResourceCard key={r.key} resource={r} tags={sportTags} sharedWith={sharedWith[r.key] || []} onShare={() => setSharing(r)} onTag={() => setTagging(r.key)} onView={() => setViewing(r)} onRename={(title) => run(() => api.renameResource(r.resource_id!, title))} onRemove={() => remove(r)} />
           ))}
         </div>
       )}
@@ -270,17 +272,26 @@ export default function Resources() {
           </div>
         </Modal>
       )}
-      {sharing && <ShareResource resource={sharing} onClose={() => setSharing(null)} />}
+      {sharing && (
+        <ShareItemDialog
+          what={{ kind: 'resource', resource: sharing }}
+          onClose={() => {
+            setSharing(null);
+            setShareVersion((v) => v + 1);
+          }}
+        />
+      )}
       {viewing && (
         <Modal title={viewing.title} onClose={() => setViewing(null)} wide>
           {viewing.kind === 'image' ? <img className="res-full" src={fileUrl(viewing)} alt={viewing.title} /> : <video className="res-full" src={fileUrl(viewing)} controls autoPlay />}
+          <SharedWithBox what={{ kind: 'resource', resource: viewing }} version={shareVersion} onShare={() => setSharing(viewing)} />
         </Modal>
       )}
     </div>
   );
 }
 
-function ResourceCard({ resource: r, tags, onShare, onTag, onView, onRename, onRemove }: { resource: Resource; tags: Tag[]; onShare: () => void; onTag: () => void; onView: () => void; onRename: (title: string) => void; onRemove: () => void }) {
+function ResourceCard({ resource: r, tags, sharedWith, onShare, onTag, onView, onRename, onRemove }: { resource: Resource; tags: Tag[]; /** The names of where it has been shared. */ sharedWith: string[]; onShare: () => void; onTag: () => void; onView: () => void; onRename: (title: string) => void; onRemove: () => void }) {
   const [title, setTitle] = useState(r.title);
   useEffect(() => setTitle(r.title), [r.title]);
   const saved = r.resource_id !== null;
@@ -333,6 +344,15 @@ function ResourceCard({ resource: r, tags, onShare, onTag, onView, onRename, onR
             ))}
             {r.uses.length > 4 && <li className="muted small">and {r.uses.length - 4} more</li>}
           </ul>
+        )}
+        {sharedWith.length > 0 && (
+          <button type="button" className="shared-with-line" onClick={onShare} title="See or change who this is shared with">
+            <ShareIcon size={14} />
+            <span>
+              <strong>Shared with</strong> {sharedWith.slice(0, 3).join(', ')}
+              {sharedWith.length > 3 && ` and ${sharedWith.length - 3} more`}
+            </span>
+          </button>
         )}
         <div className="res-actions">
           {r.kind === 'link' ? (

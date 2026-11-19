@@ -15638,7 +15638,7 @@ button.ov-meter:hover {
   margin-right: auto;
 }
 .fam-main {
-  max-width: 1040px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 20px 20px 60px;
 }
@@ -15922,4 +15922,285 @@ a.cx-row:hover .cx-row-text strong {
 }
 .fam-summary small {
   color: var(--muted);
+}
+
+/* Sharing a drill, a play or a resource: the team's part of the box, and the list of where a thing has gone. */
+.share-team {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.share-team p {
+  margin: 0;
+}
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.shared-with {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.shared-with header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.shared-with header strong {
+  flex: 1;
+  font-size: 0.9rem;
+}
+.shared-with p {
+  margin: 0;
+}
+.shared-with ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shared-with li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 0.86rem;
+}
+.shared-with-kind {
+  flex: none;
+  min-width: 74px;
+  padding: 1px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.shared-with-kind.team {
+  border-color: var(--good);
+}
+.shared-with-kind.community {
+  border-color: var(--series);
+}
+.shared-with-kind.link {
+  border-color: var(--warn);
+}
+.shared-with-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+.shared-with-line svg {
+  flex: none;
+  margin-top: 1px;
+}
+.play-card-wrap {
+  position: relative;
+  display: flex;
+}
+.play-card-wrap > .play-card {
+  flex: 1;
+  min-width: 0;
+}
+.play-share {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+/* The parents' page: the schedule takes the wide side of home, with what is next made plain. */
+.fam-home.with-schedule {
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+}
+.fam-home.with-schedule > * {
+  grid-column: 2;
+}
+.fam-home.with-schedule > .fam-home-schedule {
+  grid-column: 1;
+  grid-row: 1 / span 6;
+}
+.fam-next {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 2px solid var(--accent-edge);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fam-next:hover {
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+}
+.fam-next-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.fam-next-text strong {
+  font-size: 1.3rem;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.fam-next-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.fam-next-tag i,
+.fam-next-pill,
+.fam-today {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.fam-next-pill {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.fam-next-line {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.fam-then {
+  margin: 18px 0 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+button.fam-day {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+}
+button.fam-day.next {
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent-edge);
+}
+/* Today on the calendar, and the day that was picked. */
+.fam-cal .cal-day.today {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 2px var(--accent-edge);
+}
+.fam-cal .cal-day.today .cal-num {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.fam-cal .cal-day.picked {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.fam-pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.fam-parts li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fam-parts li.rest {
+  color: var(--muted);
+}
+.fam-parts small {
+  flex: none;
+  color: var(--muted);
+}
+.fam-details p {
+  margin: 0;
+}
+.fam-details-kind {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fam-details dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 14px 0 0;
+}
+.fam-details dt {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.fam-details dd {
+  margin: 0;
+  font-weight: 600;
+}
+.fam-details h3 {
+  margin: 18px 0 0;
+  font-size: 0.95rem;
+}
+@media (max-width: 900px) {
+  .fam-home.with-schedule {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fam-home.with-schedule > *,
+  .fam-home.with-schedule > .fam-home-schedule {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  /* No pointer to hover with on a phone: a tap opens the day. */
+  .fam-peek {
+    display: none;
+  }
+}
+.fam-cal .cal-legend .cal-chip {
+  width: auto;
+  cursor: default;
 }

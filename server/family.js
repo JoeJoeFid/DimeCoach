@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { all, db, dbPath, get, run } from './db.js';
 import { sharedOpening, withoutOpening } from './calendar.js';
-import { planView, playView } from './communities.js';
+import { drillView, planView, playView } from './communities.js';
 import { resourceList } from './resources.js';
 
 const uploadsDir = path.join(path.dirname(dbPath), 'uploads');
@@ -34,12 +34,12 @@ CREATE INDEX IF NOT EXISTS idx_team_posts ON team_posts(team_id, kind, id);
 
 export const FAMILY_KINDS = ['parent', 'family', 'friend'];
 // 'games' and 'practices' say how much of the schedule is told: when and where games are, and what a practice covers.
-export const FAMILY_SECTIONS = ['schedule', 'games', 'practices', 'news', 'board', 'homework', 'playbook', 'resources', 'roster'];
+export const FAMILY_SECTIONS = ['schedule', 'games', 'practices', 'news', 'board', 'homework', 'playbook', 'drills', 'resources', 'roster'];
 // A parent sees most things, family a little, and a friend the schedule, until a coach says otherwise.
 const DEFAULTS = {
-  parent: { schedule: true, games: true, practices: false, news: true, board: true, homework: true, playbook: true, resources: true, roster: true },
-  family: { schedule: true, games: true, practices: false, news: true, board: false, homework: false, playbook: false, resources: true, roster: false },
-  friend: { schedule: true, games: true, practices: false, news: false, board: false, homework: false, playbook: false, resources: false, roster: false },
+  parent: { schedule: true, games: true, practices: false, news: true, board: true, homework: true, playbook: true, drills: true, resources: true, roster: true },
+  family: { schedule: true, games: true, practices: false, news: true, board: false, homework: false, playbook: false, drills: false, resources: true, roster: false },
+  friend: { schedule: true, games: true, practices: false, news: false, board: false, homework: false, playbook: false, drills: false, resources: false, roster: false },
 };
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 const parse = (s, fallback) => {
@@ -52,16 +52,23 @@ const parse = (s, fallback) => {
 const nowIso = () => new Date().toISOString();
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** What a team shows its followers: who sees which part, and the plays and resources picked out for them. */
-function settingsOf(team) {
+/** What a team shows its followers: who sees which part, and the plays, drills and resources picked out for them. */
+export function settingsOf(team) {
   const saved = parse(team.family_json, {}) || {};
   const access = {};
   for (const k of FAMILY_KINDS) access[k] = Object.fromEntries(FAMILY_SECTIONS.map((s) => [s, typeof saved.access?.[k]?.[s] === 'boolean' ? saved.access[k][s] : DEFAULTS[k][s]]));
   return {
     access,
     plays: (Array.isArray(saved.plays) ? saved.plays : []).map(Number).filter(Number.isInteger),
+    drills: (Array.isArray(saved.drills) ? saved.drills : []).map(Number).filter(Number.isInteger),
     resources: (Array.isArray(saved.resources) ? saved.resources : []).map((k) => str(k, 2100)),
   };
+}
+/** Replaces one of a team's lists of what is shared with its followers: 'plays', 'drills' or 'resources'. */
+export function saveFamilyList(team, key, list) {
+  const s = settingsOf(get('SELECT * FROM teams WHERE id=?', team.id));
+  s[key] = [...new Set(list)].slice(0, 500);
+  run('UPDATE teams SET family_json=? WHERE id=?', JSON.stringify(s), team.id);
 }
 const sportOf = (team) => get('SELECT name FROM sports WHERE id=?', team.sport_id)?.name || '';
 const postOut = (p, userId) => ({ id: p.id, kind: p.kind, title: p.title, body: p.body, author: p.author, role: p.role, at: p.created_at, mine: p.user_id === userId });
@@ -146,22 +153,45 @@ function scheduleOf(team, can) {
   since.setDate(since.getDate() - 60);
   const from = isoDay(since);
   const opening = sharedOpening(all("SELECT title FROM events WHERE team_id=? AND uid NOT LIKE 'league-%'", team.id).map((r) => r.title));
-  const events = all('SELECT * FROM events WHERE team_id=? AND gone=0 AND date>=? ORDER BY date, start_time, id', team.id, from).map((ev) => ({
-    key: `e${ev.id}`, kind: ev.kind, title: withoutOpening(ev.title, opening) || (ev.kind === 'game' ? 'Game' : ev.kind === 'practice' ? 'Practice' : 'Event'),
-    date: ev.date, start_time: ev.start_time || '', end_time: ev.end_time || '', location: ev.location || '',
+  const today = isoDay(new Date());
+  // Put together the way a coach's own calendar is (buildSchedule in client/src/schedule.ts), so a
+  // parent is told the same day, time and place the coach sees. A calendar event that has a practice
+  // written for it shows once, as that practice, with the practice's time.
+  const list = all(
+    "SELECT p.id, p.title, p.date, p.start_time, p.location, p.is_game, p.game_json, (SELECT COUNT(*) FROM plan_items WHERE plan_id=p.id) AS items FROM plans p WHERE p.team_id=? AND p.kind='practice' AND p.is_template=0 AND p.date>=? AND p.date<>''",
+    team.id, from,
+  ).map((p) => ({
+    key: `p${p.id}`, kind: p.is_game ? 'game' : 'practice', title: p.title || 'Practice', date: p.date, start_time: p.start_time || '', end_time: '', location: p.location || '',
+    plan: p.id, filled: p.items > 0 || (!!p.is_game && String(p.game_json || '').length > 2), event: false,
   }));
-  const taken = new Set(events.map((e) => `${e.date} ${e.kind}`));
-  const plans = all("SELECT id, title, date, start_time, location, is_game FROM plans WHERE team_id=? AND kind='practice' AND is_template=0 AND date>=?", team.id, from)
-    .map((p) => ({ key: `p${p.id}`, kind: p.is_game ? 'game' : 'practice', title: p.title || (p.is_game ? 'Game' : 'Practice'), date: p.date, start_time: p.start_time || '', end_time: '', location: p.location || '' }))
-    .filter((p) => !taken.has(`${p.date} ${p.kind}`));
-  const written = all("SELECT id, date FROM plans WHERE team_id=? AND kind='practice' AND is_template=0 AND is_game=0 AND date>=? ORDER BY id", team.id, from);
-  return [...events, ...plans]
-    .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time))
+  const filledFirst = [...list].sort((x, y) => Number(y.filled) - Number(x.filled));
+  for (const ev of all('SELECT * FROM events WHERE team_id=? AND gone=0 AND date>=? ORDER BY date, start_time, id', team.id, from)) {
+    const short = withoutOpening(ev.title, opening);
+    // A game only pairs with a plan made for it (same title), so a practice on game day stays separate.
+    const planned =
+      filledFirst.find((e) => e.date === ev.date && !e.event && (e.title === short || e.title === ev.title)) ||
+      (ev.kind !== 'game' ? filledFirst.find((e) => e.date === ev.date && !e.event) : undefined);
+    if (planned) {
+      planned.event = true;
+      // What the practice leaves unsaid, the calendar fills in.
+      planned.end_time = ev.end_time || '';
+      planned.location ||= ev.location || '';
+    } else
+      list.push({
+        key: `e${ev.id}`, kind: ev.kind, title: short || (ev.kind === 'game' ? 'Game' : ev.kind === 'practice' ? 'Practice' : 'Event'),
+        date: ev.date, start_time: ev.start_time || '', end_time: ev.end_time || '', location: ev.location || '', plan: 0, filled: true, event: true,
+      });
+  }
+  return list
+    // A blank practice for today or earlier that is not on the calendar was started and left. It is not a real practice.
+    .filter((e) => e.filled || e.event || e.date > today)
+    .sort((x, y) => x.date.localeCompare(y.date) || x.start_time.localeCompare(y.start_time))
+    .map(({ plan, filled: _filled, event: _event, ...d }) => ({ ...d, plan }))
     .map((d) => {
       // Without the details, a game is only a game on its day.
       if (d.kind === 'game' && !can.games) return { key: d.key, kind: d.kind, title: 'Game', date: d.date, start_time: '', end_time: '', location: '', summary: null };
-      const plan = d.kind === 'practice' && can.practices ? (d.key.startsWith('p') ? Number(d.key.slice(1)) : written.find((p) => p.date === d.date)?.id) : 0;
-      return { ...d, summary: plan ? practiceSummary(plan) : null };
+      const { plan, ...day } = d;
+      return { ...day, summary: plan && day.kind === 'practice' && can.practices ? practiceSummary(plan) : null };
     });
 }
 /** Homework for the whole team, and for this person's own players. */
@@ -176,6 +206,7 @@ function homeworkOf(team, players) {
     })
     .filter(Boolean);
 }
+const sharedDrills = (team, settings) => settings.drills.map((id) => get('SELECT * FROM drills WHERE id=? AND owner_id=?', id, team.owner_id)).filter(Boolean).map((d) => ({ id: d.id, ...drillView(d) }));
 const sharedPlays = (team, settings) => settings.plays.map((id) => get('SELECT * FROM plays WHERE id=? AND owner_id=?', id, team.owner_id)).filter(Boolean).map(playView);
 function sharedResources(team, settings) {
   if (!settings.resources.length) return [];
@@ -212,9 +243,10 @@ export function mountFamily(app) {
       board: can.board ? postsOf(team.id, 'board', req.user.id) : [],
       homework: can.homework ? homeworkOf(team, f.players) : [],
       plays: can.playbook ? sharedPlays(team, settings) : [],
+      drills: can.drills ? sharedDrills(team, settings) : [],
       resources: can.resources ? sharedResources(team, settings) : [],
-      // Names and numbers only: nothing about a player's family, and none of the coach's notes.
-      roster: can.roster ? all('SELECT name, number, position FROM players WHERE team_id=? AND active=1 ORDER BY name COLLATE NOCASE', team.id) : [],
+      // Names and numbers only: nothing about a player's family, none of the coach's notes, and not where each one plays.
+      roster: can.roster ? all('SELECT name, number FROM players WHERE team_id=? AND active=1 ORDER BY name COLLATE NOCASE', team.id) : [],
     });
   });
   app.post('/api/family/teams/:id/board', (req, res) => {
@@ -256,10 +288,13 @@ export function mountFamilyCoach(app) {
     const s = settingsOf(team);
     const plays = all('SELECT id, name, category FROM plays WHERE owner_id=? AND sport_id=? ORDER BY name COLLATE NOCASE, id', team.owner_id, team.sport_id);
     const resources = resourceList(team.owner_id).map((r) => ({ key: r.key, kind: r.kind, title: r.title, url: r.url }));
+    const drills = all('SELECT id, name FROM drills WHERE owner_id=? AND sport_id=? ORDER BY name COLLATE NOCASE, id', team.owner_id, team.sport_id);
     return {
       access: s.access,
       // Only what still exists counts as shared.
       plays: s.plays.filter((id) => plays.some((p) => p.id === id)),
+      drills: s.drills.filter((id) => drills.some((d) => d.id === id)),
+      all_drills: drills,
       resources: s.resources.filter((k) => resources.some((r) => r.key === k)),
       all_plays: plays,
       all_resources: resources,
@@ -281,6 +316,7 @@ export function mountFamilyCoach(app) {
     if (b.access && typeof b.access === 'object')
       for (const k of FAMILY_KINDS) for (const sec of FAMILY_SECTIONS) if (typeof b.access[k]?.[sec] === 'boolean') s.access[k][sec] = b.access[k][sec];
     if (Array.isArray(b.plays)) s.plays = [...new Set(b.plays.map(Number))].filter((id) => get('SELECT 1 AS ok FROM plays WHERE id=? AND owner_id=?', id, team.owner_id)).slice(0, 500);
+    if (Array.isArray(b.drills)) s.drills = [...new Set(b.drills.map(Number))].filter((id) => get('SELECT 1 AS ok FROM drills WHERE id=? AND owner_id=?', id, team.owner_id)).slice(0, 500);
     if (Array.isArray(b.resources)) s.resources = [...new Set(b.resources.map((k) => str(k, 2100)))].slice(0, 500);
     run('UPDATE teams SET family_json=? WHERE id=?', JSON.stringify(s), team.id);
     res.json(out(req, team));

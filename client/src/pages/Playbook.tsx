@@ -10,6 +10,8 @@ import { PlayDiagram } from '../components/PlayDiagram';
 import { playBuilderSupports } from '../util';
 import { sportKind } from '../sports';
 import PlayIntro from '../components/PlayIntro';
+import { ShareIcon } from '../components/bits';
+import { ShareItemDialog } from '../components/ShareItem';
 
 const resourceLabel = (n: number) => (n > 0 ? `${n} resource${n === 1 ? '' : 's'}` : '');
 
@@ -57,6 +59,7 @@ export default function Playbook() {
   );
 
   // A play printed as a PDF by another play designer, read into a new play. Offered to those it is turned on for.
+  const [sharing, setSharing] = useState<Play | null>(null);
   const pdfInput = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState(false);
   const importPdf = async (file?: File) => {
@@ -138,6 +141,7 @@ export default function Playbook() {
       {/* Shown by itself the first time, and again when asked for. */}
       {showIntro ? <PlayIntro force onClose={() => setShowIntro(false)} /> : <PlayIntro />}
       {error && <p className="error">{error}</p>}
+      {sharing && <ShareItemDialog what={{ kind: 'play', id: sharing.id, title: sharing.name || 'Play' }} onClose={() => setSharing(null)} />}
       {fromCommunity && <CommunityPicker kind="play" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plays/${id}`)} />}
 
       {plays === null ? (
@@ -180,7 +184,8 @@ export default function Playbook() {
           ) : (
             <div className="play-grid">
               {shown.map((p) => (
-                <Link key={p.id} to={`/plays/${p.id}`} className="play-card">
+                <div key={p.id} className="play-card-wrap">
+                <Link to={`/plays/${p.id}`} className="play-card">
                   <div className="paper">
                     <PlayDiagram play={p} frame={p.frames[0]} />
                   </div>
@@ -206,6 +211,10 @@ export default function Playbook() {
                     )}
                   </div>
                 </Link>
+                  <button type="button" className="btn small icon-btn play-share" aria-label={`Share ${p.name}`} title="Share" onClick={() => setSharing(p)}>
+                    <ShareIcon size={17} />
+                  </button>
+                </div>
               ))}
             </div>
           )}

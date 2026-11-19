@@ -18,6 +18,7 @@ import CommunityPage from './pages/Community';
 import OrgPublic from './pages/OrgPublic';
 import SignUpForm from './pages/SignUpForm';
 import SharedPlan from './pages/SharedPlan';
+import SharedItem from './pages/SharedItem';
 import Dashboard from './pages/Dashboard';
 import Plans from './pages/Plans';
 import PlanEditor from './pages/PlanEditor';
@@ -176,9 +177,10 @@ export default function App() {
       </Routes>
     );
   // So is a practice a coach sent by link. "Sign in" there shows the sign-in page, and comes back here.
-  else if (/^\/shared\/[^/]+\/?$/.test(pathname) && (auth.user || !search.includes('signin=1')))
+  else if (/^\/shared\/(i\/)?[^/]+\/?$/.test(pathname) && (auth.user || !search.includes('signin=1')))
     view = (
       <Routes>
+        <Route path="/shared/i/:token" element={<SharedItem user={auth.user} />} />
         <Route path="/shared/:token" element={<SharedPlan user={auth.user} />} />
       </Routes>
     );

@@ -1,10 +1,10 @@
 // A team's page for its parents, family and friends: what is coming up, what the coaches say,
 // and whatever else the coach lets their kind of follower see. Nothing here changes the team.
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type FamilyDay, type FamilyKind, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
-import { MoreMenu } from '../components/bits';
+import { Modal, MoreMenu } from '../components/bits';
 import { SharedPreview } from '../components/community';
 import { DateBlock, PageHead, Row } from '../components/cx';
 import SportIcon from '../components/SportIcon';
@@ -104,7 +104,7 @@ export function FamilyHome({ name }: { name: string }) {
   );
 }
 
-type Tab = 'home' | 'schedule' | 'messages' | 'homework' | 'playbook' | 'resources' | 'roster';
+type Tab = 'home' | 'schedule' | 'messages' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
 
 /** One team, as a follower sees it. */
 export function FamilyTeamPage() {
@@ -146,6 +146,7 @@ export function FamilyTeamPage() {
     ...(can.news || can.board ? [['messages', 'Messages'] as [Tab, string]] : []),
     ...(can.homework ? [['homework', 'Homework', data.homework.length] as [Tab, string, number]] : []),
     ...(can.playbook ? [['playbook', 'Playbook', data.plays.length] as [Tab, string, number]] : []),
+    ...(can.drills ? [['drills', 'Drills', data.drills.length] as [Tab, string, number]] : []),
     ...(can.resources ? [['resources', 'Resources', data.resources.length] as [Tab, string, number]] : []),
     ...(can.roster ? [['roster', 'Team'] as [Tab, string]] : []),
   ];
@@ -154,6 +155,7 @@ export function FamilyTeamPage() {
   const go = (t: Tab, extra: Record<string, string> = {}) => setParams(t === 'home' ? {} : { tab: t, ...extra }, { replace: true });
   const today = todayISO();
   const coming = data.schedule.filter((d) => d.date >= today);
+  const next = coming[0];
 
   return (
     <div className="page cx fam">
@@ -180,16 +182,28 @@ export function FamilyTeamPage() {
       )}
 
       {tab === 'home' && (
-        <div className="fam-home">
+        <div className={`fam-home ${can.schedule ? 'with-schedule' : ''}`}>
           {can.schedule && (
-            <section className="card cx-card">
+            <section className="card cx-card fam-home-schedule">
               <div className="cx-card-head">
-                <h2>Next up</h2>
+                <h2>Schedule</h2>
                 <button type="button" className="link cx-card-action" onClick={() => go('schedule')}>
                   Full schedule
                 </button>
               </div>
-              {coming.length === 0 ? <p className="muted">Nothing on the schedule yet.</p> : <DayList days={coming.slice(0, 4)} />}
+              {!next ? (
+                <p className="muted">Nothing on the schedule yet.</p>
+              ) : (
+                <>
+                  <NextUp day={next} today={today} />
+                  {coming.length > 1 && (
+                    <>
+                      <h3 className="fam-then">After that</h3>
+                      <DayList days={coming.slice(1, 8)} />
+                    </>
+                  )}
+                </>
+              )}
             </section>
           )}
           {can.news && (
@@ -275,6 +289,25 @@ export function FamilyTeamPage() {
           </div>
         ))}
 
+      {tab === 'drills' &&
+        (data.drills.length === 0 ? (
+          <section className="card cx-card">
+            <p className="muted">The coaches have not shared any drills yet.</p>
+          </section>
+        ) : (
+          <div className="fam-plays">
+            {data.drills.map((d) => (
+              <section key={d.id} className="card fam-sheet">
+                <header>
+                  <h2>{d.name}</h2>
+                  {d.duration_min > 0 && <span className="muted small">{d.duration_min} minutes</span>}
+                </header>
+                <SharedPreview detail={{ kind: 'drill', content: d }} />
+              </section>
+            ))}
+          </div>
+        ))}
+
       {tab === 'resources' && (
         <section className="card cx-card">
           <h2>Resources</h2>
@@ -312,7 +345,7 @@ export function FamilyTeamPage() {
             ) : (
               <ul className="cx-rows">
                 {data.roster.map((p, i) => (
-                  <Row key={i} lead={<span className="fam-num">{p.number || '–'}</span>} title={p.name} sub={p.position || undefined} />
+                  <Row key={i} lead={<span className="fam-num">{p.number || '–'}</span>} title={p.name} />
                 ))}
               </ul>
             )}
@@ -331,33 +364,188 @@ export function FamilyTeamPage() {
   );
 }
 
-function DayList({ days }: { days: FamilyDay[] }) {
+/** "Today", "Tomorrow" or "In 4 days". */
+function howSoon(date: string, today: string) {
+  const days = Math.round((new Date(`${date}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86_400_000);
+  return days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+}
+const timesOf = (d: FamilyDay) => [clock(d.start_time), clock(d.end_time)].filter(Boolean).join(' – ');
+const dayLine = (d: FamilyDay) => [KIND_WORD[d.kind], timesOf(d), d.location].filter(Boolean).join(' · ');
+/** Whether there is more to a day than its line already says. */
+const hasMore = (d: FamilyDay) => !!d.summary;
+
+/** What a practice covers, part by part. `most` cuts a long one short. */
+function Parts({ day, most }: { day: FamilyDay; most?: number }) {
+  if (!day.summary) return null;
+  const items = most ? day.summary.items.slice(0, most) : day.summary.items;
   return (
-    <ul className="cx-rows">
-      {days.map((d) => (
-        <Row
-          key={d.key}
-          lead={<DateBlock date={d.date} />}
-          title={d.title}
-          sub={
+    <>
+      <ol className="cal-peek-items fam-parts">
+        {items.map((it, i) => (
+          <li key={i} className={it.rest ? 'rest' : ''}>
+            <span>{it.title}</span>
+            <small>{it.minutes} min</small>
+          </li>
+        ))}
+      </ol>
+      {items.length < day.summary.items.length && <p className="cal-peek-more">and {day.summary.items.length - items.length} more</p>}
+    </>
+  );
+}
+
+const PEEK_WIDTH = 300;
+/** A small card beside a practice or game while the pointer is on it, as coaches have on their calendar. */
+function DayPeek({ day, at }: { day: FamilyDay; at: { left: number; right: number; top: number } }) {
+  const width = Math.min(PEEK_WIDTH, window.innerWidth - 16);
+  // Beside it on the right when there is room, else on the left, else under it.
+  const left = at.right + 8 + width <= window.innerWidth - 8 ? at.right + 8 : at.left - 8 - width >= 8 ? at.left - 8 - width : Math.max(8, Math.min(at.left, window.innerWidth - width - 8));
+  const box = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState(at.top);
+  useLayoutEffect(() => {
+    const height = box.current?.offsetHeight ?? 0;
+    setTop(Math.max(8, Math.min(at.top, window.innerHeight - height - 8)));
+  }, [at.top, day.key]);
+  return (
+    <div className="cal-peek fam-peek" role="tooltip" ref={box} style={{ left, top, width }}>
+      <div className="cal-peek-top">
+        <span className={`kind ${day.kind === 'other' ? '' : day.kind}`}>{KIND_WORD[day.kind]}</span>
+        {day.summary && <span className="cal-peek-state">{day.summary.minutes} minutes planned</span>}
+      </div>
+      <strong className="cal-peek-title">{day.title}</strong>
+      <p className="cal-peek-when">{[fmtDateShort(day.date), timesOf(day)].filter(Boolean).join(' · ')}</p>
+      {day.location && <p className="cal-peek-where">{day.location}</p>}
+      <Parts day={day} most={8} />
+      <p className="cal-peek-more">Click to open it.</p>
+    </div>
+  );
+}
+
+/** A practice or game opened: everything the coach lets this person see about it. */
+function DayDetails({ day, onClose }: { day: FamilyDay; onClose: () => void }) {
+  return (
+    <Modal title={day.title} onClose={onClose}>
+      <div className="fam-details">
+        <p className="fam-details-kind">
+          <span className={`kind ${day.kind === 'other' ? '' : day.kind}`}>{KIND_WORD[day.kind]}</span>
+          <strong>{new Date(`${day.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
+        </p>
+        <dl>
+          {timesOf(day) && (
             <>
-              {[KIND_WORD[d.kind], [clock(d.start_time), clock(d.end_time)].filter(Boolean).join(' – '), d.location].filter(Boolean).join(' · ')}
-              {d.summary && (
-                <span className="fam-summary">
-                  <span className="fam-summary-total">{d.summary.minutes} minutes planned</span>
-                  {d.summary.items.map((it, i) => (
-                    <span key={i} className={it.rest ? 'rest' : ''}>
-                      {it.title}
-                      <small>{it.minutes} min</small>
-                    </span>
-                  ))}
-                </span>
-              )}
+              <dt>Time</dt>
+              <dd>{timesOf(day)}</dd>
             </>
-          }
-        />
-      ))}
-    </ul>
+          )}
+          {day.location && (
+            <>
+              <dt>Place</dt>
+              <dd>{day.location}</dd>
+            </>
+          )}
+          {day.summary && (
+            <>
+              <dt>Planned</dt>
+              <dd>{day.summary.minutes} minutes</dd>
+            </>
+          )}
+        </dl>
+        {day.summary ? (
+          <>
+            <h3>What it covers</h3>
+            <Parts day={day} />
+          </>
+        ) : (
+          !timesOf(day) && !day.location && <p className="muted small">The coaches have not shared more about this {KIND_WORD[day.kind].toLowerCase()}.</p>
+        )}
+      </div>
+      <div className="modal-actions">
+        <button type="button" className="btn primary" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * What it takes to show a day's card while the pointer is on it, and to open it on a click.
+ * Returns what to put on whatever stands for the day, and the card and box to draw.
+ */
+function useDayPeek() {
+  const [peek, setPeek] = useState<{ day: FamilyDay; left: number; right: number; top: number } | null>(null);
+  const [open, setOpen] = useState<FamilyDay | null>(null);
+  const hide = () => setPeek(null);
+  const on = (day: FamilyDay) => {
+    const show = (e: { currentTarget: Element }) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      setPeek({ day, left: r.left, right: r.right, top: r.top });
+    };
+    return {
+      onMouseEnter: show,
+      onMouseLeave: hide,
+      onFocus: show,
+      onBlur: hide,
+      onClick: () => {
+        hide();
+        setOpen(day);
+      },
+    };
+  };
+  const drawn = (
+    <>
+      {peek && !open && <DayPeek day={peek.day} at={peek} />}
+      {open && <DayDetails day={open} onClose={() => setOpen(null)} />}
+    </>
+  );
+  return { on, drawn };
+}
+
+/** The very next thing on the schedule, made plain to see. */
+function NextUp({ day, today }: { day: FamilyDay; today: string }) {
+  const { on, drawn } = useDayPeek();
+  return (
+    <>
+      <button type="button" className={`fam-next ${day.kind}`} aria-label={`Next up: ${day.title}, ${fmtDateShort(day.date)}. Open it.`} {...on(day)}>
+        <DateBlock date={day.date} />
+        <span className="fam-next-text">
+          <span className="fam-next-tag">
+            Next up <i>{howSoon(day.date, today)}</i>
+          </span>
+          <strong>{day.title}</strong>
+          <span className="fam-next-line">{dayLine(day)}</span>
+          {day.summary && <span className="fam-next-line">{day.summary.minutes} minutes planned, in {plural(day.summary.items.length, 'part')}</span>}
+        </span>
+      </button>
+      {drawn}
+    </>
+  );
+}
+
+function DayList({ days, nextKey }: { days: FamilyDay[]; /** The next thing on the schedule, which is marked. */ nextKey?: string }) {
+  const { on, drawn } = useDayPeek();
+  return (
+    <>
+      <ul className="cx-rows">
+        {days.map((d) => (
+          <li key={d.key}>
+            <button type="button" className={`cx-row fam-day ${d.key === nextKey ? 'next' : ''}`} {...on(d)}>
+              <DateBlock date={d.date} />
+              <span className="cx-row-text">
+                <strong>
+                  {d.title}
+                  {d.key === nextKey && <span className="fam-next-pill">Next up</span>}
+                </strong>
+                <span className="muted small">
+                  {dayLine(d)}
+                  {hasMore(d) && ` · ${d.summary!.minutes} minutes planned`}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {drawn}
+    </>
   );
 }
 
@@ -367,6 +555,8 @@ function Schedule({ days, today }: { days: FamilyDay[]; today: string }) {
   const home: [number, number] = [Number(next.slice(0, 4)), Number(next.slice(5, 7)) - 1];
   const [[year, month], setMonth] = useState<[number, number]>(home);
   const [picked, setPicked] = useState('');
+  const { on, drawn } = useDayPeek();
+  const nextKey = days.find((d) => d.date >= today)?.key;
   const shift = (by: number) => {
     const d = new Date(year, month + by, 1);
     setMonth([d.getFullYear(), d.getMonth()]);
@@ -411,14 +601,15 @@ function Schedule({ days, today }: { days: FamilyDay[]; today: string }) {
             ))}
             {cells.map((c) => (
               <div key={c.date} role="gridcell" className={`cal-day ${c.inMonth ? '' : 'out'} ${c.date === today ? 'today' : ''} ${c.date < today ? 'past' : ''} ${picked === c.date ? 'picked' : ''}`}>
-                <div className="cal-day-top">
+                <button type="button" className="cal-day-top fam-pick" aria-label={`${fmtDateShort(c.date)}${c.date === today ? ', today' : ''}. Show this day.`} aria-pressed={picked === c.date} onClick={() => setPicked(picked === c.date ? '' : c.date)}>
                   <span className="cal-num">{c.day}</span>
-                </div>
+                  {c.date === today && <span className="fam-today">Today</span>}
+                </button>
                 {days
                   .filter((d) => d.date === c.date)
                   .slice(0, 3)
                   .map((d) => (
-                    <button key={d.key} type="button" className={`cal-chip ${d.kind}`} aria-label={`${d.title}, ${fmtDateShort(d.date)}${d.start_time ? `, ${clock(d.start_time)}` : ''}`} onClick={() => setPicked(picked === c.date ? '' : c.date)}>
+                    <button key={d.key} type="button" className={`cal-chip ${d.kind} ${d.key === nextKey ? 'next' : ''}`} aria-label={`${d.key === nextKey ? 'Next up: ' : ''}${d.title}, ${fmtDateShort(d.date)}${d.start_time ? `, ${clock(d.start_time)}` : ''}. Open it.`} {...on(d)}>
                       {d.start_time && <span className="cal-time">{clock(d.start_time)}</span>}
                       <span className="cal-name">{d.title}</span>
                     </button>
@@ -430,6 +621,7 @@ function Schedule({ days, today }: { days: FamilyDay[]; today: string }) {
             <span className="cal-chip practice">Practice</span>
             <span className="cal-chip game">Game</span>
             <span className="cal-chip other">Event</span>
+            <span className="cal-chip practice next">Next up</span>
           </div>
         </div>
       </section>
@@ -442,8 +634,9 @@ function Schedule({ days, today }: { days: FamilyDay[]; today: string }) {
             </button>
           )}
         </div>
-        {listed.length === 0 ? <p className="muted">Nothing on the schedule yet.</p> : <DayList days={listed} />}
+        {listed.length === 0 ? <p className="muted">{picked ? 'Nothing on this day.' : 'Nothing on the schedule yet.'}</p> : <DayList days={listed} nextKey={nextKey} />}
       </section>
+      {drawn}
     </>
   );
 }

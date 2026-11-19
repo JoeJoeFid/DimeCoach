@@ -19,12 +19,13 @@ const SECTIONS: [FamilySection, string, string][] = [
   ['board', 'Message board', 'Reading it and writing on it.'],
   ['homework', 'Homework', 'Sheets set for the whole team, and for their own players.'],
   ['playbook', 'Playbook', 'Only the plays picked under "Shared plays".'],
+  ['drills', 'Drills', 'Only the drills picked under "Shared drills", without your coach notes.'],
   ['resources', 'Resources', 'Only the links, pictures and videos picked under "Shared resources".'],
-  ['roster', 'Roster', 'Players’ names, numbers and positions. Never parents’ details or your notes.'],
+  ['roster', 'Roster', 'Players’ names and numbers. Never their positions, parents’ details or your notes.'],
 ];
 const ROLE: Record<TeamPost['role'], string> = { coach: 'Coach', parent: 'Parent', family: 'Family', friend: 'Friend' };
 const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-type View = 'access' | 'messages' | 'plays' | 'resources';
+type View = 'access' | 'messages' | 'plays' | 'drills' | 'resources';
 
 export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean }) {
   const [data, setData] = useState<FamilySettings | null>(null);
@@ -91,6 +92,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
           ['access', 'Who sees what'],
           ['messages', 'Announcements & board', data.news.length + data.board.length],
           ['plays', 'Shared plays', data.plays.length],
+          ['drills', 'Shared drills', data.drills.length],
           ['resources', 'Shared resources', data.resources.length],
         ]}
       />
@@ -183,6 +185,16 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
           picked={data.plays.map(String)}
           disabled={!canEdit || busy}
           save={(ids) => act(() => api.saveTeamFamily(team.id, { plays: ids.map(Number) }))}
+        />
+      )}
+      {view === 'drills' && (
+        <Picker
+          about={anyone('drills') ? `Tick the drills the team's followers may see: something to work on at home, say. They get the drill's notes and diagrams, and never your coach notes.` : 'Drills are not open to anyone yet. Turn them on under "Who sees what", then pick the drills here.'}
+          empty="This team's sport has no drills yet. Add some on the Drills page first."
+          rows={data.all_drills.map((d) => ({ id: String(d.id), title: d.name, sub: '' }))}
+          picked={data.drills.map(String)}
+          disabled={!canEdit || busy}
+          save={(ids) => act(() => api.saveTeamFamily(team.id, { drills: ids.map(Number) }))}
         />
       )}
       {view === 'resources' && (

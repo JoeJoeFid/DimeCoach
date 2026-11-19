@@ -1,5 +1,6 @@
 import PageTitle from '../components/PageTitle';
-import { CommunityPicker, ShareDialog } from '../components/community';
+import { CommunityPicker } from '../components/community';
+import { ShareItemDialog, SharedWithBox } from '../components/ShareItem';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { useApp } from '../App';
@@ -28,6 +29,8 @@ export default function Library() {
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState('');
   const [sharing, setSharing] = useState<Drill | null>(null);
+  /** Goes up each time the share box closes, so the list of where a drill is shared is read again. */
+  const [shareVersion, setShareVersion] = useState(0);
   const [plays, setPlays] = useState<Play[]>([]);
   useEffect(() => {
     api.plays().then(setPlays).catch(() => {});
@@ -175,7 +178,15 @@ export default function Library() {
           }}
         />
       )}
-      {sharing && <ShareDialog kind="drill" itemId={sharing.id} title={sharing.name} onClose={() => setSharing(null)} />}
+      {sharing && (
+        <ShareItemDialog
+          what={{ kind: 'drill', id: sharing.id, title: sharing.name }}
+          onClose={() => {
+            setSharing(null);
+            setShareVersion((v) => v + 1);
+          }}
+        />
+      )}
       {draft && (
         <Modal
           title={
@@ -218,6 +229,7 @@ export default function Library() {
             </Field>
           </div>
           <ItemBody cards value={draft} onChange={(patch) => setDraft((d) => (d ? { ...d, ...patch } : d))} tags={sportTags} plays={plays.filter((p) => p.sport_id === sport?.id)} />
+          {draft.id && <SharedWithBox what={{ kind: 'drill', id: draft.id, title: draft.title }} version={shareVersion} onShare={() => setSharing((drills || []).find((d) => d.id === draft.id) ?? null)} />}
           <div className="modal-foot">
             <button className="btn" onClick={() => setDraft(null)}>
               Cancel

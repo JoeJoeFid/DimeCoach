@@ -302,7 +302,7 @@ export function CommunityPicker({
 }
 
 /** For one of your own things: tick the communities it should be shared with. */
-function CommunityChoices({ kind, itemId }: { kind: ShareKind; itemId: number }) {
+export function CommunityChoices({ kind, itemId }: { kind: ShareKind; itemId: number }) {
   const words = KIND_WORDS[kind];
   const { user } = useApp();
   const [rows, setRows] = useState<MyShareState[] | null>(null);

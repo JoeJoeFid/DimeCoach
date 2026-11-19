@@ -94,7 +94,11 @@ function gate(req) {
     case 'messages':
     // Taking a copy of a practice someone sent goes to the caller's own teams, wherever they are working.
     case 'plan-links':
+    case 'item-links':
       return null;
+    // Sharing a drill, a play or a resource takes the same permission as changing one.
+    case 'shares':
+      return write ? need({ drill: 'drills', play: 'plays', resource: 'resources' }[seg[1]] ?? 'manage') : null;
     case 'teams':
       if (!seg[1]) return write ? ownerOnly('add teams') : null;
       if (!sameTeam(seg[1])) return NOT_FOUND;
