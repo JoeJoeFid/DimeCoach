@@ -211,7 +211,13 @@ const sharedPlays = (team, settings) => settings.plays.map((id) => get('SELECT *
 function sharedResources(team, settings) {
   if (!settings.resources.length) return [];
   const want = new Set(settings.resources);
-  return resourceList(team.owner_id).filter((r) => want.has(r.key)).map((r) => ({ key: r.key, kind: r.kind, title: r.title, url: r.url, file_id: r.file_id }));
+  // Whether a small preview picture is kept for a link, so the page knows to ask for it.
+  const kept = new Set(all("SELECT url FROM link_thumbs WHERE owner_id=? AND state='ok'", team.owner_id).map((t) => t.url));
+  // The categories of the team's sport, by name, so the page can be narrowed by them as a coach's can.
+  const names = new Map(all('SELECT id, name, color FROM tags WHERE owner_id=? AND sport_id=?', team.owner_id, team.sport_id).map((t) => [t.id, { name: t.name, color: t.color }]));
+  return resourceList(team.owner_id)
+    .filter((r) => want.has(r.key))
+    .map((r) => ({ key: r.key, kind: r.kind, title: r.title, url: r.url, file_id: r.file_id, thumb: r.kind === 'link' && kept.has(r.url), tags: r.tag_ids.map((id) => names.get(id)).filter(Boolean) }));
 }
 
 export function mountFamily(app) {
@@ -269,6 +275,16 @@ export function mountFamily(app) {
     if (!f) return;
     run("DELETE FROM team_posts WHERE id=? AND team_id=? AND user_id=? AND kind='board'", Number(req.params.postId), f.team.id, req.user.id);
     res.json(postsOf(f.team.id, 'board', req.user.id));
+  });
+  // The small preview picture kept for a link the coach shared.
+  app.get('/api/family/teams/:id/thumb', (req, res) => {
+    const f = enter(req, res);
+    if (!f) return;
+    const url = String(req.query.url ?? '');
+    const shared = f.can.resources && sharedResources(f.team, f.settings).some((r) => r.kind === 'link' && r.url === url);
+    const t = shared && get("SELECT data, mime FROM link_thumbs WHERE owner_id=? AND url=? AND state='ok'", f.team.owner_id, url);
+    if (!t?.data) return res.status(404).end();
+    res.set({ 'Content-Type': t.mime || 'image/jpeg', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=86400' }).send(Buffer.from(t.data));
   });
   // A picture or video the coach shared with the team's followers. Files are private otherwise.
   app.get('/api/family/teams/:id/files/:fileId', (req, res) => {

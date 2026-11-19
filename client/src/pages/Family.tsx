@@ -2,15 +2,17 @@
 // and whatever else the coach lets their kind of follower see. Nothing here changes the team.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, type FamilyDay, type FamilyKind, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
+import type { SharedPlay } from '../api';
+import { api, type FamilyDay, type FamilyKind, type FamilyResource, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
-import { Modal, MoreMenu } from '../components/bits';
+import { Modal } from '../components/bits';
 import { SharedPreview } from '../components/community';
-import { DateBlock, PageHead, Row } from '../components/cx';
+import { PlayDiagram } from '../components/PlayDiagram';
+import { CategoryChips, DateBlock, LayoutToggle, PageHead, Row, useCompact } from '../components/cx';
 import SportIcon from '../components/SportIcon';
 import { PasswordForm } from './Auth';
 import { FollowedTeams, NEW_TEAM_KEY } from '../components/TeamPicker';
-import { NAV_ICONS } from '../App';
+import { NAV_ICONS, UserMenu } from '../App';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const AS: Record<FamilyKind, string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
@@ -208,19 +210,7 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
           <button type="button" className="btn small" onClick={frame.onNewTeam}>
             + New team
           </button>
-          <span className="fam-foot-who">
-            <span className="user-avatar" aria-hidden="true">
-              {(frame.user.name.trim()[0] || '?').toUpperCase()}
-            </span>
-            <span className="user-chip-name">{frame.user.name}</span>
-            <MoreMenu
-              label="Your account"
-              items={[
-                { label: 'Change password', onSelect: frame.onPassword },
-                { label: 'Sign out', onSelect: frame.onSignOut },
-              ]}
-            />
-          </span>
+          <UserMenu user={frame.user} onPassword={frame.onPassword} onSignOut={frame.onSignOut} />
         </div>
       </aside>
       <main className="main">{children}</main>
@@ -475,20 +465,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
           ))
         ))}
 
-      {tab === 'playbook' &&
-        (data.plays.length === 0 ? (
-          <div className="card">
-            <p className="muted">The coaches have not shared any plays yet.</p>
-          </div>
-        ) : (
-          <div className="fam-plays">
-            {data.plays.map((p) => (
-              <section key={p.id} className="card">
-                <SharedPreview detail={{ kind: 'play', content: p }} />
-              </section>
-            ))}
-          </div>
-        ))}
+      {tab === 'playbook' && <FamilyPlaybook plays={data.plays} />}
 
       {tab === 'drills' &&
         (data.drills.length === 0 ? (
@@ -509,31 +486,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
           </div>
         ))}
 
-      {tab === 'resources' && (
-        <section className="card cx-card">
-          <h2>Resources</h2>
-          {data.resources.length === 0 ? (
-            <p className="muted">The coaches have not shared any links, pictures or videos yet.</p>
-          ) : (
-            <ul className="cx-rows">
-              {data.resources.map((r) => {
-                const href = r.kind === 'link' ? r.url : `/api/family/teams/${id}/files/${r.file_id}`;
-                return (
-                  <li key={r.key}>
-                    <a className="cx-row fam-res" href={href} target="_blank" rel="noopener noreferrer">
-                      {r.kind === 'image' ? <img src={href} alt="" loading="lazy" /> : <span className="fam-res-kind">{r.kind === 'video' ? 'Video' : 'Link'}</span>}
-                      <span className="cx-row-text">
-                        <strong>{r.title}</strong>
-                        {r.kind === 'link' && <span className="muted small">{r.url}</span>}
-                      </span>
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-      )}
+      {tab === 'resources' && <FamilyResources slug={id} resources={data.resources} />}
 
       {tab === 'roster' && (
         <div className="fam-home">
@@ -566,6 +519,187 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
     tabs,
     tab,
     (t) => go(t),
+  );
+}
+
+/**
+ * The plays the coaches shared, laid out as a coach's own playbook is: a card for each, a search
+ * box, the layout choice, and the categories underneath. A card opens the play to read and watch.
+ */
+function FamilyPlaybook({ plays }: { plays: SharedPlay[] }) {
+  const [q, setQ] = useState('');
+  const [category, setCategory] = useState('');
+  const [compact, setCompact] = useCompact('practiceplan.familyPlaybookCompact');
+  const [open, setOpen] = useState<SharedPlay | null>(null);
+  if (plays.length === 0)
+    return (
+      <div className="empty">
+        <h2>No plays yet</h2>
+        <p>The coaches have not shared any plays yet.</p>
+      </div>
+    );
+  const term = q.trim().toLowerCase();
+  const found = plays.filter((p) => !term || `${p.name} ${p.category} ${p.labels.join(' ')} ${p.notes}`.toLowerCase().includes(term));
+  const shown = found.filter((p) => !category || p.category === category);
+  const categories = [...new Set(plays.map((p) => p.category).filter(Boolean))].sort();
+  return (
+    <>
+      <div className="playbook-filters">
+        <input className="input grow" type="search" placeholder="Search plays" aria-label="Search plays" value={q} onChange={(e) => setQ(e.target.value)} />
+        <LayoutToggle compact={compact} onChange={setCompact} />
+      </div>
+      <CategoryChips all="" total={found.length} value={category} onChange={setCategory} items={categories.map((c) => ({ id: c, label: c, count: found.filter((p) => p.category === c).length }))} />
+      {shown.length === 0 ? (
+        <p className="muted">No plays match.</p>
+      ) : (
+        <div className={`play-grid ${compact ? 'compact' : ''}`}>
+          {shown.map((p) => (
+            <div key={p.id} className="play-card-wrap">
+              <button type="button" className="play-card" onClick={() => setOpen(p)}>
+                <div className="paper">
+                  <PlayDiagram play={p} frame={p.frames[0]} />
+                </div>
+                <div className="play-card-info">
+                  <strong>{p.name}</strong>
+                  <span className="muted small">{[p.category || 'No category', `${p.frames.length} step${p.frames.length === 1 ? '' : 's'}`].join(' · ')}</span>
+                </div>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {open && (
+        <Modal title={open.name} onClose={() => setOpen(null)} wide>
+          <SharedPreview detail={{ kind: 'play', content: open }} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+const RES_KINDS: ['all' | FamilyResource['kind'], string][] = [
+  ['all', 'All'],
+  ['link', 'Links'],
+  ['image', 'Pictures'],
+  ['video', 'Videos'],
+];
+const RES_COMPACT_KEY = 'practiceplan.familyResourcesCompact';
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+};
+/**
+ * What the coaches shared, laid out as a coach's own resources are: a tile for each, a search box,
+ * a filter by kind, and a choice of large or small tiles. Nothing here can be changed.
+ */
+function FamilyResources({ slug, resources }: { slug: string; resources: FamilyResource[] }) {
+  const [q, setQ] = useState('');
+  const [kind, setKind] = useState<'all' | FamilyResource['kind']>('all');
+  const [compact, chooseCompact] = useCompact(RES_COMPACT_KEY);
+  const [viewing, setViewing] = useState<FamilyResource | null>(null);
+  const [tag, setTag] = useState('');
+  const fileOf = (r: FamilyResource) => `/api/family/teams/${slug}/files/${r.file_id}`;
+  const term = q.trim().toLowerCase();
+  const found = resources.filter((r) => !term || `${r.title} ${r.url}`.toLowerCase().includes(term));
+  const inKind = found.filter((r) => kind === 'all' || r.kind === kind);
+  const shown = inKind.filter((r) => !tag || r.tags.some((t) => t.name === tag));
+  // Every category any shared resource is filed under, in the order they are first met.
+  const tags = [...new Map(resources.flatMap((r) => r.tags).map((t) => [t.name, t])).values()].sort((x, y) => x.name.localeCompare(y.name));
+  const count = (k: 'all' | FamilyResource['kind']) => found.filter((r) => k === 'all' || r.kind === k).length;
+  const thumb = (r: FamilyResource) =>
+    r.kind === 'image' ? (
+      <img className="res-thumb" src={fileOf(r)} alt="" loading="lazy" />
+    ) : r.kind === 'video' ? (
+      <video className="res-thumb" src={fileOf(r)} preload="metadata" muted />
+    ) : r.thumb ? (
+      <img className="res-thumb link-shot" src={`/api/family/teams/${slug}/thumb?url=${encodeURIComponent(r.url)}`} alt="" loading="lazy" />
+    ) : (
+      <span className="res-thumb site">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M10 14a4 4 0 0 0 5.700 0l3-3a4 4 0 0 0-5.700-5.700l-1 1M14 10a4 4 0 0 0-5.700 0l-3 3a4 4 0 0 0 5.700 5.700l1-1" />
+        </svg>
+        {hostOf(r.url)}
+      </span>
+    );
+  if (resources.length === 0)
+    return (
+      <div className="empty">
+        <h2>No resources yet</h2>
+        <p>The coaches have not shared any links, pictures or videos yet.</p>
+      </div>
+    );
+  return (
+    <>
+      <div className="playbook-filters">
+        <input className="input grow" type="search" placeholder="Search by name or address" aria-label="Search resources" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="seg" role="group" aria-label="Kind of resource">
+          {RES_KINDS.map(([id, label]) => (
+            <button key={id} type="button" className={kind === id ? 'on' : ''} aria-pressed={kind === id} onClick={() => setKind(id)}>
+              {label} <span className="chip-num">{count(id)}</span>
+            </button>
+          ))}
+        </div>
+        <LayoutToggle compact={compact} onChange={chooseCompact} />
+      </div>
+      <CategoryChips all="" total={inKind.length} value={tag} onChange={setTag} items={tags.map((t) => ({ id: t.name, label: t.name, color: t.color, count: inKind.filter((r) => r.tags.some((x) => x.name === t.name)).length }))} />
+      {shown.length === 0 ? (
+        <p className="muted">Nothing matches.</p>
+      ) : (
+        <div className={`res-grid ${compact ? 'compact' : ''}`}>
+          {shown.map((r) => (
+            <div key={r.key} className={`res-card kind-${r.kind}`}>
+              {r.kind === 'link' ? (
+                <a className="res-preview" href={r.url} target="_blank" rel="noopener noreferrer" title="Open in a new tab">
+                  {thumb(r)}
+                </a>
+              ) : (
+                <button type="button" className="res-preview" onClick={() => setViewing(r)} title={r.kind === 'video' ? 'Play' : 'View larger'}>
+                  {thumb(r)}
+                  {r.kind === 'video' && (
+                    <span className="res-play" aria-hidden="true">
+                      ▶
+                    </span>
+                  )}
+                </button>
+              )}
+              <div className="res-info">
+                <strong className="res-title">{r.title}</strong>
+                {r.tags.length > 0 && (
+                  <div className="res-tags">
+                    {r.tags.map((t) => (
+                      <span key={t.name} className="chip">
+                        <span className="dot" style={{ background: t.color }} />
+                        {t.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {r.kind === 'link' && <span className="muted small">{hostOf(r.url)}</span>}
+                <div className="res-actions">
+                  {r.kind === 'link' ? (
+                    <a className="btn small" href={r.url} target="_blank" rel="noopener noreferrer" title={r.url}>
+                      Open
+                    </a>
+                  ) : (
+                    <button type="button" className="btn small" onClick={() => setViewing(r)}>
+                      {r.kind === 'video' ? 'Play' : 'View'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {viewing && (
+        <Modal title={viewing.title} onClose={() => setViewing(null)} wide>
+          {viewing.kind === 'image' ? <img className="res-full" src={fileOf(viewing)} alt={viewing.title} /> : <video className="res-full" src={fileOf(viewing)} controls autoPlay />}
+        </Modal>
+      )}
+    </>
   );
 }
 

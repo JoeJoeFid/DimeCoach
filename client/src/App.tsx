@@ -648,7 +648,19 @@ const MENU_ICONS = {
  * The person signed in, at the foot of the menu. Pressing it opens a list above it with their
  * account, the tour, the color theme and signing out.
  */
-function UserMenu({ user, onTour, onSignOut }: { user: User; onTour: () => void; onSignOut: () => void }) {
+export function UserMenu({
+  user,
+  onTour,
+  onSignOut,
+  onPassword,
+}: {
+  user: User;
+  /** Left out where there is no tour to take. */
+  onTour?: () => void;
+  onSignOut: () => void;
+  /** For an account that only follows teams: it has a password to change, and no account page or help of a coach's. */
+  onPassword?: () => void;
+}) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
@@ -686,10 +698,10 @@ function UserMenu({ user, onTour, onSignOut }: { user: User; onTour: () => void;
       {open && (
         <div className="user-pop" role="menu" aria-label="Your account">
           <span className="user-pop-email">{user.email}</span>
-          {item('Account', MENU_ICONS.account, () => navigate('/account'))}
-          {user.is_system_admin && item('System admin', icons.system, () => navigate('/system'))}
-          {item('Help', MENU_ICONS.help, () => navigate('/help'))}
-          {item('Take the tour', MENU_ICONS.tour, onTour)}
+          {onPassword ? item('Change password', MENU_ICONS.account, onPassword) : item('Account', MENU_ICONS.account, () => navigate('/account'))}
+          {!onPassword && user.is_system_admin && item('System admin', icons.system, () => navigate('/system'))}
+          {!onPassword && item('Help', MENU_ICONS.help, () => navigate('/help'))}
+          {onTour && item('Take the tour', MENU_ICONS.tour, onTour)}
           <div className="user-pop-row">
             <span>Appearance</span>
             <ThemeToggle />

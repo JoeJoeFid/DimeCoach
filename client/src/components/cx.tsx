@@ -222,3 +222,56 @@ export function SubTabs<T extends string>({ tabs, value, onChange, label }: { ta
     </div>
   );
 }
+
+/** Whether a list is shown as large cards or small rows. The choice is kept on this device, under `key`. */
+export function useCompact(key: string): [boolean, (on: boolean) => void] {
+  const [compact, setCompact] = useState(() => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const choose = (on: boolean) => {
+    setCompact(on);
+    try {
+      localStorage.setItem(key, on ? '1' : '0');
+    } catch {
+      /* no storage: it lasts until the page is left */
+    }
+  };
+  return [compact, choose];
+}
+/** "Cards" or "Compact", at the end of a list's row of filters. */
+export function LayoutToggle({ compact, onChange }: { compact: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <div className="seg" role="group" aria-label="Layout">
+      <button type="button" className={compact ? '' : 'on'} aria-pressed={!compact} onClick={() => onChange(false)}>
+        Cards
+      </button>
+      <button type="button" className={compact ? 'on' : ''} aria-pressed={compact} onClick={() => onChange(true)}>
+        Compact
+      </button>
+    </div>
+  );
+}
+/**
+ * The row of categories under a list's filters: "All", then each category with how many it holds.
+ * Pressing the chosen one again goes back to all. Nothing is drawn when there are no categories.
+ */
+export function CategoryChips<T extends string | number>({ all, total, items, value, onChange }: { /** What `value` is when every category shows. */ all: T; total: number; items: { id: T; label: string; count: number; color?: string }[]; value: T; onChange: (id: T) => void }) {
+  if (!items.length) return null;
+  return (
+    <div className="chips category-filter" role="group" aria-label="Filter by category">
+      <button type="button" className={`chip toggle ${value === all ? 'on' : ''}`} aria-pressed={value === all} onClick={() => onChange(all)}>
+        All <span className="chip-num">{total}</span>
+      </button>
+      {items.map((c) => (
+        <button key={String(c.id)} type="button" className={`chip toggle ${value === c.id ? 'on' : ''}`} aria-pressed={value === c.id} onClick={() => onChange(value === c.id ? all : c.id)}>
+          {c.color && <span className="dot" style={{ background: c.color }} />}
+          {c.label} <span className="chip-num">{c.count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}

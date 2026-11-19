@@ -726,6 +726,17 @@ export interface FamilyDay {
   /** What a practice covers, when the coach shares that: its parts and how long each runs. */
   summary: { minutes: number; items: { title: string; minutes: number; rest: boolean }[] } | null;
 }
+/** A link, picture or video a coach shared with the team's followers. `thumb` says a small preview picture is kept for a link. */
+export interface FamilyResource {
+  key: string;
+  kind: 'link' | 'image' | 'video';
+  title: string;
+  url: string;
+  file_id: number | null;
+  thumb: boolean;
+  /** The categories the coach filed it under. */
+  tags: { name: string; color: string }[];
+}
 /** A team as one of its followers sees it. A part they may not see comes back empty. */
 export interface FamilyTeam {
   team: { id: number; slug: string; name: string; sport: string; season: string; organization: string; coaches: { name: string; title: string }[] };
@@ -737,7 +748,7 @@ export interface FamilyTeam {
   homework: { id: number; title: string; date: string; for: string[]; content: SharedPlan }[];
   plays: SharedPlay[];
   drills: (SharedDrill & { id: number })[];
-  resources: { key: string; kind: 'link' | 'image' | 'video'; title: string; url: string; file_id: number | null }[];
+  resources: FamilyResource[];
   roster: { name: string; number: string }[];
 }
 export interface TeamContacts {

@@ -16304,3 +16304,66 @@ button.fam-day.next {
   margin-top: 4px;
   cursor: inherit;
 }
+
+/* One layout for the playbook and the resources, for coaches and for parents: filters, categories, then cards or compact rows. */
+.playbook-filters {
+  align-items: center;
+}
+button.play-card {
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.play-grid.compact {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.play-grid.compact .play-card {
+  flex-direction: row;
+  align-items: center;
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+}
+.play-grid.compact .play-card:hover {
+  transform: none;
+}
+.play-grid.compact .play-card .paper {
+  flex: none;
+  width: 72px;
+  padding: 3px;
+  border-bottom: none;
+  border-right: 1px solid var(--line);
+}
+.play-grid.compact .play-card-info {
+  flex: 1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  min-width: 0;
+  padding: 4px 52px 4px 12px;
+}
+.play-grid.compact .play-card-info > strong {
+  flex: 2 1 160px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.play-grid.compact .play-card-info > .muted {
+  flex: 2 1 160px;
+  min-width: 0;
+}
+.play-grid.compact .shared-with-line {
+  flex: 0 1 auto;
+  width: auto;
+  margin-top: 0;
+  padding: 2px 8px;
+}
+.play-grid.compact .play-share {
+  top: 50%;
+  transform: translateY(-50%);
+  box-shadow: none;
+}

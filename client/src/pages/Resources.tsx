@@ -9,6 +9,7 @@ import { prepareImage } from '../components/ItemImages';
 import { normalizeUrl } from '../components/ItemMedia';
 import { ResourceThumb, fileUrl, searchText } from '../components/ResourcePicker';
 import { Modal, ShareIcon } from '../components/bits';
+import { CategoryChips, LayoutToggle } from '../components/cx';
 import { ShareItemDialog, SharedWithBox, SharedWithLine, useShareSummary } from '../components/ShareItem';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
@@ -146,7 +147,9 @@ export default function Resources() {
   }, [resources]);
   const gone = usePendingDeletes();
   const tagged = tagging ? (resources || []).find((r) => r.key === tagging) : undefined;
-  const shown = (resources || []).filter((r) => !(r.resource_id && gone.has(`resource:${r.resource_id}`)) && (filter === 'all' || r.kind === filter) && inTag(r) && (!q.trim() || searchText(r).includes(q.trim().toLowerCase())));
+  // What the search and the kind leave, before a category narrows it: the categories are counted from these.
+  const inKind = (resources || []).filter((r) => !(r.resource_id && gone.has(`resource:${r.resource_id}`)) && (filter === 'all' || r.kind === filter) && (!q.trim() || searchText(r).includes(q.trim().toLowerCase())));
+  const shown = inKind.filter(inTag);
 
   return (
     <div className="page">
@@ -195,17 +198,6 @@ export default function Resources() {
 
       <div className="playbook-filters">
         <input className="input grow" placeholder="Search by name, address, or the drill, play or practice it is on" value={q} onChange={(e) => setQ(e.target.value)} />
-        {sportTags.length > 0 && (
-          <select className="input res-tag-filter" aria-label="Filter by category" value={tagId} onChange={(e) => setTagId(Number(e.target.value))}>
-            <option value={0}>All categories</option>
-            {sportTags.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-            <option value={-1}>No category</option>
-          </select>
-        )}
         <div className="seg" role="group" aria-label="Kind of resource">
           {FILTERS.map((f) => (
             <button key={f.id} className={filter === f.id ? 'on' : ''} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
@@ -213,15 +205,18 @@ export default function Resources() {
             </button>
           ))}
         </div>
-        <div className="seg" role="group" aria-label="Layout">
-          <button className={compact ? '' : 'on'} aria-pressed={!compact} onClick={() => chooseCompact(false)}>
-            Cards
-          </button>
-          <button className={compact ? 'on' : ''} aria-pressed={compact} onClick={() => chooseCompact(true)}>
-            Compact
-          </button>
-        </div>
+        <LayoutToggle compact={compact} onChange={chooseCompact} />
       </div>
+      <CategoryChips
+        all={0}
+        total={inKind.length}
+        value={tagId}
+        onChange={setTagId}
+        items={[
+          ...sportTags.map((t) => ({ id: t.id, label: t.name, color: t.color, count: inKind.filter((r) => r.tag_ids.includes(t.id)).length })),
+          ...(sportTags.length ? [{ id: -1, label: 'No category', count: inKind.filter((r) => !r.tag_ids.some((id) => sportTagIds.has(id))).length }] : []),
+        ]}
+      />
 
       {resources === null ? (
         <p className="muted">Loading…</p>

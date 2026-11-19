@@ -11,6 +11,7 @@ import { playBuilderSupports } from '../util';
 import { sportKind } from '../sports';
 import PlayIntro from '../components/PlayIntro';
 import { ShareIcon } from '../components/bits';
+import { CategoryChips, LayoutToggle, useCompact } from '../components/cx';
 import { ShareItemDialog, SharedWithLine, useShareSummary } from '../components/ShareItem';
 
 const resourceLabel = (n: number) => (n > 0 ? `${n} resource${n === 1 ? '' : 's'}` : '');
@@ -27,6 +28,7 @@ export default function Playbook() {
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [label, setLabel] = useState('');
+  const [compact, setCompact] = useCompact('practiceplan.playbookCompact');
 
   useEffect(() => {
     setPlays(null);
@@ -169,23 +171,13 @@ export default function Playbook() {
                 </option>
               ))}
             </select>
+            <LayoutToggle compact={compact} onChange={setCompact} />
           </div>
-          {categories.length > 0 && (
-            <div className="chips category-filter" role="group" aria-label="Filter by category">
-              <button className={`chip toggle ${category === '' ? 'on' : ''}`} aria-pressed={category === ''} onClick={() => setCategory('')}>
-                All <span className="chip-num">{plays.length}</span>
-              </button>
-              {categories.map((c) => (
-                <button key={c} className={`chip toggle ${category === c ? 'on' : ''}`} aria-pressed={category === c} onClick={() => setCategory(category === c ? '' : c)}>
-                  {c} <span className="chip-num">{plays.filter((p) => p.category === c).length}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <CategoryChips all="" total={plays.length} value={category} onChange={setCategory} items={categories.map((c) => ({ id: c, label: c, count: plays.filter((p) => p.category === c).length }))} />
           {shown.length === 0 ? (
             <p className="muted">No plays match.</p>
           ) : (
-            <div className="play-grid">
+            <div className={`play-grid ${compact ? 'compact' : ''}`}>
               {shown.map((p) => (
                 <div key={p.id} className="play-card-wrap">
                 <Link to={`/plays/${p.id}`} className="play-card">
