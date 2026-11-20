@@ -14,6 +14,9 @@ import { PasswordForm } from './Auth';
 import { FollowedTeams, NEW_TEAM_KEY } from '../components/TeamPicker';
 import { NAV_ICONS, UserMenu } from '../App';
 import Inbox from '../components/Inbox';
+import { MyStats } from './Stats';
+import GameVideo from '../components/GameVideo';
+import { periodName } from '../scoring';
 import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -134,9 +137,9 @@ function StartCoaching({ user, onBack, onSignOut }: { user: User; onBack: () => 
 /** The parts of a team's page in the menu at the side, grouped as a coach's menu is. */
 // Worked out when it is drawn: the icons belong to the app's own file, which is still loading when this one is read.
 const sideGroups = (): { title: string; items: [Tab, string][] }[] => [
-  { title: 'Plan', items: [['schedule', NAV_ICONS.practices], ['homework', NAV_ICONS.homework]] },
+  { title: 'Plan', items: [['schedule', NAV_ICONS.practices], ['homework', NAV_ICONS.homework], ['video', NAV_ICONS.video]] },
   { title: 'Library', items: [['drills', NAV_ICONS.library], ['playbook', NAV_ICONS.playbook], ['resources', NAV_ICONS.resources]] },
-  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['messages', NAV_ICONS.community], ['inbox', NAV_ICONS.messages]] },
+  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['stats', NAV_ICONS.stats], ['messages', NAV_ICONS.community], ['inbox', NAV_ICONS.messages]] },
 ];
 
 /**
@@ -314,7 +317,7 @@ export function FamilyHome({ name }: { name: string }) {
   );
 }
 
-type Tab = 'home' | 'schedule' | 'messages' | 'inbox' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
+type Tab = 'home' | 'schedule' | 'messages' | 'inbox' | 'stats' | 'video' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
 
 /** One team, as a follower sees it. */
 export function FamilyTeamPage({ frame }: { /** Present for an account that only follows teams: the page then wears the menu at the side. */ frame?: Frame } = {}) {
@@ -335,6 +338,9 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
     setError('');
     load();
     api.followedTeams().then((t) => setOthers(t.length - 1), () => {});
+    // A score that moves while the page is open shows without loading it again.
+    window.addEventListener('dime:news', load);
+    return () => window.removeEventListener('dime:news', load);
   }, [load]);
   const framed = (inner: ReactNode, team?: FamilyTeam['team'], tabs: [Tab, string, number?][] = [], tab: Tab = 'home', go: (t: Tab) => void = () => {}) =>
     frame ? (
@@ -363,8 +369,9 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
     ...(can.schedule ? [['schedule', 'Schedule'] as [Tab, string]] : []),
     ...(can.news || can.board ? [['messages', 'Team news'] as [Tab, string]] : []),
     // Their own inbox, which is not about this team alone. A coach who also follows the team has theirs in the coach's menu.
-    ...(frame ? [['inbox', 'Messages'] as [Tab, string]] : []),
+    ...(frame ? [['inbox', 'Messages'] as [Tab, string], ['stats', 'My stats'] as [Tab, string]] : []),
     ...(can.homework ? [['homework', 'Homework', data.homework.length] as [Tab, string, number]] : []),
+    ...(data.video.watch || data.video.broadcast ? [['video', 'Game video'] as [Tab, string]] : []),
     ...(can.playbook ? [['playbook', 'Playbook', data.plays.length] as [Tab, string, number]] : []),
     ...(can.drills ? [['drills', 'Drills', data.drills.length] as [Tab, string, number]] : []),
     ...(can.resources ? [['resources', 'Resources', data.resources.length] as [Tab, string, number]] : []),
@@ -402,6 +409,11 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
         </nav>
       )}
 
+      {tab === 'home' && data.video.live && (
+        <button type="button" className="fam-live" onClick={() => go('video')}>
+          <span className="gv-badge">LIVE</span> A game is being broadcast now. <strong>Watch</strong>
+        </button>
+      )}
       {tab === 'home' && (
         <div className={`fam-home ${can.schedule ? 'with-schedule' : ''}`}>
           {can.schedule && (
@@ -477,6 +489,8 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
 
       {tab === 'schedule' && <Schedule days={data.schedule} today={today} />}
       {tab === 'messages' && <Messages teamId={id} data={data} me={frame?.user.name} start={params.get('show') === 'board' || !can.news ? 'board' : 'news'} setBoard={(board) => setData({ ...data, board })} />}
+      {tab === 'stats' && frame && <MyStats />}
+      {tab === 'video' && <GameVideo teamId={team.id} />}
       {tab === 'inbox' && frame && (
         <Inbox
           user={frame.user}
@@ -797,6 +811,8 @@ function DayPeek({ day, at }: { day: FamilyDay; at: { left: number; right: numbe
 }
 
 /** A practice or game opened: everything the coach lets this person see about it. */
+/** "Final 42–38", or "Live · Q2 · 20–18" while a game is being scored. '' for anything without a score. */
+const scoreText = (d: FamilyDay) => (d.score ? `${d.score.status === 'final' ? 'Final' : `Live · ${periodName(d.score.period)}`} · ${d.score.us}–${d.score.them}` : '');
 function DayDetails({ day, onClose }: { day: FamilyDay; onClose: () => void }) {
   return (
     <Modal title={day.title} onClose={onClose}>
@@ -816,6 +832,12 @@ function DayDetails({ day, onClose }: { day: FamilyDay; onClose: () => void }) {
             <>
               <dt>Place</dt>
               <dd>{day.location}</dd>
+            </>
+          )}
+          {day.score && (
+            <>
+              <dt>Score</dt>
+              <dd className="fam-score">{scoreText(day)}</dd>
             </>
           )}
           {day.summary && (
@@ -888,6 +910,7 @@ function NextUp({ day, today }: { day: FamilyDay; today: string }) {
             Next up <i>{howSoon(day.date, today)}</i>
           </span>
           <strong>{day.title}</strong>
+          {day.score && <span className="fam-next-line fam-score">{scoreText(day)}</span>}
           <span className="fam-next-line">{dayLine(day)}</span>
           {day.summary && <span className="fam-next-line">{day.summary.minutes} minutes planned, in {plural(day.summary.items.length, 'part')}</span>}
         </span>
@@ -910,6 +933,7 @@ function DayList({ days, nextKey }: { days: FamilyDay[]; /** The next thing on t
                 <strong>
                   {d.title}
                   {d.key === nextKey && <span className="fam-next-pill">Next up</span>}
+                  {d.score && <span className={`fam-score-pill ${d.score.status}`}>{scoreText(d)}</span>}
                 </strong>
                 <span className="muted small">
                   {dayLine(d)}

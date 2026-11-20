@@ -92,6 +92,10 @@ function gate(req) {
     case 'shared-teams':
     case 'community-shares':
     case 'messages':
+    // Stats someone keeps for one player are their own, wherever they are working.
+    case 'tracks':
+    // Live video checks for itself who is on the team and what they may do.
+    case 'streams':
     // Taking a copy of a practice someone sent goes to the caller's own teams, wherever they are working.
     case 'plan-links':
     case 'item-links':

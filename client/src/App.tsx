@@ -13,6 +13,10 @@ import { Join, PasswordForm, Setup, SignedOut, Welcome } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import Messages from './pages/Messages';
+import ScoreGame from './pages/ScoreGame';
+import Stats from './pages/Stats';
+import GameVideo from './components/GameVideo';
+import PageTitle from './components/PageTitle';
 import { MessageSettings } from './components/Inbox';
 import CoachLibraryPage from './pages/CoachLibrary';
 import CommunityPage from './pages/Community';
@@ -79,6 +83,8 @@ export const NAV_ICONS = {
   community: 'M4 5h11v8H9l-3 3v-3H4zM15 9h5v8h-2v3l-3-3h-4v-2',
   messages: 'M4 6h16v12H4zM4 7.500l8 6 8-6',
   coachLibrary: 'M5 4v16M9 4v16M13 5l5 15M5 4h4M5 20h4M3 20h18',
+  stats: 'M4 20h16M7 20v-7M12 20V5M17 20v-10',
+  video: 'M3.5 7h11v10h-11zM14.5 10.500l6-3v9l-6-3',
 };
 const icons = NAV_ICONS;
 interface NavItem {
@@ -96,6 +102,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { to: '/practices', label: 'Schedule', icon: icons.practices },
       { to: '/homework', label: 'Homework', icon: icons.homework },
+      { to: '/video', label: 'Game video', icon: icons.video },
     ],
   },
   {
@@ -112,6 +119,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: 'Team',
     items: [
       { to: '/teams', label: 'Team', icon: icons.teams },
+      { to: '/stats', label: 'Stats', icon: icons.stats },
       { to: '/tags', label: 'Categories', icon: icons.tags },
     ],
   },
@@ -502,6 +510,9 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           <Route path="/practices" element={<Plans kind="practice" />} />
           <Route path="/homework" element={<Plans kind="homework" />} />
           <Route path="/plans/:id" element={<PlanEditor />} />
+          <Route path="/plans/:id/score" element={<ScoreGame />} />
+          <Route path="/stats" element={<Stats />} />
+          <Route path="/video" element={<VideoPage />} />
           <Route path="/go/plan/:teamId/:planId" element={<GoToPlan />} />
           <Route path="/go/board/:teamId" element={<GoToBoard />} />
           <Route path="/plans/:id/print" element={<PrintView />} />
@@ -620,6 +631,22 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
  * Opens a plan from a message. When it belongs to a team other than the one being worked on, that
  * team is opened first: the page it lands on then carries on to the plan.
  */
+/** A team's game video: live, saved, and who may watch. */
+function VideoPage() {
+  const app = useApp();
+  const plan = Number(new URLSearchParams(useLocation().search).get('plan')) || undefined;
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <PageTitle>Game video</PageTitle>
+          <p className="muted">Broadcast a game from a phone or tablet to the people around the team, and watch what is live.</p>
+        </div>
+      </div>
+      {app.team && <GameVideo key={app.team.id} teamId={app.team.id} planId={plan} title={plan ? 'Game' : ''} />}
+    </div>
+  );
+}
 function GoToPlan() {
   const { teamId, planId } = useParams();
   // "?post=12" rides along, so a mention lands on the message itself.

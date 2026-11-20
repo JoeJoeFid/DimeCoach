@@ -16744,3 +16744,608 @@ button.play-card {
 .inbox-target:hover {
   border-color: var(--muted);
 }
+
+/* ---------- Keeping score ---------- */
+.score-page {
+  max-width: 760px;
+}
+.score-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+.score-head .seg {
+  margin-left: auto;
+}
+.sp-sync {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.sp-sync.offline,
+.sp-sync.taken {
+  color: var(--ink);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+}
+.sp {
+  display: grid;
+  gap: 14px;
+}
+.sp-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.sp-side {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.sp-side.them {
+  text-align: right;
+}
+.sp-side-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.sp-score {
+  font-size: 3rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.sp-mid {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+.sp-period {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sp-period strong {
+  min-width: 44px;
+  text-align: center;
+  font-size: 1.1rem;
+}
+.sp-period .btn {
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 1.1rem;
+}
+.sp-clock {
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-family: var(--mono);
+  font-weight: 600;
+  cursor: pointer;
+}
+.sp-clock.running {
+  background: var(--accent);
+  border-color: var(--accent-edge);
+  color: var(--accent-ink);
+}
+.sp-solo-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.sp-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+.sp-line b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.sp-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sp-grow {
+  flex: 1;
+}
+.sp-undo {
+  min-height: 44px;
+  font-weight: 600;
+}
+.sp-options {
+  display: grid;
+  gap: 12px;
+}
+.sp-options .setting > span {
+  display: grid;
+  gap: 2px;
+}
+.sp-len {
+  max-width: 180px;
+}
+.sp-team {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.sp-team h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+.sp-hint {
+  margin: 0 0 8px;
+  min-height: 1.2em;
+}
+.sp-tiles {
+  display: grid;
+  gap: 8px;
+}
+.sp-tiles.floor {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.sp-tiles.bench {
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+}
+.sp-tile {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  min-height: 76px;
+  padding: 8px 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.sp-tile.bench {
+  min-height: 54px;
+  background: var(--surface);
+}
+.sp-tile.on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+.sp-num {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.sp-tile.bench .sp-num {
+  font-size: 1.05rem;
+}
+.sp-name,
+.sp-mini {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.76rem;
+}
+.sp-mini {
+  opacity: 0.7;
+}
+.sp-bench-label {
+  display: block;
+  margin: 14px 0 6px;
+  padding: 0;
+}
+.sp-pad {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.sp-pad-row,
+.sp-points,
+.sp-quick {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.sp-quick {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 8px;
+}
+.sp-key {
+  min-height: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.sp-key:active {
+  transform: scale(0.97);
+}
+.sp-key.made {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+  font-size: 1.15rem;
+}
+.sp-key.big {
+  min-height: 68px;
+  font-size: 1.5rem;
+}
+.sp-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-edge);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.sp-ask.sub {
+  margin-top: 10px;
+}
+.sp-chip {
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sp-chip.none {
+  background: none;
+  font-weight: 400;
+}
+.sp-off {
+  display: inline-block;
+  margin-top: 10px;
+}
+.sp-opp {
+  margin-top: 12px;
+}
+.sp-add-opp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sp-add-opp .input {
+  width: 64px;
+}
+.sp-final {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sp-periods {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+.sp-periods th,
+.sp-periods td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  font-weight: 400;
+  color: var(--ink-2);
+}
+.sp-periods tr > :first-child {
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sp-plays h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+.sp-plays ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sp-plays li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+.sp-when {
+  flex: none;
+  min-width: 62px;
+  font-family: var(--mono);
+}
+.sp-what {
+  flex: 1;
+  min-width: 0;
+}
+.sp-table td:not(:first-child),
+.sp-table th:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sp-theirs h2 {
+  margin-top: 0;
+}
+.gp-score-link {
+  margin-left: auto;
+}
+@media (max-width: 520px) {
+  .sp-score {
+    font-size: 2.4rem;
+  }
+  .sp-tiles.floor {
+    gap: 5px;
+  }
+  .sp-quick {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* Stats one person keeps for one player. */
+.my-stats-about {
+  margin: 0;
+  max-width: 560px;
+}
+.track-new {
+  margin-bottom: 14px;
+}
+.track-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+}
+.track-head h2 {
+  margin: 0;
+}
+.track-share {
+  margin-top: 14px;
+}
+.track-share .setting > span {
+  display: grid;
+  gap: 2px;
+}
+.track-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.track-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+}
+.track-list li:first-child {
+  border-top: none;
+}
+.track-row {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 6px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.track-row:hover {
+  background: var(--surface-2);
+}
+/* A game's score on a follower's schedule. */
+.fam-score {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.fam-score-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 0.76rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 1px;
+}
+.fam-score-pill.live {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+/* The question after a shot sits where the buttons were, and is as tall, so nothing jumps. */
+.sp-team .sp-ask:not(.sub) {
+  margin-top: 10px;
+  min-height: 248px;
+  align-content: flex-start;
+}
+.sp-team .sp-ask:not(.sub) strong {
+  flex-basis: 100%;
+  font-size: 1.1rem;
+}
+.sp-team .sp-ask:not(.sub) .sp-chip {
+  min-height: 56px;
+  padding: 6px 18px;
+  font-size: 1rem;
+}
+.sp-add-opp .input {
+  width: 76px;
+  min-height: 44px;
+}
+.sp-add-opp .btn {
+  min-height: 44px;
+}
+@media (max-width: 900px) {
+  /* Under the slim bar at the top of a phone, not behind it. */
+  .sp-top {
+    top: 52px;
+  }
+}
+
+/* ---------- Game video ---------- */
+.gv {
+  display: grid;
+  gap: 14px;
+  max-width: 860px;
+}
+.gv-screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+}
+.gv-screen video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.gv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.gv-screen .gv-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+}
+.gv-badge b {
+  font-family: var(--mono);
+  letter-spacing: 0;
+}
+.gv-play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 76px;
+  height: 76px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0d0d0e;
+  font-size: 1.7rem;
+  cursor: pointer;
+}
+.gv-wait {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  text-align: center;
+  color: #fff;
+  font-size: 0.86rem;
+  text-shadow: 0 1px 3px #000;
+}
+.gv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.gv-actions .btn {
+  min-height: 44px;
+}
+.gv-note {
+  margin: 10px 0 0;
+}
+.gv-none h2,
+.gv-live h2 {
+  margin-top: 0;
+}
+.gv-seek {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.gv-seek input {
+  flex: 1;
+  accent-color: var(--ink);
+}
+.gv-people td:not(:first-child),
+.gv-people th:not(:first-child) {
+  text-align: center;
+  width: 110px;
+}
+.gv-people input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ink);
+}
+.fam-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sv-teams {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}

@@ -1,3 +1,4 @@
+import type { GameEvent, ScoreState, Scoresheet } from './scoring';
 import type { Drill, ImportDraft, InviteInfo, Item, Plan, PlanKind, PlanSummary, Play, Player, Resource, ScheduleEvent, SharedTeam, Sport, StaffMember, Tag, Team, TeamAccess, TeamInvite, TeamPerms } from './types';
 
 /** Fired when the server says the session is gone, so the app can show the sign-in screen. */
@@ -747,6 +748,56 @@ export interface FamilyDay {
   location: string;
   /** What a practice covers, when the coach shares that: its parts and how long each runs. */
   summary: { minutes: number; items: { title: string; minutes: number; rest: boolean }[] } | null;
+  /** A game that is being scored, or was: the score, how far along it is, and each period's points. */
+  score?: { us: number; them: number; status: 'live' | 'final'; period: number; periods: { us: number; them: number }[] } | null;
+}
+/** Live video of a game, or one that was saved. It is made of `segments` pieces, each `segment_seconds` long. */
+export interface GameStream {
+  id: number;
+  team_id: number;
+  plan_id: number | null;
+  title: string;
+  transport: 'segments';
+  mime: string;
+  status: 'live' | 'ended';
+  saved: boolean;
+  segments: number;
+  segment_seconds: number;
+  seconds: number;
+  bytes: number;
+  started_at: string;
+  ended_at: string | null;
+  by: string;
+}
+export interface StreamList {
+  can: { watch: boolean; broadcast: boolean; save: boolean; coach: boolean };
+  live: GameStream[];
+  saved: GameStream[];
+  free_bytes?: number;
+}
+/** One of a team's parents, family or friends, and what they may do with its live video. */
+export interface StreamPerson {
+  id: number;
+  name: string;
+  kind: string;
+  joined: boolean;
+  watch: boolean;
+  broadcast: boolean;
+}
+export interface StreamTeam {
+  id: number;
+  name: string;
+  owner: string;
+  save: boolean;
+  videos: number;
+  bytes: number;
+}
+/** A team someone can keep single-player stats for, with the players they may pick: all of them for a coach, their own for a parent. */
+export interface TrackTeam {
+  id: number;
+  name: string;
+  coach: boolean;
+  players: { id: number; name: string; number: string }[];
 }
 /** A link, picture or video a coach shared with the team's followers. `thumb` says a small preview picture is kept for a link. */
 export interface FamilyResource {
@@ -763,6 +814,7 @@ export interface FamilyResource {
 export interface FamilyTeam {
   team: { id: number; slug: string; name: string; sport: string; season: string; organization: string; coaches: { name: string; title: string }[] };
   me: { kind: FamilyKind; players: string[] };
+  video: { watch: boolean; broadcast: boolean; live: boolean };
   can: Record<FamilySection, boolean>;
   schedule: FamilyDay[];
   news: TeamPost[];
@@ -836,6 +888,33 @@ export const api = {
   },
   communities: () => req<Community[]>('GET', '/communities'),
   communityNews: () => req<CommunityNews>('GET', '/communities/news'),
+  score: (planId: number) => req<{ sheet: Scoresheet | null }>('GET', `/plans/${planId}/score`),
+  /** Saves a game's scoresheet. A 409 means someone else has taken over keeping score; no connection throws. */
+  saveScore: async (planId: number, b: { state: ScoreState; events: GameEvent[]; rev: number; take: boolean }): Promise<{ status: number; sheet?: Scoresheet; error?: string }> => {
+    const res = await fetch(`/api/plans/${planId}/score`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+    const body = await res.json().catch(() => ({}));
+    return { status: res.status, sheet: body.sheet, error: body.error };
+  },
+  teamScores: (teamId: number) => req<{ games: Scoresheet[]; shared: Scoresheet[] }>('GET', `/teams/${teamId}/scores`),
+  streams: (teamId: number) => req<StreamList>('GET', `/streams?team_id=${teamId}`),
+  stream: (id: number) => req<GameStream>('GET', `/streams/${id}`),
+  startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string }) => req<{ stream: GameStream; can_save: boolean }>('POST', '/streams', b),
+  /** Sends one piece of video as it is, not as JSON. */
+  sendSegment: async (id: number, piece: Blob) => {
+    const res = await fetch(`/api/streams/${id}/segments`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: piece });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Request failed (${res.status})`);
+  },
+  endStream: (id: number, keep: boolean) => req<{ ok: true; saved: boolean }>('POST', `/streams/${id}/end`, { keep }),
+  deleteStream: (id: number) => req<{ ok: true }>('DELETE', `/streams/${id}`),
+  streamPeople: (teamId: number) => req<{ save: boolean; people: StreamPerson[] }>('GET', `/streams/teams/${teamId}/people`),
+  setStreamPerson: (teamId: number, contactId: number, b: { watch?: boolean; broadcast?: boolean }) => req<{ save: boolean; people: StreamPerson[] }>('PUT', `/streams/teams/${teamId}/people/${contactId}`, b),
+  adminStreamTeams: () => req<StreamTeam[]>('GET', '/streams/admin/teams'),
+  adminSetStreamTeam: (teamId: number, save: boolean) => req<StreamTeam[]>('PUT', `/streams/admin/teams/${teamId}`, { save }),
+  tracks: () => req<{ teams: TrackTeam[]; sheets: Scoresheet[] }>('GET', '/tracks'),
+  addTrack: (b: { team_id?: number; player_id?: number; player_name: string; title: string; date: string }) => req<{ id: number; teams: TrackTeam[]; sheets: Scoresheet[] }>('POST', '/tracks', b),
+  saveTrack: (id: number, b: { state: ScoreState; events: GameEvent[] }) => req<{ sheet: Scoresheet }>('PUT', `/tracks/${id}`, b),
+  shareTrack: (id: number, on: boolean) => req<{ teams: TrackTeam[]; sheets: Scoresheet[] }>('POST', `/tracks/${id}/share`, { on }),
+  deleteTrack: (id: number) => req<{ teams: TrackTeam[]; sheets: Scoresheet[] }>('DELETE', `/tracks/${id}`),
   messages: () => req<CommunityNews>('GET', '/messages'),
   messagePeople: () => req<ToGroup[]>('GET', '/messages/people'),
   messagesSent: () => req<CommunityNewsItem[]>('GET', '/messages/sent'),

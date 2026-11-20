@@ -164,6 +164,12 @@ export default function GamePlanner({
           {game.opponent ? `${game.side === 'away' ? 'at' : 'vs.'} ${game.opponent}` : 'Game plan'}
           {start && <span className="gp-start"> · {start}</span>}
         </h2>
+        <Link className="btn gp-score-link" to={`/video?plan=${plan.id}`}>
+          Go live
+        </Link>
+        <Link className="btn primary" to={`/plans/${plan.id}/score`}>
+          Score this game
+        </Link>
         <div className="plan-column-actions">{actions}</div>
       </div>
       {practiceItems > 0 && (

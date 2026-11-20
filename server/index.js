@@ -23,6 +23,8 @@ import { mountResources } from './resources.js';
 import { mountMailRules } from './mailRules.js';
 import { mountLinkThumbs } from './linkThumbs.js';
 import { mountStaff, staffBootstrap } from './staff.js';
+import { mountGames } from './games.js';
+import { mountStreams } from './streams.js';
 
 seedIfEmpty();
 
@@ -54,6 +56,8 @@ mountAuth(app);
 mountFamily(app);
 mountStaff(app);
 mountFamilyCoach(app);
+mountGames(app);
+mountStreams(app);
 mountImages(app);
 mountCommunities(app);
 mountOrgs(app);

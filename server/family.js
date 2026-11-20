@@ -14,6 +14,8 @@ import { resourceList } from './resources.js';
 import { coachesOfTeam, followersOfTeam } from './inbox.js';
 import { mention, mentionedIn } from './notices.js';
 import { publicBase } from './invites.js';
+import { scoreOfPlan } from './games.js';
+import { liveNow } from './streams.js';
 
 const uploadsDir = path.join(path.dirname(dbPath), 'uploads');
 const addColumn = (table, column, ddl) => {
@@ -209,7 +211,8 @@ function scheduleOf(team, can) {
       // Without the details, a game is only a game on its day.
       if (d.kind === 'game' && !can.games) return { key: d.key, kind: d.kind, title: 'Game', date: d.date, start_time: '', end_time: '', location: '', summary: null };
       const { plan, ...day } = d;
-      return { ...day, summary: plan && day.kind === 'practice' && can.practices ? practiceSummary(plan) : null };
+      // A game someone is scoring, or has scored, comes with its score.
+      return { ...day, summary: plan && day.kind === 'practice' && can.practices ? practiceSummary(plan) : null, score: plan && day.kind === 'game' ? scoreOfPlan(plan) : null };
     });
 }
 /** Homework for the whole team, and for this person's own players. */
@@ -268,6 +271,12 @@ export function mountFamily(app) {
     res.json({
       team: { id: team.id, slug: slugOf(team), name: team.name, sport: sportOf(team), season: team.season || '', organization: team.community_id ? get('SELECT name FROM communities WHERE id=?', team.community_id)?.name || '' : '', coaches: coachesOf(team) },
       me: { kind: f.kind, players: f.players.map((p) => p.name) },
+      // Live video: whether this person may watch or broadcast, and whether something is going out now.
+      video: (() => {
+        const mine = all('SELECT can_watch, can_broadcast FROM team_contacts WHERE team_id=? AND user_id=?', team.id, req.user.id);
+        const watch = mine.some((c) => c.can_watch);
+        return { watch, broadcast: mine.some((c) => c.can_broadcast), live: watch && liveNow(team.id) };
+      })(),
       can,
       schedule: can.schedule ? scheduleOf(team, can) : [],
       news: can.news ? postsOf(team.id, 'news', req.user.id) : [],
