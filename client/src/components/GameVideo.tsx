@@ -5,7 +5,6 @@
 // what is happening. See server/streams.js for why it is built this way and how it could change.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
-import { SubTabs } from './cx';
 import { confirmDialog } from './dialogs';
 
 const mb = (bytes: number) => (bytes >= 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1024 / 1024))} MB`);
@@ -128,7 +127,9 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
     const type = recordingType();
     if (!type) return setError('This browser cannot record video, so it cannot broadcast.');
     try {
-      const r = await api.startStream({ team_id: teamId, plan_id: planId, title, mime: type });
+      const today = new Date();
+      const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const r = await api.startStream({ team_id: teamId, plan_id: planId, title, mime: type, date });
       state.current = { ...state.current, id: r.stream.id, on: true, queue: [] };
       setLive(r.stream);
       setStarted(Date.now());
@@ -225,7 +226,13 @@ export function StreamPlayer({ stream, onGone }: { stream: GameStream; onGone?: 
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream.id, meta.status]);
-  // The piece to show: played as soon as it exists.
+  // The piece to show: fetched whole, then played. The player itself never holds a connection
+  // open, which a video element pointed straight at the server can do long after it is gone.
+  const loaded = useRef(-1);
+  const blobUrl = useRef('');
+  const here = useRef(true);
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
   useEffect(() => {
     const el = video.current;
     if (!el || over) return;
@@ -237,14 +244,38 @@ export function StreamPlayer({ stream, onGone }: { stream: GameStream; onGone?: 
       }
       return;
     }
-    const src = `/api/streams/${stream.id}/segments/${at}`;
-    if (el.getAttribute('data-n') === String(at)) return;
-    el.setAttribute('data-n', String(at));
-    el.src = src;
+    if (loaded.current === at) return;
+    loaded.current = at;
     setWaiting(false);
-    if (playing) el.play().catch(() => setPlaying(false));
+    fetch(`/api/streams/${stream.id}/segments/${at}`)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('gone'))))
+      .then(
+        (piece) => {
+          // Moved on, or left, while it was on its way.
+          if (!here.current || loaded.current !== at) return;
+          if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
+          blobUrl.current = URL.createObjectURL(piece);
+          el.setAttribute('data-n', String(at));
+          el.src = blobUrl.current;
+          if (playingRef.current) el.play().catch(() => setPlaying(false));
+        },
+        () => here.current && loaded.current === at && next(),
+      );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [at, meta.segments, meta.status, over]);
+  useEffect(() => {
+    here.current = true;
+    const el = video.current;
+    return () => {
+      here.current = false;
+      if (el) {
+        el.pause();
+        el.removeAttribute('src');
+        el.load();
+      }
+      if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
+    };
+  }, []);
   const next = () => {
     const m = metaRef.current;
     // Fallen far behind a live stream: jump back near the front.
@@ -278,16 +309,98 @@ export function StreamPlayer({ stream, onGone }: { stream: GameStream; onGone?: 
   );
 }
 
-type View = 'live' | 'saved' | 'people';
-/** A team's video: what is live, going live yourself, the saved games, and who may do what. */
+/** Who around a team may watch its live video and who may broadcast, person by person. */
+export function StreamPeople({ teamId }: { teamId: number }) {
+  const [people, setPeople] = useState<{ save: boolean; people: StreamPerson[] } | null>(null);
+  const [error, setError] = useState('');
+  const failed = (e: unknown) => setError((e as Error).message);
+  useEffect(() => {
+    setPeople(null);
+    api.streamPeople(teamId).then(setPeople, failed);
+  }, [teamId]);
+  const setPerson = (p: StreamPerson, change: { watch?: boolean; broadcast?: boolean }) => api.setStreamPerson(teamId, p.id, change).then(setPeople, failed);
+  return (
+    <>
+      <p className="muted small">
+        Games can be broadcast live from a phone or tablet, from the game's own page. The team's coaches can always watch and broadcast. For its parents, family and friends, you choose person by person.{' '}
+        {people && (people.save ? 'This team may save its game video.' : 'Saving game video is not turned on for this team: the administrator decides which teams may keep video.')}
+      </p>
+      {error && <p className="error">{error}</p>}
+      {!people ? (
+        <p className="muted">Loading…</p>
+      ) : people.people.length === 0 ? (
+        <p className="muted">Nobody is on this team's list of parents, family and friends yet.</p>
+      ) : (
+        <div className="table-scroll">
+          <table className="table gv-people">
+            <thead>
+              <tr>
+                <th>Person</th>
+                <th>Watch live</th>
+                <th>Broadcast</th>
+              </tr>
+            </thead>
+            <tbody>
+              {people.people.map((p) => (
+                <tr key={p.id}>
+                  <td>
+                    {p.name}{' '}
+                    <span className="muted small">
+                      {p.kind}
+                      {p.joined ? '' : ' · no account yet'}
+                    </span>
+                  </td>
+                  <td>
+                    <input type="checkbox" aria-label={`${p.name} may watch live video`} checked={p.watch} onChange={(e) => setPerson(p, { watch: e.target.checked })} />
+                  </td>
+                  <td>
+                    <input type="checkbox" aria-label={`${p.name} may broadcast`} checked={p.broadcast} onChange={(e) => setPerson(p, { broadcast: e.target.checked })} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** One saved video as a row: play it, or delete it. */
+export function SavedVideo({ stream: s, onGone }: { stream: GameStream; onGone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const remove = async () => {
+    if (!(await confirmDialog({ title: 'Delete this video?', body: `${s.title || 'Game video'}, ${day(s.started_at)}. It is gone for good, and its ${mb(s.bytes)} is freed.`, confirmLabel: 'Delete', danger: true }))) return;
+    api.deleteStream(s.id).then(onGone, () => {});
+  };
+  return (
+    <li className={open ? 'open' : ''}>
+      <div className="gv-saved-row">
+        <button type="button" className="track-row" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <strong>{s.title || 'Game video'}</strong>
+          <span className="muted small">
+            {day(s.started_at)} · {span(s.seconds)} · {mb(s.bytes)} · from {s.by}
+          </span>
+        </button>
+        <button type="button" className="link small" onClick={remove}>
+          Delete
+        </button>
+      </div>
+      {open && <StreamPlayer stream={s} />}
+    </li>
+  );
+}
+
+/**
+ * The video of a game: what is live, going live from this device, and what was saved. With a
+ * `planId` it is that game's alone. Without one it is whatever the team has live, and a broadcast
+ * started here is filed under the team's game of the day.
+ */
 export default function GameVideo({ teamId, planId, title = '' }: { teamId: number; planId?: number; title?: string }) {
   const [list, setList] = useState<StreamList | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [casting, setCasting] = useState(false);
-  const [view, setView] = useState<View>('live');
-  const [watching, setWatching] = useState<GameStream | null>(null);
-  const [people, setPeople] = useState<{ save: boolean; people: StreamPerson[] } | null>(null);
   const load = useCallback(() => api.streams(teamId).then(setList, (e) => setError((e as Error).message)), [teamId]);
   useEffect(() => {
     load();
@@ -299,148 +412,73 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
       window.clearInterval(timer);
     };
   }, [load]);
-  useEffect(() => {
-    if (view === 'people' && list?.can.coach) api.streamPeople(teamId).then(setPeople, (e) => setError((e as Error).message));
-  }, [view, teamId, list?.can.coach]);
   if (!list) return error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>;
   const { can } = list;
-  const setPerson = (p: StreamPerson, change: { watch?: boolean; broadcast?: boolean }) => api.setStreamPerson(teamId, p.id, change).then(setPeople, (e) => setError((e as Error).message));
-  const remove = async (s: GameStream) => {
-    if (!(await confirmDialog({ title: 'Delete this video?', body: `${s.title || 'Game video'}, ${day(s.started_at)}. It is gone for good, and its ${mb(s.bytes)} is freed.`, confirmLabel: 'Delete', danger: true }))) return;
-    api.deleteStream(s.id).then(() => (setWatching(null), load()), (e) => setError((e as Error).message));
-  };
+  const ofGame = (s: GameStream) => !planId || s.plan_id === planId;
+  const live = list.live.filter(ofGame);
+  const elsewhere = list.live.filter((s) => !ofGame(s));
+  const saved = list.saved.filter(ofGame);
   return (
     <div className="gv">
-      {can.coach && (
-        <SubTabs<View>
-          label="Game video"
-          value={view}
-          onChange={(v) => (setView(v), setWatching(null))}
-          tabs={[
-            ['live', 'Live'],
-            ['saved', 'Saved', list.saved.length],
-            ['people', 'Who can watch'],
-          ]}
-        />
-      )}
       {error && <p className="error">{error}</p>}
       {notice && <p className="notice">{notice}</p>}
-
-      {view === 'live' &&
-        (casting ? (
-          <Broadcast
-            teamId={teamId}
-            planId={planId}
-            title={title}
-            canSave={can.save}
-            onDone={(note) => {
-              setCasting(false);
-              setNotice(note);
-              load();
-            }}
-          />
-        ) : (
-          <>
-            {list.live.length === 0 ? (
-              <div className="card gv-none">
-                <h2>Nothing is live right now</h2>
-                <p className="muted">{can.watch ? 'When someone broadcasts a game for this team, it shows here to watch.' : 'Watching live video has not been turned on for you on this team.'}</p>
-              </div>
-            ) : (
-              list.live.map((s) => (
-                <div key={s.id} className="card gv-live">
-                  <h2>
-                    {s.title || 'Live now'} <span className="muted small">from {s.by}</span>
-                  </h2>
-                  <StreamPlayer stream={s} onGone={load} />
-                </div>
-              ))
-            )}
-            {can.broadcast && (
-              <div className="gv-actions">
-                <button type="button" className="btn primary" onClick={() => (setNotice(''), setCasting(true))}>
-                  Broadcast from this device
-                </button>
-                <span className="muted small">Uses this device's camera and microphone. {can.save ? 'You can save the video when you finish.' : 'The video is not kept afterwards.'}</span>
-              </div>
-            )}
-          </>
-        ))}
-
-      {view === 'saved' &&
-        (watching ? (
-          <div className="card">
-            <button type="button" className="link small" onClick={() => setWatching(null)}>
-              ← Saved video
-            </button>
-            <h2>{watching.title || 'Game video'}</h2>
-            <p className="muted small">
-              {day(watching.started_at)} · {span(watching.seconds)} · from {watching.by}
-            </p>
-            <StreamPlayer key={watching.id} stream={watching} />
-          </div>
-        ) : (
-          <div className="card">
-            <p className="muted small">
-              Saved video is for this team's coaches. {can.save ? 'A broadcast can be saved when it ends.' : 'Saving video is not turned on for this team: the administrator decides which teams may keep video.'}
-              {list.free_bytes !== undefined && Number.isFinite(list.free_bytes) && ` The site has ${mb(list.free_bytes)} of room left.`}
-            </p>
-            {list.saved.length === 0 ? (
-              <p className="muted">No saved video yet.</p>
-            ) : (
-              <ul className="track-list">
-                {list.saved.map((s) => (
-                  <li key={s.id}>
-                    <button type="button" className="track-row" onClick={() => setWatching(s)}>
-                      <strong>{s.title || 'Game video'}</strong>
-                      <span className="muted small">
-                        {day(s.started_at)} · {span(s.seconds)} · {mb(s.bytes)} · from {s.by}
-                      </span>
-                    </button>
-                    <button type="button" className="link small" onClick={() => remove(s)}>
-                      Delete
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-
-      {view === 'people' && (
-        <div className="card">
-          <p className="muted small">The team's coaches can always watch and broadcast. For its parents, family and friends, you choose person by person.</p>
-          {!people ? (
-            <p className="muted">Loading…</p>
-          ) : people.people.length === 0 ? (
-            <p className="muted">Nobody is on this team's list of parents, family and friends yet. Add them under Team.</p>
-          ) : (
-            <div className="table-scroll">
-              <table className="table gv-people">
-                <thead>
-                  <tr>
-                    <th>Person</th>
-                    <th>Watch live</th>
-                    <th>Broadcast</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {people.people.map((p) => (
-                    <tr key={p.id}>
-                      <td>
-                        {p.name} <span className="muted small">{p.kind}{p.joined ? '' : ' · no account yet'}</span>
-                      </td>
-                      <td>
-                        <input type="checkbox" aria-label={`${p.name} may watch live video`} checked={p.watch} onChange={(e) => setPerson(p, { watch: e.target.checked })} />
-                      </td>
-                      <td>
-                        <input type="checkbox" aria-label={`${p.name} may broadcast`} checked={p.broadcast} onChange={(e) => setPerson(p, { broadcast: e.target.checked })} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {casting ? (
+        <Broadcast
+          teamId={teamId}
+          planId={planId}
+          title={title}
+          canSave={can.save}
+          onDone={(note) => {
+            setCasting(false);
+            setNotice(note);
+            load();
+          }}
+        />
+      ) : (
+        <>
+          {live.length === 0 ? (
+            <div className="card gv-none">
+              <h2>{planId ? 'This game is not live right now' : 'Nothing is live right now'}</h2>
+              <p className="muted">{can.watch ? 'When someone broadcasts it, the video shows here to watch.' : 'Watching live video has not been turned on for you on this team.'}</p>
+              {elsewhere.length > 0 && <p className="muted small">Another of this team's games is being broadcast now: {elsewhere.map((s) => s.title || 'a game').join(', ')}.</p>}
             </div>
+          ) : (
+            live.map((s) => (
+              <div key={s.id} className="card gv-live">
+                <h2>
+                  {s.title || 'Live now'} <span className="muted small">from {s.by}</span>
+                </h2>
+                <StreamPlayer stream={s} onGone={load} />
+              </div>
+            ))
+          )}
+          {can.broadcast && (
+            <div className="gv-actions">
+              <button type="button" className="btn primary" onClick={() => (setNotice(''), setCasting(true))}>
+                Broadcast from this device
+              </button>
+              <span className="muted small">
+                Uses this device's camera and microphone. {can.save ? 'You can save the video when you finish.' : 'The video is not kept afterwards.'}
+              </span>
+            </div>
+          )}
+        </>
+      )}
+      {can.coach && !casting && (
+        <div className="card">
+          <h2>Saved video{planId ? ' of this game' : ''}</h2>
+          <p className="muted small">
+            For this team's coaches. It is also under Resources. {can.save ? '' : 'Saving video is not turned on for this team: the administrator decides which teams may keep video.'}
+            {list.free_bytes !== undefined && Number.isFinite(list.free_bytes) && ` The site has ${mb(list.free_bytes)} of room left.`}
+          </p>
+          {saved.length === 0 ? (
+            <p className="muted">No saved video yet.</p>
+          ) : (
+            <ul className="track-list gv-saved">
+              {saved.map((s) => (
+                <SavedVideo key={s.id} stream={s} onGone={load} />
+              ))}
+            </ul>
           )}
         </div>
       )}

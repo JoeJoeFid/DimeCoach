@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { SharedPlay } from '../api';
-import { api, type FamilyDay, type FamilyKind, type FamilyResource, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
+import { api, listenLive, type FamilyDay, type FamilyKind, type FamilyResource, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
 import { SharedPreview } from '../components/community';
@@ -157,15 +157,14 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
     const timer = window.setInterval(look, 60_000);
     const told = (e: Event) => setUnread((e as CustomEvent<number>).detail);
     window.addEventListener('dime:unread', told);
-    const live = new EventSource('/api/live');
-    live.addEventListener('news', () => {
+    const stop = listenLive(() => {
       look();
       window.dispatchEvent(new Event('dime:news'));
     });
     return () => {
       window.clearInterval(timer);
       window.removeEventListener('dime:unread', told);
-      live.close();
+      stop();
     };
   }, []);
   const has = (t: Tab) => tabs.find(([id]) => id === t);

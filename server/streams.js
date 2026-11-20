@@ -95,7 +95,19 @@ const out = (s) => ({
   id: s.id, team_id: s.team_id, plan_id: s.plan_id, title: s.title, transport: s.transport, mime: s.mime, status: s.status, saved: !!s.saved,
   segments: s.segments, segment_seconds: SEGMENT_SECONDS, seconds: s.seconds, bytes: s.bytes, started_at: s.started_at, ended_at: s.ended_at,
   by: get('SELECT name FROM users WHERE id=?', s.user_id)?.name || '',
+  // The game it is video of, when it belongs to one.
+  game: s.plan_id ? get('SELECT id, title, date FROM plans WHERE id=?', s.plan_id) || null : null,
 });
+/** What a game is called on its video: its title, or who it is against. */
+const gameName = (plan) => {
+  let opponent = '';
+  try {
+    opponent = JSON.parse(plan.game_json || '{}').opponent || '';
+  } catch {
+    /* no opponent written down */
+  }
+  return plan.title || (opponent ? `vs. ${opponent}` : 'Game');
+};
 const tellTeam = (team, except) => poke([...coachesOfTeam(team), ...followersOfTeam(team)].map((p) => p.id).filter((id) => id !== except));
 
 /** Whether a team has video going out right now that this kind of follower may watch. */
@@ -126,10 +138,21 @@ export function mountStreams(app) {
     // One camera per person: starting again ends what they had going.
     for (const s of all("SELECT * FROM streams WHERE user_id=? AND status='live'", req.user.id)) end(s, false);
     const mime = /^video\/(mp4|webm)/.test(String(req.body.mime)) ? str(req.body.mime, 80) : 'video/webm';
-    const plan = req.body.plan_id ? get('SELECT id FROM plans WHERE id=? AND team_id=?', Number(req.body.plan_id), role.team.id) : null;
-    const made = run('INSERT INTO streams (team_id, plan_id, user_id, title, mime, started_at, last_at) VALUES (?,?,?,?,?,?,?)', role.team.id, plan?.id ?? null, req.user.id, str(req.body.title, 120).trim(), mime, nowIso(), nowIso());
+    // Video belongs to a game: the one it was started from, or failing that the team's game on the day (the broadcaster's own date, since the server's clock may be a day off theirs).
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.date)) ? req.body.date : nowIso().slice(0, 10);
+    const plan =
+      (req.body.plan_id && get('SELECT * FROM plans WHERE id=? AND team_id=? AND is_game=1', Number(req.body.plan_id), role.team.id)) ||
+      get("SELECT * FROM plans WHERE team_id=? AND is_game=1 AND is_template=0 AND date=? ORDER BY start_time, id LIMIT 1", role.team.id, day) ||
+      null;
+    const made = run('INSERT INTO streams (team_id, plan_id, user_id, title, mime, started_at, last_at) VALUES (?,?,?,?,?,?,?)', role.team.id, plan?.id ?? null, req.user.id, str(req.body.title, 120).trim() || (plan ? gameName(plan) : ''), mime, nowIso(), nowIso());
     fs.mkdirSync(dirOf(made.lastInsertRowid), { recursive: true });
     res.json({ stream: out(get('SELECT * FROM streams WHERE id=?', made.lastInsertRowid)), can_save: role.save });
+  });
+  // Every saved video of the teams being worked on, for Resources. A coach's page, so it goes by the workspace.
+  app.get('/api/streams/saved', (req, res) => {
+    if (req.user.follower) return res.json([]);
+    const teams = req.staff ? [req.staff.teamId] : all('SELECT id FROM teams WHERE owner_id=?', req.ownerId).map((t) => t.id);
+    res.json(teams.flatMap((id) => all("SELECT * FROM streams WHERE team_id=? AND status='ended' AND saved=1 ORDER BY id DESC", id)).map(out));
   });
   const own = (req, res) => {
     const s = get("SELECT * FROM streams WHERE id=? AND user_id=? AND status='live'", Number(req.params.id), req.user.id);
@@ -177,7 +200,8 @@ export function mountStreams(app) {
     if (!s) return;
     const n = Number(req.params.n);
     if (!Number.isInteger(n) || n < 0 || n >= s.segments) return res.status(404).end();
-    res.set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }).type(s.mime.split(';')[0]).sendFile(fileOf(s, n), (err) => err && !res.headersSent && res.status(404).end());
+    // Kept by the browser, but asked about every time, so someone who may no longer watch is refused even on a shared device.
+    res.set({ 'Cache-Control': 'private, no-cache', 'X-Content-Type-Options': 'nosniff' }).type(s.mime.split(';')[0]).sendFile(fileOf(s, n), (err) => err && !res.headersSent && res.status(404).end());
   });
   // A coach removes a saved video, which gives its room back.
   app.delete('/api/streams/:id', (req, res) => {

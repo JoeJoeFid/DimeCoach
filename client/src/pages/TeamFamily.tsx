@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../App';
 import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
+import { StreamPeople } from '../components/GameVideo';
 import { api, type FamilyKind, type FamilySection, type FamilySettings, type TeamPost } from '../api';
 import type { Team } from '../types';
 import { SubTabs } from '../components/cx';
@@ -28,7 +29,7 @@ const SECTIONS: [FamilySection, string, string][] = [
 ];
 const ROLE: Record<TeamPost['role'], string> = { coach: 'Coach', parent: 'Parent', family: 'Family', friend: 'Friend' };
 const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-type View = 'access' | 'messages' | 'plays' | 'drills' | 'resources';
+type View = 'access' | 'messages' | 'plays' | 'drills' | 'resources' | 'video';
 
 export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean }) {
   const [data, setData] = useState<FamilySettings | null>(null);
@@ -101,8 +102,11 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
           ['plays', 'Shared plays', data.plays.length],
           ['drills', 'Shared drills', data.drills.length],
           ['resources', 'Shared resources', data.resources.length],
+          ['video', 'Live video'],
         ]}
       />
+
+      {view === 'video' && <StreamPeople teamId={team.id} />}
 
       {view === 'access' && (
         <div className="table-scroll">

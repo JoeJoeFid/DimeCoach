@@ -25,6 +25,33 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   return res.json();
 }
 
+/**
+ * The line the server holds open to say "look again". It is let go when the page is put away and
+ * taken up again if the page comes back, because a browser keeps a page it has left for the Back
+ * button, and each one kept would hold a connection the next page needs.
+ */
+export function listenLive(onNews: () => void): () => void {
+  let live: EventSource | null = null;
+  const open = () => {
+    if (live) return;
+    live = new EventSource('/api/live');
+    live.addEventListener('news', onNews);
+  };
+  const close = () => {
+    live?.close();
+    live = null;
+  };
+  const back = (e: PageTransitionEvent) => e.persisted && open();
+  open();
+  window.addEventListener('pagehide', close);
+  window.addEventListener('pageshow', back);
+  return () => {
+    close();
+    window.removeEventListener('pagehide', close);
+    window.removeEventListener('pageshow', back);
+  };
+}
+
 let keySeq = 0;
 export const newKey = () => `k${Date.now().toString(36)}-${keySeq++}`;
 const withKeys = (p: Plan): Plan => ({ ...p, items: (p.items || []).map((it) => ({ ...it, images: it.images || [], play_ids: it.play_ids || [], links: it.links || [], videos: it.videos || [], key: newKey() })) });
@@ -768,6 +795,8 @@ export interface GameStream {
   started_at: string;
   ended_at: string | null;
   by: string;
+  /** The game it is video of. */
+  game: { id: number; title: string; date: string } | null;
 }
 export interface StreamList {
   can: { watch: boolean; broadcast: boolean; save: boolean; coach: boolean };
@@ -898,7 +927,8 @@ export const api = {
   teamScores: (teamId: number) => req<{ games: Scoresheet[]; shared: Scoresheet[] }>('GET', `/teams/${teamId}/scores`),
   streams: (teamId: number) => req<StreamList>('GET', `/streams?team_id=${teamId}`),
   stream: (id: number) => req<GameStream>('GET', `/streams/${id}`),
-  startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string }) => req<{ stream: GameStream; can_save: boolean }>('POST', '/streams', b),
+  savedStreams: () => req<GameStream[]>('GET', '/streams/saved'),
+  startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string; date: string }) => req<{ stream: GameStream; can_save: boolean }>('POST', '/streams', b),
   /** Sends one piece of video as it is, not as JSON. */
   sendSegment: async (id: number, piece: Blob) => {
     const res = await fetch(`/api/streams/${id}/segments`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: piece });

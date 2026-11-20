@@ -1,7 +1,7 @@
 // Keeping score for one of a team's games. The sheet is kept on the device first and sent to the
 // server whenever there is a connection, so a gym with bad Wi-Fi loses nothing.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, Player } from '../types';
@@ -170,10 +170,15 @@ export function BoxScore({ events, players, usName, themName, state }: { events:
   );
 }
 
+/** The old address of the scoring screen: it now lives in the game's own page. */
 export default function ScoreGame() {
-  const app = useApp();
   const { id } = useParams();
-  const planId = Number(id);
+  return <Navigate to={`/plans/${id}?view=score`} replace />;
+}
+
+/** Keeping score for one game, inside the game's page. */
+export function ScoreGameView({ planId }: { planId: number }) {
+  const app = useApp();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [failed, setFailed] = useState('');
@@ -212,14 +217,9 @@ export default function ScoreGame() {
 
   if (failed || sheet.error)
     return (
-      <div className="page">
-        <p className="error">{failed || sheet.error}</p>
-        <Link className="btn" to={`/plans/${planId}`}>
-          Back to the game
-        </Link>
-      </div>
+      <p className="error">{failed || sheet.error}</p>
     );
-  if (!plan || !sheet.doc) return <div className="page muted">Loading…</div>;
+  if (!plan || !sheet.doc) return <p className="muted">Loading…</p>;
   const usName = app.team?.name ?? 'Us';
   const themName = plan.game?.opponent?.trim() || 'Opponent';
   const { state, events } = sheet.doc;
@@ -228,11 +228,8 @@ export default function ScoreGame() {
   const score = scoreOf(events);
 
   return (
-    <div className="page score-page">
+    <div className="score-page">
       <div className="score-head">
-        <Link className="link small" to={`/plans/${planId}`}>
-          ← Game plan
-        </Link>
         <div className="seg" role="group" aria-label="View">
           <button type="button" className={tab === 'score' ? 'on' : ''} aria-pressed={tab === 'score'} onClick={() => setTab('score')}>
             Score

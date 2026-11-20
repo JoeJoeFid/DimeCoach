@@ -17349,3 +17349,20 @@ button.play-card {
   display: grid;
   gap: 8px;
 }
+
+/* A game's page: only the part that is chosen shows. */
+.plan-head[hidden],
+.plan-layout[hidden] {
+  display: none !important;
+}
+.gv-saved li {
+  display: block;
+}
+.gv-saved-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.gv-saved li.open .gv-player {
+  margin: 4px 0 14px;
+}

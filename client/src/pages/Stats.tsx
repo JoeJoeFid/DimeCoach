@@ -281,7 +281,7 @@ export default function Stats() {
             <ul className="track-list">
               {data.games.map((g) => (
                 <li key={g.id}>
-                  <Link className="track-row" to={`/plans/${g.plan_id}/score`}>
+                  <Link className="track-row" to={`/plans/${g.plan_id}?view=score`}>
                     <strong>
                       {g.opponent ? `vs. ${g.opponent}` : g.title || 'Game'} · {g.us}–{g.them}
                     </strong>

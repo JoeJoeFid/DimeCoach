@@ -15,6 +15,9 @@ import { deleteLater, showUndo } from '../components/toasts';
 import CategoryRows from '../components/CategoryRows';
 import PlanDiscussion, { PlanCollaborators } from '../components/PlanDiscussion';
 import GamePlanner from '../components/GamePlanner';
+import GameVideo from '../components/GameVideo';
+import { ScoreGameView } from './ScoreGame';
+import { SubTabs } from '../components/cx';
 import { gameHasContent } from '../game';
 import { DraftReview, SourcePicker, defaultChoices, resolveDraft, useAiStatus, type DraftChoices } from '../components/planImport';
 
@@ -179,6 +182,9 @@ export default function PlanEditor() {
   const isHomework = plan.kind === 'homework';
   // A game has its own screen. A template or a homework sheet never does.
   const gameMode = plan.is_game && !plan.is_template && !isHomework;
+  // Which part of a game is showing. It is in the address, so a link can open the score or the video.
+  const askedView = searchParams.get('view');
+  const gameView: 'plan' | 'score' | 'video' = gameMode && (askedView === 'score' || askedView === 'video') ? askedView : 'plan';
   const listPath = isHomework ? '/homework' : '/practices';
   const mins = planMinutes(plan, tagIds);
   const total = mins.work + mins.breaks;
@@ -491,7 +497,22 @@ export default function PlanEditor() {
         }}
         onDragEnd={onDragEnd}
       >
-        <div className={`card plan-head ${headOpen ? 'open' : ''} ${gameMode ? 'game' : ''}`}>
+        {/* A game has three parts: what is planned, keeping score, and its video. */}
+        {gameMode && (
+          <SubTabs<'plan' | 'score' | 'video'>
+            label="Parts of the game"
+            value={gameView}
+            onChange={(v) => setSearchParams(v === 'plan' ? {} : { view: v }, { replace: true })}
+            tabs={[
+              ['plan', 'Plan'],
+              ['score', 'Score'],
+              ['video', 'Video'],
+            ]}
+          />
+        )}
+        {gameMode && gameView === 'score' && <ScoreGameView planId={plan.id} />}
+        {gameMode && gameView === 'video' && <GameVideo teamId={plan.team_id} planId={plan.id} title={plan.title || (plan.game?.opponent ? `vs. ${plan.game.opponent}` : 'Game')} />}
+        <div hidden={gameView !== 'plan'} className={`card plan-head ${headOpen ? 'open' : ''} ${gameMode ? 'game' : ''}`}>
           <button type="button" className="head-brief" onClick={() => setHeadOpen(!headOpen)} aria-expanded={headOpen}>
             <span className="head-brief-text">
               <strong>{plan.title || 'Untitled'}</strong>
@@ -640,7 +661,7 @@ export default function PlanEditor() {
           </div>
         </div>
 
-        <div className={`plan-layout ${gameMode ? 'game' : ''}`}>
+        <div hidden={gameView !== 'plan'} className={`plan-layout ${gameMode ? 'game' : ''}`}>
           {gameMode ? (
             <GamePlanner
               plan={plan}

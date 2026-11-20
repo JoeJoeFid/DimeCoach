@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { SIGNED_OUT_EVENT, api, type AuthStatus, type Bootstrap, type User } from './api';
+import { SIGNED_OUT_EVENT, api, listenLive, type AuthStatus, type Bootstrap, type User } from './api';
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { sportKind } from './sports';
 import { DialogHost } from './components/dialogs';
@@ -15,8 +15,7 @@ import Communities from './pages/Communities';
 import Messages from './pages/Messages';
 import ScoreGame from './pages/ScoreGame';
 import Stats from './pages/Stats';
-import GameVideo from './components/GameVideo';
-import PageTitle from './components/PageTitle';
+
 import { MessageSettings } from './components/Inbox';
 import CoachLibraryPage from './pages/CoachLibrary';
 import CommunityPage from './pages/Community';
@@ -102,7 +101,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { to: '/practices', label: 'Schedule', icon: icons.practices },
       { to: '/homework', label: 'Homework', icon: icons.homework },
-      { to: '/video', label: 'Game video', icon: icons.video },
     ],
   },
   {
@@ -325,13 +323,11 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     return () => window.clearInterval(timer);
   }, [setCommunityUnread, location.pathname]);
   useEffect(() => {
-    const live = new EventSource('/api/live');
-    live.addEventListener('news', () => {
+    return listenLive(() => {
       setCommunityUnread();
       // Pages that list messages read themselves again.
       window.dispatchEvent(new Event('dime:news'));
     });
-    return () => live.close();
   }, [setCommunityUnread, user.id]);
   // Clicking or typing counts as being active. The server is told at most once a minute,
   // and not at all while the page just sits open.
@@ -512,7 +508,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           <Route path="/plans/:id" element={<PlanEditor />} />
           <Route path="/plans/:id/score" element={<ScoreGame />} />
           <Route path="/stats" element={<Stats />} />
-          <Route path="/video" element={<VideoPage />} />
+
           <Route path="/go/plan/:teamId/:planId" element={<GoToPlan />} />
           <Route path="/go/board/:teamId" element={<GoToBoard />} />
           <Route path="/plans/:id/print" element={<PrintView />} />
@@ -631,22 +627,6 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
  * Opens a plan from a message. When it belongs to a team other than the one being worked on, that
  * team is opened first: the page it lands on then carries on to the plan.
  */
-/** A team's game video: live, saved, and who may watch. */
-function VideoPage() {
-  const app = useApp();
-  const plan = Number(new URLSearchParams(useLocation().search).get('plan')) || undefined;
-  return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <PageTitle>Game video</PageTitle>
-          <p className="muted">Broadcast a game from a phone or tablet to the people around the team, and watch what is live.</p>
-        </div>
-      </div>
-      {app.team && <GameVideo key={app.team.id} teamId={app.team.id} planId={plan} title={plan ? 'Game' : ''} />}
-    </div>
-  );
-}
 function GoToPlan() {
   const { teamId, planId } = useParams();
   // "?post=12" rides along, so a mention lands on the message itself.
