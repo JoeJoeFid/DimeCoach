@@ -210,9 +210,9 @@ export function Crumbs({ items }: { items: Crumb[] }) {
 }
 
 /** Smaller tabs inside a page. */
-export function SubTabs<T extends string>({ tabs, value, onChange, label }: { tabs: [T, string, number?][]; value: T; onChange: (t: T) => void; label: string }) {
+export function SubTabs<T extends string>({ tabs, value, onChange, label, boxed }: { tabs: [T, string, number?][]; value: T; onChange: (t: T) => void; label: string; /** Drawn as the boxed bar at the top of a page, as on Team. */ boxed?: boolean }) {
   return (
-    <div className="cx-subtabs" role="tablist" aria-label={label}>
+    <div className={boxed ? 'seg team-tabs cx-seg-tabs' : 'cx-subtabs'} role="tablist" aria-label={label}>
       {tabs.map(([id, text, count]) => (
         <button key={id} type="button" role="tab" aria-selected={value === id} className={value === id ? 'on' : ''} onClick={() => onChange(id)}>
           {text}

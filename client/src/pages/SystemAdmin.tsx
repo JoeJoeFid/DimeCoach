@@ -258,7 +258,19 @@ export default function SystemAdmin() {
   const gone = usePendingDeletes();
   const users = (state?.users ?? []).filter((u) => !gone.has(`user:${u.id}`));
   // Who the list shows: everyone, the coaches, or the parents, family and friends of teams. Someone who coaches one team and follows another is both.
-  const waiting = state?.family_waiting ?? [];
+  // A person is listed once however many teams and roles they were put on: their roles sit side by side on one line.
+  // Someone who already has a line of their own (an account, or an invitation to one) has the roles added to that line instead.
+  const emailKey = (email: string) => email.trim().toLowerCase();
+  const rolesWaiting = (state?.family_waiting ?? []).reduce((byEmail, w) => byEmail.set(emailKey(w.email), [...(byEmail.get(emailKey(w.email)) ?? []), w]), new Map<string, SystemState['family_waiting']>());
+  const hasLine = new Set(users.map((u) => emailKey(u.email)));
+  const waiting = [...rolesWaiting.entries()]
+    .filter(([email]) => !hasLine.has(email))
+    .map(([, roles]) => {
+      const sent = roles.map((r) => r.invited_at).filter((d): d is string => !!d).sort();
+      return { id: roles[0].id, name: roles.find((r) => r.name)?.name ?? '', email: roles[0].email, invited_at: sent.length ? sent[sent.length - 1] : null, roles };
+    });
+  /** Roles on a team's list that a person with a line of their own has not taken up yet, without what the line already says. */
+  const extraRoles = (u: SystemUser) => (rolesWaiting.get(emailKey(u.email)) ?? []).filter((r, i, list) => !u.follows.some((f) => f.kind === r.kind && f.team === r.team) && list.findIndex((o) => o.kind === r.kind && o.team === r.team) === i);
   const shownUsers = who === 'all' ? users : who === 'coaches' ? users.filter((u) => !u.follower) : users.filter(isFamily);
   const shownWaiting = who === 'coaches' ? [] : waiting;
   const over = users.filter((u) => u.used_bytes >= u.cap_mb * MB && u.used_bytes > 0).length;
@@ -462,6 +474,11 @@ export default function SystemAdmin() {
                                 {FAMILY_WORD[f.kind]} · {f.team}
                               </span>
                             ))}
+                            {extraRoles(u).map((r) => (
+                              <span key={`r${r.id}`} className="kind" title="On this team’s list, and not taken up yet">
+                                {FAMILY_WORD[r.kind]} · {r.team}
+                              </span>
+                            ))}
                           </span>
                         </span>
                       </td>
@@ -521,9 +538,13 @@ export default function SystemAdmin() {
                           <strong className="sys-name">{w.name || w.email}</strong>
                           <span className="muted small">{w.email}</span>
                           <span className="badges">
-                            <span className="kind">
-                              {FAMILY_WORD[w.kind]} · {w.team}
-                            </span>
+                            {w.roles
+                              .filter((r, i, list) => list.findIndex((o) => o.kind === r.kind && o.team === r.team) === i)
+                              .map((r) => (
+                                <span key={r.id} className="kind">
+                                  {FAMILY_WORD[r.kind]} · {r.team}
+                                </span>
+                              ))}
                           </span>
                         </span>
                       </td>

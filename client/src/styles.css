@@ -622,11 +622,13 @@ textarea.input {
   color: var(--ink);
   box-shadow: var(--shadow-1);
 }
-/* The chosen one keeps its box and is underlined as well, in every bar of this kind. */
+/* In the bar at the top of a page the chosen one keeps its box and is underlined as well.
+   The smaller switches further down a page (table or charts, totals or averages) have the box alone. */
 .seg button {
   position: relative;
 }
-.seg button.on::after {
+.seg.team-tabs button.on::after,
+.org-league-tabs .seg button.on::after {
   content: '';
   position: absolute;
   left: 10px;

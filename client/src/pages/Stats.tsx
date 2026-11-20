@@ -250,6 +250,7 @@ export default function Stats() {
       </div>
       {error && <p className="error">{error}</p>}
       <SubTabs<View>
+        boxed
         label="Stats"
         value={view}
         onChange={setView}
