@@ -1,11 +1,11 @@
 // Keeping score for one of a team's games. The sheet is kept on the device first and sent to the
 // server whenever there is a connection, so a gym with bad Wi-Fi loses nothing.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, Player } from '../types';
-import ScorePad, { StatTable } from '../components/ScorePad';
+import ScorePad, { CourtPicker, StatTable } from '../components/ScorePad';
 import { linesOf, newState, periodName, scoreOf, type GameEvent, type ScoreState, type Scoresheet } from '../scoring';
 
 type Saved = { status: number; sheet?: Scoresheet; error?: string };
@@ -182,7 +182,10 @@ export function ScoreGameView({ planId }: { planId: number }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [failed, setFailed] = useState('');
-  const [tab, setTab] = useState<'score' | 'box'>('score');
+  const [tab, setTab] = useState<'score' | 'box' | 'roster'>('score');
+  const navigate = useNavigate();
+  // Whether this game is going out on video right now, for the mark at the top.
+  const [live, setLive] = useState(false);
   const planRef = useRef<Plan | null>(null);
   // Asked for once: the sheet waits for it, so the starters can come from the game plan.
   const planAsked = useMemo(() => api.plan(planId), [planId]);
@@ -196,6 +199,13 @@ export function ScoreGameView({ planId }: { planId: number }) {
       (e) => setFailed((e as Error).message),
     );
   }, [planAsked]);
+  useEffect(() => {
+    if (!plan) return;
+    const look = () => api.streams(plan.team_id).then((l) => setLive(l.live.some((x) => x.plan_id === plan.id)), () => {});
+    look();
+    window.addEventListener('dime:news', look);
+    return () => window.removeEventListener('dime:news', look);
+  }, [plan]);
   const sheet = useSheet(
     `dime.score.plan.${planId}`,
     () =>
@@ -205,7 +215,7 @@ export function ScoreGameView({ planId }: { planId: number }) {
       }),
     (state, events, rev, take) => api.saveScore(planId, { state, events, rev, take }),
     // The starters come from the game plan, when it has a lineup.
-    () => ({ ...newState('score'), on: (planRef.current?.game?.lineup?.[0] ?? []).slice(0, 5) }),
+    () => ({ ...newState('full'), on: (planRef.current?.game?.lineup?.[0] ?? []).slice(0, 5) }),
   );
   // Someone only watching sees the score move as it is kept.
   const { refresh } = sheet;
@@ -227,33 +237,63 @@ export function ScoreGameView({ planId }: { planId: number }) {
   const theirs = sheet.sync === 'taken' || (!!sheet.server && sheet.server.status === 'live' && !!sheet.server.scorer_id && sheet.server.scorer_id !== app.user.id && sheet.server.events.length > 0 && !sheet.adopted);
   const score = scoreOf(events);
 
+  const seg = (
+    <div className="sp-tabs" role="tablist" aria-label="Scoring, stats and roster">
+      {(
+        [
+          ['score', 'Scoring'],
+          ['box', 'Stats'],
+          ['roster', 'Roster'],
+        ] as const
+      ).map(([id, label]) => (
+        <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
   return (
     <div className="score-page">
       <div className="score-head">
-        <div className="seg" role="group" aria-label="View">
-          <button type="button" className={tab === 'score' ? 'on' : ''} aria-pressed={tab === 'score'} onClick={() => setTab('score')}>
-            Score
-          </button>
-          <button type="button" className={tab === 'box' ? 'on' : ''} aria-pressed={tab === 'box'} onClick={() => setTab('box')}>
-            Box score
-          </button>
-        </div>
         <SyncNote sync={sheet.sync} />
       </div>
       {theirs ? (
-        <div className="card sp-theirs">
-          <h2>
-            {usName} {score.us} · {themName} {score.them} <span className="muted small">{state.status === 'final' ? 'Final' : periodName(state.period)}</span>
-          </h2>
-          <p className="muted">{sheet.server?.scorer || 'Someone else'} is keeping score for this game. One person keeps score at a time; this page follows along.</p>
-          <button type="button" className="btn primary" onClick={sheet.takeOver}>
-            Take over keeping score
-          </button>
-        </div>
-      ) : tab === 'score' ? (
-        <ScorePad state={state} events={events} onChange={sheet.change} usName={usName} themName={themName} players={players} />
-      ) : null}
-      {(tab === 'box' || theirs) && <BoxScore events={events} players={players} usName={usName} themName={themName} state={state} />}
+        <>
+          <div className="card sp-theirs">
+            <h2>
+              {usName} {score.us} · {themName} {score.them} <span className="muted small">{state.status === 'final' ? 'Final' : periodName(state.period)}</span>
+            </h2>
+            <p className="muted">{sheet.server?.scorer || 'Someone else'} is keeping score for this game. One person keeps score at a time; this page follows along.</p>
+            <button type="button" className="btn primary" onClick={sheet.takeOver}>
+              Take over keeping score
+            </button>
+          </div>
+          <BoxScore events={events} players={players} usName={usName} themName={themName} state={state} />
+        </>
+      ) : (
+        <ScorePad
+          state={state}
+          events={events}
+          onChange={sheet.change}
+          usName={usName}
+          themName={themName}
+          players={players}
+          usHome={plan.game?.side !== 'away'}
+          onExit={() => navigate(`/plans/${planId}`)}
+          video={live ? 'live' : 'none'}
+          onVideo={() => navigate(`/plans/${planId}?view=video`)}
+          tabs={seg}
+        >
+          {tab === 'box' ? (
+            <BoxScore events={events} players={players} usName={usName} themName={themName} state={state} />
+          ) : tab === 'roster' ? (
+            <div className="card">
+              <h2>On the court</h2>
+              {players.length === 0 ? <p className="muted">This team has no players yet. Add them under Team.</p> : <CourtPicker players={players} on={state.on} onChange={(on) => sheet.change({ ...state, on }, events)} />}
+            </div>
+          ) : undefined}
+        </ScorePad>
+      )}
     </div>
   );
 }

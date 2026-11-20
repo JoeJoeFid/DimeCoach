@@ -1,9 +1,11 @@
-// The screen for keeping score. Tap a player, then what they did. Everything is big enough to
-// hit with a thumb while watching the game, and one tap on Undo takes the last thing back.
+// The screen for keeping score. Tap what happened, then who did it: every tap on a play opens a
+// sheet of the players to pick from, and a made shot goes on to ask who assisted. "Assign later"
+// records the play for the team so the game is never held up, and it can be given to a player
+// afterwards from the play by play.
 //
 // It keeps nothing itself: every tap hands the new list of plays to whoever is showing it.
-import { useEffect, useRef, useState } from 'react';
-import { EV_WORDS, POINTS, byPeriod, clockText, linesOf, newId, periodName, scoreOf, type EvType, type GameEvent, type ScoreState, type StatLine } from '../scoring';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { EV_WORDS, byPeriod, clockText, linesOf, newId, periodName, scoreOf, type EvType, type GameEvent, type ScoreState, type StatLine } from '../scoring';
 import { confirmDialog } from './dialogs';
 
 export interface PadPlayer {
@@ -11,28 +13,74 @@ export interface PadPlayer {
   name: string;
   number: string;
 }
-const PAD: { title: string; made?: boolean; keys: [EvType, string][] }[] = [
-  { title: 'Made', made: true, keys: [['m2', '+2'], ['m3', '+3'], ['m1', '+1 FT']] },
-  { title: 'Missed', keys: [['x2', 'Miss 2'], ['x3', 'Miss 3'], ['x1', 'Miss FT']] },
-  { title: 'Also', keys: [['reb', 'Rebound'], ['ast', 'Assist'], ['stl', 'Steal'], ['blk', 'Block'], ['to', 'Turnover'], ['pf', 'Foul']] },
-];
-const QUICK: [EvType, string][] = [['reb', 'Rebound'], ['to', 'Turnover'], ['pf', 'Foul'], ['stl', 'Steal']];
-const first = (name: string) => name.trim().split(/\s+/)[0] || name;
+/** What a button on the pad asks for: a play, or a trip to the free-throw line. */
+type Action = EvType | 'ft';
+/** How each kind of play is named at the top of the sheet that asks who. */
+const ASK: Record<Action, string> = {
+  m2: '2-point FG made by', m3: '3-point FG made by', m1: 'Free throw made by', x2: '2-point FG missed by', x3: '3-point FG missed by', x1: 'Free throw missed by',
+  reb: 'Rebound by', ast: 'Assist by', stl: 'Steal by', blk: 'Block by', to: 'Turnover by', pf: 'Foul on', ft: 'Free throws by',
+};
+const SHOT: Partial<Record<EvType, string>> = { m2: '2-point FG made', m3: '3-point FG made', x2: '2-point FG missed', x3: '3-point FG missed', x1: 'Free throw missed' };
+const SMALL: [EvType, string][] = [['reb', 'REB'], ['ast', 'AST'], ['to', 'TO'], ['stl', 'STL'], ['blk', 'BLK'], ['pf', 'Foul']];
+const byNumber = (a: PadPlayer, b: PadPlayer) => (Number(a.number) || 999) - (Number(b.number) || 999) || a.name.localeCompare(b.name);
 
-/** The buttons for what one player did. */
-function Pad({ onTap }: { onTap: (type: EvType) => void }) {
+type Sheet =
+  | { kind: 'who'; side: 'us' | 'them'; action: Action }
+  | { kind: 'follow'; follow: 'ast' | 'reb'; shooter: number | null; shot: EvType }
+  | { kind: 'ft'; side: 'us' | 'them'; player: number | null }
+  | { kind: 'assign'; id: string }
+  | { kind: 'court' }
+  | { kind: 'options' };
+
+/** A panel that comes up from the bottom of the screen over the scoring pad. */
+function BottomSheet({ title, sub, onClose, onBack, children }: { title: ReactNode; sub?: ReactNode; onClose: () => void; onBack?: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
-    <div className="sp-pad">
-      {PAD.map((row) => (
-        <div key={row.title} className={`sp-pad-row ${row.made ? 'made' : ''}`} role="group" aria-label={row.title}>
-          {row.keys.map(([type, label]) => (
-            <button key={type} type="button" className={`sp-key ${row.made ? 'made' : ''}`} onClick={() => onTap(type)}>
-              {label}
+    <div className="sp-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="sp-sheet" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
+        <span className="sp-grip" aria-hidden="true" />
+        <header className="sp-sheet-head">
+          {onBack && (
+            <button type="button" className="btn ghost sp-back" onClick={onBack} aria-label="Back">
+              ‹
             </button>
-          ))}
-        </div>
-      ))}
+          )}
+          <div>
+            <strong>{title}</strong>
+            {sub && <span className="muted small">{sub}</span>}
+          </div>
+          <button type="button" className="btn ghost" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </header>
+        {children}
+      </div>
     </div>
+  );
+}
+
+/** The players to pick from, by number. The ones on the court are underlined. */
+function PlayerGrid({ players, on, picked, onPick }: { players: PadPlayer[]; on: number[]; /** Shown as chosen, for picking who is on the court. */ picked?: number[]; onPick: (p: PadPlayer) => void }) {
+  return (
+    <>
+      <div className="sp-grid">
+        {[...players].sort(byNumber).map((p) => (
+          <button key={p.id} type="button" className={`sp-person ${on.includes(p.id) ? 'court' : ''} ${picked?.includes(p.id) ? 'picked' : ''}`} aria-pressed={picked ? picked.includes(p.id) : undefined} onClick={() => onPick(p)}>
+            <span className="sp-num">{p.number || '–'}</span>
+            <span className="sp-name">{p.name}</span>
+          </button>
+        ))}
+      </div>
+      {on.length > 0 && !picked && (
+        <p className="sp-legend muted small">
+          <span aria-hidden="true" /> Players on the court
+        </p>
+      )}
+    </>
   );
 }
 
@@ -70,6 +118,12 @@ export default function ScorePad({
   themName,
   players,
   solo,
+  usHome = true,
+  onExit,
+  video,
+  onVideo,
+  tabs,
+  children,
 }: {
   state: ScoreState;
   events: GameEvent[];
@@ -78,13 +132,19 @@ export default function ScorePad({
   themName: string;
   /** The roster, for a team's game. */
   players: PadPlayer[];
-  /** One player followed on their own: no floor, no opponent, the buttons always showing. */
+  /** One player followed on their own: no picking who, no other team. */
   solo?: string;
+  /** Whether this team is at home. The away team is named first, as on a scoreboard. */
+  usHome?: boolean;
+  onExit?: () => void;
+  /** Whether the game is going out on video right now. */
+  video?: 'live' | 'none';
+  onVideo?: () => void;
+  /** The row of tabs under the score, and what shows in place of the pad when another tab is chosen. */
+  tabs?: ReactNode;
+  children?: ReactNode;
 }) {
-  const [sel, setSel] = useState<{ side: 'us' | 'them'; player: number } | null>(null);
-  /** The question that follows a shot: who assisted a make, who rebounded a miss. */
-  const [ask, setAsk] = useState<{ kind: 'ast' | 'reb'; shooter: number } | null>(null);
-  const [options, setOptions] = useState(false);
+  const [sheet, setSheet] = useState<Sheet | null>(null);
   const [allPlays, setAllPlays] = useState(false);
   const [oppNumber, setOppNumber] = useState('');
   // The clock runs here and is written down when it stops, so a page loaded again finds it paused.
@@ -101,33 +161,41 @@ export default function ScorePad({
   latest.current = { state, events };
 
   const final = state.status === 'final';
-  const full = state.mode === 'full' || !!solo;
   const score = scoreOf(events);
   const us = linesOf(events, 'us');
   const them = linesOf(events, 'them');
-  const nameOf = (side: 'us' | 'them', id: number | null) => {
+  const oppPlayers: PadPlayer[] = state.opp_players.map((p) => ({ id: p.id, name: '', number: p.label }));
+  const teamName = (side: 'us' | 'them') => (side === 'us' ? usName : themName);
+  const playerName = (side: 'us' | 'them', id: number | null) => {
     if (solo) return solo;
-    if (id === null) return side === 'us' ? usName : themName;
+    if (id === null) return teamName(side);
     if (side === 'them') return `${themName} #${state.opp_players.find((p) => p.id === id)?.label ?? '?'}`;
     const p = players.find((x) => x.id === id);
-    return p ? `${p.number ? `#${p.number} ` : ''}${p.name}` : 'Player';
+    return p ? `${p.name}${p.number ? `, #${p.number}` : ''}` : 'Player';
   };
-  const setState = (change: Partial<ScoreState>) => onChange({ ...state, ...change }, events);
-  const add = (side: 'us' | 'them', player: number | null, type: EvType) => {
-    const e: GameEvent = { id: newId(), side, player, type, period: state.period, clock: state.timed ? left() : null, at: Date.now() };
-    onChange(state, [...events, e]);
-    // What usually comes next is offered, and can be ignored.
-    if (!solo && full && side === 'us' && player !== null) {
-      if ((type === 'm2' || type === 'm3') && state.on.length > 1) return setAsk({ kind: 'ast', shooter: player });
-      if (type === 'x2' || type === 'x3' || type === 'x1') return setAsk({ kind: 'reb', shooter: player });
-    }
-    setAsk(null);
+  /** Whether a play by this side is given to a player: always for one's own team in "full", and for the other team when its players are tracked. */
+  const asksWho = (side: 'us' | 'them') => !solo && (side === 'us' ? state.mode === 'full' && players.length > 0 : state.opp_advanced);
+  const setState = (change: Partial<ScoreState>) => onChange({ ...latest.current.state, ...change }, latest.current.events);
+  const record = (side: 'us' | 'them', player: number | null, type: EvType) => {
+    const e: GameEvent = { id: newId(), side, player, type, period: latest.current.state.period, clock: latest.current.state.timed ? left() : null, at: Date.now() };
+    onChange(latest.current.state, [...latest.current.events, e]);
   };
-  const undo = () => {
-    if (events.length === 0) return;
-    onChange(state, events.slice(0, -1));
-    setAsk(null);
+  /** A button on the pad was pressed. */
+  const act = (side: 'us' | 'them', action: Action) => {
+    if (asksWho(side)) return setSheet({ kind: 'who', side, action });
+    if (action === 'ft') return setSheet({ kind: 'ft', side, player: null });
+    record(side, null, action);
   };
+  /** The player was chosen (or left for later) for the play being asked about. */
+  const chose = (side: 'us' | 'them', action: Action, player: number | null) => {
+    if (action === 'ft') return setSheet({ kind: 'ft', side, player });
+    record(side, player, action);
+    // A shot by one's own team goes on to who assisted, or who got the rebound.
+    if (side === 'us' && (action === 'm2' || action === 'm3')) return setSheet({ kind: 'follow', follow: 'ast', shooter: player, shot: action });
+    if (side === 'us' && (action === 'x2' || action === 'x3')) return setSheet({ kind: 'follow', follow: 'reb', shooter: player, shot: action });
+    setSheet(null);
+  };
+  const undo = () => events.length > 0 && onChange(state, events.slice(0, -1));
   const stopClock = () => {
     if (!runningSince) return;
     const now = left();
@@ -139,271 +207,178 @@ export default function ScorePad({
     setState({ period: Math.max(1, p), clock_left: state.period_secs });
   };
   const endGame = async () => {
-    if (!(await confirmDialog({ title: 'End the game?', body: `The final score is ${usName} ${score.us}, ${themName} ${score.them}. You can open it again to fix something.`, confirmLabel: 'End game' }))) return;
+    if (!(await confirmDialog({ title: solo ? 'Finish this sheet?' : 'End the game?', body: solo ? 'You can open it again to fix something.' : `The final score is ${usName} ${score.us}, ${themName} ${score.them}. You can open it again to fix something.`, confirmLabel: solo ? 'Finish' : 'End game' }))) return;
     setRunningSince(null);
-    setSel(null);
-    setAsk(null);
+    setSheet(null);
     onChange({ ...state, status: 'final', clock_left: left() }, events);
   };
-
-  const onFloor = state.on.map((id) => players.find((p) => p.id === id)).filter(Boolean) as PadPlayer[];
-  const bench = players.filter((p) => !state.on.includes(p.id));
-  const tile = (p: PadPlayer, where: 'floor' | 'bench') => {
-    const line = us.players.get(p.id);
-    const on = sel?.side === 'us' && sel.player === p.id;
-    return (
-      <button key={p.id} type="button" className={`sp-tile ${where} ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => (setSel(on ? null : { side: 'us', player: p.id }), setAsk(null))}>
-        <span className="sp-num">{p.number || first(p.name)[0]}</span>
-        <span className="sp-name">{first(p.name)}</span>
-        {where === 'floor' && (
-          <span className="sp-mini">
-            {line?.pts ?? 0} pts{line?.pf ? ` · ${line.pf} F` : ''}
-          </span>
-        )}
-      </button>
-    );
+  const addOpp = () => {
+    const label = oppNumber.trim();
+    if (!label) return;
+    setState({ opp_players: [...state.opp_players, { id: Math.max(0, ...state.opp_players.map((p) => p.id)) + 1, label }] });
+    setOppNumber('');
   };
-  const selPlayer = sel?.side === 'us' ? players.find((p) => p.id === sel.player) : undefined;
-  const selOnFloor = !!selPlayer && state.on.includes(selPlayer.id);
+
+  const onCourt = state.on.map((id) => players.find((p) => p.id === id)).filter(Boolean) as PadPlayer[];
   const plays = [...events].reverse();
   const periods = byPeriod(events, state.period);
+  const sides: ('us' | 'them')[] = usHome ? ['them', 'us'] : ['us', 'them'];
+  const assigning = sheet?.kind === 'assign' ? events.find((e) => e.id === sheet.id) : undefined;
+  const ftLine = sheet?.kind === 'ft' ? (sheet.side === 'us' ? us : them) : null;
+  const ftNow = sheet?.kind === 'ft' ? (sheet.player === null ? ftLine!.total : ftLine!.players.get(sheet.player)) : undefined;
+
+  /** The big pad for one's own team, laid out as on a scorer's table: makes at the sides, the rest between. */
+  const bigPad = (side: 'us' | 'them') => (
+    <div className="sp-big">
+      <button type="button" className="sp-key make two" onClick={() => act(side, 'm2')}>
+        <b>+2</b>
+        <span>PT FG</span>
+      </button>
+      <button type="button" className="sp-key ft" onClick={() => act(side, 'ft')}>
+        Free Throw
+      </button>
+      <button type="button" className="sp-key make three" onClick={() => act(side, 'm3')}>
+        <b>+3</b>
+        <span>PT FG</span>
+      </button>
+      <div className="sp-small">
+        {SMALL.map(([t, label]) => (
+          <button key={t} type="button" className="sp-key" onClick={() => act(side, t)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="sp-key miss two" onClick={() => act(side, 'x2')}>
+        <b>2PT</b>
+        <span>Miss</span>
+      </button>
+      <button type="button" className="sp-key miss three" onClick={() => act(side, 'x3')}>
+        <b>3PT</b>
+        <span>Miss</span>
+      </button>
+    </div>
+  );
 
   return (
     <div className={`sp ${final ? 'final' : ''}`}>
-      {!solo && (
-        <header className="sp-top">
-          <div className="sp-side">
-            <span className="sp-side-name">{usName}</span>
-            <strong className="sp-score" aria-label={`${usName} score`}>
-              {score.us}
-            </strong>
-          </div>
-          <div className="sp-mid">
-            <div className="sp-period">
-              <button type="button" className="btn small" aria-label="Previous period" disabled={final || state.period <= 1} onClick={() => toPeriod(state.period - 1)}>
-                ‹
-              </button>
-              <strong>{final ? 'Final' : periodName(state.period)}</strong>
-              <button type="button" className="btn small" aria-label="Next period" disabled={final} onClick={() => toPeriod(state.period + 1)}>
-                ›
-              </button>
-            </div>
-            {state.timed && !final && (
-              <button type="button" className={`sp-clock ${runningSince ? 'running' : ''}`} onClick={() => (runningSince ? stopClock() : setRunningSince(Date.now()))} aria-label={runningSince ? 'Stop the clock' : 'Start the clock'}>
-                {clockText(left())} <span aria-hidden="true">{runningSince ? '❚❚' : '▶'}</span>
-              </button>
-            )}
-          </div>
-          <div className="sp-side them">
-            <span className="sp-side-name">{themName}</span>
-            <strong className="sp-score" aria-label={`${themName} score`}>
-              {score.them}
-            </strong>
-          </div>
-        </header>
-      )}
-      {solo && (
-        <header className="sp-solo-top">
-          <div className="sp-period">
-            <button type="button" className="btn small" aria-label="Previous period" disabled={final || state.period <= 1} onClick={() => toPeriod(state.period - 1)}>
-              ‹
+      <div className="sp-head">
+        <div className="sp-head-row">
+          {onExit ? (
+            <button type="button" className="link" onClick={onExit}>
+              Exit
             </button>
-            <strong>{final ? 'Final' : periodName(state.period)}</strong>
-            <button type="button" className="btn small" aria-label="Next period" disabled={final} onClick={() => toPeriod(state.period + 1)}>
-              ›
-            </button>
-          </div>
-          <LineText line={us.total} />
-        </header>
-      )}
-
-      {final ? (
-        <div className="sp-final card">
-          <strong>{solo ? 'This sheet is finished.' : 'The game is over.'}</strong>
-          <button type="button" className="btn small" onClick={() => setState({ status: 'live' })}>
-            Open it again
+          ) : (
+            <span />
+          )}
+          <button type="button" className="sp-period-pill" onClick={() => setSheet({ kind: 'options' })} aria-label={`${final ? 'Final' : periodName(state.period)}. Period and options.`}>
+            {final ? 'Final' : `Period ${state.period}`} <span aria-hidden="true">▾</span>
           </button>
-        </div>
-      ) : (
-        <>
-          <div className="sp-bar">
-            <button type="button" className="btn sp-undo" disabled={events.length === 0} onClick={undo}>
-              ↶ Undo{events.length > 0 && <span className="muted small"> {EV_WORDS[events[events.length - 1].type]}</span>}
+          {solo ? (
+            <span />
+          ) : (
+            <button type="button" className={`sp-video ${video === 'live' ? 'live' : ''}`} onClick={onVideo} disabled={!onVideo}>
+              {video === 'live' ? 'LIVE' : 'NO VIDEO'}
             </button>
-            <span className="sp-grow" />
-            {!solo && (
-              <div className="seg" role="group" aria-label="How much to track">
-                <button type="button" className={!full ? 'on' : ''} aria-pressed={!full} onClick={() => (setState({ mode: 'score' }), setSel(null), setAsk(null))}>
-                  Score only
+          )}
+        </div>
+        {solo ? (
+          <div className="sp-solo-line">
+            <LineText line={us.total} />
+          </div>
+        ) : (
+          <div className="sp-scoreline">
+            <span className="sp-side-name">{teamName(sides[0])}</span>
+            <strong className="sp-score" aria-label={`${teamName(sides[0])} score`}>
+              {score[sides[0]]}
+            </strong>
+            <strong className="sp-score" aria-label={`${teamName(sides[1])} score`}>
+              {score[sides[1]]}
+            </strong>
+            <span className="sp-side-name right">{teamName(sides[1])}</span>
+          </div>
+        )}
+        {state.timed && !final && (
+          <button type="button" className={`sp-clock ${runningSince ? 'running' : ''}`} onClick={() => (runningSince ? stopClock() : setRunningSince(Date.now()))} aria-label={runningSince ? 'Stop the clock' : 'Start the clock'}>
+            {clockText(left())} <span aria-hidden="true">{runningSince ? '❚❚' : '▶'}</span>
+          </button>
+        )}
+        {tabs}
+      </div>
+
+      {children ??
+        (final ? (
+          <div className="sp-final card">
+            <strong>{solo ? 'This sheet is finished.' : 'The game is over.'}</strong>
+            <button type="button" className="btn small" onClick={() => setState({ status: 'live' })}>
+              Open it again
+            </button>
+          </div>
+        ) : solo ? (
+          <section className="sp-team mine">{bigPad('us')}</section>
+        ) : (
+          <>
+            {/* The other team: a small pad. "Team" records for the team as a whole; "Players" asks which of them. */}
+            <section className="sp-team other" aria-label={themName}>
+              <header>
+                <strong>{themName}</strong>
+                <button type="button" className="link small" onClick={() => setState({ opp_advanced: !state.opp_advanced })} aria-label={`${themName}: ${state.opp_advanced ? 'by player' : 'as a team'}. Change.`}>
+                  {state.opp_advanced ? 'Players' : 'Team'} ▾
                 </button>
-                <button type="button" className={full ? 'on' : ''} aria-pressed={full} onClick={() => setState({ mode: 'full' })}>
-                  Full stats
+              </header>
+              <div className="sp-lite">
+                <button type="button" className="sp-key ft" onClick={() => act('them', 'ft')}>
+                  Free Throw
+                </button>
+                <button type="button" className="sp-key make" onClick={() => act('them', 'm2')}>
+                  <b>+2</b>
+                  <span>PT FG</span>
+                </button>
+                <button type="button" className="sp-key make" onClick={() => act('them', 'm3')}>
+                  <b>+3</b>
+                  <span>PT FG</span>
                 </button>
               </div>
-            )}
-            <button type="button" className="btn small" aria-expanded={options} onClick={() => setOptions(!options)}>
-              Options
-            </button>
-            <button type="button" className="btn small" onClick={endGame}>
-              {solo ? 'Finish' : 'End game'}
-            </button>
-          </div>
-          {options && (
-            <div className="sp-options card">
-              <label className="check setting">
-                <input type="checkbox" checked={state.timed} onChange={(e) => (setRunningSince(null), setState({ timed: e.target.checked, clock_left: state.clock_left ?? state.period_secs }))} />
-                <span>
-                  <strong>Timed scoring</strong>
-                  <span className="muted small">Run a game clock, and each play is marked with the time left in the period. Without it, plays are marked with the period only.</span>
-                </span>
-              </label>
-              {state.timed && (
-                <label className="field sp-len">
-                  <span className="field-label">Minutes in a period</span>
-                  <input className="input" type="number" min={1} max={60} value={Math.round(state.period_secs / 60)} onChange={(e) => setState({ period_secs: Math.min(60, Math.max(1, Number(e.target.value) || 8)) * 60, clock_left: Math.min(60, Math.max(1, Number(e.target.value) || 8)) * 60 })} />
-                </label>
-              )}
-              {!solo && (
-                <label className="check setting">
-                  <input type="checkbox" checked={state.opp_advanced} onChange={(e) => setState({ opp_advanced: e.target.checked })} />
-                  <span>
-                    <strong>Track the other team's players</strong>
-                    <span className="muted small">Add their numbers and score each of them like your own. Without it, you keep only their score and a few team counts.</span>
-                  </span>
-                </label>
-              )}
-            </div>
-          )}
-
-          {solo ? (
-            <Pad onTap={(type) => add('us', null, type)} />
-          ) : (
-            <>
-              <section className="sp-team" aria-label={usName}>
-                <h3>{usName}</h3>
-                {!full ? (
-                  <div className="sp-points">
-                    {(['m1', 'm2', 'm3'] as EvType[]).map((t) => (
-                      <button key={t} type="button" className="sp-key made big" onClick={() => add('us', null, t)}>
-                        +{POINTS[t]}
-                      </button>
-                    ))}
-                  </div>
-                ) : players.length === 0 ? (
-                  <p className="muted small">This team has no players yet. Add them under Team, or use "Score only".</p>
-                ) : (
-                  <>
-                    <p className="sp-hint muted small">{onFloor.length === 0 ? 'Tap the players who are starting, then "Put on the floor".' : sel ? '' : 'Tap a player, then what they did.'}</p>
-                    {onFloor.length > 0 && <div className="sp-tiles floor">{onFloor.map((p) => tile(p, 'floor'))}</div>}
-                    {/* The question takes the place of the buttons, right where the thumb already is. */}
-                    {selPlayer && selOnFloor && (ask ? (
-<div className="sp-ask" role="group" aria-label={ask.kind === 'ast' ? 'Who assisted' : 'Who got the rebound'}>
-              <strong>{ask.kind === 'ast' ? 'Assist?' : 'Rebound?'}</strong>
-              {onFloor
-                .filter((p) => ask.kind === 'reb' || p.id !== ask.shooter)
-                .map((p) => (
-                  <button key={p.id} type="button" className="sp-chip" onClick={() => (onChange(state, [...events, { id: newId(), side: 'us', player: p.id, type: ask.kind, period: state.period, clock: state.timed ? left() : null, at: Date.now() }]), setAsk(null))}>
-                    {p.number ? `#${p.number} ` : ''}
-                    {first(p.name)}
+              <div className="sp-lite four">
+                {([['pf', 'Foul'], ['reb', 'REB'], ['to', 'TO'], ['stl', 'STL']] as [EvType, string][]).map(([t, label]) => (
+                  <button key={t} type="button" className="sp-key" onClick={() => act('them', t)}>
+                    {label} <span className="chip-num">{them.total[t as 'pf' | 'reb' | 'to' | 'stl']}</span>
                   </button>
                 ))}
-              {ask.kind === 'reb' && (
-                <button type="button" className="sp-chip" onClick={() => (onChange(state, [...events, { id: newId(), side: 'them', player: null, type: 'reb', period: state.period, clock: state.timed ? left() : null, at: Date.now() }]), setAsk(null))}>
-                  {themName}
+              </div>
+            </section>
+
+            <section className="sp-team mine" aria-label={usName}>
+              <header>
+                <strong>{usName}</strong>
+                <button type="button" className="link small" onClick={() => setState({ mode: state.mode === 'full' ? 'score' : 'full' })} aria-label={`${usName}: ${state.mode === 'full' ? 'by player' : 'as a team'}. Change.`}>
+                  {state.mode === 'full' ? 'Players' : 'Team'} ▾
                 </button>
-              )}
-              <button type="button" className="sp-chip none" onClick={() => setAsk(null)}>
-                {ask.kind === 'ast' ? 'No assist' : 'Nobody'}
-              </button>
-            </div>
-                    ) : (
-                      <Pad onTap={(type) => add('us', selPlayer.id, type)} />
+              </header>
+              {bigPad('us')}
+              {state.mode === 'full' && players.length > 0 && (
+                <div className="sp-court">
+                  <span className="muted small">On the court {onCourt.length}</span>
+                  <div className="sp-court-row">
+                    {onCourt.length === 0 && <span className="muted small">Nobody yet.</span>}
+                    {[...onCourt].sort(byNumber).map((p) => (
+                      <span key={p.id} className="sp-court-chip">
+                        <b>#{p.number || p.name[0]}</b>
+                        <span>
+                          {us.players.get(p.id)?.pts ?? 0} · {us.players.get(p.id)?.pf ?? 0} PF
+                        </span>
+                      </span>
                     ))}
-                    {bench.length > 0 && (
-                      <>
-                        <span className="side-label sp-bench-label">Bench</span>
-                        <div className="sp-tiles bench">{bench.map((p) => tile(p, 'bench'))}</div>
-                      </>
-                    )}
-                    {selPlayer && !selOnFloor && (
-                      <div className="sp-ask sub" role="group" aria-label={`Bring ${selPlayer.name} in`}>
-                        <strong>Bring {first(selPlayer.name)} in</strong>
-                        {onFloor.length < 5 && (
-                          <button type="button" className="sp-chip" onClick={() => (setState({ on: [...state.on, selPlayer.id] }), setSel(null))}>
-                            Put on the floor
-                          </button>
-                        )}
-                        {onFloor.map((p) => (
-                          <button key={p.id} type="button" className="sp-chip" onClick={() => (setState({ on: state.on.map((id) => (id === p.id ? selPlayer.id : id)) }), setSel(null))}>
-                            for {p.number ? `#${p.number} ` : ''}
-                            {first(p.name)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {selPlayer && selOnFloor && (
-                      <button type="button" className="link small sp-off" onClick={() => (setState({ on: state.on.filter((id) => id !== selPlayer.id) }), setSel(null))}>
-                        Take {first(selPlayer.name)} off the floor
-                      </button>
-                    )}
-                  </>
-                )}
-              </section>
-
-              <section className="sp-team them" aria-label={themName}>
-                <h3>{themName}</h3>
-                <div className="sp-points">
-                  {(['m1', 'm2', 'm3'] as EvType[]).map((t) => (
-                    <button key={t} type="button" className="sp-key made big" onClick={() => add('them', null, t)}>
-                      +{POINTS[t]}
+                    <button type="button" className="sp-swap" onClick={() => setSheet({ kind: 'court' })} aria-label="Change who is on the court" title="Change who is on the court">
+                      ⇄
                     </button>
-                  ))}
-                </div>
-                <div className="sp-quick">
-                  {QUICK.map(([t, label]) => (
-                    <button key={t} type="button" className="sp-key" onClick={() => add('them', null, t)}>
-                      {label} <span className="chip-num">{them.total[t as 'reb' | 'to' | 'pf' | 'stl']}</span>
-                    </button>
-                  ))}
-                </div>
-                {state.opp_advanced && (
-                  <div className="sp-opp">
-                    <div className="sp-tiles bench">
-                      {state.opp_players.map((p) => {
-                        const on = sel?.side === 'them' && sel.player === p.id;
-                        return (
-                          <button key={p.id} type="button" className={`sp-tile bench ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => setSel(on ? null : { side: 'them', player: p.id })}>
-                            <span className="sp-num">{p.label}</span>
-                            <span className="sp-mini">{them.players.get(p.id)?.pts ?? 0} pts</span>
-                          </button>
-                        );
-                      })}
-                      <form
-                        className="sp-add-opp"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const label = oppNumber.trim();
-                          if (!label) return;
-                          setState({ opp_players: [...state.opp_players, { id: Math.max(0, ...state.opp_players.map((p) => p.id)) + 1, label }] });
-                          setOppNumber('');
-                        }}
-                      >
-                        <input className="input" inputMode="numeric" maxLength={4} aria-label="Their player's number" placeholder="#" value={oppNumber} onChange={(e) => setOppNumber(e.target.value)} />
-                        <button className="btn small" disabled={!oppNumber.trim()}>
-                          Add
-                        </button>
-                      </form>
-                    </div>
-                    {sel?.side === 'them' && <Pad onTap={(type) => add('them', sel.player, type)} />}
                   </div>
-                )}
-              </section>
-            </>
-          )}
-        </>
-      )}
+                </div>
+              )}
+            </section>
+          </>
+        ))}
 
-      {!solo && periods.length > 1 && (
+      {!children && !solo && periods.length > 1 && (
         <table className="sp-periods" aria-label="Score by period">
           <thead>
             <tr>
@@ -415,9 +390,9 @@ export default function ScorePad({
             </tr>
           </thead>
           <tbody>
-            {(['us', 'them'] as const).map((side) => (
+            {sides.map((side) => (
               <tr key={side}>
-                <th>{side === 'us' ? usName : themName}</th>
+                <th>{teamName(side)}</th>
                 {periods.map((p, i) => (
                   <td key={i}>{p[side]}</td>
                 ))}
@@ -430,35 +405,188 @@ export default function ScorePad({
         </table>
       )}
 
-      <section className="sp-plays" aria-label="Play by play">
-        <h3>Play by play</h3>
-        {plays.length === 0 ? (
-          <p className="muted small">Nothing yet. Each thing you tap shows here, newest first, and can be taken out.</p>
-        ) : (
-          <ul>
-            {plays.slice(0, allPlays ? plays.length : 8).map((e) => (
-              <li key={e.id}>
-                <span className="muted small sp-when">
-                  {periodName(e.period)}
-                  {e.clock !== null ? ` ${clockText(e.clock)}` : ''}
-                </span>
-                <span className="sp-what">
-                  <strong>{nameOf(e.side, e.player)}</strong> {EV_WORDS[e.type]}
-                </span>
-                <button type="button" className="link small" aria-label={`Remove: ${nameOf(e.side, e.player)} ${EV_WORDS[e.type]}`} onClick={() => onChange(latest.current.state, latest.current.events.filter((x) => x.id !== e.id))}>
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {plays.length > 8 && (
-          <button type="button" className="link small" onClick={() => setAllPlays(!allPlays)}>
-            {allPlays ? 'Show fewer' : `Show all ${plays.length}`}
+      {!children && (
+        <section className="sp-plays" aria-label="Play by play">
+          <header>
+            <h3>Play by Play</h3>
+            <button type="button" className="link" disabled={events.length === 0 || final} onClick={undo}>
+              Undo
+            </button>
+          </header>
+          {plays.length === 0 ? (
+            <p className="muted small">Nothing yet. Each play shows here, newest first. Tap one to say who it was, or to take it out.</p>
+          ) : (
+            <ul>
+              {plays.slice(0, allPlays ? plays.length : 8).map((e) => (
+                <li key={e.id}>
+                  <button type="button" className="sp-play" disabled={final} onClick={() => setSheet({ kind: 'assign', id: e.id })}>
+                    <span className="sp-what">
+                      <strong>{EV_WORDS[e.type][0].toUpperCase() + EV_WORDS[e.type].slice(1)}</strong>
+                      <span className="muted small">
+                        by {playerName(e.side, e.player)}
+                        {e.player === null && asksWho(e.side) ? ' · not assigned' : ''}
+                      </span>
+                    </span>
+                    <span className="muted small sp-when">
+                      {periodName(e.period)}
+                      {e.clock !== null ? ` ${clockText(e.clock)}` : ''}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {plays.length > 8 && (
+            <button type="button" className="link small" onClick={() => setAllPlays(!allPlays)}>
+              {allPlays ? 'Show fewer' : `Show all ${plays.length}`}
+            </button>
+          )}
+        </section>
+      )}
+
+      {/* Who did it. */}
+      {sheet?.kind === 'who' && (
+        <BottomSheet title={ASK[sheet.action]} sub={teamName(sheet.side)} onClose={() => setSheet(null)}>
+          <button type="button" className="btn sp-wide" onClick={() => chose(sheet.side, sheet.action, null)}>
+            Assign later
           </button>
-        )}
-      </section>
+          <PlayerGrid players={sheet.side === 'us' ? players : oppPlayers} on={sheet.side === 'us' ? state.on : []} onPick={(p) => chose(sheet.side, sheet.action, p.id)} />
+          {sheet.side === 'them' && (
+            <form
+              className="sp-add-opp"
+              onSubmit={(e) => {
+                e.preventDefault();
+                addOpp();
+              }}
+            >
+              <input className="input" inputMode="numeric" maxLength={4} aria-label="Add one of their players by number" placeholder="Add a number" value={oppNumber} onChange={(e) => setOppNumber(e.target.value)} />
+              <button className="btn" disabled={!oppNumber.trim()}>
+                Add
+              </button>
+            </form>
+          )}
+        </BottomSheet>
+      )}
+      {/* After a shot: who assisted a make, who rebounded a miss. */}
+      {sheet?.kind === 'follow' && (
+        <BottomSheet title={playerName('us', sheet.shooter)} sub={SHOT[sheet.shot]} onClose={() => setSheet(null)} onBack={() => setSheet(null)}>
+          <p className="sp-ask-line">
+            <strong>{sheet.follow === 'ast' ? 'Assist by' : 'Rebound by'}</strong> <span className="muted small">{usName}</span>
+          </p>
+          <div className="sp-two">
+            <button type="button" className="btn sp-no" onClick={() => setSheet(null)}>
+              {sheet.follow === 'ast' ? 'No Assist' : 'No Rebound'}
+            </button>
+            {sheet.follow === 'ast' ? (
+              <button type="button" className="btn" onClick={() => (record('us', null, 'ast'), setSheet(null))}>
+                Assign Later
+              </button>
+            ) : (
+              <button type="button" className="btn" onClick={() => (record('them', null, 'reb'), setSheet(null))}>
+                {themName}
+              </button>
+            )}
+          </div>
+          <PlayerGrid players={players.filter((p) => sheet.follow === 'reb' || p.id !== sheet.shooter)} on={state.on} onPick={(p) => (record('us', p.id, sheet.follow), setSheet(null))} />
+        </BottomSheet>
+      )}
+      {/* A trip to the line: each throw made or missed, then done. */}
+      {sheet?.kind === 'ft' && (
+        <BottomSheet title="Free throws" sub={playerName(sheet.side, sheet.player)} onClose={() => setSheet(null)}>
+          <p className="sp-ft-count">
+            <b>
+              {ftNow?.ftm ?? 0}/{ftNow?.fta ?? 0}
+            </b>{' '}
+            <span className="muted small">made this game</span>
+          </p>
+          <div className="sp-two tall">
+            <button type="button" className="sp-key make" onClick={() => record(sheet.side, sheet.player, 'm1')}>
+              <b>Made</b>
+              <span>+1</span>
+            </button>
+            <button type="button" className="sp-key miss" onClick={() => record(sheet.side, sheet.player, 'x1')}>
+              <b>Missed</b>
+            </button>
+          </div>
+          <button type="button" className="btn primary sp-wide" onClick={() => setSheet(null)}>
+            Done
+          </button>
+        </BottomSheet>
+      )}
+      {/* A play already recorded: say who it was, or take it out. */}
+      {sheet?.kind === 'assign' && assigning && (
+        <BottomSheet title={EV_WORDS[assigning.type][0].toUpperCase() + EV_WORDS[assigning.type].slice(1)} sub={`by ${playerName(assigning.side, assigning.player)} · ${periodName(assigning.period)}`} onClose={() => setSheet(null)}>
+          {!solo && (assigning.side === 'us' ? players.length > 0 : oppPlayers.length > 0) && (
+            <PlayerGrid
+              players={assigning.side === 'us' ? players : oppPlayers}
+              on={assigning.side === 'us' ? state.on : []}
+              onPick={(p) => (onChange(state, events.map((e) => (e.id === assigning.id ? { ...e, player: p.id } : e))), setSheet(null))}
+            />
+          )}
+          <button type="button" className="btn danger sp-wide" onClick={() => (onChange(state, events.filter((e) => e.id !== assigning.id)), setSheet(null))}>
+            Remove this play
+          </button>
+        </BottomSheet>
+      )}
+      {/* Who is on the court. */}
+      {sheet?.kind === 'court' && (
+        <BottomSheet title="On the court" sub="Tap players to put them on or take them off." onClose={() => setSheet(null)}>
+          <CourtPicker players={players} on={state.on} onChange={(on) => setState({ on })} />
+          <button type="button" className="btn primary sp-wide" onClick={() => setSheet(null)}>
+            Done
+          </button>
+        </BottomSheet>
+      )}
+      {/* The period, and how the game is being kept. */}
+      {sheet?.kind === 'options' && (
+        <BottomSheet title={final ? 'Final' : `Period ${state.period}`} sub={final ? undefined : periodName(state.period)} onClose={() => setSheet(null)}>
+          {!final && (
+            <div className="sp-two">
+              <button type="button" className="btn" disabled={state.period <= 1} onClick={() => toPeriod(state.period - 1)}>
+                ‹ Previous period
+              </button>
+              <button type="button" className="btn primary" onClick={() => toPeriod(state.period + 1)}>
+                Next period ›
+              </button>
+            </div>
+          )}
+          <div className="sp-options">
+            <label className="check setting">
+              <input type="checkbox" checked={state.timed} onChange={(e) => (setRunningSince(null), setState({ timed: e.target.checked, clock_left: state.clock_left ?? state.period_secs }))} />
+              <span>
+                <strong>Timed scoring</strong>
+                <span className="muted small">Run a game clock, and each play is marked with the time left in the period. Without it, plays are marked with the period only.</span>
+              </span>
+            </label>
+            {state.timed && (
+              <label className="field sp-len">
+                <span className="field-label">Minutes in a period</span>
+                <input className="input" type="number" min={1} max={60} value={Math.round(state.period_secs / 60)} onChange={(e) => setState({ period_secs: Math.min(60, Math.max(1, Number(e.target.value) || 8)) * 60, clock_left: Math.min(60, Math.max(1, Number(e.target.value) || 8)) * 60 })} />
+              </label>
+            )}
+          </div>
+          {final ? (
+            <button type="button" className="btn primary sp-wide" onClick={() => (setState({ status: 'live' }), setSheet(null))}>
+              Open it again
+            </button>
+          ) : (
+            <button type="button" className="btn sp-wide" onClick={endGame}>
+              {solo ? 'Finish this sheet' : 'End game'}
+            </button>
+          )}
+        </BottomSheet>
+      )}
     </div>
+  );
+}
+
+/** The roster as a grid: tap a player to put them on the court or take them off. Five at most. */
+export function CourtPicker({ players, on, onChange }: { players: PadPlayer[]; on: number[]; onChange: (on: number[]) => void }) {
+  return (
+    <>
+      <PlayerGrid players={players} on={on} picked={on} onPick={(p) => onChange(on.includes(p.id) ? on.filter((id) => id !== p.id) : on.length < 5 ? [...on, p.id] : on)} />
+      <p className="muted small sp-legend">{on.length} of 5 on the court.{on.length >= 5 ? ' Take someone off to put another on.' : ''}</p>
+    </>
   );
 }
 

@@ -17366,3 +17366,422 @@ button.play-card {
 .gv-saved li.open .gv-player {
   margin: 4px 0 14px;
 }
+
+/* ---------- Keeping score: the pad, and the sheets that ask who ---------- */
+.score-page {
+  max-width: 560px;
+  margin: 0 auto;
+}
+.score-head {
+  justify-content: flex-end;
+  margin-bottom: 6px;
+  min-height: 20px;
+}
+.sp-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+@media (max-width: 900px) {
+  .sp-head {
+    top: 52px;
+  }
+}
+.sp-head-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+.sp-head-row > :last-child {
+  justify-self: end;
+}
+.sp-head-row > :first-child {
+  justify-self: start;
+}
+.sp-period-pill {
+  padding: 5px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sp-video {
+  padding: 3px 9px;
+  border: none;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.sp-video.live {
+  background: var(--danger);
+  color: #fff;
+}
+.sp-scoreline {
+  display: grid;
+  grid-template-columns: 1fr auto auto 1fr;
+  align-items: center;
+  gap: 14px;
+}
+.sp-scoreline .sp-score {
+  font-size: 2.2rem;
+  min-width: 1.4em;
+  text-align: center;
+}
+.sp-side-name.right {
+  text-align: right;
+}
+.sp-head .sp-clock {
+  justify-self: center;
+}
+.sp-solo-line {
+  text-align: center;
+}
+.sp-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border-top: 1px solid var(--line);
+  margin: 0 -14px;
+}
+.sp-tabs button {
+  padding: 10px 4px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sp-tabs button.on {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+.sp-team > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.sp-team.other {
+  background: var(--surface-2);
+}
+.sp-key {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0;
+  line-height: 1.15;
+}
+.sp-key b {
+  font-size: 1.5rem;
+}
+.sp-key span:not(.chip-num) {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.sp-key.make {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+.sp-key.make.three {
+  background: color-mix(in srgb, var(--good) 72%, black);
+  border-color: color-mix(in srgb, var(--good) 72%, black);
+}
+.sp-key.ft {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.sp-key.miss {
+  background: var(--danger);
+  border-color: var(--danger);
+  /* Dark on the light red of the dark theme, white on the deep red of the light one. */
+  color: var(--primary-ink);
+}
+.sp-key.miss.three {
+  background: color-mix(in srgb, var(--danger) 72%, black);
+  border-color: color-mix(in srgb, var(--danger) 72%, black);
+}
+/* The big pad: makes down the sides, free throws and the small plays between, misses at the foot of each side. */
+.sp-big {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr;
+  grid-template-rows: 58px auto auto;
+  grid-template-areas:
+    "two ft three"
+    "two small three"
+    "miss2 small miss3";
+  gap: 8px;
+}
+.sp-big .make.two {
+  grid-area: two;
+}
+.sp-big .make.three {
+  grid-area: three;
+}
+.sp-big .ft {
+  grid-area: ft;
+}
+.sp-big .miss.two {
+  grid-area: miss2;
+  min-height: 72px;
+}
+.sp-big .miss.three {
+  grid-area: miss3;
+  min-height: 72px;
+}
+.sp-small {
+  grid-area: small;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.sp-small .sp-key {
+  min-height: 52px;
+}
+.sp-lite {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.sp-lite.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 8px;
+}
+.sp-lite .sp-key {
+  min-height: 52px;
+}
+.sp-lite .sp-key b {
+  font-size: 1.2rem;
+}
+.sp-court {
+  margin-top: 12px;
+  text-align: center;
+}
+.sp-court-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 14px;
+  margin-top: 4px;
+}
+.sp-court-chip {
+  display: grid;
+  justify-items: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.sp-court-chip b {
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+.sp-swap {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+.sp-plays > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sp-plays li {
+  padding: 0;
+}
+.sp-play {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 6px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sp-play:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.sp-play .sp-what {
+  display: grid;
+}
+.sp-play .sp-when {
+  min-width: 0;
+  margin-left: auto;
+}
+/* The sheets. */
+.sp-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--scrim);
+}
+.sp-sheet {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 8px 16px 20px;
+  border-radius: 18px 18px 0 0;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  animation: sp-up 0.16s ease-out;
+}
+@keyframes sp-up {
+  from {
+    transform: translateY(40px);
+  }
+}
+@media (min-width: 700px) {
+  .sp-scrim {
+    align-items: center;
+  }
+  .sp-sheet {
+    border-radius: 18px;
+  }
+}
+.sp-grip {
+  justify-self: center;
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.sp-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sp-sheet-head > div {
+  flex: 1;
+  display: grid;
+  text-align: center;
+}
+.sp-sheet-head strong {
+  font-size: 1.05rem;
+}
+.sp-back {
+  font-size: 1.4rem;
+}
+.sp-wide {
+  width: 100%;
+  min-height: 48px;
+  justify-content: center;
+}
+.sp-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.sp-two .btn {
+  min-height: 48px;
+  justify-content: center;
+}
+.sp-two.tall .sp-key {
+  min-height: 96px;
+}
+.sp-no {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.sp-ask-line {
+  margin: 0;
+  text-align: center;
+}
+.sp-ft-count {
+  margin: 0;
+  text-align: center;
+}
+.sp-ft-count b {
+  font-size: 1.6rem;
+}
+.sp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.sp-person {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 74px;
+  padding: 8px 4px 9px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 3px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.sp-person .sp-num {
+  font-size: 1.2rem;
+  font-style: italic;
+}
+.sp-person .sp-name {
+  white-space: normal;
+  text-align: center;
+  line-height: 1.15;
+}
+/* On the court: underlined, as in the legend under the grid. */
+.sp-person.court {
+  border-bottom-color: var(--series);
+}
+.sp-person.picked {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+.sp-legend {
+  margin: 0;
+  text-align: center;
+}
+.sp-legend > span {
+  display: inline-block;
+  width: 22px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: var(--series);
+}
+.sp-sheet .sp-add-opp .input {
+  flex: 1;
+  width: auto;
+}
+.sp-sheet .sp-options {
+  padding: 0;
+}
