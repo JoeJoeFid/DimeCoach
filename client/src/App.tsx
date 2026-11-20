@@ -16,6 +16,7 @@ import Communities from './pages/Communities';
 import Messages from './pages/Messages';
 import { InstallDialog, InstallHint, isInstalled } from './components/InstallApp';
 import { syncPush } from './push';
+import { NotifyAsk } from './components/NotifyAsk';
 import ScoreGame from './pages/ScoreGame';
 import Stats from './pages/Stats';
 
@@ -235,6 +236,7 @@ export default function App() {
     <>
       {view}
       {auth.user && !auth.user.must_change_password && <InstallHint />}
+      {auth.user && !auth.user.must_change_password && <NotifyAsk />}
       <DialogHost />
       <ToastHost />
     </>

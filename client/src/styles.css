@@ -8151,8 +8151,21 @@ fieldset.perm-list:disabled .check.perm {
     min-height: 44px;
     font-size: 1rem;
   }
+  /* The menu can be longer than the screen. The person at its foot stays in view while the rest
+     scrolls, so the list that opens above them is never off the bottom. */
   .sidebar .side-foot {
+    position: sticky;
+    bottom: -16px;
+    z-index: 2;
     margin-top: auto;
+    margin-bottom: -16px;
+    padding-top: 8px;
+    padding-bottom: 16px;
+    background: var(--side-bg);
+  }
+  .user-pop {
+    max-height: calc(100dvh - 96px);
+    overflow-y: auto;
   }
   /* The folded look belongs to wide screens only. */
   .nav-folded .nav-badge {
