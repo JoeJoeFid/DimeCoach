@@ -17833,3 +17833,144 @@ button.play-card {
   flex: 1;
   min-width: 180px;
 }
+
+/* ---------- Stats: choosing games, sorting, and the game-by-game charts ---------- */
+.st-pick {
+  margin-bottom: 12px;
+}
+.st-pick-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.st-pick-all {
+  display: flex;
+  gap: 14px;
+}
+.st-games {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 132px;
+  overflow-y: auto;
+}
+.st-show {
+  margin-bottom: 12px;
+}
+.sp-sort {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sp-sort:hover,
+.sp-sort.on {
+  color: var(--ink);
+}
+.sc {
+  display: grid;
+  gap: 14px;
+}
+.sc-bar {
+  overflow-x: auto;
+}
+.sc-chart {
+  margin: 0;
+  min-width: 0;
+}
+.sc-chart figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin-bottom: 4px;
+}
+.sc-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y;
+}
+.sc-chart:not(.big) figcaption {
+  display: grid;
+}
+.sc-chart:not(.big) figcaption .muted {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sc-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.sc-cross {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+.sc-tick {
+  fill: var(--muted);
+  font-size: 10.5px;
+  font-family: var(--mono);
+}
+.sc-main polyline {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.sc-main circle {
+  fill: var(--series);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+/* The other team's line: gray and dashed, so it is never told apart by color alone. */
+.sc-other polyline {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+.sc-other circle {
+  fill: var(--surface);
+  stroke: var(--muted);
+  stroke-width: 2;
+}
+.sc-legend {
+  display: flex;
+  gap: 16px;
+  margin: 6px 0 0;
+}
+.sc-legend i {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  margin-right: 5px;
+  vertical-align: middle;
+  border-top: 2px solid var(--series);
+}
+.sc-legend i.other {
+  border-top: 2px dashed var(--muted);
+}
+.sc-note {
+  margin: 0;
+}
+.sc-grid-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 18px 22px;
+}
+
+.st-show {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}

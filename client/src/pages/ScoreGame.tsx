@@ -249,6 +249,10 @@ function ImportStats({ planId, their, themName, onClose, onDone }: { planId: num
                     <th>FT</th>
                     <th>REB</th>
                     <th>AST</th>
+                    <th>STL</th>
+                    <th>BLK</th>
+                    <th>TO</th>
+                    <th>PF</th>
                     <th>On your roster</th>
                   </tr>
                 </thead>
@@ -280,6 +284,10 @@ function ImportStats({ planId, their, themName, onClose, onDone }: { planId: num
                         </td>
                         <td>{row.stats.reb}</td>
                         <td>{row.stats.ast}</td>
+                        <td>{row.stats.stl}</td>
+                        <td>{row.stats.blk}</td>
+                        <td>{row.stats.to}</td>
+                        <td>{row.stats.pf}</td>
                         <td>
                           <select
                             className={`input ${clash ? 'clash' : ''}`}

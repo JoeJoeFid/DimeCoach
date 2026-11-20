@@ -9,6 +9,7 @@ import PageTitle from '../components/PageTitle';
 import { SubTabs } from '../components/cx';
 import { confirmDialog } from '../components/dialogs';
 import ScorePad, { LineText, StatTable } from '../components/ScorePad';
+import StatCharts from '../components/StatCharts';
 import { emptyLine, linesOf, sumLines, type Scoresheet, type StatLine } from '../scoring';
 import { fmtDateShort, todayISO } from '../util';
 import { SyncNote, useSheet } from './ScoreGame';
@@ -219,10 +220,15 @@ export default function Stats() {
     api.teamScores(team.id).then(setData, (e) => setError((e as Error).message));
     api.players(team.id).then(setPlayers, () => {});
   }, [team?.id]);
-  // The season: every scored game added up for each player, with how many games they have a stat in.
+  // The games left out of the season's numbers and charts. Everything is in until it is taken out.
+  const [out, setOut] = useState<Set<number>>(new Set());
+  const [show, setShow] = useState<'table' | 'charts'>('table');
+  const [average, setAverage] = useState(false);
+  const picked = (data?.games ?? []).filter((g) => !out.has(g.id));
+  // The season: every picked game added up for each player, with how many games they have a stat in.
   const season = new Map<number, { games: number; line: StatLine }>();
   const teamLines: StatLine[] = [];
-  for (const g of data?.games ?? []) {
+  for (const g of picked) {
     const l = linesOf(g.events, 'us');
     teamLines.push(l.total);
     for (const [id, line] of l.players) {
@@ -265,13 +271,85 @@ export default function Stats() {
             <p>Open a game on the Schedule and press "Score this game". Its stats add up here.</p>
           </div>
         ) : (
-          <div className="card">
-            <h2>
-              Season totals <span className="muted small">{data.games.length} {data.games.length === 1 ? 'game' : 'games'}</span>
-            </h2>
-            {season.size === 0 && <p className="muted small">The games so far were scored with "Score only", so there is nothing per player yet.</p>}
-            <StatTable rows={[...season.entries()].map(([id, s]) => ({ key: id, name: nameOf(id), line: s.line, extra: s.games })).sort((a, b) => b.line.pts - a.line.pts)} total={{ name: 'Team', line: sumLines(teamLines) }} extra="Games" />
-          </div>
+          <>
+            <div className="card st-pick">
+              <div className="st-pick-head">
+                <strong>
+                  Games <span className="muted small">{picked.length} of {data.games.length} chosen</span>
+                </strong>
+                <span className="st-pick-all">
+                  <button type="button" className="link small" disabled={out.size === 0} onClick={() => setOut(new Set())}>
+                    All
+                  </button>
+                  <button type="button" className="link small" disabled={picked.length === 0} onClick={() => setOut(new Set(data.games.map((g) => g.id)))}>
+                    None
+                  </button>
+                </span>
+              </div>
+              <div className="st-games" role="group" aria-label="Games to count">
+                {[...data.games]
+                  .sort((x, y) => x.date.localeCompare(y.date) || x.id - y.id)
+                  .map((g) => {
+                    const on = !out.has(g.id);
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        className={`chip toggle ${on ? 'on' : ''}`}
+                        aria-pressed={on}
+                        onClick={() => {
+                          const next = new Set(out);
+                          if (on) next.add(g.id);
+                          else next.delete(g.id);
+                          setOut(next);
+                        }}
+                      >
+                        {fmtDateShort(g.date)} · {g.opponent ? `vs. ${g.opponent}` : g.title || 'Game'}{' '}
+                        <span className="chip-num">
+                          {g.us}–{g.them}
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+            <div className="st-show">
+              <div className="seg" role="group" aria-label="Table or charts">
+                <button type="button" className={show === 'table' ? 'on' : ''} aria-pressed={show === 'table'} onClick={() => setShow('table')}>
+                  Table
+                </button>
+                <button type="button" className={show === 'charts' ? 'on' : ''} aria-pressed={show === 'charts'} onClick={() => setShow('charts')}>
+                  Game by game
+                </button>
+              </div>
+              {show === 'table' && (
+                <div className="seg" role="group" aria-label="Totals or averages">
+                  <button type="button" className={!average ? 'on' : ''} aria-pressed={!average} onClick={() => setAverage(false)}>
+                    Totals
+                  </button>
+                  <button type="button" className={average ? 'on' : ''} aria-pressed={average} onClick={() => setAverage(true)}>
+                    Averages
+                  </button>
+                </div>
+              )}
+            </div>
+            {picked.length === 0 ? (
+              <p className="muted">Choose at least one game above.</p>
+            ) : show === 'table' ? (
+              <div className="card">
+                <h2>
+                  {average ? 'Averages per game' : 'Totals'} <span className="muted small">{picked.length} {picked.length === 1 ? 'game' : 'games'} · press a heading to sort</span>
+                </h2>
+                {season.size === 0 && <p className="muted small">These games have a score and nothing per player.</p>}
+                {average && <p className="muted small">Each player's numbers are divided by the games they have a stat in. Shooting is the share that went in.</p>}
+                <StatTable sortable average={average} rows={[...season.entries()].map(([id, s]) => ({ key: id, name: nameOf(id), line: s.line, extra: s.games })).sort((a, b) => b.line.pts - a.line.pts)} total={{ name: 'Team', line: sumLines(teamLines), games: picked.length }} extra="Games" />
+              </div>
+            ) : (
+              <div className="card">
+                <StatCharts games={picked} nameOf={nameOf} teamName={team?.name ?? 'Team'} />
+              </div>
+            )}
+          </>
         )
       ) : view === 'games' ? (
         data.games.length === 0 ? (

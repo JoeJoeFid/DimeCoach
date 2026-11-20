@@ -591,27 +591,84 @@ export function CourtPicker({ players, on, onChange }: { players: PadPlayer[]; o
 
 const COLS: [keyof StatLine | 'fg' | 'tp' | 'ft', string][] = [['pts', 'PTS'], ['fg', 'FG'], ['tp', '3PT'], ['ft', 'FT'], ['reb', 'REB'], ['ast', 'AST'], ['stl', 'STL'], ['blk', 'BLK'], ['to', 'TO'], ['pf', 'PF']];
 const cell = (l: StatLine, k: (typeof COLS)[number][0]) => (k === 'fg' ? `${l.fgm}/${l.fga}` : k === 'tp' ? `${l.tpm}/${l.tpa}` : k === 'ft' ? `${l.ftm}/${l.fta}` : l[k]);
-/** A table of stat lines: one row for each name, and a row of totals when asked for. */
-export function StatTable({ rows, total, first: firstCol = 'Player', extra }: { rows: { key: string | number; name: string; line: StatLine; extra?: string | number }[]; total?: { name: string; line: StatLine }; first?: string; /** A column before the numbers, such as games played. */ extra?: string }) {
+type SortKey = (typeof COLS)[number][0] | 'name' | 'extra';
+/** What a column is put in order by: shooting by makes, then by fewer attempts. */
+const sortValue = (r: { name: string; line: StatLine; extra?: string | number }, k: SortKey, average: boolean): number | string => {
+  if (k === 'name') return r.name.replace(/^#\d+\s*/, '').toLowerCase();
+  if (k === 'extra') return Number(r.extra) || 0;
+  const [made, tried] = k === 'fg' ? [r.line.fgm, r.line.fga] : k === 'tp' ? [r.line.tpm, r.line.tpa] : k === 'ft' ? [r.line.ftm, r.line.fta] : [0, 0];
+  // As averages, shooting goes by how often it went in; as totals, by how many did.
+  if (k === 'fg' || k === 'tp' || k === 'ft') return average ? (tried ? made / tried : -1) : made - tried / 1000;
+  return average ? r.line[k] / Math.max(1, Number(r.extra) || 1) : r.line[k];
+};
+/** A cell as an average: a count per game to one place, and shooting as the share that went in. */
+const perGame = (l: StatLine, k: (typeof COLS)[number][0], games: number) => {
+  const pct = (made: number, tried: number) => (tried ? `${Math.round((made / tried) * 100)}%` : '–');
+  if (k === 'fg') return pct(l.fgm, l.fga);
+  if (k === 'tp') return pct(l.tpm, l.tpa);
+  if (k === 'ft') return pct(l.ftm, l.fta);
+  return (l[k] / Math.max(1, games)).toFixed(1);
+};
+/**
+ * A table of stat lines: one row for each name, and a row of totals when asked for. With
+ * `sortable`, pressing a heading puts the rows in order by that column, and again turns it round.
+ * With `average`, each number is per game played (the `extra` column says how many) and shooting is a percentage.
+ */
+export function StatTable({
+  rows,
+  total,
+  first: firstCol = 'Player',
+  extra,
+  sortable,
+  average,
+}: {
+  rows: { key: string | number; name: string; line: StatLine; extra?: string | number }[];
+  total?: { name: string; line: StatLine; /** How many games the totals cover, for averages. */ games?: number };
+  first?: string;
+  /** A column before the numbers, such as games played. */
+  extra?: string;
+  sortable?: boolean;
+  average?: boolean;
+}) {
+  const [sort, setSort] = useState<{ key: SortKey; down: boolean } | null>(null);
+  const ordered = sort
+    ? [...rows].sort((a, b) => {
+        const x = sortValue(a, sort.key, !!average);
+        const y = sortValue(b, sort.key, !!average);
+        const way = typeof x === 'string' ? x.localeCompare(String(y)) : x - (y as number);
+        return sort.down ? -way : way;
+      })
+    : rows;
+  // Numbers start with the most at the top; names start at A.
+  const press = (key: SortKey) => setSort(sort?.key === key ? { key, down: !sort.down } : { key, down: key !== 'name' });
+  const head = (key: SortKey, label: string) =>
+    sortable ? (
+      <th key={key} aria-sort={sort?.key === key ? (sort.down ? 'descending' : 'ascending') : undefined}>
+        <button type="button" className={`sp-sort ${sort?.key === key ? 'on' : ''}`} onClick={() => press(key)} title={`Sort by ${label}`}>
+          {label}
+          <span aria-hidden="true">{sort?.key === key ? (sort.down ? ' ▾' : ' ▴') : ''}</span>
+        </button>
+      </th>
+    ) : (
+      <th key={key}>{label}</th>
+    );
   return (
     <div className="table-scroll">
       <table className="table sp-table">
         <thead>
           <tr>
-            <th>{firstCol}</th>
-            {extra && <th>{extra}</th>}
-            {COLS.map(([, label]) => (
-              <th key={label}>{label}</th>
-            ))}
+            {head('name', firstCol)}
+            {extra && head('extra', extra)}
+            {COLS.map(([k, label]) => head(k, average && (k === 'fg' || k === 'tp' || k === 'ft') ? `${label}%` : label))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {ordered.map((r) => (
             <tr key={r.key}>
               <td>{r.name}</td>
               {extra && <td>{r.extra}</td>}
               {COLS.map(([k, label]) => (
-                <td key={label}>{cell(r.line, k)}</td>
+                <td key={label}>{average ? perGame(r.line, k, Number(r.extra) || 1) : cell(r.line, k)}</td>
               ))}
             </tr>
           ))}
@@ -620,9 +677,9 @@ export function StatTable({ rows, total, first: firstCol = 'Player', extra }: { 
           <tfoot>
             <tr>
               <td>{total.name}</td>
-              {extra && <td />}
+              {extra && <td>{average ? total.games : ''}</td>}
               {COLS.map(([k, label]) => (
-                <td key={label}>{cell(total.line, k)}</td>
+                <td key={label}>{average ? perGame(total.line, k, total.games || 1) : cell(total.line, k)}</td>
               ))}
             </tr>
           </tfoot>

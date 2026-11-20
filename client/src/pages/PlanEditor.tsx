@@ -365,7 +365,7 @@ export default function PlanEditor() {
     try {
       await flush();
       await api.createPlan({ team_id: plan.team_id, from_plan_id: plan.id, is_template: true, title: name });
-      setNotice(`Saved template "${name}". Find it on the ${isHomework ? 'Homework' : 'Practices'} page.`);
+      setNotice(`Saved template "${name}". Find it on the ${isHomework ? 'Homework' : 'Schedule'} page.`);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -458,7 +458,7 @@ export default function PlanEditor() {
   return (
     <div className="page editor plan-editor">
       <div className="crumbs">
-        <Link to={listPath}>← {isHomework ? 'Homework' : 'Practices'}</Link>
+        <Link to={listPath}>← {isHomework ? 'Homework' : 'Schedule'}</Link>
         <span className={`save-state ${saveState}`} role="status">
           {saveState === 'saved' ? 'All changes saved' : saveState === 'error' ? 'Not saved' : 'Saving…'}
         </span>
