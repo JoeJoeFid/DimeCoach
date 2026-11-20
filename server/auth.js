@@ -572,7 +572,7 @@ export function mountAuth(app) {
     const membership = get('SELECT owner_id, role FROM memberships WHERE user_id=? ORDER BY owner_id LIMIT 1', user.id);
     if (!membership) return res.status(403).json({ error: 'This account has no workspace. Contact the administrator.' });
     // A follower's account opens the teams they follow, and nothing a coach uses.
-    if (user.follower && !/^\/(auth|family|live|messages|tracks|streams)(\/|$)/.test(req.path)) return res.status(403).json({ error: 'This account follows teams as a parent, family or a friend. It cannot be used to coach.' });
+    if (user.follower && !/^\/(auth|family|live|messages|tracks|streams|push)(\/|$)/.test(req.path)) return res.status(403).json({ error: 'This account follows teams as a parent, family or a friend. It cannot be used to coach.' });
     req.user = user;
     req.ownerId = membership.owner_id;
     noteMailActor(user.id);

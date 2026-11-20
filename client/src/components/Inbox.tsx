@@ -6,6 +6,7 @@ import { api, type CommunityNews, type CommunityNewsItem, type ToGroup, type ToP
 import { Modal } from './bits';
 import { confirmDialog } from './dialogs';
 import { MentionText } from './Mentions';
+import { disablePush, enablePush, pushState, type PushState } from '../push';
 
 const SHARE_WORD = { drill: 'Drill', play: 'Play', plan: 'Practice plan' } as const;
 const stamp = (at: string) => new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`);
@@ -27,6 +28,64 @@ function lineOf(n: CommunityNewsItem): { from: string; subject: string; text: st
   return { from: n.by, subject: `New in ${n.community}`, text: n.text };
 }
 
+/** Notifications on the device in hand: on, off, and why not when it cannot be. */
+function DevicePush() {
+  const [state, setState] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  useEffect(() => {
+    pushState().then(setState, () => setState('unsupported'));
+  }, []);
+  const run = async (work: () => Promise<PushState>, done = '') => {
+    setBusy(true);
+    setNote('');
+    try {
+      const next = await work();
+      setState(next);
+      setNote(next === 'blocked' ? '' : done);
+    } catch (e) {
+      setNote((e as Error).message);
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="push-box">
+      <strong>Notifications on this device</strong>
+      {state === null ? (
+        <span className="muted small">Checking…</span>
+      ) : state === 'on' ? (
+        <>
+          <span className="muted small">On. This device is told at once when you get a message, are mentioned, have something shared with you, or a game you can watch goes live.</span>
+          <span className="push-actions">
+            <button type="button" className="btn small" disabled={busy} onClick={() => run(async () => ((await api.pushTest()), 'on'), 'Sent. It should arrive in a moment.')}>
+              Send me a test
+            </button>
+            <button type="button" className="btn small" disabled={busy} onClick={() => run(disablePush, 'Notifications are off for this device.')}>
+              Turn off
+            </button>
+          </span>
+        </>
+      ) : state === 'off' ? (
+        <>
+          <span className="muted small">Be told at once, even when Dime Coach is closed: a new message, a mention, something shared with you, or a game going live. Each device is turned on by itself.</span>
+          <span className="push-actions">
+            <button type="button" className="btn small primary" disabled={busy} onClick={() => run(enablePush, 'Notifications are on for this device.')}>
+              Turn on notifications
+            </button>
+          </span>
+        </>
+      ) : state === 'needs-install' ? (
+        <span className="muted small">An iPhone or iPad only allows notifications for an app on the home screen. Put Dime Coach there first ("Get the app" in your account menu), open it from its icon, and turn them on here.</span>
+      ) : state === 'blocked' ? (
+        <span className="muted small">Notifications from this site are blocked in this browser. Allow them in the browser's or the phone's settings for Dime Coach, then come back here.</span>
+      ) : (
+        <span className="muted small">This browser cannot show notifications from Dime Coach.</span>
+      )}
+      {note && <span className="notice">{note}</span>}
+    </div>
+  );
+}
+
 /** The choices a person has about messages. Each is saved as it is ticked. */
 export function MessageSettings({ user, onChanged }: { user: User; onChanged: () => void }) {
   const [prefs, setPrefs] = useState({ mention_email_off: !!user.prefs.mention_email_off, message_email_off: !!user.prefs.message_email_off, hide_in_to: !!user.prefs.hide_in_to });
@@ -45,6 +104,7 @@ export function MessageSettings({ user, onChanged }: { user: User; onChanged: ()
   };
   return (
     <div className="msg-settings">
+      <DevicePush />
       <label className="check setting">
         <input type="checkbox" checked={!prefs.mention_email_off} onChange={(e) => save({ mention_email_off: !e.target.checked })} />
         <span>

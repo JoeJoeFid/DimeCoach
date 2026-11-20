@@ -7,6 +7,7 @@ import { messagePrefs } from './notices.js';
 import { settingsOf, slugOf } from './family.js';
 import { publicBase } from './invites.js';
 import { mailerStatus, sendMail } from './mailer.js';
+import { pushTo } from './push.js';
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS direct_messages (
@@ -185,6 +186,11 @@ export function mountInbox(app, inbox) {
     const id = Number(run('INSERT INTO direct_messages (from_id, reply_to, subject, body) VALUES (?,?,?,?)', req.user.id, replyTo?.id ?? null, subject, body).lastInsertRowid);
     for (const userId of to) run('INSERT INTO direct_recipients (message_id, user_id) VALUES (?,?)', id, userId);
     poke(to);
+    // A notification says who wrote and the subject, as the email does, and opens their inbox.
+    for (const userId of to) {
+      const person = get('SELECT * FROM users WHERE id=?', userId);
+      if (person) pushTo(userId, { title: `${req.user.name} sent you a message`, body: subject, link: inboxPath(person), tag: `dm-${id}` });
+    }
     emailRecipients(req.user, to, subject, publicBase(req));
     res.json({ ok: true, sent: sentBy(req.user.id) });
   });

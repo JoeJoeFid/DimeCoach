@@ -84,3 +84,36 @@ self.addEventListener('fetch', (event) => {
   // Icons and the like: the site first, the kept copy when it cannot be reached.
   event.respondWith(fetch(req).catch(() => caches.match(req).then((kept) => kept || Response.error())));
 });
+
+// --- Notifications ---
+// What the server sends arrives here whether or not a page is open, and is shown at once.
+self.addEventListener('push', (event) => {
+  let note = {};
+  try {
+    note = event.data ? event.data.json() : {};
+  } catch {
+    note = { title: 'Dime Coach', body: event.data ? event.data.text() : '' };
+  }
+  event.waitUntil(
+    self.registration.showNotification(note.title || 'Dime Coach', {
+      body: note.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      // Two about the same thing take one place, the newer over the older.
+      tag: note.tag || undefined,
+      data: { link: note.link || '/' },
+    }),
+  );
+});
+// Pressing one opens the place it is about: in the app if it is already open, or else by opening it.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const link = new URL(event.notification.data?.link || '/', self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((open) => {
+      const page = open.find((c) => 'focus' in c);
+      if (page) return page.navigate(link).then((c) => (c || page).focus()).catch(() => self.clients.openWindow(link));
+      return self.clients.openWindow(link);
+    }),
+  );
+});

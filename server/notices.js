@@ -3,6 +3,7 @@
 import { all, get, run } from './db.js';
 import { poke } from './live.js';
 import { mailerStatus, sendMail } from './mailer.js';
+import { pushTo } from './push.js';
 
 /**
  * Leaves a message for someone. `link` is where clicking it goes, if anywhere. With a `ref`, an
@@ -15,6 +16,8 @@ export function notify(userId, { kind, ref = '', title, body = '', link = '' }) 
     if (old) run("UPDATE notices SET title=?, body=?, link=?, created_at=datetime('now') WHERE id=?", title, body, link, old.id);
     else run('INSERT INTO notices (user_id, kind, ref, title, body, link) VALUES (?,?,?,?,?,?)', userId, kind, ref, title, body, link);
     poke(userId);
+    // And on their phone or computer, where they turned notifications on. A link off the site is opened from Messages instead.
+    pushTo(userId, { title, body, link: /^\//.test(link) ? link : '/messages', tag: ref ? `${kind}-${ref}` : '' });
   } catch (e) {
     console.error('Could not leave a message:', e.message);
   }

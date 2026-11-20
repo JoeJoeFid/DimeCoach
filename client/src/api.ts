@@ -897,7 +897,16 @@ export const api = {
   authStatus: () => req<AuthStatus>('GET', '/auth/status'),
   setup: (b: { name: string; first_name?: string; last_name?: string; email: string; password: string; setup_token?: string }) => req<{ user: User }>('POST', '/auth/setup', b),
   login: (email: string, password: string) => req<{ user: User }>('POST', '/auth/login', { email, password }),
-  logout: () => req('POST', '/auth/logout', {}),
+  /** Signs out. First this device is taken off the list for the person's notifications, so the next person to use it does not get them. */
+  logout: async () => {
+    await (await import('./push')).forgetPush();
+    return req('POST', '/auth/logout', {});
+  },
+  /** The key this site's notifications are signed with, and whether the device with this address is getting them. */
+  pushKey: (endpoint = '') => req<{ key: string; on: boolean; devices: number }>('GET', `/push/key${endpoint ? `?endpoint=${encodeURIComponent(endpoint)}` : ''}`),
+  pushSubscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) => req<{ ok: true }>('POST', '/push/subscribe', sub),
+  pushUnsubscribe: (endpoint: string) => req<{ ok: true }>('POST', '/push/unsubscribe', { endpoint }),
+  pushTest: () => req<{ ok: true; devices: number }>('POST', '/push/test', {}),
   register: (b: { name: string; first_name?: string; last_name?: string; email: string; password: string }) => req<{ ok: true; user?: User }>('POST', '/auth/register', b),
   confirm: (token: string) => req('POST', '/auth/confirm', { token }),
   forgotPassword: (email: string) => req<{ ok: true; minutes: number }>('POST', '/auth/forgot', { email }),

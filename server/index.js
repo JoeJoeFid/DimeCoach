@@ -25,6 +25,7 @@ import { mountLinkThumbs } from './linkThumbs.js';
 import { mountStaff, staffBootstrap } from './staff.js';
 import { mountGames } from './games.js';
 import { mountStreams } from './streams.js';
+import { mountPush } from './push.js';
 
 seedIfEmpty();
 
@@ -58,6 +59,7 @@ mountStaff(app);
 mountFamilyCoach(app);
 mountGames(app);
 mountStreams(app);
+mountPush(app);
 mountImages(app);
 mountCommunities(app);
 mountOrgs(app);

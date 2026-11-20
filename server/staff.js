@@ -96,6 +96,8 @@ function gate(req) {
     case 'tracks':
     // Live video checks for itself who is on the team and what they may do.
     case 'streams':
+    // Notifications are each person's own, on each of their devices.
+    case 'push':
     // Taking a copy of a practice someone sent goes to the caller's own teams, wherever they are working.
     case 'plan-links':
     case 'item-links':

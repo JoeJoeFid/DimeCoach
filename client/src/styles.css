@@ -18018,3 +18018,23 @@ button.play-card {
   display: grid;
   min-width: 0;
 }
+
+/* ---------- Notifications on this device ---------- */
+.push-box {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.push-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+.push-box .notice {
+  margin: 2px 0 0;
+}

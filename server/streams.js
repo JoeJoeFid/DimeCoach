@@ -20,6 +20,8 @@ import { coachesOfTeam, followersOfTeam } from './inbox.js';
 import './contacts.js';
 // The setting for importing stats is kept beside the one for video, and its column is made there.
 import './games.js';
+import { pushTo } from './push.js';
+import { slugOf } from './family.js';
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS streams (
@@ -172,8 +174,16 @@ export function mountStreams(app) {
     fs.mkdirSync(dirOf(s.id), { recursive: true });
     fs.writeFileSync(fileOf(s, s.segments), body);
     run('UPDATE streams SET segments=segments+1, bytes=bytes+?, seconds=seconds+?, last_at=? WHERE id=?', body.length, SEGMENT_SECONDS, nowIso(), s.id);
-    // The first piece is the moment there is something to watch.
-    if (s.segments === 0) tellTeam(get('SELECT * FROM teams WHERE id=?', s.team_id), req.user.id);
+    // The first piece is the moment there is something to watch: everyone who may watch is told, on their devices too.
+    if (s.segments === 0) {
+      const team = get('SELECT * FROM teams WHERE id=?', s.team_id);
+      tellTeam(team, req.user.id);
+      const coaches = coachesOfTeam(team).map((p) => p.id);
+      const watchers = all('SELECT DISTINCT user_id FROM team_contacts WHERE team_id=? AND user_id IS NOT NULL AND can_watch=1', team.id).map((c) => c.user_id).filter((id) => !coaches.includes(id));
+      const what = { title: `${team.name} is live`, body: `${s.title || 'A game'} is being broadcast now. Tap to watch.`, tag: `live-${s.id}` };
+      for (const id of coaches) if (id !== req.user.id) pushTo(id, { ...what, link: s.plan_id ? `/go/plan/${team.id}/${s.plan_id}?view=video` : '/' });
+      for (const id of watchers) if (id !== req.user.id) pushTo(id, { ...what, link: `/family/${slugOf(team)}?tab=video` });
+    }
     res.json({ segments: s.segments + 1 });
   });
   app.post('/api/streams/:id/end', (req, res) => {

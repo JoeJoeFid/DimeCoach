@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { SIGNED_OUT_EVENT, api, listenLive, type AuthStatus, type Bootstrap, type User } from './api';
@@ -14,6 +15,7 @@ import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import Messages from './pages/Messages';
 import { InstallDialog, InstallHint, isInstalled } from './components/InstallApp';
+import { syncPush } from './push';
 import ScoreGame from './pages/ScoreGame';
 import Stats from './pages/Stats';
 
@@ -141,6 +143,11 @@ export default function App() {
   const [justSignedIn, setJustSignedIn] = useState(false);
   const { pathname, search } = useLocation();
 
+  // A device that already allows notifications is put on the list of whoever is signed in on it.
+  const signedInAs = auth?.user?.id;
+  useEffect(() => {
+    if (signedInAs) syncPush();
+  }, [signedInAs]);
   const refresh = useCallback(async () => {
     try {
       setAuth(await api.authStatus());
@@ -716,7 +723,8 @@ export function UserMenu({
   );
   return (
     <div className="user-menu" ref={root}>
-      {installing && <InstallDialog onClose={() => setInstalling(false)} />}
+      {/* Drawn at the top of the page, not in here: on a phone this menu sits in a panel that slides in, which would cut the dialog off at its own edge. */}
+      {installing && createPortal(<InstallDialog onClose={() => setInstalling(false)} />, document.body)}
       {open && (
         <div className="user-pop" role="menu" aria-label="Your account">
           <span className="user-pop-email">{user.email}</span>
