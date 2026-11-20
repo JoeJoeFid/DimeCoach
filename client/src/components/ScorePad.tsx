@@ -173,8 +173,8 @@ export default function ScorePad({
     const p = players.find((x) => x.id === id);
     return p ? `${p.name}${p.number ? `, #${p.number}` : ''}` : 'Player';
   };
-  /** Whether a play by this side is given to a player: always for one's own team in "full", and for the other team when its players are tracked. */
-  const asksWho = (side: 'us' | 'them') => !solo && (side === 'us' ? state.mode === 'full' && players.length > 0 : state.opp_advanced);
+  /** Whether a play by this side is given to a player: always for one's own team, whose roster comes up every time, and for the other team when its players are tracked. */
+  const asksWho = (side: 'us' | 'them') => !solo && (side === 'us' ? players.length > 0 : state.opp_advanced);
   const setState = (change: Partial<ScoreState>) => onChange({ ...latest.current.state, ...change }, latest.current.events);
   const record = (side: 'us' | 'them', player: number | null, type: EvType) => {
     const e: GameEvent = { id: newId(), side, player, type, period: latest.current.state.period, clock: latest.current.state.timed ? left() : null, at: Date.now() };
@@ -350,12 +350,10 @@ export default function ScorePad({
             <section className="sp-team mine" aria-label={usName}>
               <header>
                 <strong>{usName}</strong>
-                <button type="button" className="link small" onClick={() => setState({ mode: state.mode === 'full' ? 'score' : 'full' })} aria-label={`${usName}: ${state.mode === 'full' ? 'by player' : 'as a team'}. Change.`}>
-                  {state.mode === 'full' ? 'Players' : 'Team'} ▾
-                </button>
               </header>
               {bigPad('us')}
-              {state.mode === 'full' && players.length > 0 && (
+              {players.length === 0 && <p className="muted small sp-noroster">This team has no players yet, so plays are recorded for the team. Add players under Team and each press will ask who.</p>}
+              {players.length > 0 && (
                 <div className="sp-court">
                   <span className="muted small">On the court {onCourt.length}</span>
                   <div className="sp-court-row">

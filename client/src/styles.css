@@ -17785,3 +17785,8 @@ button.play-card {
 .sp-sheet .sp-options {
   padding: 0;
 }
+
+.sp-noroster {
+  margin: 10px 0 0;
+  text-align: center;
+}
