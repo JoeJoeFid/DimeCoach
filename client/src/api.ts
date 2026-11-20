@@ -81,7 +81,7 @@ export interface User {
   /** An account that follows teams as a parent, family or a friend, and coaches nothing. */
   follower: boolean;
   /** Personal display preferences, saved with the account. */
-  prefs: { heat_color?: string; /** True once the welcome tour has been finished or skipped. */ tour_done?: boolean; /** True once the introduction to drawing plays has been seen. */ play_intro_done?: boolean; /** No email when someone names them with "@". */ mention_email_off?: boolean; /** Not offered as someone to write a message to. */ hide_in_to?: boolean };
+  prefs: { heat_color?: string; /** True once the welcome tour has been finished or skipped. */ tour_done?: boolean; /** True once the introduction to drawing plays has been seen. */ play_intro_done?: boolean; /** No email when someone names them with "@". */ mention_email_off?: boolean; /** No email when someone sends them a message. */ message_email_off?: boolean; /** Not offered as someone to write a message to. */ hide_in_to?: boolean };
 }
 export interface AuthStatus {
   /** True on a fresh install with no accounts yet. */
@@ -804,7 +804,7 @@ export const api = {
   acceptWelcome: (b: { token: string; name: string; first_name?: string; last_name?: string; password: string }) => req<{ ok: true; user: User }>('POST', '/auth/welcome', b),
   inviteInfo: (token: string) => req<InviteInfo>('GET', `/auth/invite?token=${encodeURIComponent(token)}`),
   acceptTeamInvite: (b: { token: string; name?: string; first_name?: string; last_name?: string; password?: string }) => req<{ ok: true; existing?: boolean; user?: User }>('POST', '/auth/invite/accept', b),
-  savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean; play_intro_done?: boolean; mention_email_off?: boolean; hide_in_to?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
+  savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean; play_intro_done?: boolean; mention_email_off?: boolean; message_email_off?: boolean; hide_in_to?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
   setName: (name: string, parts?: { first: string; last: string }) => req<{ user: User }>('PUT', '/auth/profile', { name, first_name: parts?.first, last_name: parts?.last }),
   changePassword: (current: string, next: string) => req<{ user: User }>('POST', '/auth/password', { current, next }),
 

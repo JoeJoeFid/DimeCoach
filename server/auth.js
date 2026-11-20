@@ -130,6 +130,7 @@ function prefsOf(u) {
   if (stored.play_intro_done === true) prefs.play_intro_done = true;
   // No email when someone names them with "@", and not offered as someone to write to.
   if (stored.mention_email_off === true) prefs.mention_email_off = true;
+  if (stored.message_email_off === true) prefs.message_email_off = true;
   if (stored.hide_in_to === true) prefs.hide_in_to = true;
   return prefs;
 }
@@ -623,7 +624,7 @@ export function mountAuth(app) {
       if (req.body.play_intro_done === true) prefs.play_intro_done = true;
       else delete prefs.play_intro_done;
     }
-    for (const key of ['mention_email_off', 'hide_in_to'])
+    for (const key of ['mention_email_off', 'message_email_off', 'hide_in_to'])
       if (key in req.body) {
         if (req.body[key] === true) prefs[key] = true;
         else delete prefs[key];

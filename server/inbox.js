@@ -4,7 +4,9 @@
 import { all, db, get, run } from './db.js';
 import { poke } from './live.js';
 import { messagePrefs } from './notices.js';
-import { settingsOf } from './family.js';
+import { settingsOf, slugOf } from './family.js';
+import { publicBase } from './invites.js';
+import { mailerStatus, sendMail } from './mailer.js';
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS direct_messages (
@@ -126,6 +128,31 @@ function tooMany(userId) {
   return recent.length >= SEND_LIMIT;
 }
 
+/** Where a person's inbox is: a coach's Messages page, or for someone who only follows teams, the one on a team's page. */
+function inboxPath(user) {
+  if (!user.follower) return '/messages';
+  const team = get('SELECT t.* FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id=? ORDER BY t.id LIMIT 1', user.id);
+  return team ? `/family/${slugOf(team)}?tab=inbox` : '/';
+}
+/**
+ * Emails each person a message was sent to, unless they turned those off: who wrote, the subject,
+ * and a link to their inbox. The message itself stays in the app, and no address is shown to anyone.
+ */
+function emailRecipients(from, to, subject, base) {
+  if (!base || !mailerStatus().configured) return;
+  for (const userId of to) {
+    try {
+      const user = get("SELECT * FROM users WHERE id=? AND status='active'", userId);
+      if (!user?.email || messagePrefs(user).message_email_off) continue;
+      const first = String(user.first_name || '').trim() || String(user.name || '').trim().split(/\s+/)[0] || 'there';
+      const text = `Hi ${first},\n\n${from.name} sent you a message on Dime Coach${subject ? `: "${subject}"` : '.'}\n\nRead it and reply:\n\n${base}${inboxPath(user)}\n\nYou can turn these emails off in Dime Coach, under Messages, then Settings.`;
+      sendMail({ to: user.email, subject: `${from.name} sent you a message${subject ? `: ${subject}` : ''}`, text, automatic: true }).catch(() => {});
+    } catch (e) {
+      console.error('Could not email a message:', e.message);
+    }
+  }
+}
+
 /** `inbox` gives the whole Messages list back after a change, as the routes beside these do. */
 export function mountInbox(app, inbox) {
   app.get('/api/messages/people', (req, res) => res.json(peopleFor(req.user)));
@@ -150,6 +177,7 @@ export function mountInbox(app, inbox) {
     const id = Number(run('INSERT INTO direct_messages (from_id, reply_to, subject, body) VALUES (?,?,?,?)', req.user.id, replyTo?.id ?? null, subject, body).lastInsertRowid);
     for (const userId of to) run('INSERT INTO direct_recipients (message_id, user_id) VALUES (?,?)', id, userId);
     poke(to);
+    emailRecipients(req.user, to, subject, publicBase(req));
     res.json({ ok: true, sent: sentBy(req.user.id) });
   });
   app.post('/api/messages/direct/:id/read', (req, res) => {

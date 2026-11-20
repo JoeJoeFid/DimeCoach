@@ -812,33 +812,39 @@ function Account({ onChanged }: { onChanged: () => void }) {
           </p>
         </div>
       </div>
-      <div className="card account-card">
-        <h2>Your name</h2>
-        <form className="fields stack" onSubmit={saveName}>
-          <NameFields
-            name={name}
-            parts={{ first: user.first_name || splitName(user.name).first, last: user.first_name || user.last_name ? user.last_name : splitName(user.name).last }}
-            onChange={(n, p) => {
-              setName(n);
-              setParts(p);
-              setState({});
-            }}
-          />
-          <p className="muted small">This is the name other coaches see on your posts, shared teams and messages.</p>
-          {state.error && <p className="error">{state.error}</p>}
-          {state.saved && <p className="notice">Name saved.</p>}
-          <button className="btn primary" type="submit" disabled={state.busy || !name.trim() || name.trim() === user.name}>
-            {state.busy ? 'Saving…' : 'Save name'}
-          </button>
-        </form>
-      </div>
-      <div className="card account-card">
-        <h2>Messages</h2>
-        <MessageSettings user={user} onChanged={onChanged} />
-      </div>
-      <div className="card account-card">
-        <h2>Change password</h2>
-        <PasswordForm onDone={onChanged} />
+      <div className="account-grid">
+        <div className="account-col">
+          <div className="card account-card">
+            <h2>Your name</h2>
+            <form className="fields stack" onSubmit={saveName}>
+              <NameFields
+                name={name}
+                parts={{ first: user.first_name || splitName(user.name).first, last: user.first_name || user.last_name ? user.last_name : splitName(user.name).last }}
+                onChange={(n, p) => {
+                  setName(n);
+                  setParts(p);
+                  setState({});
+                }}
+              />
+              <p className="muted small">This is the name other coaches see on your posts, shared teams and messages.</p>
+              {state.error && <p className="error">{state.error}</p>}
+              {state.saved && <p className="notice">Name saved.</p>}
+              <button className="btn primary" type="submit" disabled={state.busy || !name.trim() || name.trim() === user.name}>
+                {state.busy ? 'Saving…' : 'Save name'}
+              </button>
+            </form>
+          </div>
+          <div className="card account-card">
+            <h2>Change password</h2>
+            <PasswordForm onDone={onChanged} />
+          </div>
+        </div>
+        <div className="account-col">
+          <div className="card account-card">
+            <h2>Messages</h2>
+            <MessageSettings user={user} onChanged={onChanged} />
+          </div>
+        </div>
       </div>
     </div>
   );

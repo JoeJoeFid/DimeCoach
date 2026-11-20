@@ -27,7 +27,7 @@ export function notify(userId, { kind, ref = '', title, body = '', link = '' }) 
 export const mentionedIn = (body, people) =>
   people.filter((p) => p.name && new RegExp(`(^|[\\s(])@${String(p.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w])`, 'i').test(String(body)));
 
-/** What a person chose about messages. Both are off unless they turned them on. */
+/** What a person chose about messages. Each is off unless they turned it on. */
 export function messagePrefs(user) {
   let stored = {};
   try {
@@ -35,7 +35,7 @@ export function messagePrefs(user) {
   } catch {
     /* treat as nothing chosen */
   }
-  return { mention_email_off: stored.mention_email_off === true, hide_in_to: stored.hide_in_to === true };
+  return { mention_email_off: stored.mention_email_off === true, message_email_off: stored.message_email_off === true, hide_in_to: stored.hide_in_to === true };
 }
 
 /**

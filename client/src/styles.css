@@ -16668,3 +16668,32 @@ button.play-card {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   transition: background 0.6s;
 }
+
+/* ---------- Your account: two columns of boxes that fill the page ---------- */
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+  max-width: 1000px;
+}
+.account-col {
+  display: grid;
+  gap: 16px;
+}
+.account-grid .account-card {
+  max-width: none;
+  margin: 0;
+}
+/* In a form set out top to bottom, the two name boxes take only the height they need. */
+.fields.stack > .name-pair {
+  flex: none;
+}
+.account-card .btn.primary {
+  align-self: flex-start;
+}
+@media (max-width: 900px) {
+  .account-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -26,9 +26,9 @@ function lineOf(n: CommunityNewsItem): { from: string; subject: string; text: st
   return { from: n.by, subject: `New in ${n.community}`, text: n.text };
 }
 
-/** The two choices a person has about messages. Each is saved as it is ticked. */
+/** The choices a person has about messages. Each is saved as it is ticked. */
 export function MessageSettings({ user, onChanged }: { user: User; onChanged: () => void }) {
-  const [prefs, setPrefs] = useState({ mention_email_off: !!user.prefs.mention_email_off, hide_in_to: !!user.prefs.hide_in_to });
+  const [prefs, setPrefs] = useState({ mention_email_off: !!user.prefs.mention_email_off, message_email_off: !!user.prefs.message_email_off, hide_in_to: !!user.prefs.hide_in_to });
   const [error, setError] = useState('');
   const save = async (change: Partial<typeof prefs>) => {
     const before = prefs;
@@ -49,6 +49,13 @@ export function MessageSettings({ user, onChanged }: { user: User; onChanged: ()
         <span>
           <strong>Email me when someone mentions me</strong>
           <span className="muted small">When someone writes "@" and your name, you get an email with a link to where. With this off, the mention still shows in your Messages.</span>
+        </span>
+      </label>
+      <label className="check setting">
+        <input type="checkbox" checked={!prefs.message_email_off} onChange={(e) => save({ message_email_off: !e.target.checked })} />
+        <span>
+          <strong>Email me when someone sends me a message</strong>
+          <span className="muted small">The email says who wrote and the subject, with a link to your inbox. With this off, the message still shows in your Messages.</span>
         </span>
       </label>
       <label className="check setting">

@@ -127,7 +127,7 @@ function codeOf(team) {
   return code;
 }
 /** How a team is named in the address of its page: its name, then its code. Only the code is looked up, so a renamed team keeps its old links. */
-const slugOf = (team) => {
+export const slugOf = (team) => {
   const name = String(team.name || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
   return `${name || 'team'}-${codeOf(team)}`;
 };
