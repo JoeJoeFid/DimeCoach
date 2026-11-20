@@ -17790,3 +17790,46 @@ button.play-card {
   margin: 10px 0 0;
   text-align: center;
 }
+
+/* ---------- Importing a game's stats from a file ---------- */
+.score-head {
+  gap: 10px;
+}
+.sp-imported {
+  margin: 0 0 8px;
+  text-align: right;
+}
+.stat-import {
+  display: grid;
+  gap: 12px;
+}
+.stat-import > p {
+  margin: 0;
+}
+.stat-match td,
+.stat-match th {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.stat-match select {
+  min-width: 190px;
+}
+.stat-match select.clash {
+  border-color: var(--danger);
+}
+.stat-match tr.skipped td:not(:last-child) {
+  color: var(--muted);
+}
+.stat-them {
+  max-width: 220px;
+}
+.sv-teams li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+}
+.sv-teams li > span:first-child {
+  flex: 1;
+  min-width: 180px;
+}

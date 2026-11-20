@@ -8,6 +8,8 @@
 import { all, db, get, run } from './db.js';
 import { poke } from './live.js';
 import { coachesOfTeam, followersOfTeam } from './inbox.js';
+import { isSystemAdmin } from './auth.js';
+import { statsFromCsv } from './statsCsv.js';
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS scoresheets (
@@ -37,9 +39,13 @@ const parse = (json, fallback) => {
     return fallback;
   }
 };
-const POINTS = { m1: 1, m2: 2, m3: 3 };
-const TYPES = new Set(['m1', 'm2', 'm3', 'x1', 'x2', 'x3', 'reb', 'ast', 'stl', 'blk', 'to', 'pf']);
+// 'p1' is a point with nothing known about how it was scored: the other team's score when stats are brought in from a file.
+const POINTS = { m1: 1, m2: 2, m3: 3, p1: 1 };
+const TYPES = new Set(['p1', 'm1', 'm2', 'm3', 'x1', 'x2', 'x3', 'reb', 'ast', 'stl', 'blk', 'to', 'pf']);
 const MAX_EVENTS = 3000;
+// Whether a team may bring a game's stats in from a file: the system administrator's call, team by team.
+if (!all('PRAGMA table_info(teams)').some((c) => c.name === 'stat_import')) db.exec('ALTER TABLE teams ADD COLUMN stat_import INTEGER DEFAULT 0');
+const mayImport = (user, teamId) => isSystemAdmin(user) || !!get('SELECT stat_import FROM teams WHERE id=?', teamId)?.stat_import;
 
 /** The plays as sent, with anything unexpected dropped. */
 function cleanEvents(list) {
@@ -67,6 +73,8 @@ function cleanState(s) {
     clock_left: Number.isFinite(st.clock_left) ? Math.max(0, Math.round(st.clock_left)) : null,
     opp_advanced: !!st.opp_advanced,
     opp_players: (Array.isArray(st.opp_players) ? st.opp_players : []).slice(0, 30).map((p) => ({ id: Number(p?.id) || 0, label: str(p?.label, 20) })).filter((p) => p.id),
+    // Set when the plays were made from a file of totals, not tapped in as they happened.
+    imported: st.imported ? str(st.imported, 120) : '',
   };
 }
 const pointsOf = (events, side) => events.reduce((n, e) => n + (e.side === side ? POINTS[e.type] || 0 : 0), 0);
@@ -124,7 +132,95 @@ export function mountGames(app) {
     const plan = planOf(req, res);
     if (!plan) return;
     const s = get("SELECT * FROM scoresheets WHERE plan_id=? AND scope='team'", plan.id);
-    res.json({ sheet: s ? sheetOut(s) : null });
+    res.json({ sheet: s ? sheetOut(s) : null, can_import: mayImport(req.user, plan.team_id) });
+  });
+  // --- Bringing a game's stats in from a file ---
+  // The file is read and handed back first, so the coach can say which of their players each line is.
+  const importable = (req, res) => {
+    const plan = planOf(req, res);
+    if (!plan) return null;
+    if (!mayImport(req.user, plan.team_id)) {
+      res.status(403).json({ error: 'Importing stats is not turned on for this team. The administrator decides which teams may.' });
+      return null;
+    }
+    return plan;
+  };
+  const readStats = (req, res) => {
+    try {
+      return statsFromCsv(String(req.body.csv ?? '').slice(0, 400_000));
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+      return null;
+    }
+  };
+  app.post('/api/plans/:id/score/import/read', (req, res) => {
+    const plan = importable(req, res);
+    const read = plan && readStats(req, res);
+    if (!read) return;
+    const roster = all('SELECT id, name, number FROM players WHERE team_id=? AND active=1 ORDER BY name COLLATE NOCASE', plan.team_id);
+    const flat = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const taken = new Set();
+    // A line is matched by name first, then by number, and each player only once. The coach has the last word.
+    const guess = (row) => {
+      const names = [`${row.first} ${row.last}`, `${row.last} ${row.first}`, row.last].map(flat).filter(Boolean);
+      const found = roster.find((p) => !taken.has(p.id) && names.includes(flat(p.name))) || roster.find((p) => !taken.has(p.id) && row.number && String(p.number).trim() === row.number && (!row.last || flat(p.name).includes(flat(row.last))));
+      if (found) taken.add(found.id);
+      return found?.id ?? 0;
+    };
+    const rows = read.rows.map((row) => ({ ...row, player_id: guess(row) }));
+    // Whoever is left is offered by number alone.
+    for (const row of rows) {
+      if (row.player_id || !row.number) continue;
+      const p = roster.find((x) => !taken.has(x.id) && String(x.number).trim() === row.number);
+      if (p) {
+        taken.add(p.id);
+        row.player_id = p.id;
+      }
+    }
+    const old = get("SELECT events_json FROM scoresheets WHERE plan_id=? AND scope='team'", plan.id);
+    res.json({ rows, team: read.team, games: read.games, roster, existing: old ? parse(old.events_json, []).length : 0 });
+  });
+  app.post('/api/plans/:id/score/import', (req, res) => {
+    const plan = importable(req, res);
+    const read = plan && readStats(req, res);
+    if (!read) return;
+    const roster = new Set(all('SELECT id FROM players WHERE team_id=?', plan.team_id).map((p) => p.id));
+    const map = req.body.map && typeof req.body.map === 'object' ? req.body.map : {};
+    const used = new Set();
+    const events = [];
+    let n = 0;
+    const add = (side, player, type, count) => {
+      for (let i = 0; i < count; i++) events.push({ id: `imp${(n++).toString(36)}`, side, player, type, period: 1, clock: null, at: 0 });
+    };
+    for (const [i, row] of read.rows.entries()) {
+      // What the coach chose for this line: one of their players, the team as a whole ('team'), or to leave it out.
+      const to = map[i];
+      if (to === 'skip' || to === undefined || to === null || to === 0) continue;
+      const player = to === 'team' ? null : Number(to);
+      if (player !== null && (!roster.has(player) || used.has(player))) return res.status(400).json({ error: 'Each line of the file has to go to a different player on this team.' });
+      if (player !== null) used.add(player);
+      const s = row.stats;
+      add('us', player, 'm3', s.tpm);
+      add('us', player, 'x3', s.tpa - s.tpm);
+      add('us', player, 'm2', s.fgm - s.tpm);
+      add('us', player, 'x2', s.fga - s.fgm - (s.tpa - s.tpm));
+      add('us', player, 'm1', s.ftm);
+      add('us', player, 'x1', s.fta - s.ftm);
+      for (const k of ['reb', 'ast', 'stl', 'blk', 'to', 'pf']) add('us', player, k, s[k]);
+    }
+    if (events.length === 0) return res.status(400).json({ error: 'Nothing was chosen to bring in.' });
+    if (events.length > MAX_EVENTS - 400) return res.status(400).json({ error: 'That file has more in it than one game can hold.' });
+    add('them', null, 'p1', Math.min(300, Math.max(0, Math.round(Number(req.body.them) || 0))));
+    const old = get("SELECT * FROM scoresheets WHERE plan_id=? AND scope='team'", plan.id);
+    const state = cleanState({ ...(old ? parse(old.state_json, {}) : {}), mode: 'full', period: 1, status: 'final', imported: str(req.body.file, 100) || 'a file' });
+    const us = pointsOf(events, 'us');
+    const them = pointsOf(events, 'them');
+    if (old) run("UPDATE scoresheets SET state_json=?, events_json=?, us=?, them=?, status='final', rev=rev+1, scorer_id=?, updated_at=datetime('now') WHERE id=?", JSON.stringify(state), JSON.stringify(events), us, them, req.user.id, old.id);
+    else run("INSERT INTO scoresheets (scope, plan_id, team_id, user_id, state_json, events_json, us, them, status, rev, scorer_id) VALUES ('team',?,?,?,?,?,?,?,'final',1,?)", plan.id, plan.team_id, req.user.id, JSON.stringify(state), JSON.stringify(events), us, them, req.user.id);
+    const game = parse(plan.game_json, {});
+    game.result = { went_well: '', work_on: '', ...(game.result || {}), us: String(us), them: String(them) };
+    run('UPDATE plans SET game_json=? WHERE id=?', JSON.stringify(game), plan.id);
+    res.json({ sheet: sheetOut(get("SELECT * FROM scoresheets WHERE plan_id=? AND scope='team'", plan.id)) });
   });
   // One person keeps score at a time. Saving sends the whole sheet with the number of the version
   // it was built on; a save built on an older version means someone else has taken over.

@@ -1,8 +1,8 @@
 // Keeping score: the plays a scorer taps in, and every number worked out from them.
 // The server keeps the same list (server/games.js) and only ever adds up the points.
 
-/** A made shot worth 1, 2 or 3; a missed one; or one of the other things a player does. */
-export type EvType = 'm1' | 'm2' | 'm3' | 'x1' | 'x2' | 'x3' | 'reb' | 'ast' | 'stl' | 'blk' | 'to' | 'pf';
+/** A made shot worth 1, 2 or 3; a missed one; or one of the other things a player does. 'p1' is a point with nothing known about how it was scored. */
+export type EvType = 'p1' | 'm1' | 'm2' | 'm3' | 'x1' | 'x2' | 'x3' | 'reb' | 'ast' | 'stl' | 'blk' | 'to' | 'pf';
 export interface GameEvent {
   id: string;
   side: 'us' | 'them';
@@ -27,6 +27,8 @@ export interface ScoreState {
   /** The opponent's players are tracked one by one, not only their score. */
   opp_advanced: boolean;
   opp_players: { id: number; label: string }[];
+  /** The name of the file the plays were made from, when they were brought in as totals and not tapped in. */
+  imported?: string;
 }
 export interface Scoresheet {
   id: number;
@@ -54,10 +56,10 @@ export interface Scoresheet {
 }
 export const newState = (mode: ScoreState['mode'] = 'score'): ScoreState => ({ mode, period: 1, status: 'live', on: [], timed: false, period_secs: 480, clock_left: null, opp_advanced: false, opp_players: [] });
 
-export const POINTS: Partial<Record<EvType, number>> = { m1: 1, m2: 2, m3: 3 };
+export const POINTS: Partial<Record<EvType, number>> = { p1: 1, m1: 1, m2: 2, m3: 3 };
 /** How a play reads in the list: "made a 3". */
 export const EV_WORDS: Record<EvType, string> = {
-  m1: 'made a free throw', m2: 'made a 2', m3: 'made a 3', x1: 'missed a free throw', x2: 'missed a 2', x3: 'missed a 3',
+  p1: 'point', m1: 'made a free throw', m2: 'made a 2', m3: 'made a 3', x1: 'missed a free throw', x2: 'missed a 2', x3: 'missed a 3',
   reb: 'rebound', ast: 'assist', stl: 'steal', blk: 'block', to: 'turnover', pf: 'foul',
 };
 export const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;

@@ -818,8 +818,28 @@ export interface StreamTeam {
   name: string;
   owner: string;
   save: boolean;
+  /** May bring a game's stats in from a file. */
+  stats: boolean;
   videos: number;
   bytes: number;
+}
+/** One line of a stats file: a player as the file names them, their totals, and the roster player it looks like (0 for none). */
+export interface StatsRow {
+  number: string;
+  first: string;
+  last: string;
+  unassigned: boolean;
+  stats: { pts: number; fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number; reb: number; ast: number; stl: number; blk: number; to: number; pf: number };
+  file_pts: number;
+  player_id: number;
+}
+export interface StatsFile {
+  rows: StatsRow[];
+  /** How many games the file's totals cover. It should be one. */
+  games: number;
+  roster: { id: number; name: string; number: string }[];
+  /** How many plays the game already has, which the import replaces. */
+  existing: number;
 }
 /** A team someone can keep single-player stats for, with the players they may pick: all of them for a coach, their own for a parent. */
 export interface TrackTeam {
@@ -917,7 +937,11 @@ export const api = {
   },
   communities: () => req<Community[]>('GET', '/communities'),
   communityNews: () => req<CommunityNews>('GET', '/communities/news'),
-  score: (planId: number) => req<{ sheet: Scoresheet | null }>('GET', `/plans/${planId}/score`),
+  score: (planId: number) => req<{ sheet: Scoresheet | null; can_import: boolean }>('GET', `/plans/${planId}/score`),
+  /** Reads a stats file and says which of the team's players each line looks like. Nothing is saved. */
+  readStats: (planId: number, csv: string) => req<StatsFile>('POST', `/plans/${planId}/score/import/read`, { csv }),
+  /** Makes the game's stats from the file. `map` says, for each line by its place, a player's id, 'team' or 'skip'. */
+  importStats: (planId: number, b: { csv: string; file: string; map: Record<number, number | 'team' | 'skip'>; them: number }) => req<{ sheet: Scoresheet }>('POST', `/plans/${planId}/score/import`, b),
   /** Saves a game's scoresheet. A 409 means someone else has taken over keeping score; no connection throws. */
   saveScore: async (planId: number, b: { state: ScoreState; events: GameEvent[]; rev: number; take: boolean }): Promise<{ status: number; sheet?: Scoresheet; error?: string }> => {
     const res = await fetch(`/api/plans/${planId}/score`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
@@ -939,7 +963,7 @@ export const api = {
   streamPeople: (teamId: number) => req<{ save: boolean; people: StreamPerson[] }>('GET', `/streams/teams/${teamId}/people`),
   setStreamPerson: (teamId: number, contactId: number, b: { watch?: boolean; broadcast?: boolean }) => req<{ save: boolean; people: StreamPerson[] }>('PUT', `/streams/teams/${teamId}/people/${contactId}`, b),
   adminStreamTeams: () => req<StreamTeam[]>('GET', '/streams/admin/teams'),
-  adminSetStreamTeam: (teamId: number, save: boolean) => req<StreamTeam[]>('PUT', `/streams/admin/teams/${teamId}`, { save }),
+  adminSetStreamTeam: (teamId: number, b: { save?: boolean; stats?: boolean }) => req<StreamTeam[]>('PUT', `/streams/admin/teams/${teamId}`, b),
   tracks: () => req<{ teams: TrackTeam[]; sheets: Scoresheet[] }>('GET', '/tracks'),
   addTrack: (b: { team_id?: number; player_id?: number; player_name: string; title: string; date: string }) => req<{ id: number; teams: TrackTeam[]; sheets: Scoresheet[] }>('POST', '/tracks', b),
   saveTrack: (id: number, b: { state: ScoreState; events: GameEvent[] }) => req<{ sheet: Scoresheet }>('PUT', `/tracks/${id}`, b),

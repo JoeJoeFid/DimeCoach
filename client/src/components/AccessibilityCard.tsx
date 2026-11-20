@@ -69,7 +69,7 @@ export function PlayImportCard({ settings, run }: { settings: AdminSettings; run
   );
 }
 
-/** Which teams may keep video of their games. Video is what fills the disk, so it is decided team by team. */
+/** What each team may do that is decided team by team: keep video of its games, which is what fills the disk, and bring a game's stats in from a file. */
 export function SavedVideoCard({ run }: { run: (fn: () => Promise<unknown>, done?: string) => void }) {
   const [teams, setTeams] = useState<StreamTeam[] | null>(null);
   useEffect(() => {
@@ -78,8 +78,8 @@ export function SavedVideoCard({ run }: { run: (fn: () => Promise<unknown>, done
   const mb = (bytes: number) => `${Math.round(bytes / 1024 / 1024)} MB`;
   return (
     <div className="card">
-      <h2>Saved game video</h2>
-      <p className="muted small">Anyone allowed to can broadcast a game live. Keeping the video afterwards takes room on the disk, so it is turned on team by team. Saved video is for the team's coaches.</p>
+      <h2>Saved game video and stat import</h2>
+      <p className="muted small">Both are turned on team by team. Anyone allowed to can broadcast a game live; keeping the video afterwards takes room on the disk, and saved video is for the team's coaches. Stat import adds "Import stats" to each of the team's games, to bring in the stats another scorekeeping app exports.</p>
       {teams === null ? (
         <p className="muted small">Loading…</p>
       ) : teams.length === 0 ? (
@@ -88,11 +88,16 @@ export function SavedVideoCard({ run }: { run: (fn: () => Promise<unknown>, done
         <ul className="sv-teams">
           {teams.map((t) => (
             <li key={t.id}>
+              <span>
+                <strong>{t.name}</strong> <span className="muted small">{[t.owner, t.videos ? `${t.videos} saved, ${mb(t.bytes)}` : ''].filter(Boolean).join(' · ')}</span>
+              </span>
               <label className="check">
-                <input type="checkbox" checked={t.save} onChange={(e) => run(async () => setTeams(await api.adminSetStreamTeam(t.id, e.target.checked)), e.target.checked ? `${t.name} can now save game video.` : `${t.name} can no longer save game video. What it saved already is kept.`)} />
-                <span>
-                  <strong>{t.name}</strong> <span className="muted small">{[t.owner, t.videos ? `${t.videos} saved, ${mb(t.bytes)}` : ''].filter(Boolean).join(' · ')}</span>
-                </span>
+                <input type="checkbox" checked={t.save} onChange={(e) => run(async () => setTeams(await api.adminSetStreamTeam(t.id, { save: e.target.checked })), e.target.checked ? `${t.name} can now save game video.` : `${t.name} can no longer save game video. What it saved already is kept.`)} />
+                <span>Save video</span>
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={t.stats} onChange={(e) => run(async () => setTeams(await api.adminSetStreamTeam(t.id, { stats: e.target.checked })), e.target.checked ? `${t.name} can now import stats.` : `${t.name} can no longer import stats. What it brought in already is kept.`)} />
+                <span>Import stats</span>
               </label>
             </li>
           ))}

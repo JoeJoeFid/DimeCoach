@@ -18,6 +18,8 @@ import { isSystemAdmin } from './auth.js';
 import { coachesOfTeam, followersOfTeam } from './inbox.js';
 // The list of a team's parents, family and friends is made there, and has to exist before columns are added to it.
 import './contacts.js';
+// The setting for importing stats is kept beside the one for video, and its column is made there.
+import './games.js';
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS streams (
@@ -243,15 +245,16 @@ export function mountStreams(app) {
   const systemOnly = (req, res, next) => (isSystemAdmin(req.user) ? next() : res.status(403).json({ error: 'Only the system administrator can do this.' }));
   const teamsOut = () =>
     all(
-      `SELECT t.id, t.name, t.save_streams,
+      `SELECT t.id, t.name, t.save_streams, t.stat_import,
               COALESCE((SELECT u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.owner_id=t.owner_id AND m.role='owner' ORDER BY u.id LIMIT 1), '') AS owner,
               (SELECT COUNT(*) FROM streams s WHERE s.team_id=t.id AND s.saved=1) AS videos,
               (SELECT COALESCE(SUM(bytes),0) FROM streams s WHERE s.team_id=t.id AND s.saved=1) AS bytes
          FROM teams t ORDER BY t.name COLLATE NOCASE`,
-    ).map((t) => ({ id: t.id, name: t.name, owner: t.owner, save: !!t.save_streams, videos: t.videos, bytes: t.bytes }));
+    ).map((t) => ({ id: t.id, name: t.name, owner: t.owner, save: !!t.save_streams, stats: !!t.stat_import, videos: t.videos, bytes: t.bytes }));
   app.get('/api/streams/admin/teams', systemOnly, (req, res) => res.json(teamsOut()));
   app.put('/api/streams/admin/teams/:id', systemOnly, (req, res) => {
-    run('UPDATE teams SET save_streams=? WHERE id=?', req.body.save === true ? 1 : 0, Number(req.params.id));
+    if (typeof req.body.save === 'boolean') run('UPDATE teams SET save_streams=? WHERE id=?', req.body.save ? 1 : 0, Number(req.params.id));
+    if (typeof req.body.stats === 'boolean') run('UPDATE teams SET stat_import=? WHERE id=?', req.body.stats ? 1 : 0, Number(req.params.id));
     res.json(teamsOut());
   });
 }

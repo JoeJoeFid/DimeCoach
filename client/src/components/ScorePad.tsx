@@ -17,7 +17,7 @@ export interface PadPlayer {
 type Action = EvType | 'ft';
 /** How each kind of play is named at the top of the sheet that asks who. */
 const ASK: Record<Action, string> = {
-  m2: '2-point FG made by', m3: '3-point FG made by', m1: 'Free throw made by', x2: '2-point FG missed by', x3: '3-point FG missed by', x1: 'Free throw missed by',
+  p1: 'Point by', m2: '2-point FG made by', m3: '3-point FG made by', m1: 'Free throw made by', x2: '2-point FG missed by', x3: '3-point FG missed by', x1: 'Free throw missed by',
   reb: 'Rebound by', ast: 'Assist by', stl: 'Steal by', blk: 'Block by', to: 'Turnover by', pf: 'Foul on', ft: 'Free throws by',
 };
 const SHOT: Partial<Record<EvType, string>> = { m2: '2-point FG made', m3: '3-point FG made', x2: '2-point FG missed', x3: '3-point FG missed', x1: 'Free throw missed' };
@@ -403,7 +403,8 @@ export default function ScorePad({
         </table>
       )}
 
-      {!children && (
+      {/* Stats brought in as totals have no plays to list. */}
+      {!children && !state.imported && (
         <section className="sp-plays" aria-label="Play by play">
           <header>
             <h3>Play by Play</h3>
