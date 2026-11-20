@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { api, type PlanCollaborator, type PlanPost } from '../api';
 import { useApp } from '../App';
 import { confirmDialog } from './dialogs';
-import { EditBox, EditedMark, MentionArea, MentionText } from './Mentions';
+import { EditBox, EditedMark, MentionArea, MentionText, useFocusPost } from './Mentions';
 
 const stamp = (at: string) => new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`).getTime();
 function ago(at: string) {
@@ -92,7 +92,7 @@ function Node({
   const [writing, setWriting] = useState(false);
   const [editing, setEditing] = useState(false);
   return (
-    <li className="cm-reply pd-post">
+    <li className="cm-reply pd-post" data-post={p.id}>
       <Avatar name={p.by} />
       <div className="cm-reply-main">
         <div className="cm-post-head">
@@ -207,6 +207,7 @@ export default function PlanDiscussion({ planId, what }: { planId: number; /** "
   const me = useApp().user.name;
   const [posts, setPosts] = useState<PlanPost[] | null>(null);
   const [error, setError] = useState('');
+  useFocusPost(posts !== null);
   // Everyone on the plan, so they can be named with "@".
   const [names, setNames] = useState<string[]>([]);
   useEffect(() => {

@@ -81,7 +81,7 @@ export interface User {
   /** An account that follows teams as a parent, family or a friend, and coaches nothing. */
   follower: boolean;
   /** Personal display preferences, saved with the account. */
-  prefs: { heat_color?: string; /** True once the welcome tour has been finished or skipped. */ tour_done?: boolean; /** True once the introduction to drawing plays has been seen. */ play_intro_done?: boolean };
+  prefs: { heat_color?: string; /** True once the welcome tour has been finished or skipped. */ tour_done?: boolean; /** True once the introduction to drawing plays has been seen. */ play_intro_done?: boolean; /** No email when someone names them with "@". */ mention_email_off?: boolean; /** Not offered as someone to write a message to. */ hide_in_to?: boolean };
 }
 export interface AuthStatus {
   /** True on a fresh install with no accounts yet. */
@@ -186,11 +186,15 @@ export type ShareKind = 'drill' | 'play' | 'plan';
  */
 export interface CommunityNewsItem {
   key: string;
-  kind: 'invite' | 'post' | 'share' | 'notice';
-  /** Notices only: its id, its headline, and where clicking it goes ('' for nowhere). */
+  kind: 'invite' | 'post' | 'share' | 'notice' | 'direct' | 'sent';
+  /** Notices only: its id, its headline, and where clicking it goes ('' for nowhere). A message from a person has an id and a subject too. */
   id?: number;
   title?: string;
   link?: string;
+  /** A message from a person ('direct'), or one of the caller's own ('sent'): who wrote it, all of its words, and the names it went to. */
+  by_id?: number;
+  body?: string;
+  to?: string[];
   share_kind?: ShareKind;
   community_id: number;
   community: string;
@@ -200,6 +204,20 @@ export interface CommunityNewsItem {
   /** The message itself, or the name of what was shared. */
   text: string;
   unread: boolean;
+}
+/** Someone a message can be written to: a name and how they are known in the group, never an address. */
+export interface ToPerson {
+  id: number;
+  name: string;
+  role: string;
+}
+/** The people of one team, community or organization the caller can write to. Teams come first. */
+export interface ToGroup {
+  key: string;
+  tier: 'team' | 'community';
+  label: string;
+  sub: string;
+  people: ToPerson[];
 }
 export interface CommunityNews {
   unread: number;
@@ -703,6 +721,8 @@ export interface FamilySettings {
   joined: Record<FamilyKind, number>;
   news: TeamPost[];
   board: TeamPost[];
+  /** The names that can be written with "@" on the board. */
+  board_people: string[];
 }
 export interface FollowedTeam {
   id: number;
@@ -745,6 +765,7 @@ export interface FamilyTeam {
   schedule: FamilyDay[];
   news: TeamPost[];
   board: TeamPost[];
+  board_people: string[];
   homework: { id: number; title: string; date: string; for: string[]; content: SharedPlan }[];
   plays: SharedPlay[];
   drills: (SharedDrill & { id: number })[];
@@ -783,7 +804,7 @@ export const api = {
   acceptWelcome: (b: { token: string; name: string; first_name?: string; last_name?: string; password: string }) => req<{ ok: true; user: User }>('POST', '/auth/welcome', b),
   inviteInfo: (token: string) => req<InviteInfo>('GET', `/auth/invite?token=${encodeURIComponent(token)}`),
   acceptTeamInvite: (b: { token: string; name?: string; first_name?: string; last_name?: string; password?: string }) => req<{ ok: true; existing?: boolean; user?: User }>('POST', '/auth/invite/accept', b),
-  savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean; play_intro_done?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
+  savePrefs: (prefs: { heat_color?: string | null; tour_done?: boolean; play_intro_done?: boolean; mention_email_off?: boolean; hide_in_to?: boolean }) => req<{ user: User }>('PUT', '/auth/prefs', prefs),
   setName: (name: string, parts?: { first: string; last: string }) => req<{ user: User }>('PUT', '/auth/profile', { name, first_name: parts?.first, last_name: parts?.last }),
   changePassword: (current: string, next: string) => req<{ user: User }>('POST', '/auth/password', { current, next }),
 
@@ -814,6 +835,12 @@ export const api = {
   communities: () => req<Community[]>('GET', '/communities'),
   communityNews: () => req<CommunityNews>('GET', '/communities/news'),
   messages: () => req<CommunityNews>('GET', '/messages'),
+  messagePeople: () => req<ToGroup[]>('GET', '/messages/people'),
+  messagesSent: () => req<CommunityNewsItem[]>('GET', '/messages/sent'),
+  sendMessage: (b: { to: number[]; subject: string; body: string; reply_to?: number }) => req<{ ok: true; sent: CommunityNewsItem[] }>('POST', '/messages/send', b),
+  readDirect: (id: number) => req<CommunityNews>('POST', `/messages/direct/${id}/read`, {}),
+  deleteDirect: (id: number) => req<CommunityNews>('DELETE', `/messages/direct/${id}`),
+  deleteSent: (id: number) => req<CommunityNewsItem[]>('DELETE', `/messages/sent/${id}`),
   /** Marks one message from the app, or with no id everything, as read. */
   markMessagesRead: (id?: number) => req<CommunityNews>('POST', id ? `/messages/${id}/read` : '/messages/read', {}),
   /** Marks one community, or with no id all of them, as read up to now. */

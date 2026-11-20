@@ -1,7 +1,8 @@
 // Naming someone in a message with "@". Typing "@" in a message box offers the people who can be
 // named there; choosing one writes "@Their Name". Where the message is shown, the name stands out,
 // and the person named is sent a message of their own by the server.
-import { useRef, useState, type KeyboardEvent, type ReactNode, type Ref, type TextareaHTMLAttributes } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type Ref, type TextareaHTMLAttributes } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** What is being typed after an "@" just before the caret, or null when the caret is not in one. */
@@ -151,6 +152,31 @@ export function MentionText({ text, people, me }: { text: string; /** Everyone w
   }
   if (last < text.length) out.push(linked(text.slice(last), 'end'));
   return <>{out}</>;
+}
+
+/**
+ * Brings the message an address names with "?post=12" into view and marks it for a few seconds:
+ * it is how a "you were mentioned" link lands on the very message. Messages say which they are
+ * with `data-post`. `ready` turns true once they are drawn.
+ */
+export function useFocusPost(ready: boolean) {
+  const [params] = useSearchParams();
+  const post = params.get('post');
+  useEffect(() => {
+    if (!post || !ready) return;
+    let fade = 0;
+    const timer = window.setTimeout(() => {
+      const el = document.querySelector(`[data-post="${post.replace(/[^\w-]/g, '')}"]`);
+      if (!el) return;
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('post-focus');
+      fade = window.setTimeout(() => el.classList.remove('post-focus'), 5000);
+    }, 200);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(fade);
+    };
+  }, [post, ready]);
 }
 
 /** "edited on Nov 13 at 3:42 PM", from a time the database wrote in UTC. */

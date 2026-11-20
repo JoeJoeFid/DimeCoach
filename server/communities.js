@@ -5,7 +5,9 @@
 import crypto from 'node:crypto';
 import { all, get, run, tx } from './db.js';
 import { poke } from './live.js';
-import { mentionedIn, noticesFor, notify, readNotices } from './notices.js';
+import { mention, mentionedIn, noticesFor, notify, readNotices } from './notices.js';
+import { directFor, mountInbox, readDirect } from './inbox.js';
+import { publicBase } from './invites.js';
 import { isOrg, librarySports, orgMemberLeaving, orgSummary } from './orgs.js';
 
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
@@ -295,15 +297,17 @@ export function mountCommunities(app) {
         if (row) items.push({ ...base, key: `share-${sh.id}`, kind: 'share', share_kind: sh.kind, at: sh.created_at, by: sh.by_name, text: titleOf(sh.kind, row), unread: sh.created_at > c.seen });
       }
     }
-    items.push(...noticesFor(userId));
+    items.push(...noticesFor(userId), ...directFor(userId));
     items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
-    return { unread: items.filter((i) => i.unread).length, items: items.slice(0, 80) };
+    return { unread: items.filter((i) => i.unread).length, items: items.slice(0, 120) };
   };
   app.get('/api/communities/news', (req, res) => res.json(newsFor(req.user.id)));
   // The Messages page: the same list, and reading one message from the app or everything at once.
   app.get('/api/messages', (req, res) => res.json(newsFor(req.user.id)));
+  mountInbox(app, newsFor);
   app.post('/api/messages/read', (req, res) => {
     readNotices(req.user.id);
+    readDirect(req.user.id);
     run("UPDATE community_members SET seen_at=datetime('now') WHERE user_id=? AND status='active'", req.user.id);
     res.json(newsFor(req.user.id));
   });
@@ -488,10 +492,7 @@ export function mountCommunities(app) {
     // Anyone named with "@" gets a message of their own, on top of the community's usual "something new".
     const members = all("SELECT u.id, u.name FROM community_members cm JOIN users u ON u.id=cm.user_id WHERE cm.community_id=? AND cm.status='active' AND u.id<>?", at.c.id, req.user.id);
     for (const p of mentionedIn(body, members))
-      notify(p.id, {
-        kind: 'mention', ref: `community-post-${made.lastInsertRowid}`, link: `/communities/${at.c.id}`,
-        title: `${req.user.name} mentioned you in ${at.c.name}`, body: body.length > 160 ? `${body.slice(0, 160)}…` : body,
-      });
+      mention(p.id, { by: req.user.name, where: `in ${at.c.name}`, body, ref: `community-post-${made.lastInsertRowid}`, link: `/communities/${at.c.id}?tab=discussions&post=${made.lastInsertRowid}`, base: publicBase(req) });
     pokeMembers(at.c.id, req.user.id);
     res.json(postsOut(at.c, at.m));
   });
@@ -511,10 +512,7 @@ export function mountCommunities(app) {
       const before = new Set(mentionedIn(p.body, members).map((m) => m.id));
       for (const m of mentionedIn(body, members))
         if (!before.has(m.id))
-          notify(m.id, {
-            kind: 'mention', ref: `community-post-${p.id}`, link: `/communities/${at.c.id}`,
-            title: `${req.user.name} mentioned you in ${at.c.name}`, body: body.length > 160 ? `${body.slice(0, 160)}…` : body,
-          });
+          mention(m.id, { by: req.user.name, where: `in ${at.c.name}`, body, ref: `community-post-${p.id}`, link: `/communities/${at.c.id}?tab=discussions&post=${p.id}`, base: publicBase(req) });
       pokeMembers(at.c.id, req.user.id);
     }
     res.json(postsOut(at.c, at.m));

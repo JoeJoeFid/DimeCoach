@@ -128,6 +128,9 @@ function prefsOf(u) {
   if (stored.tour_done === true) prefs.tour_done = true;
   // Set once the introduction to drawing plays has been seen.
   if (stored.play_intro_done === true) prefs.play_intro_done = true;
+  // No email when someone names them with "@", and not offered as someone to write to.
+  if (stored.mention_email_off === true) prefs.mention_email_off = true;
+  if (stored.hide_in_to === true) prefs.hide_in_to = true;
   return prefs;
 }
 /**
@@ -568,7 +571,7 @@ export function mountAuth(app) {
     const membership = get('SELECT owner_id, role FROM memberships WHERE user_id=? ORDER BY owner_id LIMIT 1', user.id);
     if (!membership) return res.status(403).json({ error: 'This account has no workspace. Contact the administrator.' });
     // A follower's account opens the teams they follow, and nothing a coach uses.
-    if (user.follower && !/^\/(auth|family|live)(\/|$)/.test(req.path)) return res.status(403).json({ error: 'This account follows teams as a parent, family or a friend. It cannot be used to coach.' });
+    if (user.follower && !/^\/(auth|family|live|messages)(\/|$)/.test(req.path)) return res.status(403).json({ error: 'This account follows teams as a parent, family or a friend. It cannot be used to coach.' });
     req.user = user;
     req.ownerId = membership.owner_id;
     noteMailActor(user.id);
@@ -620,6 +623,11 @@ export function mountAuth(app) {
       if (req.body.play_intro_done === true) prefs.play_intro_done = true;
       else delete prefs.play_intro_done;
     }
+    for (const key of ['mention_email_off', 'hide_in_to'])
+      if (key in req.body) {
+        if (req.body[key] === true) prefs[key] = true;
+        else delete prefs[key];
+      }
     run('UPDATE users SET prefs_json=? WHERE id=?', JSON.stringify(prefs), req.user.id);
     res.json({ user: userOut(get('SELECT * FROM users WHERE id=?', req.user.id)) });
   });

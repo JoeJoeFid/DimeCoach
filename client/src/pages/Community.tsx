@@ -8,7 +8,7 @@ import { Field, Modal, MoreMenu, type MenuItem } from '../components/bits';
 import { KIND_WORDS, ShareRow, SharedPreview, sharesKind } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { PlayDiagram } from '../components/PlayDiagram';
-import { EditBox, EditedMark, MentionArea, MentionText } from '../components/Mentions';
+import { EditBox, EditedMark, MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 import { LapsedBanner, OrgAnnouncements, OrgLibrarySettings, OrgLog, OrgVenues, OrgPeople, OrgPublicSettings, OrgTeams, PinnedAnnouncements } from './OrgPanels';
 import { ManageOverview, OrgSchedule, OrgUsage, type ManageGo } from './OrgManage';
 import { OrgPlayers } from './OrgPlayers';
@@ -160,6 +160,15 @@ export default function CommunityPage() {
   const [preview, setPreview] = useState<CommunityShare | null>(null);
   // The conversation that is open on its own, and whether a new one is being written.
   const [thread, setThread] = useState<string | null>(null);
+  // A link to one message ("you were mentioned") opens the conversation it is in.
+  const askedPost = Number(params.get('post')) || 0;
+  useEffect(() => {
+    if (!askedPost || !posts) return;
+    const top = posts.find((p) => p.id === askedPost || flatten(p.replies || []).some((r) => r.id === askedPost));
+    if (top) setThread(top.share_id ? `s${top.share_id}` : `p${top.id}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedPost, posts === null]);
+  useFocusPost(!!posts && thread !== null);
   const [composing, setComposing] = useState(false);
   // Where the overview sent the manager: a league to open, or a part of the coaches page.
   const [focus, setFocus] = useState<{ leagueId?: number; build?: boolean; view?: 'coaches' | 'invites' | 'requirements' | 'waiting' | 'teams' | 'form' } | null>(null);
@@ -912,7 +921,7 @@ function Feed({
                 ]
               : shareMenu(e.share!);
             return (
-              <li key={e.key} className="card cm-post">
+              <li key={e.key} className="card cm-post" data-post={e.post?.id}>
                 <Avatar name={by} big />
                 <div className="cm-post-main">
                   <div className="cm-post-head">
@@ -1116,7 +1125,7 @@ function ReplyNode({ r, depth, ctx }: { r: CommunityPost; depth: number; ctx: Th
   const kids = r.replies || [];
   const share = r.attach_share_id ? ctx.shares.find((s) => s.id === r.attach_share_id) : undefined;
   return (
-    <li className="cm-reply">
+    <li className="cm-reply" data-post={r.id}>
       <Avatar name={r.by} />
       <div className="cm-reply-main">
         <div className="cm-post-head">

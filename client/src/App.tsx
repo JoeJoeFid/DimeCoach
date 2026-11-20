@@ -13,6 +13,7 @@ import { Join, PasswordForm, Setup, SignedOut, Welcome } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import Messages from './pages/Messages';
+import { MessageSettings } from './components/Inbox';
 import CoachLibraryPage from './pages/CoachLibrary';
 import CommunityPage from './pages/Community';
 import OrgPublic from './pages/OrgPublic';
@@ -502,6 +503,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           <Route path="/homework" element={<Plans kind="homework" />} />
           <Route path="/plans/:id" element={<PlanEditor />} />
           <Route path="/go/plan/:teamId/:planId" element={<GoToPlan />} />
+          <Route path="/go/board/:teamId" element={<GoToBoard />} />
           <Route path="/plans/:id/print" element={<PrintView />} />
           {user.can_import && <Route path="/import" element={<ImportPlans />} />}
           <Route path="/library" element={<Library />} />
@@ -619,12 +621,20 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
  * team is opened first: the page it lands on then carries on to the plan.
  */
 function GoToPlan() {
+  const { teamId, planId } = useParams();
+  // "?post=12" rides along, so a mention lands on the message itself.
+  return <GoToTeam team={Number(teamId)} to={`/plans/${planId}${window.location.search}`} />;
+}
+/** The same for a team's message board, which sits with its parents and family. */
+function GoToBoard() {
+  const { teamId } = useParams();
+  const post = new URLSearchParams(window.location.search).get('post');
+  return <GoToTeam team={Number(teamId)} to={`/teams?tab=family&view=messages&show=board${post ? `&post=${encodeURIComponent(post)}` : ''}`} />;
+}
+function GoToTeam({ team, to }: { team: number; to: string }) {
   const app = useApp();
   const navigate = useNavigate();
-  const { teamId, planId } = useParams();
   useEffect(() => {
-    const team = Number(teamId);
-    const to = `/plans/${planId}`;
     const shared = app.shared_teams.some((t) => t.id === team);
     if (app.team?.id === team) navigate(to, { replace: true });
     // A team that is no longer theirs to open: back to the messages.
@@ -821,6 +831,10 @@ function Account({ onChanged }: { onChanged: () => void }) {
             {state.busy ? 'Saving…' : 'Save name'}
           </button>
         </form>
+      </div>
+      <div className="card account-card">
+        <h2>Messages</h2>
+        <MessageSettings user={user} onChanged={onChanged} />
       </div>
       <div className="card account-card">
         <h2>Change password</h2>

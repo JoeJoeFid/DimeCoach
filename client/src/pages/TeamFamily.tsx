@@ -2,6 +2,9 @@
 // which parts each kind of follower gets, the plays and resources picked out for them, and what
 // the coaches write to them.
 import { useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useApp } from '../App';
+import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 import { api, type FamilyKind, type FamilySection, type FamilySettings, type TeamPost } from '../api';
 import type { Team } from '../types';
 import { SubTabs } from '../components/cx';
@@ -30,8 +33,11 @@ type View = 'access' | 'messages' | 'plays' | 'drills' | 'resources';
 export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean }) {
   const [data, setData] = useState<FamilySettings | null>(null);
   const [error, setError] = useState('');
-  const [view, setView] = useState<View>('access');
-  const [show, setShow] = useState<'news' | 'board'>('news');
+  // A link to a message on the board ("you were mentioned") opens the board itself.
+  const [params] = useSearchParams();
+  const me = useApp().user.name;
+  const [view, setView] = useState<View>(params.get('view') === 'messages' ? 'messages' : 'access');
+  const [show, setShow] = useState<'news' | 'board'>(params.get('show') === 'board' ? 'board' : 'news');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,6 +58,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
       return false;
     }
   };
+  useFocusPost(!!data && view === 'messages' && show === 'board');
   if (!data)
     return (
       <div className="card">
@@ -152,7 +159,11 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
           </p>
           <form className="fields stack tf-write" onSubmit={post}>
             {show === 'news' && <input className="input" maxLength={120} aria-label="Headline" placeholder="Headline (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />}
-            <textarea className="input" rows={3} maxLength={4000} aria-label="Message" placeholder={show === 'news' ? 'What do the team’s parents, family and friends need to know?' : 'Write on the board…'} value={body} onChange={(e) => setBody(e.target.value)} />
+            {show === 'news' ? (
+              <textarea className="input" rows={3} maxLength={4000} aria-label="Message" placeholder="What do the team’s parents, family and friends need to know?" value={body} onChange={(e) => setBody(e.target.value)} />
+            ) : (
+              <MentionArea people={data.board_people.filter((n) => n !== me)} className="input" rows={3} maxLength={4000} aria-label="Message" placeholder="Write on the board… Type @ to name someone." value={body} onChange={setBody} />
+            )}
             <div className="modal-actions">
               <button className="btn primary" disabled={busy || !body.trim()}>
                 {show === 'news' ? 'Post announcement' : 'Post'}
@@ -161,7 +172,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
           </form>
           {posts.length === 0 && <p className="muted">{show === 'news' ? 'No announcements yet.' : 'Nobody has written on the board yet.'}</p>}
           {posts.map((p) => (
-            <article key={p.id} className={`fam-post ${p.role === 'coach' ? 'coach' : ''}`}>
+            <article key={p.id} className={`fam-post ${p.role === 'coach' ? 'coach' : ''}`} data-post={p.id}>
               <header>
                 <strong>{p.author}</strong>
                 <span className="kind">{ROLE[p.role]}</span>
@@ -171,7 +182,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
                 </button>
               </header>
               {p.title && <h3>{p.title}</h3>}
-              <p>{p.body}</p>
+              <p>{show === 'board' ? <MentionText text={p.body} people={data.board_people} me={me} /> : p.body}</p>
             </article>
           ))}
         </>

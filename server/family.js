@@ -11,6 +11,9 @@ import { all, db, dbPath, get, run } from './db.js';
 import { sharedOpening, withoutOpening } from './calendar.js';
 import { drillView, planView, playView } from './communities.js';
 import { resourceList } from './resources.js';
+import { coachesOfTeam, followersOfTeam } from './inbox.js';
+import { mention, mentionedIn } from './notices.js';
+import { publicBase } from './invites.js';
 
 const uploadsDir = path.join(path.dirname(dbPath), 'uploads');
 const addColumn = (table, column, ddl) => {
@@ -82,11 +85,26 @@ function tooManyPosts(userId) {
   posted.set(userId, [...recent, Date.now()]);
   return recent.length >= POST_LIMIT;
 }
-function addPost(team, user, role, kind, b) {
+/** Who reads a team's board, and so can be named on it: its coaches, and the followers it is open to. */
+function boardPeople(team) {
+  const access = settingsOf(team).access;
+  const coaches = coachesOfTeam(team).map((p) => ({ id: p.id, name: p.name, coach: true }));
+  const seen = new Set(coaches.map((p) => p.id));
+  return [...coaches, ...followersOfTeam(team).filter((p) => !seen.has(p.id) && access?.[p.kind]?.board).map((p) => ({ id: p.id, name: p.name, coach: false }))];
+}
+const boardNames = (team) => [...new Set(boardPeople(team).map((p) => p.name))];
+function addPost(team, user, role, kind, b, base = '') {
   const body = str(b.body, 4000).trim();
   if (!body) return 'Write something first.';
   if (tooManyPosts(user.id)) return 'You have posted a lot in the last hour. Try again a little later.';
-  run('INSERT INTO team_posts (team_id, user_id, author, role, kind, title, body, created_at) VALUES (?,?,?,?,?,?,?,?)', team.id, user.id, user.name, role, kind, kind === 'news' ? str(b.title, 120).trim() : '', body, nowIso());
+  const postId = run('INSERT INTO team_posts (team_id, user_id, author, role, kind, title, body, created_at) VALUES (?,?,?,?,?,?,?,?)', team.id, user.id, user.name, role, kind, kind === 'news' ? str(b.title, 120).trim() : '', body, nowIso()).lastInsertRowid;
+  // Someone named with "@" on the board is told, with a link to the message that names them.
+  if (kind === 'board')
+    for (const p of mentionedIn(body, boardPeople(team).filter((x) => x.id !== user.id)))
+      mention(p.id, {
+        by: user.name, where: `on the ${team.name} message board`, body, ref: `team-post-${postId}`, base,
+        link: p.coach ? `/go/board/${team.id}?post=${postId}` : `/family/${slugOf(team)}?tab=messages&show=board&post=${postId}`,
+      });
   return '';
 }
 
@@ -254,6 +272,8 @@ export function mountFamily(app) {
       schedule: can.schedule ? scheduleOf(team, can) : [],
       news: can.news ? postsOf(team.id, 'news', req.user.id) : [],
       board: can.board ? postsOf(team.id, 'board', req.user.id) : [],
+      // The names that can be written with "@" on the board.
+      board_people: can.board ? boardNames(team) : [],
       homework: can.homework ? homeworkOf(team, f.players) : [],
       plays: can.playbook ? sharedPlays(team, settings) : [],
       drills: can.drills ? sharedDrills(team, settings) : [],
@@ -266,7 +286,7 @@ export function mountFamily(app) {
     const f = enter(req, res);
     if (!f) return;
     if (!f.can.board) return res.status(403).json({ error: 'The message board is not open to you on this team.' });
-    const problem = addPost(f.team, req.user, f.kind, 'board', req.body);
+    const problem = addPost(f.team, req.user, f.kind, 'board', req.body, publicBase(req));
     if (problem) return res.status(400).json({ error: problem });
     res.json(postsOf(f.team.id, 'board', req.user.id));
   });
@@ -325,6 +345,7 @@ export function mountFamilyCoach(app) {
       joined: Object.fromEntries(FAMILY_KINDS.map((k) => [k, get('SELECT COUNT(*) AS n FROM team_contacts WHERE team_id=? AND kind=? AND user_id IS NOT NULL', team.id, k).n])),
       news: postsOf(team.id, 'news', req.user.id),
       board: postsOf(team.id, 'board', req.user.id),
+      board_people: boardNames(team),
     };
   };
   app.get('/api/teams/:id/family', (req, res) => {
@@ -347,7 +368,7 @@ export function mountFamilyCoach(app) {
   app.post('/api/teams/:id/family/posts', (req, res) => {
     const team = enter(req, res);
     if (!team) return;
-    const problem = addPost(team, req.user, 'coach', req.body.kind === 'news' ? 'news' : 'board', req.body);
+    const problem = addPost(team, req.user, 'coach', req.body.kind === 'news' ? 'news' : 'board', req.body, publicBase(req));
     if (problem) return res.status(400).json({ error: problem });
     res.json(out(req, team));
   });

@@ -16401,3 +16401,270 @@ button.play-card {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Messages as an inbox ---------- */
+.inbox-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.inbox-space {
+  flex: 1;
+}
+.inbox-card {
+  padding: 6px 8px;
+}
+.inbox-none {
+  padding: 14px 10px;
+  margin: 0;
+}
+.inbox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.inbox-list li + li {
+  border-top: 1px solid var(--line);
+}
+.inbox-row {
+  display: grid;
+  grid-template-columns: 10px minmax(110px, 190px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.inbox-row:hover {
+  background: var(--surface-2);
+}
+.inbox-from,
+.inbox-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.inbox-subject {
+  color: var(--ink);
+}
+.inbox-snip {
+  color: var(--muted);
+}
+.inbox-list li.unread .inbox-from,
+.inbox-list li.unread .inbox-subject {
+  color: var(--ink);
+  font-weight: 700;
+}
+.inbox-when {
+  white-space: nowrap;
+}
+.inbox-read {
+  padding: 10px 12px 14px;
+}
+.inbox-read h2 {
+  margin: 12px 0 4px;
+}
+.inbox-meta {
+  margin: 0 0 14px;
+}
+.inbox-body {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+.inbox-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+@media (max-width: 700px) {
+  .inbox-row {
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    row-gap: 2px;
+  }
+  .inbox-line {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+}
+/* Writing one: who it is for. */
+.compose-to {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.compose-label {
+  padding-top: 9px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.to-box {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--field);
+  cursor: text;
+}
+.to-box input {
+  flex: 1;
+  min-width: 150px;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  padding: 4px 2px;
+}
+.to-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.to-chip button {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 0.72rem;
+  padding: 3px 5px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.to-chip button:hover {
+  opacity: 1;
+}
+.to-pick {
+  max-height: 230px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.to-pick > p {
+  margin: 0;
+}
+.to-group + .to-group,
+.to-further {
+  margin-top: 12px;
+}
+.to-group > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+}
+.to-group > header .link {
+  margin-left: auto;
+}
+.to-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.to-person {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.to-person:hover {
+  border-color: var(--muted);
+}
+.to-person.on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+  font-weight: 600;
+}
+.to-role {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 400;
+}
+.to-person.on .to-role {
+  color: inherit;
+  opacity: 0.7;
+}
+.to-further > .side-label {
+  display: block;
+  margin-bottom: 4px;
+  padding: 0;
+}
+.to-group.folded {
+  margin-top: 2px;
+}
+.to-fold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  width: 100%;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.to-fold:hover {
+  background: var(--surface-3);
+}
+.to-caret {
+  width: 12px;
+  color: var(--muted);
+}
+.to-group.folded .to-people {
+  padding: 4px 0 8px 24px;
+}
+.compose-note {
+  margin-right: auto;
+}
+.msg-settings .setting + .setting {
+  margin-top: 12px;
+}
+.msg-settings .setting > span {
+  display: grid;
+  gap: 2px;
+}
+/* The message a "you were mentioned" link points at. */
+.post-focus {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  transition: background 0.6s;
+}

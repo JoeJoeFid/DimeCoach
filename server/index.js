@@ -15,7 +15,8 @@ import { mountItemShares, mountItemSharesPublic } from './itemShares.js';
 import { followingCount, mountFamily, mountFamilyCoach } from './family.js';
 import { mountContacts } from './contacts.js';
 import { mountLive } from './live.js';
-import { mentionedIn, notify } from './notices.js';
+import { mention, mentionedIn, notify } from './notices.js';
+import { publicBase } from './invites.js';
 import { cleanImages, cleanLinks, cleanVideos, mountImages } from './images.js';
 import { canImportPlays, cleanPlayIds, mountPlays } from './plays.js';
 import { mountResources } from './resources.js';
@@ -669,7 +670,7 @@ app.post('/api/plans/:id/posts', (req, res) => {
   if (!body) return res.status(400).json({ error: 'Write something first.' });
   const parent = req.body.parent_id ? get('SELECT id FROM plan_posts WHERE id=? AND plan_id=?', id(req.body.parent_id), plan.id) : null;
   if (req.body.parent_id && !parent) return res.status(404).json({ error: 'The message you are replying to has been deleted.' });
-  run('INSERT INTO plan_posts (plan_id, user_id, parent_id, body) VALUES (?,?,?,?)', plan.id, req.user.id, parent?.id ?? null, body);
+  const postId = run('INSERT INTO plan_posts (plan_id, user_id, parent_id, body) VALUES (?,?,?,?)', plan.id, req.user.id, parent?.id ?? null, body).lastInsertRowid;
   // Every other coach on the team hears about it in their Messages.
   const team = get('SELECT name FROM teams WHERE id=?', plan.team_id);
   const what = plan.kind === 'homework' ? 'homework' : 'practice';
@@ -677,14 +678,15 @@ app.post('/api/plans/:id/posts', (req, res) => {
   const coaches = [...new Set(coachesOf(plan))].filter((u) => u !== req.user.id);
   // Someone named with "@" is told they were mentioned, not just that there is something new.
   const named = new Set(mentionedIn(body, coaches.map((u) => ({ id: u, name: get('SELECT name FROM users WHERE id=?', u)?.name }))).map((p) => p.id));
+  const link = `/go/plan/${plan.team_id}/${plan.id}?post=${postId}`;
   for (const userId of coaches)
-    notify(userId, {
-      kind: named.has(userId) ? 'mention' : 'plan-post', ref: `plan-${plan.id}`, link: `/go/plan/${plan.team_id}/${plan.id}`,
-      title: named.has(userId)
-        ? `${req.user.name} mentioned you about a ${what} for ${team?.name ?? 'your team'}`
-        : `${req.user.name} ${parent ? 'replied' : 'wrote'} about a ${what} for ${team?.name ?? 'your team'}`,
-      body: `${label}: ${body.length > 140 ? `${body.slice(0, 140)}…` : body}`,
-    });
+    if (named.has(userId)) mention(userId, { by: req.user.name, where: `about a ${what} for ${team?.name ?? 'your team'}`, body: `${label}: ${body}`, ref: `plan-${plan.id}`, link, base: publicBase(req) });
+    else
+      notify(userId, {
+        kind: 'plan-post', ref: `plan-${plan.id}`, link,
+        title: `${req.user.name} ${parent ? 'replied' : 'wrote'} about a ${what} for ${team?.name ?? 'your team'}`,
+        body: `${label}: ${body.length > 140 ? `${body.slice(0, 140)}…` : body}`,
+      });
   res.json(planPostsOut(req, plan));
 });
 /** The writer changes what their own message says. */
@@ -704,11 +706,7 @@ app.put('/api/plans/:id/posts/:postId', (req, res) => {
     const what = plan.kind === 'homework' ? 'homework' : 'practice';
     for (const p of mentionedIn(body, coaches))
       if (!before.has(p.id))
-        notify(p.id, {
-          kind: 'mention', ref: `plan-${plan.id}`, link: `/go/plan/${plan.team_id}/${plan.id}`,
-          title: `${req.user.name} mentioned you about a ${what} for ${team?.name ?? 'your team'}`,
-          body: body.length > 140 ? `${body.slice(0, 140)}…` : body,
-        });
+        mention(p.id, { by: req.user.name, where: `about a ${what} for ${team?.name ?? 'your team'}`, body, ref: `plan-${plan.id}`, link: `/go/plan/${plan.team_id}/${plan.id}?post=${post.id}`, base: publicBase(req) });
   }
   res.json(planPostsOut(req, plan));
 });

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { SharedPlay } from '../api';
-import { api, type FamilyDay, type FamilyKind, type FamilyResource, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
+import { api, type CommunityNewsItem, type FamilyDay, type FamilyKind, type FamilyResource, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
 import { SharedPreview } from '../components/community';
@@ -13,6 +13,8 @@ import SportIcon from '../components/SportIcon';
 import { PasswordForm } from './Auth';
 import { FollowedTeams, NEW_TEAM_KEY } from '../components/TeamPicker';
 import { NAV_ICONS, UserMenu } from '../App';
+import Inbox from '../components/Inbox';
+import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const AS: Record<FamilyKind, string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
@@ -32,6 +34,8 @@ interface Frame {
   onNewTeam: () => void;
   onPassword: () => void;
   onSignOut: () => void;
+  /** Something about the account changed, and it should be read again. */
+  onChanged: () => void;
 }
 
 /** Everything a follower's account sees: choosing a team, the team's pages, and the way into coaching. */
@@ -56,7 +60,7 @@ export function FamilyApp({ user, onChanged }: { user: User; onChanged: () => vo
       navigate('/family/coach');
     }
   };
-  const frame: Frame = { user, onNewTeam: newTeam, onPassword: () => setChanging(true), onSignOut: signOut };
+  const frame: Frame = { user, onNewTeam: newTeam, onPassword: () => setChanging(true), onSignOut: signOut, onChanged };
   if (changing)
     return (
       <div className="auth team-pick">
@@ -132,7 +136,7 @@ function StartCoaching({ user, onBack, onSignOut }: { user: User; onBack: () => 
 const sideGroups = (): { title: string; items: [Tab, string][] }[] => [
   { title: 'Plan', items: [['schedule', NAV_ICONS.practices], ['homework', NAV_ICONS.homework]] },
   { title: 'Library', items: [['drills', NAV_ICONS.library], ['playbook', NAV_ICONS.playbook], ['resources', NAV_ICONS.resources]] },
-  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['messages', NAV_ICONS.messages]] },
+  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['messages', NAV_ICONS.community], ['inbox', NAV_ICONS.messages]] },
 ];
 
 /**
@@ -142,6 +146,25 @@ const sideGroups = (): { title: string; items: [Tab, string][] }[] => [
 function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; team?: FamilyTeam['team']; tabs: [Tab, string, number?][]; tab: Tab; go: (t: Tab) => void; children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  // Unread messages light up Messages in the menu, as they do for a coach.
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    const look = () => api.messages().then((n) => setUnread(n.unread), () => {});
+    look();
+    const timer = window.setInterval(look, 60_000);
+    const told = (e: Event) => setUnread((e as CustomEvent<number>).detail);
+    window.addEventListener('dime:unread', told);
+    const live = new EventSource('/api/live');
+    live.addEventListener('news', () => {
+      look();
+      window.dispatchEvent(new Event('dime:news'));
+    });
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('dime:unread', told);
+      live.close();
+    };
+  }, []);
   const has = (t: Tab) => tabs.find(([id]) => id === t);
   const item = (t: Tab, icon: string) => {
     const found = has(t);
@@ -162,6 +185,11 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
           <path d={icon} />
         </svg>
         {found[1]}
+        {t === 'inbox' && unread > 0 && (
+          <span className="nav-badge" title={`${unread} unread message${unread === 1 ? '' : 's'}`}>
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
       </a>
     );
   };
@@ -286,7 +314,7 @@ export function FamilyHome({ name }: { name: string }) {
   );
 }
 
-type Tab = 'home' | 'schedule' | 'messages' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
+type Tab = 'home' | 'schedule' | 'messages' | 'inbox' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
 
 /** One team, as a follower sees it. */
 export function FamilyTeamPage({ frame }: { /** Present for an account that only follows teams: the page then wears the menu at the side. */ frame?: Frame } = {}) {
@@ -333,7 +361,9 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
   const tabs: [Tab, string, number?][] = [
     ['home', 'Home'],
     ...(can.schedule ? [['schedule', 'Schedule'] as [Tab, string]] : []),
-    ...(can.news || can.board ? [['messages', 'Messages'] as [Tab, string]] : []),
+    ...(can.news || can.board ? [['messages', 'Team news'] as [Tab, string]] : []),
+    // Their own inbox, which is not about this team alone. A coach who also follows the team has theirs in the coach's menu.
+    ...(frame ? [['inbox', 'Messages'] as [Tab, string]] : []),
     ...(can.homework ? [['homework', 'Homework', data.homework.length] as [Tab, string, number]] : []),
     ...(can.playbook ? [['playbook', 'Playbook', data.plays.length] as [Tab, string, number]] : []),
     ...(can.drills ? [['drills', 'Drills', data.drills.length] as [Tab, string, number]] : []),
@@ -446,7 +476,18 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
       )}
 
       {tab === 'schedule' && <Schedule days={data.schedule} today={today} />}
-      {tab === 'messages' && <Messages teamId={id} data={data} start={params.get('show') === 'board' || !can.news ? 'board' : 'news'} setBoard={(board) => setData({ ...data, board })} />}
+      {tab === 'messages' && <Messages teamId={id} data={data} me={frame?.user.name} start={params.get('show') === 'board' || !can.news ? 'board' : 'news'} setBoard={(board) => setData({ ...data, board })} />}
+      {tab === 'inbox' && frame && (
+        <Inbox
+          user={frame.user}
+          onUserChanged={frame.onChanged}
+          onUnread={(n) => window.dispatchEvent(new CustomEvent('dime:unread', { detail: n }))}
+          go={(n: CommunityNewsItem) => {
+            if (/^https?:\/\//.test(n.link || '')) window.open(n.link, '_blank', 'noopener');
+            else if (n.link) navigate(n.link);
+          }}
+        />
+      )}
 
       {tab === 'homework' &&
         (data.homework.length === 0 ? (
@@ -980,9 +1021,9 @@ function Schedule({ days, today }: { days: FamilyDay[]; today: string }) {
   );
 }
 
-function Post({ post, onDelete }: { post: TeamPost; onDelete?: () => void }) {
+function Post({ post, onDelete, people, me }: { post: TeamPost; onDelete?: () => void; /** On the board: the names that stand out when written with "@". */ people?: string[]; me?: string }) {
   return (
-    <article className={`fam-post ${post.role === 'coach' ? 'coach' : ''}`}>
+    <article className={`fam-post ${post.role === 'coach' ? 'coach' : ''}`} data-post={post.id}>
       <header>
         <strong>{post.author}</strong>
         <span className="kind">{ROLE[post.role]}</span>
@@ -994,15 +1035,16 @@ function Post({ post, onDelete }: { post: TeamPost; onDelete?: () => void }) {
         )}
       </header>
       {post.title && <h3>{post.title}</h3>}
-      <p>{post.body}</p>
+      <p>{people ? <MentionText text={post.body} people={people} me={me} /> : post.body}</p>
     </article>
   );
 }
 
 /** What the coaches announced, and the board where the team's people talk. */
-function Messages({ teamId, data, start, setBoard }: { teamId: string; data: FamilyTeam; start: 'news' | 'board'; setBoard: (posts: TeamPost[]) => void }) {
+function Messages({ teamId, data, me, start, setBoard }: { teamId: string; data: FamilyTeam; me?: string; start: 'news' | 'board'; setBoard: (posts: TeamPost[]) => void }) {
   const both = data.can.news && data.can.board;
   const [show, setShow] = useState<'news' | 'board'>(start);
+  useFocusPost(show === 'board');
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -1048,13 +1090,13 @@ function Messages({ teamId, data, start, setBoard }: { teamId: string; data: Fam
           <h2>Message board</h2>
           <p className="muted small">Seen by the coaches and by everyone the board is open to on this team.</p>
           <form className="fam-write" onSubmit={send}>
-            <textarea className="input" rows={2} maxLength={4000} aria-label="Your message" placeholder="Write to the team…" value={body} onChange={(e) => setBody(e.target.value)} />
+            <MentionArea people={data.board_people.filter((n) => n !== me)} className="input" rows={2} maxLength={4000} aria-label="Your message" placeholder="Write to the team… Type @ to name someone." value={body} onChange={setBody} />
             <button className="btn primary" disabled={busy || !body.trim()}>
               Post
             </button>
           </form>
           {error && <p className="error">{error}</p>}
-          {data.board.length === 0 ? <p className="muted">Nobody has written yet.</p> : data.board.map((p) => <Post key={p.id} post={p} onDelete={p.mine ? () => act(() => api.familyDeletePost(teamId, p.id)) : undefined} />)}
+          {data.board.length === 0 ? <p className="muted">Nobody has written yet.</p> : data.board.map((p) => <Post key={p.id} post={p} people={data.board_people} me={me} onDelete={p.mine ? () => act(() => api.familyDeletePost(teamId, p.id)) : undefined} />)}
         </section>
       )}
     </>
