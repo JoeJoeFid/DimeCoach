@@ -13,6 +13,7 @@ import { Join, PasswordForm, Setup, SignedOut, Welcome } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import Messages from './pages/Messages';
+import { InstallDialog, InstallHint, isInstalled } from './components/InstallApp';
 import ScoreGame from './pages/ScoreGame';
 import Stats from './pages/Stats';
 
@@ -226,6 +227,7 @@ export default function App() {
   return (
     <>
       {view}
+      {auth.user && !auth.user.must_change_password && <InstallHint />}
       <DialogHost />
       <ToastHost />
     </>
@@ -660,6 +662,7 @@ const MENU_ICONS = {
   tour: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9.500 9.500a2.500 2.500 0 1 1 3.500 2.300c-.700.400-1 .900-1 1.700M12 16.500h.01',
   signOut: 'M10 4H5v16h5M14 8l4 4-4 4M18 12H9',
   help: 'M5 4.500h9.500a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3ZM5 17a3 3 0 0 1 3-3h9.500M9 8.500h5',
+  app: 'M8 3.500h8a1.500 1.500 0 0 1 1.500 1.500v14a1.500 1.500 0 0 1-1.500 1.500H8A1.500 1.500 0 0 1 6.500 19V5A1.500 1.500 0 0 1 8 3.500ZM12 8v6M9.500 11.500l2.500 2.500 2.500-2.500',
 };
 /**
  * The person signed in, at the foot of the menu. Pressing it opens a list above it with their
@@ -681,6 +684,7 @@ export function UserMenu({
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
+  const [installing, setInstalling] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
@@ -712,6 +716,7 @@ export function UserMenu({
   );
   return (
     <div className="user-menu" ref={root}>
+      {installing && <InstallDialog onClose={() => setInstalling(false)} />}
       {open && (
         <div className="user-pop" role="menu" aria-label="Your account">
           <span className="user-pop-email">{user.email}</span>
@@ -719,6 +724,7 @@ export function UserMenu({
           {!onPassword && user.is_system_admin && item('System admin', icons.system, () => navigate('/system'))}
           {!onPassword && item('Help', MENU_ICONS.help, () => navigate('/help'))}
           {onTour && item('Take the tour', MENU_ICONS.tour, onTour)}
+          {!isInstalled() && item('Get the app', MENU_ICONS.app, () => setInstalling(true))}
           <div className="user-pop-row">
             <span>Appearance</span>
             <ThemeToggle />

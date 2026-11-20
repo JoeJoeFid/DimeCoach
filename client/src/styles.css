@@ -17974,3 +17974,47 @@ button.play-card {
   flex-wrap: wrap;
   gap: 10px;
 }
+
+/* ---------- Putting the app on a phone's home screen ---------- */
+.ia {
+  display: grid;
+  gap: 12px;
+}
+.ia > p {
+  margin: 0;
+}
+.ia-steps {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 10px;
+  line-height: 1.5;
+}
+.ia-share {
+  vertical-align: -3px;
+}
+.ia-hint {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.ia-hint .brand-mark {
+  flex: none;
+}
+.ia-hint-text {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+}
