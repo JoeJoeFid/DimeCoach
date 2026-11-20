@@ -622,6 +622,24 @@ textarea.input {
   color: var(--ink);
   box-shadow: var(--shadow-1);
 }
+/* The chosen one keeps its box and is underlined as well, in every bar of this kind. */
+.seg button {
+  position: relative;
+}
+.seg button.on::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent-edge);
+}
+/* Not where the chosen one is filled with that colour already. */
+.seg.cx-switch button.on::after {
+  content: none;
+}
 .add-row {
   display: flex;
   gap: 8px;
@@ -7796,6 +7814,26 @@ fieldset.perm-list:disabled .check.perm {
 .chip.perm-chip span {
   text-decoration: none;
   display: inline-block;
+  font-weight: 700;
+}
+/* On: the tick sits in a green circle, so it reads as on at a glance whatever the chip's own colour. */
+.chip.perm-chip.on span,
+.chip.toggle.on:not(.perm-chip)::before {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: var(--good);
+  color: #fff;
+  font-size: 0.62rem;
+  line-height: 1;
+}
+/* Every other chip that is pressed on (a filter, a print option) gets the same mark. */
+.chip.toggle.on:not(.perm-chip)::before {
+  content: '✓';
   font-weight: 700;
 }
 .chip.perm-chip.manage.on {
