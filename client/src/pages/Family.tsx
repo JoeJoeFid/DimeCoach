@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { SharedPlay } from '../api';
+import Chat, { useChatUnread } from '../components/Chat';
 import { api, listenLive, type FamilyDay, type FamilyKind, type FamilyResource, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
@@ -139,7 +140,7 @@ function StartCoaching({ user, onBack, onSignOut }: { user: User; onBack: () => 
 const sideGroups = (): { title: string; items: [Tab, string][] }[] => [
   { title: 'Plan', items: [['schedule', NAV_ICONS.practices], ['homework', NAV_ICONS.homework], ['video', NAV_ICONS.video]] },
   { title: 'Library', items: [['drills', NAV_ICONS.library], ['playbook', NAV_ICONS.playbook], ['resources', NAV_ICONS.resources]] },
-  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['stats', NAV_ICONS.stats], ['messages', NAV_ICONS.community], ['inbox', NAV_ICONS.messages]] },
+  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['stats', NAV_ICONS.stats], ['chat', NAV_ICONS.chat], ['messages', NAV_ICONS.community], ['inbox', NAV_ICONS.messages]] },
 ];
 
 /**
@@ -150,6 +151,7 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   // Unread messages light up Messages in the menu, as they do for a coach.
+  const chatUnread = useChatUnread();
   const [unread, setUnread] = useState(0);
   useEffect(() => {
     const look = () => api.messages().then((n) => setUnread(n.unread), () => {});
@@ -190,6 +192,11 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
         {t === 'inbox' && unread > 0 && (
           <span className="nav-badge" title={`${unread} unread message${unread === 1 ? '' : 's'}`}>
             {unread > 9 ? '9+' : unread}
+          </span>
+        )}
+        {t === 'chat' && chatUnread > 0 && (
+          <span className="nav-badge" title={`${chatUnread} unread in your chats`}>
+            {chatUnread > 9 ? '9+' : chatUnread}
           </span>
         )}
       </a>
@@ -316,7 +323,7 @@ export function FamilyHome({ name }: { name: string }) {
   );
 }
 
-type Tab = 'home' | 'schedule' | 'messages' | 'inbox' | 'stats' | 'video' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
+type Tab = 'home' | 'schedule' | 'chat' | 'messages' | 'inbox' | 'stats' | 'video' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
 
 /** One team, as a follower sees it. */
 export function FamilyTeamPage({ frame }: { /** Present for an account that only follows teams: the page then wears the menu at the side. */ frame?: Frame } = {}) {
@@ -366,6 +373,8 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
   const tabs: [Tab, string, number?][] = [
     ['home', 'Home'],
     ...(can.schedule ? [['schedule', 'Schedule'] as [Tab, string]] : []),
+    // Chat is the person's own, like their inbox: the team's chat and any they started with other people.
+    ...(frame ? [['chat', 'Chat'] as [Tab, string]] : []),
     ...(can.news || can.board ? [['messages', 'Team news'] as [Tab, string]] : []),
     // Their own inbox, which is not about this team alone. A coach who also follows the team has theirs in the coach's menu.
     ...(frame ? [['inbox', 'Messages'] as [Tab, string], ['stats', 'My stats'] as [Tab, string]] : []),
@@ -379,6 +388,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
   const asked = params.get('tab') as Tab | null;
   const tab: Tab = tabs.some(([t]) => t === asked) ? asked! : 'home';
   const go = (t: Tab, extra: Record<string, string> = {}) => setParams(t === 'home' ? {} : { tab: t, ...extra }, { replace: true });
+  const openChat = (chatId: number) => go('chat', chatId ? { chat: String(chatId) } : {});
   const today = todayISO();
   const coming = data.schedule.filter((d) => d.date >= today);
   const next = coming[0];
@@ -488,6 +498,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
 
       {tab === 'schedule' && <Schedule days={data.schedule} today={today} />}
       {tab === 'messages' && <Messages teamId={id} data={data} me={frame?.user.name} start={params.get('show') === 'board' || !can.news ? 'board' : 'news'} setBoard={(board) => setData({ ...data, board })} />}
+      {tab === 'chat' && frame && <Chat me={frame.user} openId={Number(params.get('chat')) || 0} onOpen={openChat} />}
       {tab === 'stats' && frame && <MyStats />}
       {tab === 'video' && <GameVideo teamId={team.id} />}
       {tab === 'inbox' && frame && (

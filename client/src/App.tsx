@@ -14,6 +14,8 @@ import { Join, PasswordForm, Setup, SignedOut, Welcome } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import Messages from './pages/Messages';
+import ChatPage from './pages/ChatPage';
+import { useChatUnread } from './components/Chat';
 import { InstallDialog, InstallHint, isInstalled } from './components/InstallApp';
 import { syncPush } from './push';
 import { NotifyAsk } from './components/NotifyAsk';
@@ -85,6 +87,7 @@ export const NAV_ICONS = {
   system: 'M4 6h16v5H4zM4 13h16v5H4zM7 8.500h.01M7 15.500h.01M11 8.500h6M11 15.500h6',
   community: 'M4 5h11v8H9l-3 3v-3H4zM15 9h5v8h-2v3l-3-3h-4v-2',
   messages: 'M4 6h16v12H4zM4 7.500l8 6 8-6',
+  chat: 'M4 5h16v11H10l-4 3.500V16H4z',
   coachLibrary: 'M5 4v16M9 4v16M13 5l5 15M5 4h4M5 20h4M3 20h18',
   stats: 'M4 20h16M7 20v-7M12 20V5M17 20v-10',
   video: 'M3.5 7h11v10h-11zM14.5 10.500l6-3v9l-6-3',
@@ -129,6 +132,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     // Other coaches: talking, and trading drills, plays and plans.
     title: 'Community',
     items: [
+      { to: '/chat', label: 'Chat', icon: icons.chat },
       { to: '/messages', label: 'Messages', icon: icons.messages },
       { to: '/communities', label: 'Communities', icon: icons.community },
       { to: '/coach-library', label: 'Coach library', icon: icons.coachLibrary },
@@ -294,6 +298,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
   // Unread messages light up Messages in the menu. The server says the moment there is something new;
   // checking when the page changes and once a minute covers a dropped connection.
   const [communityUnread, setUnread] = useState(0);
+  const chatUnread = useChatUnread();
   /** Unread messages already known about, so only one that has just arrived gets a notice in the corner. */
   const known = useRef<Set<string> | null>(null);
   const whereNow = useRef(location.pathname);
@@ -531,6 +536,8 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           <Route path="/plays/:id/print" element={<PlayPrint />} />
           <Route path="/tags" element={<Tags />} />
           <Route path="/messages" element={<Messages />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat/:id" element={<ChatPage />} />
           <Route path="/coach-library" element={<CoachLibraryPage />} />
           <Route path="/communities" element={<Communities />} />
           <Route path="/communities/:id" element={<CommunityPage />} />
@@ -548,6 +555,12 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
       {n.to === '/messages' && communityUnread > 0 && (
         <span className="nav-badge" title={`${communityUnread} unread message${communityUnread === 1 ? '' : 's'}`}>
           {communityUnread > 9 ? '9+' : communityUnread}
+          <span className="sr-only"> new</span>
+        </span>
+      )}
+      {n.to === '/chat' && chatUnread > 0 && (
+        <span className="nav-badge" title={`${chatUnread} unread in your chats`}>
+          {chatUnread > 9 ? '9+' : chatUnread}
           <span className="sr-only"> new</span>
         </span>
       )}

@@ -30,27 +30,45 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
  * taken up again if the page comes back, because a browser keeps a page it has left for the Back
  * button, and each one kept would hold a connection the next page needs.
  */
-export function listenLive(onNews: () => void): () => void {
-  let live: EventSource | null = null;
-  const open = () => {
-    if (live) return;
-    live = new EventSource('/api/live');
-    live.addEventListener('news', onNews);
-  };
-  const close = () => {
-    live?.close();
-    live = null;
-  };
-  const back = (e: PageTransitionEvent) => e.persisted && open();
-  open();
-  window.addEventListener('pagehide', close);
-  window.addEventListener('pageshow', back);
+type LiveEvent = 'news' | 'chat' | 'typing';
+const LIVE_EVENTS: LiveEvent[] = ['news', 'chat', 'typing'];
+// One line for the whole page, however many parts of it are listening: a browser allows a site
+// only a handful of connections at once, and each line kept open is one fewer for everything else.
+const liveHeard = new Set<{ event: LiveEvent; heard: (data: unknown) => void }>();
+let liveLine: EventSource | null = null;
+function liveOpen() {
+  if (liveLine || liveHeard.size === 0) return;
+  liveLine = new EventSource('/api/live');
+  for (const event of LIVE_EVENTS)
+    liveLine.addEventListener(event, (e) => {
+      let data: unknown = {};
+      try {
+        data = JSON.parse((e as MessageEvent).data || '{}');
+      } catch {
+        /* nothing came with it */
+      }
+      for (const h of [...liveHeard]) if (h.event === event) h.heard(data);
+    });
+}
+function liveClose() {
+  liveLine?.close();
+  liveLine = null;
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', liveClose);
+  window.addEventListener('pageshow', (e) => e.persisted && liveOpen());
+}
+/** Hears one kind of thing the server says as it happens. Returns what stops the listening. */
+export function onLive<T = unknown>(event: LiveEvent, heard: (data: T) => void): () => void {
+  const h = { event, heard: heard as (data: unknown) => void };
+  liveHeard.add(h);
+  liveOpen();
   return () => {
-    close();
-    window.removeEventListener('pagehide', close);
-    window.removeEventListener('pageshow', back);
+    liveHeard.delete(h);
+    if (liveHeard.size === 0) liveClose();
   };
 }
+export const listenLive = (onNews: () => void): (() => void) => onLive('news', onNews);
 
 let keySeq = 0;
 export const newKey = () => `k${Date.now().toString(36)}-${keySeq++}`;
@@ -248,6 +266,36 @@ export interface ToGroup {
   label: string;
   sub: string;
   people: ToPerson[];
+}
+/** One line of a chat: something a person said, or a note of what happened in it. */
+export interface ChatLine {
+  id: number;
+  chat_id: number;
+  user_id: number | null;
+  by: string;
+  kind: 'text' | 'note';
+  body: string;
+  at: string;
+}
+/** A chat as the list shows it. A team has one of its own; the rest are started by people. */
+export interface ChatRoom {
+  id: number;
+  kind: 'team' | 'group';
+  team_id: number | null;
+  /** A team's name, or the name a group was given. '' for a group known by who is in it. */
+  name: string;
+  /** A team's chat: whether its parents, family and friends are in it. */
+  families: boolean;
+  members: ToPerson[];
+  /** Whether the caller may take out other people's lines and change who is in it. */
+  can_run: boolean;
+  muted: boolean;
+  last: ChatLine | null;
+  unread: number;
+}
+export interface ChatList {
+  chats: ChatRoom[];
+  unread: number;
 }
 export interface CommunityNews {
   unread: number;
@@ -980,8 +1028,21 @@ export const api = {
   deleteTrack: (id: number) => req<{ teams: TrackTeam[]; sheets: Scoresheet[] }>('DELETE', `/tracks/${id}`),
   messages: () => req<CommunityNews>('GET', '/messages'),
   messagePeople: () => req<ToGroup[]>('GET', '/messages/people'),
+  chats: () => req<ChatList>('GET', '/chat'),
+  chatPeople: () => req<ToGroup[]>('GET', '/chat/people'),
+  chatStart: (to: number[], name = '') => req<ChatList & { id: number }>('POST', '/chat', { to, name }),
+  chatMessages: (id: number, before = 0) => req<{ chat: ChatRoom; messages: ChatLine[]; more: boolean }>('GET', `/chat/${id}/messages${before ? `?before=${before}` : ''}`),
+  chatSay: (id: number, body: string) => req<ChatLine>('POST', `/chat/${id}/messages`, { body }),
+  chatUnsay: (id: number, lineId: number) => req<{ ok: true }>('DELETE', `/chat/${id}/messages/${lineId}`),
+  chatTyping: (id: number) => req<{ ok: true }>('POST', `/chat/${id}/typing`, {}),
+  /** The chat is open in front of the person: it is marked read, and they are not notified about it for a little while. */
+  chatRead: (id: number) => req<{ unread: number }>('POST', `/chat/${id}/read`, {}),
+  chatAway: () => req<{ ok: true }>('POST', '/chat/away', {}),
+  chatUpdate: (id: number, b: { muted?: boolean; name?: string; families?: boolean }) => req<ChatRoom>('PUT', `/chat/${id}`, b),
+  chatAdd: (id: number, add: number[]) => req<ChatRoom>('POST', `/chat/${id}/members`, { add }),
+  chatLeave: (id: number) => req<ChatList>('POST', `/chat/${id}/leave`, {}),
   messagesSent: () => req<CommunityNewsItem[]>('GET', '/messages/sent'),
-  sendMessage: (b: { to: number[]; subject: string; body: string; reply_to?: number }) => req<{ ok: true; sent: CommunityNewsItem[] }>('POST', '/messages/send', b),
+  sendMessage: (b: { to: number[]; subject: string; body: string; reply_to?: number; /** Also email the people it goes to. */ email?: boolean }) => req<{ ok: true; sent: CommunityNewsItem[] }>('POST', '/messages/send', b),
   readDirect: (id: number) => req<CommunityNews>('POST', `/messages/direct/${id}/read`, {}),
   deleteMessages: (keys: string[]) => req<{ news: CommunityNews; sent: CommunityNewsItem[] }>('POST', '/messages/delete', { keys }),
   /** Marks one message from the app, or with no id everything, as read. */

@@ -26,6 +26,7 @@ import { mountStaff, staffBootstrap } from './staff.js';
 import { mountGames } from './games.js';
 import { mountStreams } from './streams.js';
 import { mountPush } from './push.js';
+import { mountChat } from './chat.js';
 
 seedIfEmpty();
 
@@ -60,6 +61,7 @@ mountFamilyCoach(app);
 mountGames(app);
 mountStreams(app);
 mountPush(app);
+mountChat(app);
 mountImages(app);
 mountCommunities(app);
 mountOrgs(app);

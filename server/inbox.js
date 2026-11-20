@@ -191,7 +191,8 @@ export function mountInbox(app, inbox) {
       const person = get('SELECT * FROM users WHERE id=?', userId);
       if (person) pushTo(userId, { title: `${req.user.name} sent you a message`, body: subject, link: inboxPath(person), tag: `dm-${id}` });
     }
-    emailRecipients(req.user, to, subject, publicBase(req));
+    // An email goes as well only when the sender ticked it, and never to someone who has turned those off.
+    if (req.body.email === true) emailRecipients(req.user, to, subject, publicBase(req));
     res.json({ ok: true, sent: sentBy(req.user.id) });
   });
   app.post('/api/messages/direct/:id/read', (req, res) => {

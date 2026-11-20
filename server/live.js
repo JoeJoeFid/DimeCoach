@@ -8,6 +8,12 @@ export function poke(userIds) {
   for (const id of new Set([userIds].flat())) for (const res of streams.get(Number(id)) ?? []) res.write('event: news\ndata: {}\n\n');
 }
 
+/** Sends these people's open browsers something of another kind, with what it is about: a chat line, someone typing. */
+export function tell(userIds, event, data = {}) {
+  const line = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const id of new Set([userIds].flat())) for (const res of streams.get(Number(id)) ?? []) res.write(line);
+}
+
 // --- Who is using the app right now ---
 // When each person last did something: saved, posted, or clicked or typed in an open page.
 // Kept in memory only, so it costs nothing to keep and starts again empty when the server does.

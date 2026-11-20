@@ -115,7 +115,7 @@ export function MessageSettings({ user, onChanged }: { user: User; onChanged: ()
       <label className="check setting">
         <input type="checkbox" checked={!prefs.message_email_off} onChange={(e) => save({ message_email_off: !e.target.checked })} />
         <span>
-          <strong>Email me when someone sends me a message</strong>
+          <strong>Email me when someone sends me a message and asks for an email too</strong>
           <span className="muted small">The email says who wrote and the subject, with a link to your inbox. With this off, the message still shows in your Messages.</span>
         </span>
       </label>
@@ -153,6 +153,8 @@ function Compose({ reply, onClose, onSent }: { reply?: CommunityNewsItem; onClos
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [subject, setSubject] = useState(reply ? (/^re:/i.test(reply.title || '') ? reply.title! : `Re: ${reply.title}`) : '');
   const [body, setBody] = useState('');
+  // Off unless asked for: the message is in their Messages, and on their phone if they have notifications on.
+  const [alsoEmail, setAlsoEmail] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const find = useRef<HTMLInputElement>(null);
@@ -185,7 +187,7 @@ function Compose({ reply, onClose, onSent }: { reply?: CommunityNewsItem; onClos
     if (busy || to.length === 0 || !body.trim()) return;
     setBusy(true);
     try {
-      const r = await api.sendMessage({ to: to.map((p) => p.id), subject, body, reply_to: reply?.id });
+      const r = await api.sendMessage({ to: to.map((p) => p.id), subject, body, reply_to: reply?.id, email: alsoEmail });
       onSent(r.sent);
     } catch (err) {
       setError((err as Error).message);
@@ -288,6 +290,13 @@ function Compose({ reply, onClose, onSent }: { reply?: CommunityNewsItem; onClos
         </div>
         <input className="input" maxLength={150} aria-label="Subject" placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
         <textarea className="input" rows={7} maxLength={8000} aria-label="Message" placeholder="Write your message…" value={body} onChange={(e) => setBody(e.target.value)} autoFocus={!!reply} />
+        <label className="check compose-email">
+          <input type="checkbox" checked={alsoEmail} onChange={(e) => setAlsoEmail(e.target.checked)} />
+          <span>
+            Also email {to.length > 1 ? 'them' : 'the person'}
+            <span className="muted small"> · Without this it shows in their Messages, and as a notification if they have those on.</span>
+          </span>
+        </label>
         {error && <p className="error">{error}</p>}
         <div className="modal-actions">
           <span className="muted small compose-note">Only names are shown. Nobody sees anyone's email address.</span>

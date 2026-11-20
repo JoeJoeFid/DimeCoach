@@ -98,6 +98,8 @@ function gate(req) {
     case 'streams':
     // Notifications are each person's own, on each of their devices.
     case 'push':
+    // A chat is between its own people, whatever team is open.
+    case 'chat':
     // Taking a copy of a practice someone sent goes to the caller's own teams, wherever they are working.
     case 'plan-links':
     case 'item-links':
