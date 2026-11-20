@@ -1,6 +1,7 @@
 // Messages laid out as an inbox: what the app and other people sent you, what you sent, and a
 // form for writing to the people you share a team, a community or an organization with.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { api, type CommunityNews, type CommunityNewsItem, type ToGroup, type ToPerson, type User } from '../api';
 import { Modal } from './bits';
 import { confirmDialog } from './dialogs';
@@ -242,11 +243,40 @@ function Compose({ reply, onClose, onSent }: { reply?: CommunityNewsItem; onClos
   );
 }
 
+/** Where a line leads, to the very thing it is about: '' when there is nowhere to go. */
+function linkOf(n: CommunityNewsItem): string {
+  if (n.kind === 'notice') return n.link || '';
+  if (n.kind === 'post') return `/communities/${n.community_id}?tab=discussions&post=${n.ref_id}`;
+  if (n.kind === 'share') return `/communities/${n.community_id}?tab=library&share=${n.ref_id}`;
+  if (n.kind === 'invite') return '/communities';
+  return '';
+}
+/** What the button to that place says. */
+function linkWord(n: CommunityNewsItem, link: string): string {
+  if (n.kind === 'post') return 'Open the conversation';
+  if (n.kind === 'share') return `Open the ${SHARE_WORD[n.share_kind!].toLowerCase()}`;
+  if (n.kind === 'invite') return 'Open your invitations';
+  if (/^https?:\/\//.test(link)) return 'Open the link';
+  if (/[?&]post=/.test(link)) return 'Open the message';
+  if (/^\/go\/plan\//.test(link)) return 'Open the practice';
+  if (/^\/shared\//.test(link) || /[?&]share=/.test(link)) return 'Open what was shared';
+  if (/^\/communities/.test(link)) return 'Open the community';
+  if (/^\/teams/.test(link)) return 'Open the team';
+  if (/^\/account/.test(link)) return 'Open your account';
+  return 'Open';
+}
+/** All the words of a line, for when it is opened. */
+function wordsOf(n: CommunityNewsItem): string {
+  if (n.kind === 'invite') return `${n.by} invited you to join ${n.community}.`;
+  if (n.kind === 'share') return `${n.by} shared a ${SHARE_WORD[n.share_kind!].toLowerCase()} in ${n.community}: ${n.text}`;
+  return n.body || n.text || '';
+}
+
 /**
- * The inbox itself. `go` opens what a message from the app is about; `onUnread` hears the count
- * of unread messages each time it is known, for the menu.
+ * The inbox itself. Every line opens to be read, with a link to the thing it is about. Lines can
+ * be ticked and deleted together. `onUnread` hears the count of unread messages, for the menu.
  */
-export default function Inbox({ user, go, onUnread, onUserChanged }: { user: User; go: (n: CommunityNewsItem) => void; onUnread?: (count: number) => void; onUserChanged: () => void }) {
+export default function Inbox({ user, onUnread, onUserChanged }: { user: User; onUnread?: (count: number) => void; onUserChanged: () => void }) {
   const [news, setNews] = useState<CommunityNews | null>(null);
   const [sent, setSent] = useState<CommunityNewsItem[] | null>(null);
   const [folder, setFolder] = useState<'inbox' | 'sent'>('inbox');
@@ -254,6 +284,7 @@ export default function Inbox({ user, go, onUnread, onUserChanged }: { user: Use
   const [writing, setWriting] = useState<{ reply?: CommunityNewsItem } | null>(null);
   const [settings, setSettings] = useState(false);
   const [shown, setShown] = useState(25);
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const heard = useRef(onUnread);
@@ -278,39 +309,56 @@ export default function Inbox({ user, go, onUnread, onUserChanged }: { user: Use
   useEffect(() => {
     if (folder === 'sent' && sent === null) api.messagesSent().then(setSent, failed);
   }, [folder, sent]);
+  const choose = (f: 'inbox' | 'sent') => {
+    setFolder(f);
+    setReading(null);
+    setTicked(new Set());
+  };
 
-  /** A message from a person opens here to be read. Anything else goes to what it is about. */
+  /** Opens a line to be read, and counts it as read. */
   const open = (n: CommunityNewsItem) => {
     setNotice('');
-    if (n.kind === 'direct' || n.kind === 'sent') {
-      setReading(n);
-      if (n.kind === 'direct' && n.unread && n.id) api.readDirect(n.id).then(got, failed);
-      return;
-    }
-    if (n.kind === 'notice' && n.unread && n.id) api.markMessagesRead(n.id).then(got, failed);
-    go(n);
+    setReading(n);
+    if (!n.unread || !n.id) return;
+    if (n.kind === 'direct') api.readDirect(n.id).then(got, failed);
+    else if (n.kind === 'notice') api.markMessagesRead(n.id).then(got, failed);
   };
-  const remove = async (n: CommunityNewsItem) => {
-    if (!n.id || !(await confirmDialog({ title: 'Delete this message?', body: 'It is taken out of your list only. Everyone else keeps their copy.', confirmLabel: 'Delete', danger: true }))) return;
+  const remove = async (keys: string[]) => {
+    if (keys.length === 0) return;
+    const many = keys.length > 1;
+    if (!(await confirmDialog({ title: many ? `Delete ${keys.length} messages?` : 'Delete this message?', body: `${many ? 'They are' : 'It is'} taken out of your list only. Nobody else's copy is touched.`, confirmLabel: 'Delete', danger: true }))) return;
     try {
-      if (n.kind === 'sent') setSent(await api.deleteSent(n.id));
-      else got(await api.deleteDirect(n.id));
+      const r = await api.deleteMessages(keys);
+      got(r.news);
+      setSent(r.sent);
+      setTicked(new Set());
       setReading(null);
+      setNotice(many ? `${keys.length} messages deleted.` : 'Message deleted.');
     } catch (e) {
       failed(e);
     }
   };
   const items = folder === 'inbox' ? news?.items ?? null : sent;
   const unread = news?.unread ?? 0;
+  const onPage = (items || []).slice(0, shown);
+  const allTicked = onPage.length > 0 && onPage.every((n) => ticked.has(n.key));
+  const tick = (key: string) => {
+    const next = new Set(ticked);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setTicked(next);
+  };
+  const link = reading ? linkOf(reading) : '';
+  const line = reading ? lineOf(reading) : null;
 
   return (
     <div className="inbox">
       <div className="inbox-bar">
         <div className="seg" role="group" aria-label="Folder">
-          <button type="button" className={folder === 'inbox' ? 'on' : ''} aria-pressed={folder === 'inbox'} onClick={() => (setFolder('inbox'), setReading(null))}>
+          <button type="button" className={folder === 'inbox' ? 'on' : ''} aria-pressed={folder === 'inbox'} onClick={() => choose('inbox')}>
             Inbox {unread > 0 && <span className="chip-num">{unread}</span>}
           </button>
-          <button type="button" className={folder === 'sent' ? 'on' : ''} aria-pressed={folder === 'sent'} onClick={() => (setFolder('sent'), setReading(null))}>
+          <button type="button" className={folder === 'sent' ? 'on' : ''} aria-pressed={folder === 'sent'} onClick={() => choose('sent')}>
             Sent
           </button>
         </div>
@@ -331,17 +379,28 @@ export default function Inbox({ user, go, onUnread, onUserChanged }: { user: Use
       {notice && <p className="notice">{notice}</p>}
 
       <div className="card inbox-card">
-        {reading ? (
+        {reading && line ? (
           <article className="inbox-read">
             <button type="button" className="link small" onClick={() => setReading(null)}>
               ← Back to {folder === 'inbox' ? 'the inbox' : 'sent messages'}
             </button>
-            <h2>{reading.title}</h2>
+            <h2>{line.subject}</h2>
             <p className="muted small inbox-meta">
-              <strong>{reading.kind === 'sent' ? 'You' : reading.by}</strong> to {(reading.to || []).map((n) => (reading.kind === 'direct' && n === user.name ? 'you' : n)).join(', ')} · {fullWhen(reading.at)}
+              <strong>{reading.kind === 'sent' ? 'You' : line.from}</strong>
+              {reading.to && <> to {reading.to.map((n) => (reading.kind === 'direct' && n === user.name ? 'you' : n)).join(', ')}</>} · {fullWhen(reading.at)}
             </p>
             <div className="inbox-body">
-              <MentionText text={reading.body || ''} people={[]} />
+              <MentionText text={wordsOf(reading)} people={[]} />
+              {link &&
+                (/^https?:\/\//.test(link) ? (
+                  <a className="inbox-target" href={link} target="_blank" rel="noopener noreferrer">
+                    {linkWord(reading, link)} <span aria-hidden="true">→</span>
+                  </a>
+                ) : (
+                  <Link className="inbox-target" to={link}>
+                    {linkWord(reading, link)} <span aria-hidden="true">→</span>
+                  </Link>
+                ))}
             </div>
             <div className="inbox-actions">
               {reading.kind === 'direct' && (
@@ -349,7 +408,7 @@ export default function Inbox({ user, go, onUnread, onUserChanged }: { user: Use
                   Reply
                 </button>
               )}
-              <button type="button" className="btn" onClick={() => remove(reading)}>
+              <button type="button" className="btn" onClick={() => remove([reading.key])}>
                 Delete
               </button>
             </div>
@@ -359,25 +418,39 @@ export default function Inbox({ user, go, onUnread, onUserChanged }: { user: Use
         ) : items.length === 0 ? (
           <p className="muted small inbox-none">{folder === 'inbox' ? 'Nothing here yet. Messages from other people land here, and so does news from the app: being added to a team, being mentioned, something shared with you.' : 'You have not sent any messages yet.'}</p>
         ) : (
-          <ul className="inbox-list">
-            {items.slice(0, shown).map((n) => {
-              const l = lineOf(n);
-              return (
-                <li key={n.key} className={`${n.unread ? 'unread' : ''} kind-${n.kind}`}>
-                  <button type="button" className="inbox-row" onClick={() => open(n)}>
-                    <span className={`news-dot ${n.unread ? 'on' : ''}`} aria-hidden="true" />
-                    <span className="inbox-from">{l.from}</span>
-                    <span className="inbox-line">
-                      <span className="inbox-subject">{l.subject}</span>
-                      {l.text && <span className="inbox-snip"> — {l.text}</span>}
-                      {n.unread && <span className="sr-only"> (new)</span>}
-                    </span>
-                    <span className="muted small inbox-when">{shortWhen(n.at)}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <div className="inbox-tools">
+              <label className="check">
+                <input type="checkbox" checked={allTicked} onChange={() => setTicked(allTicked ? new Set() : new Set(onPage.map((n) => n.key)))} />
+                <span>{ticked.size > 0 ? `${ticked.size} selected` : 'Select all'}</span>
+              </label>
+              {ticked.size > 0 && (
+                <button type="button" className="btn small" onClick={() => remove([...ticked])}>
+                  Delete
+                </button>
+              )}
+            </div>
+            <ul className="inbox-list">
+              {onPage.map((n) => {
+                const l = lineOf(n);
+                return (
+                  <li key={n.key} className={`${n.unread ? 'unread' : ''} ${ticked.has(n.key) ? 'ticked' : ''} kind-${n.kind}`}>
+                    <input type="checkbox" className="inbox-tick" aria-label={`Select: ${l.subject}`} checked={ticked.has(n.key)} onChange={() => tick(n.key)} />
+                    <button type="button" className="inbox-row" onClick={() => open(n)}>
+                      <span className={`news-dot ${n.unread ? 'on' : ''}`} aria-hidden="true" />
+                      <span className="inbox-from">{l.from}</span>
+                      <span className="inbox-line">
+                        <span className="inbox-subject">{l.subject}</span>
+                        {l.text && <span className="inbox-snip"> — {l.text}</span>}
+                        {n.unread && <span className="sr-only"> (new)</span>}
+                      </span>
+                      <span className="muted small inbox-when">{shortWhen(n.at)}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
         {!reading && items && items.length > shown && (
           <button type="button" className="link small" onClick={() => setShown(items.length)}>

@@ -195,6 +195,8 @@ export interface CommunityNewsItem {
   by_id?: number;
   body?: string;
   to?: string[];
+  /** A community's post or share: its number, so a link can open the very thing. */
+  ref_id?: number;
   share_kind?: ShareKind;
   community_id: number;
   community: string;
@@ -839,8 +841,7 @@ export const api = {
   messagesSent: () => req<CommunityNewsItem[]>('GET', '/messages/sent'),
   sendMessage: (b: { to: number[]; subject: string; body: string; reply_to?: number }) => req<{ ok: true; sent: CommunityNewsItem[] }>('POST', '/messages/send', b),
   readDirect: (id: number) => req<CommunityNews>('POST', `/messages/direct/${id}/read`, {}),
-  deleteDirect: (id: number) => req<CommunityNews>('DELETE', `/messages/direct/${id}`),
-  deleteSent: (id: number) => req<CommunityNewsItem[]>('DELETE', `/messages/sent/${id}`),
+  deleteMessages: (keys: string[]) => req<{ news: CommunityNews; sent: CommunityNewsItem[] }>('POST', '/messages/delete', { keys }),
   /** Marks one message from the app, or with no id everything, as read. */
   markMessagesRead: (id?: number) => req<CommunityNews>('POST', id ? `/messages/${id}/read` : '/messages/read', {}),
   /** Marks one community, or with no id all of them, as read up to now. */

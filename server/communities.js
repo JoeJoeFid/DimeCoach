@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { all, get, run, tx } from './db.js';
 import { poke } from './live.js';
 import { mention, mentionedIn, noticesFor, notify, readNotices } from './notices.js';
-import { directFor, mountInbox, readDirect } from './inbox.js';
+import { directFor, hiddenFor, mountInbox, readDirect } from './inbox.js';
 import { publicBase } from './invites.js';
 import { isOrg, librarySports, orgMemberLeaving, orgSummary } from './orgs.js';
 
@@ -289,15 +289,18 @@ export function mountCommunities(app) {
           WHERE p.community_id=? AND p.user_id<>? ORDER BY p.id DESC LIMIT 25`,
         c.id, userId,
       ))
-        items.push({ ...base, key: `post-${p.id}`, kind: 'post', at: p.created_at, by: p.name, text: p.body.length > 180 ? `${p.body.slice(0, 180)}…` : p.body, unread: p.created_at > c.seen });
+        items.push({ ...base, key: `post-${p.id}`, ref_id: p.id, body: p.body, kind: 'post', at: p.created_at, by: p.name, text: p.body.length > 180 ? `${p.body.slice(0, 180)}…` : p.body, unread: p.created_at > c.seen });
       const inSport = sportFilter(c, userId);
       for (const sh of all(`${SHARE_SELECT} WHERE s.community_id=? AND s.status='approved' AND s.user_id<>? ORDER BY s.id DESC LIMIT 25`, c.id, userId)) {
         if (!c[KIND_FLAG[sh.kind]] || !inSport(sh)) continue;
         const row = source(sh);
-        if (row) items.push({ ...base, key: `share-${sh.id}`, kind: 'share', share_kind: sh.kind, at: sh.created_at, by: sh.by_name, text: titleOf(sh.kind, row), unread: sh.created_at > c.seen });
+        if (row) items.push({ ...base, key: `share-${sh.id}`, ref_id: sh.id, kind: 'share', share_kind: sh.kind, at: sh.created_at, by: sh.by_name, text: titleOf(sh.kind, row), unread: sh.created_at > c.seen });
       }
     }
     items.push(...noticesFor(userId), ...directFor(userId));
+    // What they took out of their inbox stays out.
+    const hidden = hiddenFor(userId);
+    if (hidden.size) for (let i = items.length - 1; i >= 0; i--) if (hidden.has(items[i].key)) items.splice(i, 1);
     items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     return { unread: items.filter((i) => i.unread).length, items: items.slice(0, 120) };
   };
@@ -578,7 +581,7 @@ export function mountCommunities(app) {
     run("UPDATE community_shares SET status='approved' WHERE id=?", at.s.id);
     pokeMembers(at.c.id, req.user.id);
     if (at.s.status !== 'approved' && at.s.user_id !== req.user.id)
-      notify(at.s.user_id, { kind: 'community', title: `Your ${SHARE_NOUN[at.s.kind] || 'item'} was approved in ${at.c.name}`, body: `${req.user.name} approved it. Everyone in the community can see it now.`, link: `/communities/${at.c.id}` });
+      notify(at.s.user_id, { kind: 'community', title: `Your ${SHARE_NOUN[at.s.kind] || 'item'} was approved in ${at.c.name}`, body: `${req.user.name} approved it. Everyone in the community can see it now.`, link: `/communities/${at.c.id}?tab=library&share=${at.s.id}` });
     res.json(sharesOut(at.c, at.m));
   });
   app.delete('/api/community-shares/:shareId', (req, res) => {

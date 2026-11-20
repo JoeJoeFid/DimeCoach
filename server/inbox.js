@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS direct_recipients (
 );
 CREATE INDEX IF NOT EXISTS idx_direct_recipients_user ON direct_recipients(user_id, message_id);
 CREATE INDEX IF NOT EXISTS idx_direct_messages_from ON direct_messages(from_id, id);
+-- What a person took out of their own inbox that is not theirs alone to delete: a community's post, share or invitation.
+CREATE TABLE IF NOT EXISTS inbox_hidden (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  PRIMARY KEY (user_id, key)
+);
 `);
 
 const str = (v, max) => String(v ?? '').slice(0, max);
@@ -113,6 +119,8 @@ const sentBy = (userId) =>
     key: `sent-${d.id}`, id: d.id, kind: 'sent', community_id: 0, community: '', at: d.created_at, by: 'You', by_id: userId,
     title: d.subject || '(no subject)', text: snippet(d.body), body: d.body, link: '', unread: false, to: namesTo(d.id).map((p) => p.name),
   }));
+/** The lines a person took out of their inbox, by key ("post-12"). */
+export const hiddenFor = (userId) => new Set(all('SELECT key FROM inbox_hidden WHERE user_id=?', userId).map((r) => r.key));
 /** Marks what people wrote to this person as read: one message, or with no id all of them. */
 export function readDirect(userId, id) {
   if (id) run("UPDATE direct_recipients SET read_at=datetime('now') WHERE message_id=? AND user_id=? AND read_at IS NULL", id, userId);
@@ -184,13 +192,17 @@ export function mountInbox(app, inbox) {
     readDirect(req.user.id, Number(req.params.id));
     res.json(inbox(req.user.id));
   });
-  // Taking a message out of your own list leaves everyone else's copy alone.
-  app.delete('/api/messages/direct/:id', (req, res) => {
-    run("UPDATE direct_recipients SET deleted_at=datetime('now'), read_at=COALESCE(read_at, datetime('now')) WHERE message_id=? AND user_id=?", Number(req.params.id), req.user.id);
-    res.json(inbox(req.user.id));
-  });
-  app.delete('/api/messages/sent/:id', (req, res) => {
-    run('UPDATE direct_messages SET sender_deleted=1 WHERE id=? AND from_id=?', Number(req.params.id), req.user.id);
-    res.json(sentBy(req.user.id));
+  // Taking lines out of your own list, one or many at once. Everyone else keeps their copy, and
+  // what a community holds stays in the community: it only stops showing here.
+  app.post('/api/messages/delete', (req, res) => {
+    const keys = (Array.isArray(req.body.keys) ? req.body.keys : []).slice(0, 300).map((k) => /^(notice|dm|sent|post|share|invite)-(\d+)$/.exec(String(k))).filter(Boolean);
+    for (const [key, kind, n] of keys) {
+      const id = Number(n);
+      if (kind === 'notice') run('DELETE FROM notices WHERE id=? AND user_id=?', id, req.user.id);
+      else if (kind === 'dm') run("UPDATE direct_recipients SET deleted_at=datetime('now'), read_at=COALESCE(read_at, datetime('now')) WHERE message_id=? AND user_id=?", id, req.user.id);
+      else if (kind === 'sent') run('UPDATE direct_messages SET sender_deleted=1 WHERE id=? AND from_id=?', id, req.user.id);
+      else run('INSERT OR IGNORE INTO inbox_hidden (user_id, key) VALUES (?,?)', req.user.id, key);
+    }
+    res.json({ news: inbox(req.user.id), sent: sentBy(req.user.id) });
   });
 }

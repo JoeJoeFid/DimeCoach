@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { SharedPlay } from '../api';
-import { api, type CommunityNewsItem, type FamilyDay, type FamilyKind, type FamilyResource, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
+import { api, type FamilyDay, type FamilyKind, type FamilyResource, type FamilyTeam, type FollowedTeam, type TeamPost, type User } from '../api';
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
 import { SharedPreview } from '../components/community';
@@ -482,10 +482,6 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
           user={frame.user}
           onUserChanged={frame.onChanged}
           onUnread={(n) => window.dispatchEvent(new CustomEvent('dime:unread', { detail: n }))}
-          go={(n: CommunityNewsItem) => {
-            if (/^https?:\/\//.test(n.link || '')) window.open(n.link, '_blank', 'noopener');
-            else if (n.link) navigate(n.link);
-          }}
         />
       )}
 

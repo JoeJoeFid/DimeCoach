@@ -169,6 +169,13 @@ export default function CommunityPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askedPost, posts === null]);
   useFocusPost(!!posts && thread !== null);
+  // A link to one shared thing opens it.
+  const askedShare = Number(params.get('share')) || 0;
+  useEffect(() => {
+    const s = askedShare && shares?.find((x) => x.id === askedShare && x.status === 'approved');
+    if (s) setPreview(s);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedShare, shares === null]);
   const [composing, setComposing] = useState(false);
   // Where the overview sent the manager: a league to open, or a part of the coaches page.
   const [focus, setFocus] = useState<{ leagueId?: number; build?: boolean; view?: 'coaches' | 'invites' | 'requirements' | 'waiting' | 'teams' | 'form' } | null>(null);
