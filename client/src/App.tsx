@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { SIGNED_OUT_EVENT, api, listenLive, type AuthStatus, type Bootstrap, type User } from './api';
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { sportKind } from './sports';
@@ -581,8 +581,11 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
               </svg>
               {communityUnread > 0 && <span className="menu-dot" aria-hidden="true" />}
             </button>
-            <span className="brand-mark" aria-hidden="true" />
-            <span className="mobile-team">{state.team!.name}</span>
+            {/* The mark and the team's name lead back to the dashboard, as the name at the top of the menu does. */}
+            <Link to="/" className="mobile-home" aria-label={`${state.team!.name}: dashboard`}>
+              <span className="brand-mark" aria-hidden="true" />
+              <span className="mobile-team">{state.team!.name}</span>
+            </Link>
           </header>
           {menuOpen && <div className="menu-scrim" onClick={() => setMenuOpen(false)} />}
           <aside className="sidebar">

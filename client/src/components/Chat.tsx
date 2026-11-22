@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, onLive, type ChatLine, type ChatRoom, type ToGroup, type ToPerson, type User } from '../api';
 import { Modal } from './bits';
+import { EmojiPanel, QUICK_EMOJI, onlyEmoji, rememberEmoji } from './Emoji';
 
 /** What a chat is called: a team's name, the name it was given, or else the people in it. */
 export function chatTitle(c: ChatRoom, meId: number) {
@@ -285,6 +286,8 @@ function Thread({ id, me, onBack, onRead, onGone }: { id: number; me: User; onBa
   const [error, setError] = useState('');
   const [picked, setPicked] = useState(0);
   const [details, setDetails] = useState(false);
+  /** What the emoji panel is open for: the line being written, or a line said earlier (its number). */
+  const [emojiFor, setEmojiFor] = useState<'write' | number | null>(null);
   /** Who is typing: each name, and when to stop saying so. */
   const [typing, setTyping] = useState<Record<number, { name: string; until: number }>>({});
   const scroller = useRef<HTMLDivElement>(null);
@@ -333,9 +336,11 @@ function Thread({ id, me, onBack, onRead, onGone }: { id: number; me: User; onBa
     atEnd.current = true;
     load();
     if (!touch()) box.current?.focus();
-    const offChat = onLive<{ chat_id: number; id: number }>('chat', (d) => {
+    const offChat = onLive<{ chat_id: number; id: number; line?: ChatLine }>('chat', (d) => {
       if (d.chat_id !== id) return;
-      load();
+      // An emoji put on a line, or taken off: only that line changed.
+      if (d.line) setLines((old) => old.map((m) => (m.id === d.line!.id ? d.line! : m)));
+      else load();
     });
     const offTyping = onLive<{ chat_id: number; user_id: number; name: string }>('typing', (d) => {
       if (d.chat_id === id) setTyping((t) => ({ ...t, [d.user_id]: { name: d.name, until: Date.now() + TYPING_MS } }));
@@ -358,9 +363,10 @@ function Thread({ id, me, onBack, onRead, onGone }: { id: number; me: User; onBa
   // A new line keeps the end in view, for someone who was at the end.
   const newest = lines[lines.length - 1]?.id ?? 0;
   const someoneTyping = Object.keys(typing).length > 0;
+  const reacted = lines.reduce((n, m) => n + m.reactions.length, 0);
   useEffect(() => {
     if (atEnd.current) toEnd();
-  }, [newest, someoneTyping, chat?.id]);
+  }, [newest, someoneTyping, chat?.id, reacted, picked, emojiFor]);
   // Someone who has spoken is no longer typing.
   useEffect(() => {
     const last = lines[lines.length - 1];
@@ -403,6 +409,7 @@ function Thread({ id, me, onBack, onRead, onGone }: { id: number; me: User; onBa
     try {
       const line = await api.chatSay(id, body);
       setText('');
+      setEmojiFor(null);
       toldTyping.current = 0;
       atEnd.current = true;
       setLines((old) => (old.some((m) => m.id === line.id) ? old : [...old, line]));
@@ -411,6 +418,33 @@ function Thread({ id, me, onBack, onRead, onGone }: { id: number; me: User; onBa
     }
     setSending(false);
     box.current?.focus();
+  };
+  /** Puts an emoji on a line, or takes this person's own off it. */
+  const react = async (line: ChatLine, emoji: string) => {
+    setPicked(0);
+    setEmojiFor(null);
+    setError('');
+    try {
+      const now = await api.chatReact(id, line.id, emoji);
+      if (now.reactions.some((r) => r.emoji === emoji && r.users.some((u) => u.id === me.id))) rememberEmoji(emoji);
+      setLines((old) => old.map((m) => (m.id === now.id ? now : m)));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  /** Puts an emoji into what is being written, where the caret is. */
+  const insert = (emoji: string) => {
+    rememberEmoji(emoji);
+    const el = box.current;
+    const from = el ? el.selectionStart : text.length;
+    const to = el ? el.selectionEnd : text.length;
+    wrote((text.slice(0, from) + emoji + text.slice(to)).slice(0, 4000));
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.selectionStart = el.selectionEnd = from + emoji.length;
+      // On a phone the caret is left alone: focusing would bring the keyboard up over the emoji.
+      if (!touch()) el.focus();
+    });
   };
   const unsay = async (line: ChatLine) => {
     setPicked(0);
@@ -480,17 +514,43 @@ function Thread({ id, me, onBack, onRead, onGone }: { id: number; me: User; onBa
             <div key={m.id} className={`chat-line ${mine ? 'mine' : 'theirs'} ${startsRun ? 'starts' : ''} ${endsRun ? 'ends' : ''}`}>
               {gap && <span className="chat-stamp">{stamp(m.at)}</span>}
               {!mine && showNames && startsRun && <span className="chat-by">{m.by}</span>}
-              <button type="button" className="chat-bubble" aria-expanded={picked === m.id} onClick={() => setPicked(picked === m.id ? 0 : m.id)}>
+              <button type="button" className={`chat-bubble ${onlyEmoji(m.body) ? 'big' : ''}`} aria-expanded={picked === m.id} title="Add an emoji" onClick={() => setPicked(picked === m.id ? 0 : m.id)}>
                 {m.body}
               </button>
+              {m.reactions.length > 0 && (
+                <span className="chat-reactions">
+                  {m.reactions.map((r) => {
+                    const own = r.users.some((u) => u.id === me.id);
+                    const who = r.users.map((u) => (u.id === me.id ? 'You' : u.name)).join(', ');
+                    return (
+                      <button key={r.emoji} type="button" className={`chat-reaction ${own ? 'on' : ''}`} aria-pressed={own} title={who} aria-label={`${r.emoji} from ${who}. ${own ? 'Take yours off' : 'Add yours'}`} onClick={() => react(m, r.emoji)}>
+                        <span aria-hidden="true">{r.emoji}</span>
+                        {r.users.length > 1 && <span className="chat-reaction-n">{r.users.length}</span>}
+                      </button>
+                    );
+                  })}
+                </span>
+              )}
               {picked === m.id && (
-                <span className="chat-line-more muted small">
-                  {clock(new Date(m.at))}
-                  {canTake && (
-                    <button type="button" className="link danger" onClick={() => unsay(m)}>
-                      Delete
+                <span className="chat-line-more">
+                  <span className="chat-react-row" role="group" aria-label="Add an emoji to this">
+                    {QUICK_EMOJI.map((e) => (
+                      <button key={e} type="button" className={m.reactions.some((r) => r.emoji === e && r.users.some((u) => u.id === me.id)) ? 'on' : ''} onClick={() => react(m, e)}>
+                        {e}
+                      </button>
+                    ))}
+                    <button type="button" className="chat-react-more" aria-label="More emoji" title="More emoji" onClick={() => setEmojiFor(m.id)}>
+                      +
                     </button>
-                  )}
+                  </span>
+                  <span className="chat-line-meta muted small">
+                    {clock(new Date(m.at))}
+                    {canTake && (
+                      <button type="button" className="link danger" onClick={() => unsay(m)}>
+                        Delete
+                      </button>
+                    )}
+                  </span>
                 </span>
               )}
             </div>
@@ -508,6 +568,17 @@ function Thread({ id, me, onBack, onRead, onGone }: { id: number; me: User; onBa
         )}
       </div>
       {error && <p className="error chat-error">{error}</p>}
+      {emojiFor !== null && (
+        <EmojiPanel
+          title={emojiFor === 'write' ? 'Add emoji to your message' : 'Pick an emoji to put on the message'}
+          onClose={() => setEmojiFor(null)}
+          onPick={(e) => {
+            if (emojiFor === 'write') return insert(e);
+            const line = lines.find((m) => m.id === emojiFor);
+            if (line) react(line, e);
+          }}
+        />
+      )}
       <form
         className="chat-write"
         onSubmit={(e) => {
@@ -515,6 +586,12 @@ function Thread({ id, me, onBack, onRead, onGone }: { id: number; me: User; onBa
           send();
         }}
       >
+        <button type="button" className="btn ghost chat-emoji" aria-label="Emoji" title="Emoji" aria-expanded={emojiFor === 'write'} onClick={() => setEmojiFor(emojiFor === 'write' ? null : 'write')}>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01" />
+          </svg>
+        </button>
         <textarea
           ref={box}
           className="input"

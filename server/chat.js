@@ -46,11 +46,23 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_chat ON chat_messages(chat_id, id);
+-- An emoji a person put on something that was said. One of each kind per person.
+CREATE TABLE IF NOT EXISTS chat_reactions (
+  id INTEGER PRIMARY KEY,
+  message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  emoji TEXT NOT NULL,
+  UNIQUE (message_id, user_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_reactions_message ON chat_reactions(message_id);
 `);
 
 const str = (v, max) => String(v ?? '').slice(0, max);
 const MAX_PEOPLE = 50;
 const PAGE = 60;
+/** Nothing but emoji: pictures, flags, and the joiners and skin tones that go with them. */
+const EMOJI = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u200d\ufe0f\u20e3\u{1f3fb}-\u{1f3ff}])+$/u;
+const MAX_KINDS = 20;
 
 /** The teams a person coaches. */
 const coachedTeams = (userId) =>
@@ -109,7 +121,17 @@ function chatFor(user, id) {
   return membersOf(chat).some((p) => p.id === user.id) ? chat : null;
 }
 
-const lineOut = (m) => ({ id: m.id, chat_id: m.chat_id, user_id: m.user_id, by: m.by_name || 'Someone', kind: m.kind, body: m.body, at: m.created_at });
+/** The emoji put on a line, in the order each was first used, with who used it. */
+function reactionsOf(messageId) {
+  const kinds = [];
+  for (const r of all("SELECT r.emoji, r.user_id, u.name FROM chat_reactions r JOIN users u ON u.id=r.user_id WHERE r.message_id=? ORDER BY r.id", messageId)) {
+    let kind = kinds.find((k) => k.emoji === r.emoji);
+    if (!kind) kinds.push((kind = { emoji: r.emoji, users: [] }));
+    kind.users.push({ id: r.user_id, name: r.name });
+  }
+  return kinds;
+}
+const lineOut = (m) => ({ id: m.id, chat_id: m.chat_id, user_id: m.user_id, by: m.by_name || 'Someone', kind: m.kind, body: m.body, at: m.created_at, reactions: m.kind === 'text' ? reactionsOf(m.id) : [] });
 const stateOf = (chatId, userId) => get('SELECT * FROM chat_state WHERE chat_id=? AND user_id=?', chatId, userId) ?? { last_read: 0, muted: 0 };
 const setState = (chatId, userId, change) => {
   const now = { ...stateOf(chatId, userId), ...change };
@@ -237,9 +259,29 @@ export function mountChat(app) {
     const m = chat && get("SELECT * FROM chat_messages WHERE id=? AND chat_id=? AND kind='text'", Number(req.params.mid), chat.id);
     if (!m) return res.status(404).json({ error: 'That is no longer there.' });
     if (m.user_id !== req.user.id && !runs(chat, req.user.id)) return res.status(403).json({ error: 'Only the person who wrote it, or whoever runs the chat, can take it out.' });
+    run('DELETE FROM chat_reactions WHERE message_id=?', m.id);
     run('DELETE FROM chat_messages WHERE id=?', m.id);
     tell(membersOf(chat).map((p) => p.id), 'chat', { chat_id: chat.id, id: 0, gone: m.id });
     res.json({ ok: true });
+  });
+
+  // Putting an emoji on something that was said, or taking your own off again. It shows for everyone at once, and nobody is notified.
+  app.post('/api/chat/:id/messages/:mid/react', (req, res) => {
+    const chat = chatFor(req.user, req.params.id);
+    const m = chat && get("SELECT * FROM chat_messages WHERE id=? AND chat_id=? AND kind='text'", Number(req.params.mid), chat.id);
+    if (!m) return res.status(404).json({ error: 'That is no longer there.' });
+    const emoji = str(req.body.emoji, 24).trim();
+    if (!EMOJI.test(emoji)) return res.status(400).json({ error: 'Pick an emoji.' });
+    const mine = get('SELECT id FROM chat_reactions WHERE message_id=? AND user_id=? AND emoji=?', m.id, req.user.id, emoji);
+    if (mine) run('DELETE FROM chat_reactions WHERE id=?', mine.id);
+    else {
+      const kinds = all('SELECT DISTINCT emoji FROM chat_reactions WHERE message_id=?', m.id).map((r) => r.emoji);
+      if (!kinds.includes(emoji) && kinds.length >= MAX_KINDS) return res.status(400).json({ error: 'That has plenty of different emoji on it already. Pick one that is there.' });
+      run('INSERT INTO chat_reactions (message_id, user_id, emoji) VALUES (?,?,?)', m.id, req.user.id, emoji);
+    }
+    const line = lineOut(get('SELECT m.*, u.name AS by_name FROM chat_messages m LEFT JOIN users u ON u.id=m.user_id WHERE m.id=?', m.id));
+    tell(membersOf(chat).map((p) => p.id), 'chat', { chat_id: chat.id, id: 0, line });
+    res.json(line);
   });
 
   // "Pat is typing": passed straight on to the others, and kept nowhere.

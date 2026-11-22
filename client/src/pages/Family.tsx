@@ -210,8 +210,19 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
         </button>
-        <span className="brand-mark" aria-hidden="true" />
-        <span className="mobile-team">{team?.name ?? 'Dime Coach'}</span>
+        {/* The mark and the team's name lead back to the team's first page. */}
+        <a
+          href="?"
+          className="mobile-home"
+          aria-label={`${team?.name ?? 'Dime Coach'}: home`}
+          onClick={(e) => {
+            e.preventDefault();
+            go('home');
+          }}
+        >
+          <span className="brand-mark" aria-hidden="true" />
+          <span className="mobile-team">{team?.name ?? 'Dime Coach'}</span>
+        </a>
       </header>
       {menuOpen && <div className="menu-scrim" onClick={() => setMenuOpen(false)} />}
       <aside className="sidebar">

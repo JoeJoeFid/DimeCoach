@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api } from '../api';
+import { api, type TeamContact } from '../api';
 import { useApp } from '../App';
 import type { Group, Item, Plan, Play, Player } from '../types';
 import { SITUATIONS, availablePlayers, playingTime, segmentsOf, spotOf, subsOf, substitutions } from '../game';
@@ -48,6 +48,8 @@ export default function PrintView() {
   const app = useApp();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  /** The team's parents and family, when the coach may see them: the ones linked to a player are written to as well. */
+  const [family, setFamily] = useState<TeamContact[]>([]);
   const [plays, setPlays] = useState<Play[]>([]);
   const [error, setError] = useState('');
   const [audience, setAudience] = useState<Audience>('notes');
@@ -66,6 +68,7 @@ export default function PrintView() {
         const p = await api.plan(Number(id));
         setPlan(p);
         setPlayers(await api.players(p.team_id));
+        api.teamContacts(p.team_id).then((d) => setFamily(d.contacts), () => {});
         setPlays(await api.plays());
       } catch (e) {
         setError((e as Error).message);
@@ -88,9 +91,9 @@ export default function PrintView() {
   // With nothing usable typed yet, every step still shows.
   const only = playMode === 'some' && chosen.size > 0 ? chosen : undefined;
 
-  const recipients = players
-    .filter((p) => p.active && p.parent_email && (plan.assigned.length === 0 || plan.assigned.includes(p.id)))
-    .map((p) => p.parent_email);
+  const going = players.filter((p) => p.active && (plan.assigned.length === 0 || plan.assigned.includes(p.id)));
+  // Every parent of the players it is for: the one written on the roster, and everyone linked to the player.
+  const recipients = [...going.map((p) => p.parent_email.trim()), ...family.filter((c) => going.some((p) => c.player_ids.includes(p.id))).map((c) => c.email)].filter(Boolean);
   const mailto = `mailto:?bcc=${encodeURIComponent([...new Set(recipients)].join(','))}&subject=${encodeURIComponent(
     `${team?.name || ''} ${heading}`.trim(),
   )}`;

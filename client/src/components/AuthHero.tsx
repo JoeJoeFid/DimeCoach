@@ -3,11 +3,6 @@ import type { Play } from '../types';
 import { COURT, Ball, Court, VIEW_PAD, courtHeight } from './PlayDiagram';
 
 const TICKER = ['Dynamic warm-up', 'Shell drill', 'Ground ball triangles', 'Routes on air', 'Give and go', 'Cutoffs and relays', 'Form tackling', 'Free throws', 'Live batting practice', 'Special teams', 'Water break', 'Late-game situations'];
-const POINTS = [
-  { title: 'Practices that time themselves', text: 'Add drills and breaks. Every start time updates as you go.' },
-  { title: 'Plays that move', text: 'Draw them on a court, a diamond or a football field, then press play and watch them run.' },
-  { title: 'The whole season in one place', text: 'Drills, homework, film and the calendar, for every team you coach.' },
-];
 
 export function useReducedMotion() {
   const [reduced, setReduced] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -117,7 +112,6 @@ function lineEnd(d: string, bar: boolean) {
 }
 const SCENE_SECONDS = 7;
 /** The plays shown on the sign-in page, one after another. */
-const HOME_SCENES = SCENES.filter((s) => s.home !== false);
 
 /** One short play, looping on the surface its sport is played on. */
 export function HeroPlay({ scene, still }: { scene: Scene; still: boolean }) {
@@ -157,17 +151,38 @@ export function HeroPlay({ scene, still }: { scene: Scene; still: boolean }) {
   );
 }
 
-/** The left side of every signed-out screen: what Dime Coach is, with a play running for each sport in turn. */
+/** The short film of the app at work. It plays by itself, without sound, and a press stops or starts it. */
+function HeroVideo({ still }: { still: boolean }) {
+  return (
+    <video
+      className="hero-video"
+      src="/media/dime-coach.mp4"
+      poster="/media/dime-coach.jpg"
+      width={1280}
+      height={720}
+      muted
+      loop
+      playsInline
+      autoPlay={!still}
+      controls={still}
+      preload={still ? 'none' : 'metadata'}
+      aria-label="A half-minute look at Dime Coach: the dashboard, building a practice, drills and plays, the printed practice, the roster with families, team chat, what parents see, and stats"
+      onClick={
+        still
+          ? undefined
+          : (e) => {
+              const v = e.currentTarget;
+              if (v.paused) void v.play();
+              else v.pause();
+            }
+      }
+    />
+  );
+}
+
+/** The left side of every signed-out screen: what Dime Coach is, and a short film of it at work. */
 export default function AuthHero() {
   const still = useReducedMotion();
-  const [index, setIndex] = useState(0);
-  // Each play runs once, then the next sport's play takes its place.
-  useEffect(() => {
-    if (still) return;
-    const t = setTimeout(() => setIndex((i) => (i + 1) % HOME_SCENES.length), SCENE_SECONDS * 1000);
-    return () => clearTimeout(t);
-  }, [index, still]);
-  const scene = HOME_SCENES[index];
   return (
     <aside className="hero">
       <div className="hero-top">
@@ -177,44 +192,15 @@ export default function AuthHero() {
         </div>
       </div>
 
-      <div className="hero-main">
+      <div className="hero-main hero-main-wide">
         <h2 className="hero-title">
           Plan the practice. <em>Draw the play.</em>
         </h2>
         <p className="hero-lead">A practice planner and playbook for basketball, baseball, football and volleyball coaches. Walk in knowing exactly what comes next.</p>
-        <ul className="hero-points">
-          {POINTS.map((p, i) => (
-            <li key={p.title}>
-              <span className="hero-num" aria-hidden="true">
-                {String(i + 1).padStart(2, '0')}
-              </span>
-              <span>
-                <strong>{p.title}</strong>
-                <span className="hero-point-text">{p.text}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <HeroVideo still={still} />
         <p className="hero-dime">
           <strong>Why "Dime"?</strong> A dime is a perfect pass that sets a teammate up to score. A good plan does the same for your team.
         </p>
-      </div>
-
-      <div className="hero-art">
-        <HeroPlay key={scene.sport} scene={scene} still={still} />
-        <div className="hero-sports" role="group" aria-label="Show a play for">
-          {HOME_SCENES.map((s, i) => (
-            <button
-              key={s.sport}
-              type="button"
-              className={i === index ? 'on' : ''}
-              aria-pressed={i === index}
-              onClick={() => setIndex(i)}
-            >
-              {s.sport}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="hero-ticker" aria-hidden="true">

@@ -18331,9 +18331,16 @@ button.play-card {
   border-bottom-right-radius: 4px;
 }
 .chat-line-more {
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+  gap: 4px;
+  margin: 4px 2px 4px;
+}
+.chat-line-meta {
   display: inline-flex;
   gap: 10px;
-  margin: 2px 8px 4px;
+  margin: 0 8px;
 }
 .chat-note {
   display: flex;
@@ -18527,5 +18534,260 @@ button.play-card {
   }
   .chat-write textarea.input {
     font-size: 16px;
+  }
+}
+
+/* ---------- Roster: the parents and family of each player, as people ---------- */
+.roster-family-cell {
+  min-width: 220px;
+}
+.roster-family {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.chip.roster-person {
+  gap: 6px;
+  padding: 3px 5px 3px 10px;
+  max-width: 100%;
+}
+.roster-person-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+.roster-person-text strong {
+  font-weight: 600;
+}
+.roster-person-text strong,
+.roster-person-text .small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roster-person-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.roster-person-x:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+.roster-add-existing {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.roster-add-existing .add-row {
+  margin-top: 0;
+}
+.roster-add-existing .input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The mark and team name in a phone's top bar are one link home. */
+.mobile-home {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ---------- Chat: emoji on a bubble, and the panel to pick them from ---------- */
+/* One to three emoji said by themselves stand large, without a bubble. */
+.chat-bubble.big,
+.chat-line.mine .chat-bubble.big {
+  padding: 0 4px;
+  background: none;
+  font-size: 2.4rem;
+  line-height: 1.15;
+}
+.chat-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: min(78%, 560px);
+  margin: -5px 8px 3px;
+  position: relative;
+}
+.chat-line.mine .chat-reactions {
+  justify-content: flex-end;
+}
+.chat-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 1px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.chat-reaction.on {
+  border-color: var(--accent-edge);
+  background: var(--surface-3);
+}
+.chat-reaction-n {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.chat-react-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.chat-react-row button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.chat-react-row button:hover,
+.chat-react-row button.on {
+  background: var(--surface-3);
+}
+.chat-react-row .chat-react-more {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.chat-emoji {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--ink-2);
+}
+.chat-emoji[aria-expanded='true'] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+.emoji-panel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  max-height: min(260px, 42%);
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.emoji-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 0 10px;
+}
+.emoji-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.emoji-tabs button,
+.emoji-grid button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  font: inherit;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.emoji-tabs button {
+  font-size: 1.1rem;
+  opacity: 0.6;
+}
+.emoji-tabs button.on {
+  background: var(--surface-3);
+  opacity: 1;
+}
+.emoji-grid button:hover {
+  background: var(--surface-3);
+}
+.emoji-title {
+  margin: 4px 14px 0;
+}
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+  gap: 2px;
+  padding: 6px 10px 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ---------- Signed-out page: the short film of the app ---------- */
+.hero-main-wide {
+  grid-column: 1 / -1;
+}
+.hero-main-wide .hero-lead {
+  max-width: 54ch;
+  margin-bottom: 20px;
+}
+.hero-video {
+  display: block;
+  width: 100%;
+  /* Never so tall that the page under it is pushed out of the window. */
+  max-width: min(100%, calc((100vh - 430px) * 16 / 9));
+  height: auto;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 18px;
+  border: 1px solid rgba(245, 245, 240, 0.16);
+  border-radius: 14px;
+  background: #070708;
+  cursor: pointer;
+}
+@media (max-width: 860px) {
+  .hero-video {
+    max-width: 100%;
+    margin-top: 14px;
+    margin-bottom: 4px;
   }
 }

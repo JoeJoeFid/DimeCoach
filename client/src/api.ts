@@ -276,6 +276,8 @@ export interface ChatLine {
   kind: 'text' | 'note';
   body: string;
   at: string;
+  /** The emoji people put on it, each with who did. */
+  reactions: { emoji: string; users: { id: number; name: string }[] }[];
 }
 /** A chat as the list shows it. A team has one of its own; the rest are started by people. */
 export interface ChatRoom {
@@ -1034,6 +1036,8 @@ export const api = {
   chatMessages: (id: number, before = 0) => req<{ chat: ChatRoom; messages: ChatLine[]; more: boolean }>('GET', `/chat/${id}/messages${before ? `?before=${before}` : ''}`),
   chatSay: (id: number, body: string) => req<ChatLine>('POST', `/chat/${id}/messages`, { body }),
   chatUnsay: (id: number, lineId: number) => req<{ ok: true }>('DELETE', `/chat/${id}/messages/${lineId}`),
+  /** Puts an emoji on a line, or takes the caller's own off again. */
+  chatReact: (id: number, lineId: number, emoji: string) => req<ChatLine>('POST', `/chat/${id}/messages/${lineId}/react`, { emoji }),
   chatTyping: (id: number) => req<{ ok: true }>('POST', `/chat/${id}/typing`, {}),
   /** The chat is open in front of the person: it is marked read, and they are not notified about it for a little while. */
   chatRead: (id: number) => req<{ unread: number }>('POST', `/chat/${id}/read`, {}),

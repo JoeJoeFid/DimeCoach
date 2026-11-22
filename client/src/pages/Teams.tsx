@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Papa from 'papaparse';
 import { api, type TeamContact, type TeamContacts } from '../api';
@@ -25,6 +25,8 @@ const COLUMNS: { key: keyof Player; label: string; headers: string[] }[] = [
   { key: 'parent_email', label: 'Parent email', headers: ['email', 'parentemail', 'guardianemail', 'emailaddress'] },
   { key: 'notes', label: 'Notes (coach only)', headers: ['notes', 'note', 'comments'] },
 ];
+/** The columns typed into on the roster. A player's parents and family are shown as people, in a cell of their own. */
+const ROSTER_COLUMNS = COLUMNS.filter((c) => c.key !== 'parent_name' && c.key !== 'parent_email');
 const TEMPLATE =
   'data:text/csv;charset=utf-8,' +
   encodeURIComponent('Name,Number,Position,Grade,Parent name,Parent email,Notes\nJordan Smith,12,PG,5,Pat Smith,pat@example.com,\n');
@@ -718,6 +720,28 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
   const [notice, setNotice] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const gone = usePendingDeletes();
+  // The team's parents, family and friends, so each player's own can be shown and added to on the roster.
+  const seesFamily = app.can('contacts');
+  const [family, setFamily] = useState<TeamContacts | null>(null);
+  const [addingTo, setAddingTo] = useState<Player | null>(null);
+  useEffect(() => {
+    setFamily(null);
+    if (seesFamily && tab === 'team') api.teamContacts(team.id).then(setFamily, () => {});
+  }, [team.id, seesFamily, tab]);
+  /** Changes the list of people and says what happened. False when it did not work. */
+  const familyAct = async (work: () => Promise<TeamContacts>, done = '') => {
+    try {
+      const next = await work();
+      setFamily(next);
+      onError('');
+      setNotice(next.warning || done);
+      return true;
+    } catch (e) {
+      setNotice('');
+      onError((e as Error).message);
+      return false;
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -837,6 +861,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
         </>
       )}
 
+      {addingTo && <AddPlayerFamily team={team} player={addingTo} data={family} onClose={() => setAddingTo(null)} act={familyAct} />}
       {tab === 'family' && (
         <>
           <FamilyCard team={team} players={players} canSee={app.can('contacts')} canEdit={app.can('roster')} />
@@ -880,8 +905,11 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
             <table className="table roster">
               <thead>
                 <tr>
-                  {COLUMNS.map((c) => (
-                    <th key={c.key}>{c.label}</th>
+                  {ROSTER_COLUMNS.map((c) => (
+                    <Fragment key={c.key}>
+                      {c.key === 'notes' && <th>Parents &amp; family</th>}
+                      <th>{c.label}</th>
+                    </Fragment>
                   ))}
                   <th className="row-end" />
                 </tr>
@@ -891,6 +919,17 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
                   <PlayerRow
                     key={p.id}
                     player={p}
+                    family={
+                      <PlayerFamily
+                        player={p}
+                        contacts={family?.contacts ?? null}
+                        hidden={!seesFamily}
+                        canEdit={app.can('roster')}
+                        onAdd={() => setAddingTo(p)}
+                        onUnlink={(c) => familyAct(() => api.updateTeamContact(team.id, c.id, { name: c.name, email: c.email, kind: c.kind, player_ids: c.player_ids.filter((id) => id !== p.id) }), `${c.name || c.email} is no longer linked to ${p.name}. They are still on the team's list.`)}
+                        onClearOwn={() => savePlayer({ ...p, parent_name: '', parent_email: '' })}
+                      />
+                    }
                     onSave={savePlayer}
                     onDelete={async () => {
                       const ok = await confirmDialog({
@@ -1149,25 +1188,172 @@ function CalendarCard({ team }: { team: Team }) {
   );
 }
 
-function PlayerRow({ player, onSave, onDelete }: { player: Player; onSave: (p: Player) => void; onDelete: () => void }) {
+/**
+ * The people who belong to one player, on the roster: everyone linked to them under "Parents &
+ * family", however many, and a parent written on the roster itself. Adding one here is the same
+ * as adding them on that tab, already linked to this player.
+ */
+function PlayerFamily({ player, contacts, hidden, canEdit, onAdd, onUnlink, onClearOwn }: { player: Player; contacts: TeamContact[] | null; hidden: boolean; canEdit: boolean; onAdd: () => void; onUnlink: (c: TeamContact) => void; onClearOwn: () => void }) {
+  if (hidden) return <span className="muted small">Hidden</span>;
+  const linked = (contacts ?? []).filter((c) => c.player_ids.includes(player.id));
+  const ownEmail = player.parent_email.trim().toLowerCase();
+  // A parent typed on the roster or read from a file, unless the same person is on the list by that address.
+  const own = (player.parent_name.trim() || ownEmail) && !linked.some((c) => ownEmail && c.email === ownEmail);
+  return (
+    <span className="roster-family">
+      {own && (
+        <span className="chip roster-person" title={[player.parent_email, 'Written on the roster. Add them under "Parents & family" to invite them.'].filter(Boolean).join(' · ')}>
+          <span className="roster-person-text">
+            <strong>{player.parent_name || player.parent_email}</strong>
+            {player.parent_name && player.parent_email && <span className="muted small">{player.parent_email}</span>}
+          </span>
+          {canEdit && (
+            <button type="button" className="roster-person-x" aria-label={`Take ${player.parent_name || player.parent_email} off ${player.name}`} onClick={onClearOwn}>
+              ✕
+            </button>
+          )}
+        </span>
+      )}
+      {linked.map((c) => (
+        <span key={c.id} className="chip roster-person" title={[KIND_WORDS[c.kind], c.joined ? 'Has an account' : c.invited_at ? 'Invited, no account yet' : 'Not invited'].join(' · ')}>
+          <span className="roster-person-text">
+            <strong>{c.name || c.email}</strong>
+            {c.name && c.email && <span className="muted small">{c.email}</span>}
+          </span>
+          {c.kind !== 'parent' && <span className="kind">{c.kind === 'family' ? 'Family' : 'Friend'}</span>}
+          {canEdit && (
+            <button type="button" className="roster-person-x" aria-label={`Unlink ${c.name || c.email} from ${player.name}`} title={`Unlink from ${player.name}`} onClick={() => onUnlink(c)}>
+              ✕
+            </button>
+          )}
+        </span>
+      ))}
+      {canEdit && (
+        <button type="button" className="btn small roster-add" aria-label={`Add a parent or family member for ${player.name}`} onClick={onAdd}>
+          + Add
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** Adding a parent or family member to one player from the roster: someone new, or someone already on the team's list. */
+function AddPlayerFamily({ team, player, data, onClose, act }: { team: Team; player: Player; data: TeamContacts | null; onClose: () => void; act: (work: () => Promise<TeamContacts>, done?: string) => Promise<boolean> }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [kind, setKind] = useState<TeamContact['kind']>('parent');
+  const [invite, setInvite] = useState(true);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [pick, setPick] = useState(0);
+  const others = (data?.contacts ?? []).filter((c) => !c.player_ids.includes(player.id));
+  const sending = invite && !!data?.mail && !!email.trim();
+  const run = async (work: () => Promise<TeamContacts>, done: string) => {
+    setBusy(true);
+    const ok = await act(work, done);
+    setBusy(false);
+    if (ok) onClose();
+  };
+  return (
+    <Modal title={`Add a parent or family member for ${player.name}`} onClose={onClose}>
+      <form
+        className="family-add roster-add-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          run(() => api.addTeamContact(team.id, { name, email, kind, player_ids: [player.id], invite: sending, note }), sending ? `${name || email} was added for ${player.name} and sent an invitation.` : `${name || email} was added for ${player.name}.`);
+        }}
+      >
+        <Field label="Name">
+          <input className="input" autoFocus value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="Email">
+          <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Field>
+        <Field label="They are">
+          <select className="input" value={kind} onChange={(e) => setKind(e.target.value as TeamContact['kind'])}>
+            {(Object.keys(KIND_WORDS) as TeamContact['kind'][]).map((k) => (
+              <option key={k} value={k}>
+                {KIND_WORDS[k]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {data?.mail ? (
+          <label className="check family-wide">
+            <input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} /> Send them an invitation by email, saying you added them to {team.name}
+          </label>
+        ) : (
+          <p className="muted small family-wide">Email is not set up on this site, so they are added without an invitation.</p>
+        )}
+        {data?.mail && invite && (
+          <label className="family-wide">
+            <span className="field-label">Add a note to the invitation (optional)</span>
+            <textarea className="input" rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+        )}
+        <p className="muted small family-wide">A player can have as many people as they need. They also show under "Parents &amp; family", where invitations are sent again and people are taken off.</p>
+        <div className="modal-actions family-wide">
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn primary" disabled={busy || (!name.trim() && !email.trim())}>
+            {sending ? 'Add and invite' : 'Add'}
+          </button>
+        </div>
+      </form>
+      {others.length > 0 && (
+        <div className="roster-add-existing">
+          <span className="field-label">Or link someone already on the team's list</span>
+          <div className="add-row">
+            <select className="input" aria-label="Someone already on the list" value={pick} onChange={(e) => setPick(Number(e.target.value))}>
+              <option value={0}>Choose a person…</option>
+              {others.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name || c.email}
+                  {c.name && c.email ? ` (${c.email})` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy || !pick}
+              onClick={() => {
+                const c = others.find((o) => o.id === pick);
+                if (c) run(() => api.updateTeamContact(team.id, c.id, { name: c.name, email: c.email, kind: c.kind, player_ids: [...c.player_ids, player.id] }), `${c.name || c.email} is now linked to ${player.name}.`);
+              }}
+            >
+              Link to {player.name}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function PlayerRow({ player, family, onSave, onDelete }: { player: Player; family: ReactNode; onSave: (p: Player) => void; onDelete: () => void }) {
   const [draft, setDraft] = useState(player);
   useEffect(() => setDraft(player), [player]);
   const commit = () => {
     if (!draft.name.trim()) return setDraft(player);
-    if (COLUMNS.some((c) => draft[c.key] !== player[c.key])) onSave(draft);
+    if (ROSTER_COLUMNS.some((c) => draft[c.key] !== player[c.key])) onSave(draft);
   };
   return (
     <tr>
-      {COLUMNS.map((c) => (
-        <td key={c.key}>
-          <input
-            className={`input cell-${c.key}`}
-            aria-label={`${c.label} for ${player.name}`}
-            value={String(draft[c.key] ?? '')}
-            onChange={(e) => setDraft({ ...draft, [c.key]: e.target.value })}
-            onBlur={commit}
-          />
-        </td>
+      {ROSTER_COLUMNS.map((c) => (
+        <Fragment key={c.key}>
+          {c.key === 'notes' && <td className="roster-family-cell">{family}</td>}
+          <td>
+            <input
+              className={`input cell-${c.key}`}
+              aria-label={`${c.label} for ${player.name}`}
+              value={String(draft[c.key] ?? '')}
+              onChange={(e) => setDraft({ ...draft, [c.key]: e.target.value })}
+              onBlur={commit}
+            />
+          </td>
+        </Fragment>
       ))}
       <td className="row-end">
         <button className="btn small danger" aria-label={`Remove ${player.name} from the roster`} onClick={onDelete}>
