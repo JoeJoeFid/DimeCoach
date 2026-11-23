@@ -124,7 +124,7 @@ const LENS_ZOOM = 1.6;
 /** How wide the magnifying glass is, in pixels. */
 const LENS = 124;
 /** Held still this long, the spot under the finger becomes where the player set off from, and dragging draws their way to the shot. */
-const ROUTE_HOLD_MS = 520;
+const ROUTE_HOLD_MS = 850;
 /** A finger that has gone further than this, in pixels, is moving the spot, not holding still. */
 const STILL_PX = 9;
 /** The most points a drawn way is kept as. */
