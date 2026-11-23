@@ -5,6 +5,7 @@
 //
 // It keeps nothing itself: every tap hands the new list of plays to whoever is showing it.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { DEFAULT_SCORING, byPeriod, clockText, linesOf, newId, periodName, playWords, scoreOf, type EvType, type GameEvent, type ScoreState, type ScoringConfig, type StatLine } from '../scoring';
 import { COURT, Court } from './PlayDiagram';
 import { confirmDialog } from './dialogs';
@@ -119,7 +120,7 @@ export function LineText({ line }: { line: StatLine }) {
 }
 
 /** How much larger the court is under the magnifying glass. */
-const LENS_ZOOM = 2.2;
+const LENS_ZOOM = 1.6;
 /** How wide the magnifying glass is, in pixels. */
 const LENS = 124;
 /** How long the pin is shown, and the court takes to fade, before the spot is handed over. */
@@ -163,15 +164,17 @@ function PlacePicker({ onPick }: { onPick: (x: number, y: number) => void }) {
     setPin(here);
     timers.current.push(window.setTimeout(() => onPick(Math.round(here.x * 1000) / 1000, Math.round(here.y * 1000) / 1000), PIN_SHOWN_MS));
   };
-  // The glass sits above the finger, where a hand does not cover it. Near the top of the court there is no
-  // room above, so it goes to the side instead: towards the middle of the court, level with the finger.
+  // The glass always sits above the finger, where a hand does not cover it. It is drawn over the whole
+  // page, not inside the court, so high on the court it rises over the heading instead of moving aside.
   const size = wrap.current?.getBoundingClientRect();
-  const place = (w: number, h: number, x: number, y: number) => {
-    const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), max);
-    if (y - LENS - 34 >= 0) return { left: clamp(x - LENS / 2, w - LENS), top: y - LENS - 34 };
-    return { left: clamp(x < w / 2 ? x + 44 : x - 44 - LENS, w - LENS), top: clamp(y - LENS / 2, h - LENS) };
-  };
-  const lens = at && held && size ? { ...place(size.width, size.height, at.x * size.width, at.y * size.height), span: ((LENS / size.width) * COURT.width) / LENS_ZOOM } : null;
+  const lens =
+    at && held && size
+      ? {
+          left: Math.min(Math.max(size.left + at.x * size.width - LENS / 2, 4), window.innerWidth - LENS - 4),
+          top: Math.max(size.top + at.y * size.height - LENS - 34, 4),
+          span: ((LENS / size.width) * COURT.width) / LENS_ZOOM,
+        }
+      : null;
   const mark = pin ?? (at && !held ? null : at);
   return (
     <div ref={wrap} className={`sp-place-wrap ${pin ? 'done' : ''}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => (setAt(null), setHeld(false))} role="img" aria-label="Half court. Tap where the shot was taken, or hold to look closer.">
@@ -188,15 +191,18 @@ function PlacePicker({ onPick }: { onPick: (x: number, y: number) => void }) {
           </g>
         )}
       </svg>
-      {lens && at && (
-        <div className="sp-lens" style={{ left: lens.left, top: lens.top, width: LENS, height: LENS }} aria-hidden="true">
-          <svg className="play-svg" viewBox={`${at.x * COURT.width - lens.span / 2} ${at.y * COURT.half - lens.span / 2} ${lens.span} ${lens.span}`}>
-            <rect className="court-floor" x={-20} y={-20} width={COURT.width + 40} height={COURT.half + 40} />
-            <Court court="half" flipped={false} />
-            <circle className="sp-aim" cx={at.x * COURT.width} cy={at.y * COURT.half} r={0.45} />
-          </svg>
-        </div>
-      )}
+      {lens &&
+        at &&
+        createPortal(
+          <div className="sp-lens" style={{ left: lens.left, top: lens.top, width: LENS, height: LENS }} aria-hidden="true">
+            <svg className="play-svg" viewBox={`${at.x * COURT.width - lens.span / 2} ${at.y * COURT.half - lens.span / 2} ${lens.span} ${lens.span}`}>
+              <rect className="court-floor" x={-20} y={-20} width={COURT.width + 40} height={COURT.half + 40} />
+              <Court court="half" flipped={false} />
+              <circle className="sp-aim" cx={at.x * COURT.width} cy={at.y * COURT.half} r={0.55} />
+            </svg>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

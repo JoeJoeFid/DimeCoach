@@ -19590,8 +19590,8 @@ select.input.shot-game {
   }
 }
 .sp-lens {
-  position: absolute;
-  z-index: 2;
+  position: fixed;
+  z-index: 400;
   overflow: hidden;
   border: 3px solid var(--ink);
   border-radius: 50%;
