@@ -19743,3 +19743,29 @@ select.input.shot-game {
   fill: var(--shot);
   opacity: 0.75;
 }
+
+/* Drawing how the player moved: the glass turns to the accent color and pulses, so it is plain the mode has changed. */
+.sp-lens.drawing {
+  border-color: var(--accent);
+  animation: sp-lens-pulse 0.9s ease-in-out infinite;
+}
+@keyframes sp-lens-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent), var(--shadow-2);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 9px color-mix(in srgb, var(--accent) 0%, transparent), var(--shadow-2);
+    transform: scale(1.05);
+  }
+}
+.sp-lens .sp-route polyline {
+  stroke-width: 0.34;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-lens.drawing {
+    animation: none;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent), var(--shadow-2);
+  }
+}

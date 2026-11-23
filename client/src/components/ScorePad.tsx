@@ -250,10 +250,17 @@ function PlacePicker({ onPick }: { onPick: (x: number, y: number, path?: [number
       {lens &&
         at &&
         createPortal(
-          <div className="sp-lens" style={{ left: lens.left, top: lens.top, width: LENS, height: LENS }} aria-hidden="true">
+          <div className={`sp-lens ${route.length > 0 ? 'drawing' : ''}`} style={{ left: lens.left, top: lens.top, width: LENS, height: LENS }} aria-hidden="true">
             <svg className="play-svg" viewBox={`${at.x * COURT.width - lens.span / 2} ${at.y * COURT.half - lens.span / 2} ${lens.span} ${lens.span}`}>
               <rect className="court-floor" x={-20} y={-20} width={COURT.width + 40} height={COURT.half + 40} />
               <Court court="half" flipped={false} />
+              {/* The way as it is drawn shows in the glass too, since the finger covers it on the court. */}
+              {route.length > 0 && (
+                <g className="sp-route">
+                  <polyline points={[...route, at].map((q) => `${q.x * COURT.width},${q.y * COURT.half}`).join(' ')} />
+                  <circle cx={route[0].x * COURT.width} cy={route[0].y * COURT.half} r={0.5} />
+                </g>
+              )}
               <circle className="sp-aim" cx={at.x * COURT.width} cy={at.y * COURT.half} r={0.55} />
             </svg>
           </div>,
