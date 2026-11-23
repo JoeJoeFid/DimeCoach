@@ -282,10 +282,6 @@ function ScoringSetup({ teamId, config, canEdit, onSaved }: { teamId: number; co
         {row('forced', 'Forced turnovers', 'After a turnover, ask whether it was forced and by whom. Needs Turnovers on.')}
         {row('place', 'Shot placement', 'After a 2 or a 3, made or missed, ask where on the court it was taken. It can be skipped each time.')}
       </div>
-      <div className="card st-setup">
-        <h2>Periods</h2>
-        {row('halves', 'This team plays halves', 'Periods are named H1 and H2, then overtime. Off, they are Q1 to Q4.')}
-      </div>
     </>
   );
 }
@@ -407,7 +403,7 @@ export default function Stats() {
       ) : view === 'setup' ? (
         <ScoringSetup teamId={team?.id ?? 0} config={data.scoring} canEdit={app.can('manage')} onSaved={(scoring) => setData((d) => (d ? { ...d, scoring } : d))} />
       ) : view === 'shooting' ? (
-        <ShotCharts games={scored} picked={picked} picker={picker} nameOf={nameOf} teamName={team?.name ?? 'Team'} teamId={team?.id ?? 0} halves={data.scoring.halves} flag={data.shot_efficiency} />
+        <ShotCharts games={scored} picked={picked} picker={picker} nameOf={nameOf} teamName={team?.name ?? 'Team'} teamId={team?.id ?? 0} flag={data.shot_efficiency} />
       ) : view === 'season' ? (
         scored.length === 0 ? (
           <>

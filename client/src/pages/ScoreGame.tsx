@@ -11,6 +11,7 @@ import { Modal } from '../components/bits';
 import type { StatsFile } from '../api';
 import { DEFAULT_SCORING, linesOf, newState, periodName, scoreOf, type GameEvent, type ScoreState, type ScoringConfig, type Scoresheet } from '../scoring';
 import { confirmDialog } from '../components/dialogs';
+import { sportKind } from '../sports';
 
 type Saved = { status: number; sheet?: Scoresheet; error?: string };
 type Kept = { state: ScoreState; events: GameEvent[]; rev: number; dirty: boolean };
@@ -404,7 +405,8 @@ export function ScoreGameView({ planId }: { planId: number }) {
       }),
     (state, events, rev, take) => api.saveScore(planId, { state, events, rev, take }),
     // The starters come from the game plan, when it has a lineup.
-    () => ({ ...newState('full'), on: (planRef.current?.game?.lineup?.[0] ?? []).slice(0, 5) }),
+    // A basketball game starts out in halves; it is changed for the game under the period button.
+    () => ({ ...newState('full', sportKind(app.sport?.name) === 'basketball'), on: (planRef.current?.game?.lineup?.[0] ?? []).slice(0, 5) }),
   );
   // Someone only watching sees the score move as it is kept.
   const { refresh } = sheet;
@@ -436,7 +438,7 @@ export function ScoreGameView({ planId }: { planId: number }) {
     });
     if (!ok) return;
     // How the game is kept stays as it was set: the clock, the other team's numbers, who is on the court.
-    sheet.change({ ...newState('full'), on: state.on, timed: state.timed, period_secs: state.period_secs, opp_advanced: state.opp_advanced, opp_players: state.opp_players }, []);
+    sheet.change({ ...newState('full', !!state.halves), on: state.on, timed: state.timed, period_secs: state.period_secs, opp_advanced: state.opp_advanced, opp_players: state.opp_players }, []);
     setTab('score');
   };
   const seg = (
@@ -487,7 +489,7 @@ export function ScoreGameView({ planId }: { planId: number }) {
         <>
           <div className="card sp-theirs">
             <h2>
-              {usName} {score.us} · {themName} {score.them} <span className="muted small">{state.status === 'final' ? 'Final' : periodName(state.period, config.halves)}</span>
+              {usName} {score.us} · {themName} {score.them} <span className="muted small">{state.status === 'final' ? 'Final' : periodName(state.period, !!state.halves)}</span>
             </h2>
             <p className="muted">{sheet.server?.scorer || 'Someone else'} is keeping score for this game. One person keeps score at a time; this page follows along.</p>
             <button type="button" className="btn primary" onClick={sheet.takeOver}>

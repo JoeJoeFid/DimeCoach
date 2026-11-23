@@ -19353,3 +19353,15 @@ select.input.shot-game {
   fill: var(--court-floor);
   stroke-width: 0.34;
 }
+
+/* Halves or quarters for this game, in the pad's options. */
+.sp-halves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+.sp-halves > span {
+  display: grid;
+}

@@ -30,6 +30,7 @@ type Sheet =
   | { kind: 'follow'; follow: 'ast' | 'reb'; shooter: number | null; shot: EvType; /** The shot's own play, so what follows is tied to it. */ shotId: string }
   | { kind: 'ft'; side: 'us' | 'them'; player: number | null }
   | { kind: 'forced'; id: string; side: 'us' | 'them' }
+  | { kind: 'blocked'; blocker: number | null }
   | { kind: 'place'; id: string; /** What is asked once the spot is marked or skipped. */ next: Sheet | null }
   | { kind: 'assign'; id: string }
   | { kind: 'court' }
@@ -167,7 +168,7 @@ export default function ScorePad({
   latest.current = { state, events };
 
   const final = state.status === 'final';
-  const pName = (p: number) => periodName(p, config.halves);
+  const pName = (p: number) => periodName(p, !!state.halves);
   const score = scoreOf(events);
   const us = linesOf(events, 'us');
   const them = linesOf(events, 'them');
@@ -205,6 +206,8 @@ export default function ScorePad({
   /** What is asked once a play is down: whether a turnover was forced, where a shot was taken, then who assisted or rebounded. */
   const afterPlay = (side: 'us' | 'them', action: EvType, player: number | null, id: string) => {
     if (action === 'to' && config.forced && !solo) return setSheet({ kind: 'forced', id, side });
+    // A blocked shot comes down to someone: ask who.
+    if (side === 'us' && action === 'blk' && config.reb && asksWho('us')) return setSheet({ kind: 'blocked', blocker: player });
     const made = action === 'm2' || action === 'm3';
     const missed = action === 'x2' || action === 'x3';
     // A shot by one's own team goes on to who assisted, or who got the rebound.
@@ -525,6 +528,23 @@ export default function ScorePad({
           <PlayerGrid players={players.filter((p) => sheet.follow === 'reb' || p.id !== sheet.shooter)} on={state.on} onPick={(p) => (record('us', p.id, sheet.follow, sheet.shotId), setSheet(null))} />
         </BottomSheet>
       )}
+      {/* After a block: who came up with the ball. For this team it is a defensive rebound. */}
+      {sheet?.kind === 'blocked' && (
+        <BottomSheet title={playerName('us', sheet.blocker)} sub="Block" onClose={() => setSheet(null)}>
+          <p className="sp-ask-line">
+            <strong>Rebound after the block by</strong> <span className="muted small">{usName}</span>
+          </p>
+          <div className="sp-two">
+            <button type="button" className="btn sp-no" onClick={() => setSheet(null)}>
+              No Rebound
+            </button>
+            <button type="button" className="btn" onClick={() => (record('them', null, 'reb'), setSheet(null))}>
+              {themName}
+            </button>
+          </div>
+          <PlayerGrid players={players} on={state.on} onPick={(p) => (record('us', p.id, 'reb', null), setSheet(null))} />
+        </BottomSheet>
+      )}
       {/* A turnover: was it forced, and by whom on the other side. */}
       {sheet?.kind === 'forced' &&
         (() => {
@@ -633,6 +653,20 @@ export default function ScorePad({
             </div>
           )}
           <div className="sp-options">
+            <div className="sp-halves">
+              <span>
+                <strong>Periods in this game</strong>
+                <span className="muted small">{state.halves ? 'Two halves, then overtime.' : 'Four quarters, then overtime.'}</span>
+              </span>
+              <div className="seg" role="group" aria-label="Halves or quarters">
+                <button type="button" className={state.halves ? 'on' : ''} aria-pressed={!!state.halves} onClick={() => setState({ halves: true })}>
+                  Halves
+                </button>
+                <button type="button" className={state.halves ? '' : 'on'} aria-pressed={!state.halves} onClick={() => setState({ halves: false })}>
+                  Quarters
+                </button>
+              </div>
+            </div>
             <label className="check setting">
               <input type="checkbox" checked={state.timed} onChange={(e) => (setRunningSince(null), setState({ timed: e.target.checked, clock_left: state.clock_left ?? state.period_secs }))} />
               <span>

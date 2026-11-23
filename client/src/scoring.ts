@@ -39,10 +39,8 @@ export interface ScoringConfig {
   forced: boolean;
   /** After a shot, ask where on the court it was taken. */
   place: boolean;
-  /** The game is played in halves, not quarters. */
-  halves: boolean;
 }
-export const DEFAULT_SCORING: ScoringConfig = { reb: true, ast: true, stl: true, blk: true, to: true, pf: true, forced: false, place: false, halves: false };
+export const DEFAULT_SCORING: ScoringConfig = { reb: true, ast: true, stl: true, blk: true, to: true, pf: true, forced: false, place: false };
 export interface ScoreState {
   /** "score" is just the two scores. "full" is who did what. */
   mode: 'score' | 'full';
@@ -53,6 +51,8 @@ export interface ScoreState {
   timed: boolean;
   period_secs: number;
   clock_left: number | null;
+  /** This game is played in halves, not quarters. Chosen game by game, under the period button. */
+  halves?: boolean;
   /** The opponent's players are tracked one by one, not only their score. */
   opp_advanced: boolean;
   opp_players: { id: number; label: string }[];
@@ -83,7 +83,7 @@ export interface Scoresheet {
   team?: string;
   by?: string;
 }
-export const newState = (mode: ScoreState['mode'] = 'score'): ScoreState => ({ mode, period: 1, status: 'live', on: [], timed: false, period_secs: 480, clock_left: null, opp_advanced: false, opp_players: [] });
+export const newState = (mode: ScoreState['mode'] = 'score', halves = false): ScoreState => ({ mode, halves, period: 1, status: 'live', on: [], timed: false, period_secs: 480, clock_left: null, opp_advanced: false, opp_players: [] });
 
 export const POINTS: Partial<Record<EvType, number>> = { p1: 1, m1: 1, m2: 2, m3: 3 };
 /** How a play reads in the list: "made a 3". */

@@ -338,7 +338,7 @@ function Volume({ games, nameOf }: { games: GameShots[]; nameOf: (id: number) =>
 }
 
 /** Where the shots were taken: each one that had its spot marked, on the half court. */
-function ShotMap({ list, nameOf, teamName, halves }: { list: Attempt[]; nameOf: (id: number) => string; teamName: string; halves: boolean }) {
+function ShotMap({ list, nameOf, teamName, halvesOf }: { list: Attempt[]; nameOf: (id: number) => string; teamName: string; /** Whether the game an attempt is from was played in halves. */ halvesOf: (a: Attempt) => boolean }) {
   const tip = useTip();
   const field = list.filter((a) => a.kind !== 1);
   const placed = field.filter((a) => a.x !== undefined && a.y !== undefined);
@@ -353,8 +353,8 @@ function ShotMap({ list, nameOf, teamName, halves }: { list: Attempt[]; nameOf: 
         {[...placed]
           .sort((a, b) => Number(a.made) - Number(b.made))
           .map((a) => (
-            <circle key={a.id} className={`shot k${a.kind} ${a.made ? 'made' : 'miss'}`} cx={a.x! * COURT.width} cy={a.y! * COURT.half} r={0.95} {...tip.on(say(a, nameOf, teamName, halves))}>
-              <title>{say(a, nameOf, teamName, halves).join('. ')}</title>
+            <circle key={a.id} className={`shot k${a.kind} ${a.made ? 'made' : 'miss'}`} cx={a.x! * COURT.width} cy={a.y! * COURT.half} r={0.95} {...tip.on(say(a, nameOf, teamName, halvesOf(a)))}>
+              <title>{say(a, nameOf, teamName, halvesOf(a)).join('. ')}</title>
             </circle>
           ))}
       </svg>
@@ -372,7 +372,7 @@ type View = 'run' | 'grid' | 'map' | 'volume';
  * The Shooting part of the stats page. `flag` is whether this team has the shot volume and
  * efficiency chart turned on; `picker` is the list of games to count, for that chart.
  */
-export default function ShotCharts({ games, picked, picker, nameOf, teamName, teamId, halves, flag }: { games: Scoresheet[]; picked: Scoresheet[]; picker: ReactNode; nameOf: (id: number) => string; teamName: string; teamId: number; halves: boolean; flag: boolean }) {
+export default function ShotCharts({ games, picked, picker, nameOf, teamName, teamId, flag }: { games: Scoresheet[]; picked: Scoresheet[]; picker: ReactNode; nameOf: (id: number) => string; teamName: string; teamId: number; flag: boolean }) {
   const [view, setView] = useState<View>('run');
   const byDate = [...games].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
   const [gameId, setGameId] = useState(0);
@@ -388,7 +388,15 @@ export default function ShotCharts({ games, picked, picker, nameOf, teamName, te
   }, [flag, view, teamId]);
   const now: View = view === 'volume' && !flag ? 'run' : view;
   const everyGame = now === 'map' && gameId === ALL;
-  const all = everyGame ? byDate.flatMap((g) => attemptsOf(g.events)) : game ? attemptsOf(game.events) : [];
+  // Halves or quarters is each game's own choice, so each attempt remembers which its game was.
+  const inHalves = new Set<string>();
+  const from = (g: Scoresheet) => {
+    const list = attemptsOf(g.events);
+    if (g.state.halves) for (const a of list) inHalves.add(a.id);
+    return list;
+  };
+  const all = everyGame ? byDate.flatMap(from) : game ? from(game) : [];
+  const halves = !!game?.state.halves;
   const shooters = [...new Set(all.map((a) => a.player).filter((id): id is number => id !== null))];
   const shown = who === 'team' ? all : all.filter((a) => a.player === who);
   if (byDate.length === 0) return <p className="muted">No games scored yet, so no attempts are recorded.</p>;
@@ -448,7 +456,7 @@ export default function ShotCharts({ games, picked, picker, nameOf, teamName, te
             {now === 'run' ? 'Shot by shot' : now === 'map' ? 'Shot map' : 'Shots by period'} <span className="muted small">{everyGame ? `${byDate.length} ${byDate.length === 1 ? 'game' : 'games'}` : gameName(game)}</span>
           </h2>
           {now === 'map' ? (
-            <ShotMap list={shown} nameOf={nameOf} teamName={teamName} halves={halves} />
+            <ShotMap list={shown} nameOf={nameOf} teamName={teamName} halvesOf={(a) => inHalves.has(a.id)} />
           ) : !hasOrder(game.events) ? (
             <p className="muted">This game's stats were brought in as totals from a file, so the order of its shots is not recorded.</p>
           ) : shown.length === 0 ? (

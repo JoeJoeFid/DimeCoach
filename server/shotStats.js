@@ -1,8 +1,8 @@
 // What a team tracks while scoring a game, and the numbers behind the shot volume and efficiency
 // chart. Nothing here touches the database, so it can be tested on its own.
 
-/** What the scoring pad asks for until a team says otherwise. The last three are extras, off to begin with. */
-export const DEFAULT_SCORING = { reb: true, ast: true, stl: true, blk: true, to: true, pf: true, forced: false, place: false, halves: false };
+/** What the scoring pad asks for until a team says otherwise. The last two are extras, off to begin with. */
+export const DEFAULT_SCORING = { reb: true, ast: true, stl: true, blk: true, to: true, pf: true, forced: false, place: false };
 
 /** A team's scoring choices as sent or as stored: every switch present, each one true or false. */
 export function cleanScoring(value, base = DEFAULT_SCORING) {

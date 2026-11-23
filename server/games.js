@@ -85,6 +85,8 @@ function cleanState(s) {
     period_secs: Math.min(3600, Math.max(60, Number(st.period_secs) || 480)),
     clock_left: Number.isFinite(st.clock_left) ? Math.max(0, Math.round(st.clock_left)) : null,
     opp_advanced: !!st.opp_advanced,
+    // Whether this game is played in halves. Games kept before this was asked have quarters.
+    halves: !!st.halves,
     opp_players: (Array.isArray(st.opp_players) ? st.opp_players : []).slice(0, 30).map((p) => ({ id: Number(p?.id) || 0, label: str(p?.label, 20) })).filter((p) => p.id),
     // Set when the plays were made from a file of totals, not tapped in as they happened.
     imported: st.imported ? str(st.imported, 120) : '',
