@@ -5,10 +5,12 @@ import { useId, useState } from 'react';
 import { linesOf, scoreOf, type Scoresheet, type StatLine } from '../scoring';
 import { fmtDateShort } from '../util';
 
-export type ChartStat = 'pts' | 'reb' | 'ast' | 'stl' | 'blk' | 'to' | 'pf' | 'tpm';
+export type ChartStat = 'pts' | 'reb' | 'oreb' | 'dreb' | 'ast' | 'stl' | 'blk' | 'to' | 'pf' | 'tpm';
 export const CHART_STATS: [ChartStat, string, string][] = [
   ['pts', 'PTS', 'Points'],
   ['reb', 'REB', 'Rebounds'],
+  ['oreb', 'OREB', 'Offensive rebounds'],
+  ['dreb', 'DREB', 'Defensive rebounds'],
   ['ast', 'AST', 'Assists'],
   ['stl', 'STL', 'Steals'],
   ['blk', 'BLK', 'Blocks'],
@@ -54,7 +56,8 @@ function Line({
   const W = big ? 720 : 260;
   const H = big ? 220 : 130;
   const pad = { l: 30, r: big ? 34 : 12, t: big ? 18 : 12, b: 22 };
-  const fade = useId();
+  // Letters and numbers only: some browsers will not follow url(#...) to an id with other marks in it.
+  const fade = `scfade${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const n = labels.length;
   const x = (i: number) => (n <= 1 ? (pad.l + W - pad.r) / 2 : pad.l + (i * (W - pad.l - pad.r)) / (n - 1));
   const y = (v: number) => H - pad.b - (v / top) * (H - pad.t - pad.b);

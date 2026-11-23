@@ -10,6 +10,7 @@ import { SubTabs } from '../components/cx';
 import { confirmDialog } from '../components/dialogs';
 import ScorePad, { LineText, StatTable } from '../components/ScorePad';
 import StatCharts from '../components/StatCharts';
+import AssistDuos from '../components/AssistDuos';
 import { emptyLine, linesOf, sumLines, type Scoresheet, type StatLine } from '../scoring';
 import { fmtDateShort, todayISO } from '../util';
 import { SyncNote, useSheet } from './ScoreGame';
@@ -177,7 +178,7 @@ export function MyStats() {
         <>
           <div className="card">
             <h2>Totals</h2>
-            <StatTable rows={[...byPlayer.entries()].map(([key, p]) => ({ key, name: p.name, line: sumLines(p.lines), extra: p.lines.length }))} extra="Games" />
+            <StatTable oneReb rows={[...byPlayer.entries()].map(([key, p]) => ({ key, name: p.name, line: sumLines(p.lines), extra: p.lines.length }))} extra="Games" />
           </div>
           <div className="card">
             <h2>Sheets</h2>
@@ -261,7 +262,7 @@ export default function Stats() {
   }, [team?.id]);
   // The games left out of the season's numbers and charts. Everything is in until it is taken out.
   const [out, setOut] = useState<Set<number>>(new Set());
-  const [show, setShow] = useState<'table' | 'charts'>('table');
+  const [show, setShow] = useState<'table' | 'charts' | 'duos'>('table');
   const [average, setAverage] = useState(false);
   // A sheet that was opened and never used counts as a game not scored.
   const unused = (g: Scoresheet) => g.status !== 'final' && g.events.length === 0 && g.us === 0 && g.them === 0;
@@ -373,6 +374,9 @@ export default function Stats() {
                 <button type="button" className={show === 'charts' ? 'on' : ''} aria-pressed={show === 'charts'} onClick={() => setShow('charts')}>
                   Game by game
                 </button>
+                <button type="button" className={show === 'duos' ? 'on' : ''} aria-pressed={show === 'duos'} onClick={() => setShow('duos')}>
+                  Assist duos
+                </button>
               </div>
               {show === 'table' && (
                 <div className="seg" role="group" aria-label="Totals or averages">
@@ -395,6 +399,13 @@ export default function Stats() {
                 {season.size === 0 && <p className="muted small">These games have a score and nothing per player.</p>}
                 {average && <p className="muted small">Each player's numbers are divided by the games they have a stat in. Shooting is the share that went in.</p>}
                 <StatTable sortable average={average} rows={[...season.entries()].map(([id, s]) => ({ key: id, name: nameOf(id), line: s.line, extra: s.games })).sort((a, b) => b.line.pts - a.line.pts)} total={{ name: 'Team', line: sumLines(teamLines), games: picked.length }} extra="Games" />
+              </div>
+            ) : show === 'duos' ? (
+              <div className="card">
+                <h2>
+                  Who sets up whom <span className="muted small">{picked.length} {picked.length === 1 ? 'game' : 'games'} · assists between each pair of players</span>
+                </h2>
+                <AssistDuos games={picked} nameOf={nameOf} />
               </div>
             ) : (
               <div className="card">
@@ -439,7 +450,7 @@ export default function Stats() {
         <div className="card">
           <h2>Shared by parents and coaches</h2>
           <p className="muted small">Kept by one person for one player. These stand beside the team's stats and are not added into them.</p>
-          <StatTable first="Player and game" rows={data.shared.map((s) => ({ key: s.id, name: `${s.player_name} · ${[s.title, fmtDateShort(s.date)].filter(Boolean).join(', ')} · by ${s.by}`, line: linesOf(s.events, 'us').total }))} />
+          <StatTable oneReb first="Player and game" rows={data.shared.map((s) => ({ key: s.id, name: `${s.player_name} · ${[s.title, fmtDateShort(s.date)].filter(Boolean).join(', ')} · by ${s.by}`, line: linesOf(s.events, 'us').total }))} />
         </div>
       )}
     </div>

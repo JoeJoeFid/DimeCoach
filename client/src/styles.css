@@ -13922,7 +13922,8 @@ button.cx-row:hover .cx-row-text strong {
 .cx-trend-line {
   fill: none;
   stroke: var(--series);
-  stroke-width: 2;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--series) 55%, transparent));
+  stroke-width: 2.5;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
@@ -19076,4 +19077,47 @@ a.chip.st-miss:hover {
 .track-list li > .btn {
   flex: none;
   margin-right: 6px;
+}
+
+/* ---------- Stats: who assists whom ---------- */
+.duo {
+  display: grid;
+  gap: 12px;
+}
+.duo-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.duo-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+.duo-count {
+  font-family: var(--mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.duo-bar {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.duo-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--series);
+}
+.duo-ways {
+  grid-column: 1 / -1;
+}
+.duo-none {
+  margin: 0;
 }

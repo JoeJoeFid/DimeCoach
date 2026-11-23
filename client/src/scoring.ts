@@ -13,6 +13,12 @@ export interface GameEvent {
   /** Seconds left in the period, when the scorer is running a clock. */
   clock: number | null;
   at: number;
+  /**
+   * For an assist, the id of the made shot it set up; for a rebound, the id of the missed shot it
+   * came off. Null when the play was put in by itself, with its own button. Left out on plays
+   * recorded before this was kept: those are matched to the shot recorded just before them.
+   */
+  for?: string | null;
 }
 export interface ScoreState {
   /** "score" is just the two scores. "full" is who did what. */
@@ -81,14 +87,19 @@ export interface StatLine {
   tpa: number;
   ftm: number;
   fta: number;
+  /** Every rebound: the two kinds below added together. */
   reb: number;
+  /** Offensive: off one of the team's own missed shots. */
+  oreb: number;
+  /** Defensive: put in with the rebound button by itself. */
+  dreb: number;
   ast: number;
   stl: number;
   blk: number;
   to: number;
   pf: number;
 }
-export const emptyLine = (): StatLine => ({ pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0 });
+export const emptyLine = (): StatLine => ({ pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0 });
 export function addTo(line: StatLine, e: GameEvent) {
   line.pts += POINTS[e.type] ?? 0;
   if (e.type === 'm2' || e.type === 'm3') line.fgm++;
@@ -99,18 +110,67 @@ export function addTo(line: StatLine, e: GameEvent) {
   if (e.type === 'm1' || e.type === 'x1') line.fta++;
   if (e.type === 'reb' || e.type === 'ast' || e.type === 'stl' || e.type === 'blk' || e.type === 'to' || e.type === 'pf') line[e.type]++;
 }
+/** Plays brought in from a file as totals are in no order, so nothing is read from which came before which. */
+const fromFile = (e: GameEvent) => e.id.startsWith('imp');
+/**
+ * Finds the shot behind a play: the made shot an assist set up, or the team's own miss a rebound
+ * came off. Null when there is none. A play from before the link was kept is matched to the shot
+ * recorded just before it, which is how the pad has always asked.
+ */
+export function shotFinder(events: GameEvent[]) {
+  const byId = new Map(events.map((e) => [e.id, e]));
+  return (i: number): GameEvent | null => {
+    const e = events[i];
+    if (e.type !== 'ast' && e.type !== 'reb') return null;
+    if (e.for !== undefined) return e.for === null ? null : (byId.get(e.for) ?? null);
+    const prev = events[i - 1];
+    if (!prev || fromFile(e) || prev.side !== 'us') return null;
+    if (e.type === 'ast') return e.side === 'us' && (prev.type === 'm2' || prev.type === 'm3') ? prev : null;
+    return prev.type === 'x2' || prev.type === 'x3' ? prev : null;
+  };
+}
+/** Whether a rebound by the team was offensive: it came off one of the team's own missed shots. */
+const offensive = (e: GameEvent, shot: GameEvent | null) => e.side === 'us' && (e.for !== undefined ? e.for !== null : shot !== null);
 /** The numbers for one side, and within it for each player who did anything. */
 export function linesOf(events: GameEvent[], side: 'us' | 'them') {
   const total = emptyLine();
   const players = new Map<number, StatLine>();
-  for (const e of events) {
-    if (e.side !== side) continue;
-    addTo(total, e);
-    if (e.player === null) continue;
-    if (!players.has(e.player)) players.set(e.player, emptyLine());
-    addTo(players.get(e.player)!, e);
-  }
+  const shot = shotFinder(events);
+  events.forEach((e, i) => {
+    if (e.side !== side) return;
+    const kind = e.type === 'reb' ? (offensive(e, shot(i)) ? 'oreb' : 'dreb') : null;
+    if (e.player !== null && !players.has(e.player)) players.set(e.player, emptyLine());
+    for (const line of e.player === null ? [total] : [total, players.get(e.player)!]) {
+      addTo(line, e);
+      if (kind) line[kind]++;
+    }
+  });
   return { total, players };
+}
+/** Who set up whom: one entry for each assist by a player of the team whose scorer is known. */
+export function assistPairs(events: GameEvent[]) {
+  const shot = shotFinder(events);
+  const pairs: { from: number; to: number }[] = [];
+  /** Assists by the team with no scorer to pair them with. */
+  let loose = 0;
+  events.forEach((e, i) => {
+    if (e.type !== 'ast' || e.side !== 'us') return;
+    const s = shot(i);
+    if (e.player !== null && s && s.player !== null && s.player !== e.player) pairs.push({ from: e.player, to: s.player });
+    else loose++;
+  });
+  return { pairs, loose };
+}
+/** How each play reads in the list, by its id: a rebound says which kind, and an assist carries who scored. */
+export function playWords(events: GameEvent[]) {
+  const shot = shotFinder(events);
+  const out = new Map<string, { words: string; scorer: number | null }>();
+  events.forEach((e, i) => {
+    const s = shot(i);
+    const words = e.type === 'reb' && e.side === 'us' ? `${offensive(e, s) ? 'offensive' : 'defensive'} rebound` : EV_WORDS[e.type];
+    out.set(e.id, { words, scorer: e.type === 'ast' && s ? s.player : null });
+  });
+  return out;
 }
 export const sumLines = (lines: StatLine[]) => {
   const out = emptyLine();

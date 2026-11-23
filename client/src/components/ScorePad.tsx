@@ -5,7 +5,7 @@
 //
 // It keeps nothing itself: every tap hands the new list of plays to whoever is showing it.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { EV_WORDS, byPeriod, clockText, linesOf, newId, periodName, scoreOf, type EvType, type GameEvent, type ScoreState, type StatLine } from '../scoring';
+import { byPeriod, clockText, linesOf, newId, periodName, playWords, scoreOf, type EvType, type GameEvent, type ScoreState, type StatLine } from '../scoring';
 import { confirmDialog } from './dialogs';
 
 export interface PadPlayer {
@@ -26,7 +26,7 @@ const byNumber = (a: PadPlayer, b: PadPlayer) => (Number(a.number) || 999) - (Nu
 
 type Sheet =
   | { kind: 'who'; side: 'us' | 'them'; action: Action }
-  | { kind: 'follow'; follow: 'ast' | 'reb'; shooter: number | null; shot: EvType }
+  | { kind: 'follow'; follow: 'ast' | 'reb'; shooter: number | null; shot: EvType; /** The shot's own play, so what follows is tied to it. */ shotId: string }
   | { kind: 'ft'; side: 'us' | 'them'; player: number | null }
   | { kind: 'assign'; id: string }
   | { kind: 'court' }
@@ -176,23 +176,30 @@ export default function ScorePad({
   /** Whether a play by this side is given to a player: always for one's own team, whose roster comes up every time, and for the other team when its players are tracked. */
   const asksWho = (side: 'us' | 'them') => !solo && (side === 'us' ? players.length > 0 : state.opp_advanced);
   const setState = (change: Partial<ScoreState>) => onChange({ ...latest.current.state, ...change }, latest.current.events);
-  const record = (side: 'us' | 'them', player: number | null, type: EvType) => {
-    const e: GameEvent = { id: newId(), side, player, type, period: latest.current.state.period, clock: latest.current.state.timed ? left() : null, at: Date.now() };
+  /**
+   * Adds a play and gives back its id. `after` is the shot an assist or rebound came from: the
+   * shot's id, or null when the play was put in by itself with its own button.
+   */
+  const record = (side: 'us' | 'them', player: number | null, type: EvType, after?: string | null) => {
+    const e: GameEvent = { id: newId(), side, player, type, period: latest.current.state.period, clock: latest.current.state.timed ? left() : null, at: Date.now(), ...(after !== undefined ? { for: after } : {}) };
     onChange(latest.current.state, [...latest.current.events, e]);
+    return e.id;
   };
+  /** A rebound or an assist pressed by itself came from no shot: that is what makes the rebound a defensive one. */
+  const alone = (type: EvType) => (type === 'reb' || type === 'ast' ? null : undefined);
   /** A button on the pad was pressed. */
   const act = (side: 'us' | 'them', action: Action) => {
     if (asksWho(side)) return setSheet({ kind: 'who', side, action });
     if (action === 'ft') return setSheet({ kind: 'ft', side, player: null });
-    record(side, null, action);
+    record(side, null, action, alone(action));
   };
   /** The player was chosen (or left for later) for the play being asked about. */
   const chose = (side: 'us' | 'them', action: Action, player: number | null) => {
     if (action === 'ft') return setSheet({ kind: 'ft', side, player });
-    record(side, player, action);
+    const shotId = record(side, player, action, alone(action));
     // A shot by one's own team goes on to who assisted, or who got the rebound.
-    if (side === 'us' && (action === 'm2' || action === 'm3')) return setSheet({ kind: 'follow', follow: 'ast', shooter: player, shot: action });
-    if (side === 'us' && (action === 'x2' || action === 'x3')) return setSheet({ kind: 'follow', follow: 'reb', shooter: player, shot: action });
+    if (side === 'us' && (action === 'm2' || action === 'm3')) return setSheet({ kind: 'follow', follow: 'ast', shooter: player, shot: action, shotId });
+    if (side === 'us' && (action === 'x2' || action === 'x3')) return setSheet({ kind: 'follow', follow: 'reb', shooter: player, shot: action, shotId });
     setSheet(null);
   };
   const undo = () => events.length > 0 && onChange(state, events.slice(0, -1));
@@ -221,6 +228,11 @@ export default function ScorePad({
 
   const onCourt = state.on.map((id) => players.find((p) => p.id === id)).filter(Boolean) as PadPlayer[];
   const plays = [...events].reverse();
+  const said = playWords(events);
+  const title = (e: GameEvent) => {
+    const w = said.get(e.id)?.words ?? '';
+    return w[0].toUpperCase() + w.slice(1);
+  };
   const periods = byPeriod(events, state.period);
   const sides: ('us' | 'them')[] = usHome ? ['them', 'us'] : ['us', 'them'];
   const assigning = sheet?.kind === 'assign' ? events.find((e) => e.id === sheet.id) : undefined;
@@ -420,9 +432,11 @@ export default function ScorePad({
                 <li key={e.id}>
                   <button type="button" className="sp-play" disabled={final} onClick={() => setSheet({ kind: 'assign', id: e.id })}>
                     <span className="sp-what">
-                      <strong>{EV_WORDS[e.type][0].toUpperCase() + EV_WORDS[e.type].slice(1)}</strong>
+                      <strong>{title(e)}</strong>
                       <span className="muted small">
                         by {playerName(e.side, e.player)}
+                        {/* An assist says whose basket it was. */}
+                        {said.get(e.id)?.scorer != null ? ` · to ${playerName('us', said.get(e.id)!.scorer)}` : ''}
                         {e.player === null && asksWho(e.side) ? ' · not assigned' : ''}
                       </span>
                     </span>
@@ -470,23 +484,23 @@ export default function ScorePad({
       {sheet?.kind === 'follow' && (
         <BottomSheet title={playerName('us', sheet.shooter)} sub={SHOT[sheet.shot]} onClose={() => setSheet(null)} onBack={() => setSheet(null)}>
           <p className="sp-ask-line">
-            <strong>{sheet.follow === 'ast' ? 'Assist by' : 'Rebound by'}</strong> <span className="muted small">{usName}</span>
+            <strong>{sheet.follow === 'ast' ? 'Assist by' : 'Offensive rebound by'}</strong> <span className="muted small">{usName}</span>
           </p>
           <div className="sp-two">
             <button type="button" className="btn sp-no" onClick={() => setSheet(null)}>
               {sheet.follow === 'ast' ? 'No Assist' : 'No Rebound'}
             </button>
             {sheet.follow === 'ast' ? (
-              <button type="button" className="btn" onClick={() => (record('us', null, 'ast'), setSheet(null))}>
+              <button type="button" className="btn" onClick={() => (record('us', null, 'ast', sheet.shotId), setSheet(null))}>
                 Assign Later
               </button>
             ) : (
-              <button type="button" className="btn" onClick={() => (record('them', null, 'reb'), setSheet(null))}>
+              <button type="button" className="btn" onClick={() => (record('them', null, 'reb', sheet.shotId), setSheet(null))}>
                 {themName}
               </button>
             )}
           </div>
-          <PlayerGrid players={players.filter((p) => sheet.follow === 'reb' || p.id !== sheet.shooter)} on={state.on} onPick={(p) => (record('us', p.id, sheet.follow), setSheet(null))} />
+          <PlayerGrid players={players.filter((p) => sheet.follow === 'reb' || p.id !== sheet.shooter)} on={state.on} onPick={(p) => (record('us', p.id, sheet.follow, sheet.shotId), setSheet(null))} />
         </BottomSheet>
       )}
       {/* A trip to the line: each throw made or missed, then done. */}
@@ -514,7 +528,7 @@ export default function ScorePad({
       )}
       {/* A play already recorded: say who it was, or take it out. */}
       {sheet?.kind === 'assign' && assigning && (
-        <BottomSheet title={EV_WORDS[assigning.type][0].toUpperCase() + EV_WORDS[assigning.type].slice(1)} sub={`by ${playerName(assigning.side, assigning.player)} · ${periodName(assigning.period)}`} onClose={() => setSheet(null)}>
+        <BottomSheet title={title(assigning)} sub={`by ${playerName(assigning.side, assigning.player)} · ${periodName(assigning.period)}`} onClose={() => setSheet(null)}>
           {!solo && (assigning.side === 'us' ? players.length > 0 : oppPlayers.length > 0) && (
             <PlayerGrid
               players={assigning.side === 'us' ? players : oppPlayers}
@@ -589,7 +603,7 @@ export function CourtPicker({ players, on, onChange }: { players: PadPlayer[]; o
   );
 }
 
-const COLS: [keyof StatLine | 'fg' | 'tp' | 'ft', string][] = [['pts', 'PTS'], ['fg', 'FG'], ['tp', '3PT'], ['ft', 'FT'], ['reb', 'REB'], ['ast', 'AST'], ['stl', 'STL'], ['blk', 'BLK'], ['to', 'TO'], ['pf', 'PF']];
+const COLS: [keyof StatLine | 'fg' | 'tp' | 'ft', string][] = [['pts', 'PTS'], ['fg', 'FG'], ['tp', '3PT'], ['ft', 'FT'], ['oreb', 'OREB'], ['dreb', 'DREB'], ['reb', 'REB'], ['ast', 'AST'], ['stl', 'STL'], ['blk', 'BLK'], ['to', 'TO'], ['pf', 'PF']];
 const cell = (l: StatLine, k: (typeof COLS)[number][0]) => (k === 'fg' ? `${l.fgm}/${l.fga}` : k === 'tp' ? `${l.tpm}/${l.tpa}` : k === 'ft' ? `${l.ftm}/${l.fta}` : l[k]);
 type SortKey = (typeof COLS)[number][0] | 'name' | 'extra';
 /** What a column is put in order by: shooting by makes, then by fewer attempts. */
@@ -621,7 +635,10 @@ export function StatTable({
   extra,
   sortable,
   average,
+  oneReb,
 }: {
+  /** Rebounds as one number: for the other team and for sheets kept on one player, where the two kinds are not told apart. */
+  oneReb?: boolean;
   rows: { key: string | number; name: string; line: StatLine; extra?: string | number }[];
   total?: { name: string; line: StatLine; /** How many games the totals cover, for averages. */ games?: number };
   first?: string;
@@ -631,6 +648,7 @@ export function StatTable({
   average?: boolean;
 }) {
   const [sort, setSort] = useState<{ key: SortKey; down: boolean } | null>(null);
+  const cols = oneReb ? COLS.filter(([k]) => k !== 'oreb' && k !== 'dreb') : COLS;
   const ordered = sort
     ? [...rows].sort((a, b) => {
         const x = sortValue(a, sort.key, !!average);
@@ -659,7 +677,7 @@ export function StatTable({
           <tr>
             {head('name', firstCol)}
             {extra && head('extra', extra)}
-            {COLS.map(([k, label]) => head(k, average && (k === 'fg' || k === 'tp' || k === 'ft') ? `${label}%` : label))}
+            {cols.map(([k, label]) => head(k, average && (k === 'fg' || k === 'tp' || k === 'ft') ? `${label}%` : label))}
           </tr>
         </thead>
         <tbody>
@@ -667,7 +685,7 @@ export function StatTable({
             <tr key={r.key}>
               <td>{r.name}</td>
               {extra && <td>{r.extra}</td>}
-              {COLS.map(([k, label]) => (
+              {cols.map(([k, label]) => (
                 <td key={label}>{average ? perGame(r.line, k, Number(r.extra) || 1) : cell(r.line, k)}</td>
               ))}
             </tr>
@@ -678,7 +696,7 @@ export function StatTable({
             <tr>
               <td>{total.name}</td>
               {extra && <td>{average ? total.games : ''}</td>}
-              {COLS.map(([k, label]) => (
+              {cols.map(([k, label]) => (
                 <td key={label}>{average ? perGame(total.line, k, total.games || 1) : cell(total.line, k)}</td>
               ))}
             </tr>

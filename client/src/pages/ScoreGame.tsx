@@ -6,6 +6,7 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, Player } from '../types';
 import ScorePad, { CourtPicker, StatTable } from '../components/ScorePad';
+import AssistDuos from '../components/AssistDuos';
 import { Modal } from '../components/bits';
 import type { StatsFile } from '../api';
 import { linesOf, newState, periodName, scoreOf, type GameEvent, type ScoreState, type Scoresheet } from '../scoring';
@@ -176,8 +177,14 @@ export function BoxScore({ events, players, usName, themName, state }: { events:
       </div>
       <div className="card">
         <h2>{themName}</h2>
-        <StatTable rows={oppRows} total={{ name: 'Team', line: them.total }} first={oppRows.length ? 'Player' : ''} />
+        <StatTable oneReb rows={oppRows} total={{ name: 'Team', line: them.total }} first={oppRows.length ? 'Player' : ''} />
       </div>
+      {us.total.ast > 0 && (
+        <div className="card">
+          <h2>Who set up whom</h2>
+          <AssistDuos games={[{ events }]} nameOf={(id) => players.find((p) => p.id === id)?.name ?? 'Former player'} />
+        </div>
+      )}
     </>
   );
 }

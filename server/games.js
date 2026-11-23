@@ -55,6 +55,8 @@ function cleanEvents(list) {
     out.push({
       id: str(e.id, 40), side: e.side === 'them' ? 'them' : 'us', player: Number.isInteger(e.player) ? e.player : null, type: e.type,
       period: Math.min(20, Math.max(1, Number(e.period) || 1)), clock: Number.isFinite(e.clock) ? Math.max(0, Math.round(e.clock)) : null, at: Number(e.at) || 0,
+      // The shot an assist or a rebound came from, by its id: null when it came from none, left out on plays from before this was kept.
+      ...(typeof e.for === 'string' ? { for: str(e.for, 40) } : e.for === null ? { for: null } : {}),
     });
   }
   return out;

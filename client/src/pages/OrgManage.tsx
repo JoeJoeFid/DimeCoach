@@ -782,6 +782,13 @@ function Trend({ points }: { points: { label: string; value: number }[] }) {
           </text>
         </g>
       ))}
+      <defs>
+        <linearGradient id="cx-trend-fade" x1="0" x2="0" y1="0" y2="1">
+          <stop className="sc-fade-top" offset="0" />
+          <stop className="sc-fade-end" offset="1" />
+        </linearGradient>
+      </defs>
+      {points.length > 1 && <polygon fill="url(#cx-trend-fade)" points={`${points.map((p, i) => `${x(i)},${y(p.value)}`).join(' ')} ${x(points.length - 1)},${y(0)} ${x(0)},${y(0)}`} />}
       <polyline points={points.map((p, i) => `${x(i)},${y(p.value)}`).join(' ')} className="cx-trend-line" />
       {points.map((p, i) => (
         <g key={p.label}>
