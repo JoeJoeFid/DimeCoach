@@ -565,7 +565,11 @@ export default function ScorePad({
         <section className="sp-plays" aria-label="Play by play">
           <header>
             <h3>Play by Play</h3>
-            <button type="button" className="link" disabled={events.length === 0 || final} onClick={undo}>
+            <button type="button" className="btn sp-undo" disabled={events.length === 0 || final} onClick={undo} aria-label="Undo the last play">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.400" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 14 4 9l5-5" />
+                <path d="M4 9h10.500a5.500 5.500 0 0 1 0 11H11" />
+              </svg>
               Undo
             </button>
           </header>

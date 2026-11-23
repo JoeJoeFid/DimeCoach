@@ -19613,3 +19613,107 @@ select.input.shot-game {
     animation-duration: 0.01s;
   }
 }
+
+/* Undo on the scoring pad: a real button, easy to find and to hit in the middle of a game. */
+.btn.sp-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 8px 16px;
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+.btn.sp-undo:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--surface);
+}
+.btn.sp-undo:disabled {
+  border-color: var(--line-strong);
+  color: var(--muted);
+}
+
+/* Parents and family: changing which players someone goes with. A small button, not a text link. */
+.btn.small.fam-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  margin-left: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+/* A finished game's result on its schedule card: won or lost, and the score. */
+.tl-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  padding: 2px 10px 2px 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+.tl-result b {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  font-size: 0.72rem;
+}
+.tl-result.w b {
+  background: var(--good);
+  color: #fff;
+}
+.tl-result.l b {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* The schedule's lines: a finished game's result sits before its pill, in the pill's place on the line. */
+.plan-row.ps-row {
+  grid-template-columns: 92px minmax(0, 1fr) 216px auto;
+}
+/* The result has a place of its own before the pill, kept empty on other lines so the pills stay in a column. */
+.ps-pills {
+  display: grid;
+  grid-template-columns: 84px auto;
+  justify-content: start;
+  align-items: center;
+  gap: 8px;
+}
+.ps-pills .tl-result {
+  justify-self: end;
+}
+.ps-pills .ps-pill {
+  grid-column: 2;
+}
+@media (max-width: 1000px) {
+  .plan-row.ps-row {
+    grid-template-columns: 80px minmax(0, 1fr) auto;
+  }
+  /* Under the name on a narrower screen: the result first, then the pill, with no empty place kept. */
+  .ps-pills {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 560px) {
+  .plan-row.ps-row {
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
+}

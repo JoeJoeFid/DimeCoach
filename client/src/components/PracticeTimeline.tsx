@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api, type RecordGame } from '../api';
 import { useApp } from '../App';
 import type { Plan, ScheduleEvent, Tag } from '../types';
 import { daysBetween, fmtClock, fmtDateShort, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
@@ -37,6 +37,30 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
   // Where the row of smaller cards starts, counted in everything except the big one. Null is "just after the big one".
   const [startAt, setStartAt] = useState<number | null>(null);
   const [error, setError] = useState('');
+  // The games that have been scored to the end, by their plan: the result goes on their cards.
+  const [results, setResults] = useState<Map<number, RecordGame>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    api
+      .teamRecord(team.id)
+      .then((r) => alive && setResults(new Map(r.games.map((g) => [g.plan_id, g]))))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [team.id, plans]);
+  /** "W 36-27" for a game whose scoring is finished, or nothing. */
+  const result = (e: Entry) => {
+    const g = e.plan ? results.get(e.plan.id) : undefined;
+    if (!g) return null;
+    const won = g.us > g.them;
+    const lost = g.us < g.them;
+    return (
+      <span className={`tl-result ${won ? 'w' : lost ? 'l' : ''}`} role="img" aria-label={`${won ? 'Won' : lost ? 'Lost' : 'Tied'} ${g.us} to ${g.them}`}>
+        <b>{won ? 'W' : lost ? 'L' : 'T'}</b> {g.us}–{g.them}
+      </span>
+    );
+  };
 
   useEffect(() => {
     setEvents([]);
@@ -160,7 +184,8 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
         </span>
         <span className="tl-title">{e.title}</span>
         <span className="muted small">{timeRange(e)}</span>
-        {planState(e)}
+        {/* A game scored to the end shows how it went, in place of whether it was planned. */}
+        {result(e) ?? planState(e)}
       </>
     );
     const past = e.date < today ? 'past done' : '';
@@ -169,7 +194,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
     return (
       <div key={e.key} className="tl-slot" data-key={e.key}>
         {e.plan ? (
-          <Link className={`tl-card tl-small ${e.kind} ${past} ${next}`} to={`/plans/${e.plan.id}`} title="Open this practice">
+          <Link className={`tl-card tl-small ${e.kind} ${past} ${next}`} to={`/plans/${e.plan.id}`} title={e.kind === 'game' ? 'Open this game' : e.kind === 'practice' ? 'Open this practice' : 'Open this plan'}>
             {body}
           </Link>
         ) : (
@@ -221,7 +246,7 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
                   {focus.location}
                 </span>
               )}
-              {planState(focus)}
+              {result(focus) ?? planState(focus)}
             </div>
             {focus.plan && mins && (
               <>

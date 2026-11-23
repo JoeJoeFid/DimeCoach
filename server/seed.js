@@ -237,7 +237,7 @@ function seedDemoTeam(ownerId, { sport, tag, drill }) {
   const team = lastId(
     run(
       'INSERT INTO teams (owner_id, sport_id, name, season, notes) VALUES (?,?,?,?,?)',
-      ownerId, sport, 'Demo Team', '2026-27', 'Sample data. Delete this team whenever you like.',
+      ownerId, sport, 'Demo Team', '2026-27', '',
     ),
   );
   const names = ['Asher', 'Nigel', 'Declan', 'Mason', 'Kam', 'Theo', 'Jonah', 'Eli', 'Micah', 'Owen'];

@@ -274,7 +274,11 @@ function FamilyCard({ team, players, canSee, canEdit }: { team: Team; players: P
                         {canEdit && (
                           <>
                             {' '}
-                            <button type="button" className="link small" onClick={() => setLinking(c)}>
+                            <button type="button" className="btn small fam-change" onClick={() => setLinking(c)} aria-label={`${kids(c).length ? 'Change the players for' : 'Link players to'} ${c.name || c.email}`}>
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M4 20h4L19 9l-4-4L4 16v4Z" />
+                                <path d="m13.500 6.500 4 4" />
+                              </svg>
                               {kids(c).length ? 'Change' : 'Link to players'}
                             </button>
                           </>
@@ -846,7 +850,8 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
             )}
           </div>
         </div>
-        {team.notes && <p className="muted small">{team.notes}</p>}
+        {/* Demo teams made before this was dropped still carry the old sample-data line: it is not shown. */}
+        {team.notes && !team.notes.startsWith('Sample data.') && <p className="muted small">{team.notes}</p>}
         {(app.can('manage') || team.logo) && (
           <div className="team-logo-row">
             {team.logo ? <img className="team-logo-preview" src={team.logo} alt={`${team.name} logo`} /> : <span className="team-logo-preview none" aria-hidden="true" />}

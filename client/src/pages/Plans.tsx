@@ -1,7 +1,7 @@
 import PageTitle from '../components/PageTitle';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { api } from '../api';
+import { api, type RecordGame } from '../api';
 import { useApp } from '../App';
 import type { Plan, PlanKind, PlanSummary, ScheduleEvent } from '../types';
 import { fmtClock, fmtDateShort, fmtDuration, fmtSynced, parseClock, planMinutes, todayISO } from '../util';
@@ -99,7 +99,10 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   /** Whether any practice or game has been made here yet. */
   const built = (plans || []).some((p) => !p.is_template);
 
+  // The games scored to the end, by their plan: how each went is put on its line.
+  const [results, setResults] = useState<Map<number, RecordGame>>(new Map());
   const load = useCallback(async () => {
+    api.teamRecord(teamId).then((r) => setResults(new Map(r.games.map((g) => [g.plan_id, g]))), () => {});
     try {
       const [p, t, ev] = await Promise.all([
         api.plansFull(teamId, kind),
@@ -342,9 +345,23 @@ export default function Plans({ kind }: { kind: PlanKind }) {
             )}
           </span>
         </span>
-        <span className={`ps-pill ${pill.cls}`}>
-          <Icon d={pill.icon} />
-          {pill.text}
+        <span className="ps-pills">
+          {/* A game scored to the end: won or lost, and the score, before the pill. */}
+          {(() => {
+            const g = p ? results.get(p.id) : undefined;
+            if (!g) return null;
+            const won = g.us > g.them;
+            const lost = g.us < g.them;
+            return (
+              <span className={`tl-result ${won ? 'w' : lost ? 'l' : ''}`} role="img" aria-label={`${won ? 'Won' : lost ? 'Lost' : 'Tied'} ${g.us} to ${g.them}`}>
+                <b>{won ? 'W' : lost ? 'L' : 'T'}</b> {g.us}–{g.them}
+              </span>
+            );
+          })()}
+          <span className={`ps-pill ${pill.cls}`}>
+            <Icon d={pill.icon} />
+            {pill.text}
+          </span>
         </span>
         <span className="ps-actions">
           {p && (
