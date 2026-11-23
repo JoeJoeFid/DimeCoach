@@ -1049,7 +1049,7 @@ export function StatTable({
     );
   return (
     <div className="table-scroll">
-      <table className="table sp-table">
+      <table className={`table sp-table ${sortable ? 'cross' : ''}`}>
         <thead>
           <tr>
             {head('name', firstCol)}

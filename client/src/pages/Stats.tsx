@@ -456,7 +456,6 @@ export default function Stats() {
                   </div>
                 </div>
                 {season.size === 0 && <p className="muted small">These games have a score and nothing per player.</p>}
-                {average && <p className="muted small">Each player's numbers are divided by the games they have a stat in. Shooting is the share that went in.</p>}
                 <StatTable sortable average={average} rows={[...season.entries()].map(([id, s]) => ({ key: id, name: nameOf(id), line: s.line, extra: s.games })).sort((a, b) => b.line.pts - a.line.pts)} total={{ name: 'Team', line: sumLines(teamLines), games: picked.length }} extra="Games" />
               </div>
             ) : show === 'duos' ? (

@@ -19810,3 +19810,369 @@ select.input.shot-game {
     box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent);
   }
 }
+
+/* Shooting: the chart buttons, the game and whose shots sit inside the box they change. */
+.shot-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.shot-views {
+  flex-wrap: wrap;
+}
+.shot-views button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+/* Each button's little drawing wears a shot color of its own. */
+.shot-views svg {
+  flex: none;
+  color: var(--shot);
+  transition: transform 0.15s ease;
+}
+.shot-views button:hover svg,
+.shot-views button.on svg {
+  transform: scale(1.18) rotate(-4deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .shot-views svg {
+    transition: none;
+  }
+}
+
+/* The summary table: the cell pointed at stands out, and its row and its column are marked much more faintly. */
+.sp-table.cross :is(tbody, tfoot) tr:hover td,
+.sp-table.cross:has(tbody td:nth-child(1):hover, tfoot td:nth-child(1):hover) :is(td, th):nth-child(1),
+.sp-table.cross:has(tbody td:nth-child(2):hover, tfoot td:nth-child(2):hover) :is(td, th):nth-child(2),
+.sp-table.cross:has(tbody td:nth-child(3):hover, tfoot td:nth-child(3):hover) :is(td, th):nth-child(3),
+.sp-table.cross:has(tbody td:nth-child(4):hover, tfoot td:nth-child(4):hover) :is(td, th):nth-child(4),
+.sp-table.cross:has(tbody td:nth-child(5):hover, tfoot td:nth-child(5):hover) :is(td, th):nth-child(5),
+.sp-table.cross:has(tbody td:nth-child(6):hover, tfoot td:nth-child(6):hover) :is(td, th):nth-child(6),
+.sp-table.cross:has(tbody td:nth-child(7):hover, tfoot td:nth-child(7):hover) :is(td, th):nth-child(7),
+.sp-table.cross:has(tbody td:nth-child(8):hover, tfoot td:nth-child(8):hover) :is(td, th):nth-child(8),
+.sp-table.cross:has(tbody td:nth-child(9):hover, tfoot td:nth-child(9):hover) :is(td, th):nth-child(9),
+.sp-table.cross:has(tbody td:nth-child(10):hover, tfoot td:nth-child(10):hover) :is(td, th):nth-child(10),
+.sp-table.cross:has(tbody td:nth-child(11):hover, tfoot td:nth-child(11):hover) :is(td, th):nth-child(11),
+.sp-table.cross:has(tbody td:nth-child(12):hover, tfoot td:nth-child(12):hover) :is(td, th):nth-child(12),
+.sp-table.cross:has(tbody td:nth-child(13):hover, tfoot td:nth-child(13):hover) :is(td, th):nth-child(13),
+.sp-table.cross:has(tbody td:nth-child(14):hover, tfoot td:nth-child(14):hover) :is(td, th):nth-child(14),
+.sp-table.cross:has(tbody td:nth-child(15):hover, tfoot td:nth-child(15):hover) :is(td, th):nth-child(15),
+.sp-table.cross:has(tbody td:nth-child(16):hover, tfoot td:nth-child(16):hover) :is(td, th):nth-child(16),
+.sp-table.cross:has(tbody td:nth-child(17):hover, tfoot td:nth-child(17):hover) :is(td, th):nth-child(17),
+.sp-table.cross:has(tbody td:nth-child(18):hover, tfoot td:nth-child(18):hover) :is(td, th):nth-child(18),
+.sp-table.cross:has(tbody td:nth-child(19):hover, tfoot td:nth-child(19):hover) :is(td, th):nth-child(19),
+.sp-table.cross:has(tbody td:nth-child(20):hover, tfoot td:nth-child(20):hover) :is(td, th):nth-child(20) {
+  background: color-mix(in srgb, var(--series) 8%, transparent);
+}
+/* Said with more weight than the row and column rule above, so the cell itself wins. */
+.sp-table.cross.cross.cross.cross.cross :is(tbody, tfoot) td:hover {
+  background: color-mix(in srgb, var(--series) 34%, transparent);
+  box-shadow: inset 0 0 0 1px var(--series);
+}
+
+/* Movement lines: the shot pointed at, with its line, stands out and every other shot and line dims. */
+.shot-map .shot-route,
+.shot-map circle.shot {
+  transition: opacity 0.12s ease;
+}
+.shot-map .shot-route {
+  cursor: pointer;
+}
+.shot-map .shot-route-hit {
+  stroke: transparent;
+  stroke-width: 2.2;
+  opacity: 1;
+}
+.shot-map.focusing .shot-route:not(.on),
+.shot-map.focusing circle.shot:not(.on) {
+  opacity: 0.16;
+}
+.shot-map.focusing .shot-route.on polyline:not(.shot-route-hit) {
+  stroke-width: 0.52;
+  opacity: 1;
+}
+.shot-map.focusing .shot-route.on circle {
+  opacity: 1;
+}
+
+/* ---------- Parent portal: what is live now, on the dashboard ---------- */
+.fam-now.on {
+  border-color: var(--danger);
+}
+.fam-now-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fam-now-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fam-now-row:hover {
+  border-color: var(--ink);
+}
+.fam-now-row .gv-badge {
+  flex: none;
+  animation: lp-blink 1.6s ease-in-out infinite;
+}
+.fam-now-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.fam-now-go {
+  flex: none;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@keyframes lp-blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ---------- Parent portal: a game followed play by play ---------- */
+.lp-modes {
+  width: max-content;
+  max-width: 100%;
+  margin-bottom: 14px;
+}
+.lp-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: lp-blink 1.6s ease-in-out infinite;
+}
+.lp {
+  display: grid;
+  gap: 14px;
+}
+.lp .card {
+  margin: 0;
+}
+/* The scoreboard: a team and its score at each end, the period in the middle. */
+.lp-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 18px;
+  padding: 16px 22px;
+}
+.lp-team {
+  overflow: hidden;
+  font-size: 1.1rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-team.right {
+  text-align: right;
+}
+.lp-score {
+  font-family: var(--mono);
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.lp-mid {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.lp-period {
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.lp-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.lp-court {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+.lp-court-note {
+  margin: 8px 0 0;
+}
+.lp-court circle.shot.made {
+  stroke: var(--court-floor);
+  stroke-width: 0.15;
+}
+.lp-court circle.shot.miss {
+  fill: var(--court-floor);
+  stroke-width: 0.32;
+}
+.lp-court circle.shot.then {
+  opacity: 0.5;
+}
+.lp-court circle.shot.now {
+  animation: lp-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.lp-ring {
+  fill: none;
+  stroke: var(--shot);
+  stroke-width: 0.22;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: lp-ring 1.5s ease-out infinite;
+}
+.lp-way {
+  fill: none;
+  stroke: var(--shot);
+  stroke-width: 0.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.8;
+}
+@keyframes lp-pop {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+}
+@keyframes lp-ring {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+.lp-side {
+  display: grid;
+  gap: 14px;
+}
+/* The newest play, in large words. It slides in each time there is a new one. */
+.lp-latest {
+  display: grid;
+  gap: 6px;
+  border-left: 5px solid var(--line-strong);
+  animation: lp-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.lp-latest.us {
+  border-left-color: var(--series);
+}
+.lp-latest.scored {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-left-color: var(--accent-edge);
+}
+.lp-latest-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.lp-tag {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.lp-latest strong {
+  font-size: 1.35rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.lp-latest-score {
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+@keyframes lp-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+.lp-feed h2 {
+  margin: 0 0 6px;
+}
+.lp-feed ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.lp-feed li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.lp-feed li:first-child {
+  border-top: none;
+}
+.lp-feed li.them .lp-what {
+  color: var(--ink-2);
+}
+.lp-feed li.scored .lp-what {
+  font-weight: 650;
+}
+.lp-when {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.lp-run {
+  font-family: var(--mono);
+  font-weight: 700;
+}
+@media (max-width: 860px) {
+  .lp-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp-board {
+    padding: 14px;
+    gap: 6px 10px;
+  }
+  .lp-score {
+    font-size: 2rem;
+  }
+  .lp-team {
+    font-size: 0.95rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-ring,
+  .lp-latest,
+  .lp-dot,
+  .fam-now-row .gv-badge,
+  .lp-court circle.shot.now {
+    animation: none;
+  }
+}

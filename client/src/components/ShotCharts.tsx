@@ -4,7 +4,7 @@
 //
 // A made shot is a filled dot and a miss is a ring in the same color, so made and missed are never
 // told apart by color alone.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { periodName, type Scoresheet } from '../scoring';
 import { attemptsOf, efficiency, hasOrder, sections, streaks, tally, type Attempt, type GameShots, type ShotKind, type Tally } from '../shots';
@@ -117,16 +117,22 @@ function RunChart({ list, nameOf, teamName, halves }: { list: Attempt[]; nameOf:
             <g key={s.period}>
               {k > 0 && <line className="shot-divide" x1={pad.l + s.start * STEP} x2={pad.l + s.start * STEP} y1={pad.t - 14} y2={H - pad.b + 8} />}
               <text className="shot-period" x={pad.l + ((s.start + s.end) / 2) * STEP} y={H - pad.b + 22} textAnchor="middle">
+                <title>{`${periodName(s.period, halves)}: FG ${of(s.totals.fgm, s.totals.fga)}, 3PT ${of(s.totals.tpm, s.totals.tpa)}, FT ${of(s.totals.ftm, s.totals.fta)}`}</title>
                 <tspan className="name">{periodName(s.period, halves)}</tspan>
-                <tspan x={pad.l + ((s.start + s.end) / 2) * STEP} dy={14}>
-                  FG {of(s.totals.fgm, s.totals.fga)}
-                </tspan>
-                <tspan x={pad.l + ((s.start + s.end) / 2) * STEP} dy={13}>
-                  3PT {of(s.totals.tpm, s.totals.tpa)}
-                </tspan>
-                <tspan x={pad.l + ((s.start + s.end) / 2) * STEP} dy={13}>
-                  FT {of(s.totals.ftm, s.totals.fta)}
-                </tspan>
+                {/* A period with only a few attempts is too narrow for its totals: they would run into the next period's. */}
+                {(s.end - s.start) * STEP >= 74 && (
+                  <>
+                    <tspan x={pad.l + ((s.start + s.end) / 2) * STEP} dy={14}>
+                      FG {of(s.totals.fgm, s.totals.fga)}
+                    </tspan>
+                    <tspan x={pad.l + ((s.start + s.end) / 2) * STEP} dy={13}>
+                      3PT {of(s.totals.tpm, s.totals.tpa)}
+                    </tspan>
+                    <tspan x={pad.l + ((s.start + s.end) / 2) * STEP} dy={13}>
+                      FT {of(s.totals.ftm, s.totals.fta)}
+                    </tspan>
+                  </>
+                )}
               </text>
             </g>
           ))}
@@ -341,6 +347,9 @@ function Volume({ games, nameOf }: { games: GameShots[]; nameOf: (id: number) =>
 function ShotMap({ list, nameOf, teamName, halvesOf }: { list: Attempt[]; nameOf: (id: number) => string; teamName: string; /** Whether the game an attempt is from was played in halves. */ halvesOf: (a: Attempt) => boolean }) {
   const tip = useTip();
   const [moves, setMoves] = useState(false);
+  /** With movement lines on: the shot being pointed at, by itself or by its line. It stands out and the rest dim. */
+  const [focus, setFocus] = useState<string | null>(null);
+  const lit = moves ? focus : null;
   const field = list.filter((a) => a.kind !== 1);
   const placed = field.filter((a) => a.x !== undefined && a.y !== undefined);
   if (placed.length === 0)
@@ -356,12 +365,23 @@ function ShotMap({ list, nameOf, teamName, halvesOf }: { list: Attempt[]; nameOf
           </button>
         </div>
       )}
-      <svg className="shot-map play-svg" viewBox={`0 0 ${COURT.width} ${COURT.half}`} role="img" aria-label={`Shot map: ${placed.length} shots with a spot marked, ${t.fgm} made.`}>
+      <svg className={`shot-map play-svg ${lit ? 'focusing' : ''}`} viewBox={`0 0 ${COURT.width} ${COURT.half}`} role="img" aria-label={`Shot map: ${placed.length} shots with a spot marked, ${t.fgm} made.`} onClick={() => setFocus(null)}>
         <Court court="half" flipped={false} />
         {/* How each shooter got to the spot, from the small dot where they set off. Under the shots, so the dots stay clear. */}
         {moves &&
           drawn.map((a) => (
-            <g key={`r${a.id}`} className={`shot-route k${a.kind}`}>
+            <g
+              key={`r${a.id}`}
+              className={`shot-route k${a.kind} ${lit === a.id ? 'on' : ''}`}
+              onMouseEnter={() => setFocus(a.id)}
+              onMouseLeave={() => setFocus(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setFocus(a.id);
+              }}
+            >
+              {/* A wide unseen line over the thin one, so it is easy to point at. */}
+              <polyline className="shot-route-hit" points={a.path!.map(([px, py]) => `${px * COURT.width},${py * COURT.half}`).join(' ')} />
               <polyline points={a.path!.map(([px, py]) => `${px * COURT.width},${py * COURT.half}`).join(' ')} />
               <circle cx={a.path![0][0] * COURT.width} cy={a.path![0][1] * COURT.half} r={0.38} />
             </g>
@@ -369,11 +389,23 @@ function ShotMap({ list, nameOf, teamName, halvesOf }: { list: Attempt[]; nameOf
         {/* Misses first, so a make at the same spot is not hidden under one. */}
         {[...placed]
           .sort((a, b) => Number(a.made) - Number(b.made))
-          .map((a) => (
-            <circle key={a.id} className={`shot k${a.kind} ${a.made ? 'made' : 'miss'}`} cx={a.x! * COURT.width} cy={a.y! * COURT.half} r={0.95} {...tip.on(say(a, nameOf, teamName, halvesOf(a)))}>
-              <title>{say(a, nameOf, teamName, halvesOf(a)).join('. ')}</title>
-            </circle>
-          ))}
+          .map((a) => {
+            const words = tip.on(say(a, nameOf, teamName, halvesOf(a)));
+            return (
+              <circle
+                key={a.id}
+                className={`shot k${a.kind} ${a.made ? 'made' : 'miss'} ${lit === a.id ? 'on' : ''}`}
+                cx={a.x! * COURT.width}
+                cy={a.y! * COURT.half}
+                r={0.95}
+                onMouseEnter={(e) => (words.onMouseEnter(e), setFocus(a.id))}
+                onMouseLeave={() => (words.onMouseLeave(), setFocus(null))}
+                onClick={(e) => (words.onClick(e), setFocus(a.id))}
+              >
+                <title>{say(a, nameOf, teamName, halvesOf(a)).join('. ')}</title>
+              </circle>
+            );
+          })}
       </svg>
       <Legend kinds={[2, 3]} />
       <p className="muted small shot-note">
@@ -418,24 +450,46 @@ export default function ShotCharts({ games, picked, nameOf, teamName, teamId, fl
   const shooters = [...new Set(all.map((a) => a.player).filter((id): id is number => id !== null))];
   const shown = who === 'team' ? all : all.filter((a) => a.player === who);
   if (byDate.length === 0) return <p className="muted">No games scored yet, so no attempts are recorded.</p>;
+  /** Each chart's button: a small drawing of the chart, in a shot color of its own, and its name. */
+  const views: [View, string, string, ReactNode][] = [
+    ['run', 'Shot by shot', 'k2', <path key="p" d="M3 19h4v-5h5V9h5V5h4" />],
+    ['grid', 'By period', 'k3', <path key="p" d="M4 5h16v14H4zM4 12h16M9.500 5v14M14.500 5v14" />],
+    [
+      'map',
+      'Shot map',
+      'k1',
+      <g key="p">
+        <path d="M4 4h16v16H4zM8 4a4 4 0 0 0 8 0" />
+        <circle cx="9" cy="14" r="1.300" fill="currentColor" />
+        <circle cx="15.500" cy="11.500" r="1.300" />
+      </g>,
+    ],
+  ];
+  if (flag)
+    views.push([
+      'volume',
+      'Volume and efficiency',
+      'plain',
+      <g key="p">
+        <path d="M4 4v16h16" />
+        <circle cx="9" cy="14" r="1.400" fill="currentColor" />
+        <circle cx="13" cy="9.500" r="1.400" fill="currentColor" />
+        <circle cx="17.500" cy="12" r="1.400" fill="currentColor" />
+      </g>,
+    ]);
   return (
-    <>
-      <div className="st-show">
-        <div className="seg" role="group" aria-label="Which shooting chart">
-          <button type="button" className={now === 'run' ? 'on' : ''} aria-pressed={now === 'run'} onClick={() => setView('run')}>
-            Shot by shot
-          </button>
-          <button type="button" className={now === 'grid' ? 'on' : ''} aria-pressed={now === 'grid'} onClick={() => setView('grid')}>
-            By period
-          </button>
-          <button type="button" className={now === 'map' ? 'on' : ''} aria-pressed={now === 'map'} onClick={() => setView('map')}>
-            Shot map
-          </button>
-          {flag && (
-            <button type="button" className={now === 'volume' ? 'on' : ''} aria-pressed={now === 'volume'} onClick={() => setView('volume')}>
-              Volume and efficiency
+    <div className="card shot-card">
+      {/* Which chart, which game and whose shots: all inside the box they change. */}
+      <div className="shot-bar">
+        <div className="seg shot-views" role="group" aria-label="Which shooting chart">
+          {views.map(([id, label, color, art]) => (
+            <button key={id} type="button" className={now === id ? 'on' : ''} aria-pressed={now === id} onClick={() => setView(id)}>
+              <svg className={color} viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.100" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {art}
+              </svg>
+              {label}
             </button>
-          )}
+          ))}
         </div>
         {now !== 'volume' && (
           <select className="input shot-game" aria-label="Game" value={everyGame ? ALL : game.id} onChange={(e) => (setGameId(Number(e.target.value)), setWho('team'))}>
@@ -460,15 +514,13 @@ export default function ShotCharts({ games, picked, nameOf, teamName, teamId, fl
       </div>
       {now === 'volume' ? (
         <>
-          <div className="card">
-            <h2>
-              Shot volume and efficiency <span className="muted small">{picked.length} {picked.length === 1 ? 'game' : 'games'}</span>
-            </h2>
-            {error ? <p className="error">{error}</p> : season === null ? <p className="muted">Loading…</p> : <Volume games={season.filter((g) => picked.some((p) => p.plan_id === g.plan_id))} nameOf={nameOf} />}
-          </div>
+          <h2>
+            Shot volume and efficiency <span className="muted small">{picked.length} {picked.length === 1 ? 'game' : 'games'}</span>
+          </h2>
+          {error ? <p className="error">{error}</p> : season === null ? <p className="muted">Loading…</p> : <Volume games={season.filter((g) => picked.some((p) => p.plan_id === g.plan_id))} nameOf={nameOf} />}
         </>
       ) : (
-        <div className="card">
+        <>
           <h2>
             {now === 'run' ? 'Shot by shot' : now === 'map' ? 'Shot map' : 'Shots by period'} <span className="muted small">{everyGame ? `${byDate.length} ${byDate.length === 1 ? 'game' : 'games'}` : gameName(game)}</span>
           </h2>
@@ -483,8 +535,8 @@ export default function ShotCharts({ games, picked, nameOf, teamName, teamId, fl
           ) : (
             <PeriodGrid list={all} nameOf={nameOf} teamName={teamName} halves={halves} />
           )}
-        </div>
+        </>
       )}
-    </>
+    </div>
   );
 }

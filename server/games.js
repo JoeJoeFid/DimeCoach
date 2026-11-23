@@ -123,7 +123,7 @@ export function scoreOfPlan(planId) {
     periods[e.period - 1] ||= { us: 0, them: 0 };
     periods[e.period - 1][e.side] += p;
   }
-  return { us: s.us, them: s.them, status: s.status, period: cleanState(parse(s.state_json, {})).period, periods: [...periods].map((p) => p || { us: 0, them: 0 }) };
+  return { us: s.us, them: s.them, status: s.status, period: cleanState(parse(s.state_json, {})).period, halves: cleanState(parse(s.state_json, {})).halves, periods: [...periods].map((p) => p || { us: 0, them: 0 }) };
 }
 
 /** The teams a person coaches, and the ones they follow with the players that are theirs. */

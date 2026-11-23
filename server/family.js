@@ -16,6 +16,7 @@ import { mention, mentionedIn } from './notices.js';
 import { publicBase } from './invites.js';
 import { scoreOfPlan } from './games.js';
 import { liveNow } from './streams.js';
+import { livePlays } from './liveFeed.js';
 
 const uploadsDir = path.join(path.dirname(dbPath), 'uploads');
 const addColumn = (table, column, ddl) => {
@@ -264,6 +265,22 @@ export function mountFamily(app) {
     if (!f) res.status(404).json({ error: 'You are not on this team’s list of parents, family and friends. Ask its coach to add you.' });
     return f;
   };
+  /**
+   * The game being scored for a team right now, if there is one: a scoresheet with plays on it,
+   * not finished, and touched in the last three hours, so a game left open overnight is not "live".
+   */
+  const liveGame = (team) =>
+    get(
+      "SELECT s.*, p.title AS plan_title, p.game_json FROM scoresheets s JOIN plans p ON p.id=s.plan_id WHERE s.team_id=? AND s.scope='team' AND s.status='live' AND s.events_json<>'[]' AND s.updated_at >= datetime('now','-3 hours') ORDER BY s.updated_at DESC, s.id DESC LIMIT 1",
+      team.id,
+    ) || null;
+  /** What a follower is told about the game itself: who it is against, the score, and where it has got to. */
+  const liveBrief = (s) => {
+    if (!s) return null;
+    const game = parse(s.game_json, {});
+    const state = parse(s.state_json, {});
+    return { plan_id: s.plan_id, opponent: String(game.opponent || '').trim() || 'Opponent', home: game.side !== 'away', us: s.us, them: s.them, period: Math.max(1, Number(state.period) || 1), halves: !!state.halves };
+  };
   app.get('/api/family/teams/:id', (req, res) => {
     const f = enter(req, res);
     if (!f) return;
@@ -277,6 +294,8 @@ export function mountFamily(app) {
         const watch = mine.some((c) => c.can_watch);
         return { watch, broadcast: mine.some((c) => c.can_broadcast), live: watch && liveNow(team.id) };
       })(),
+      // A game being scored right now, for those who are told about games: the score and how far along it is.
+      live_game: can.schedule && can.games ? liveBrief(liveGame(team)) : null,
       can,
       schedule: can.schedule ? scheduleOf(team, can) : [],
       news: can.news ? postsOf(team.id, 'news', req.user.id) : [],
@@ -290,6 +309,24 @@ export function mountFamily(app) {
       // Names and numbers only: nothing about a player's family, none of the coach's notes, and not where each one plays.
       roster: can.roster ? all('SELECT name, number FROM players WHERE team_id=? AND active=1 ORDER BY name COLLATE NOCASE', team.id) : [],
     });
+  });
+  // The game being scored right now, play by play, for followers who are told about games. A player is
+  // named only to those who may see the roster; to the rest each one is their number.
+  app.get('/api/family/teams/:id/live', (req, res) => {
+    const f = enter(req, res);
+    if (!f) return;
+    if (!f.can.schedule || !f.can.games) return res.status(403).json({ error: 'Games are not open to you on this team.' });
+    const sheet = liveGame(f.team);
+    if (!sheet) return res.json({ game: null, plays: [] });
+    const players = new Map(all('SELECT id, name, number FROM players WHERE team_id=?', f.team.id).map((p) => [p.id, p]));
+    const nameOf = (id) => {
+      const p = players.get(id);
+      if (!p) return 'A player';
+      return f.can.roster ? p.name : p.number ? `#${p.number}` : 'A player';
+    };
+    const brief = liveBrief(sheet);
+    const state = parse(sheet.state_json, {});
+    res.json({ game: brief, plays: livePlays(parse(sheet.events_json, []), { nameOf, oppName: brief.opponent, oppPlayers: Array.isArray(state.opp_players) ? state.opp_players : [] }) });
   });
   app.post('/api/family/teams/:id/board', (req, res) => {
     const f = enter(req, res);

@@ -17,6 +17,7 @@ import { NAV_ICONS, UserMenu } from '../App';
 import Inbox from '../components/Inbox';
 import { MyStats } from './Stats';
 import GameVideo from '../components/GameVideo';
+import LivePlays from '../components/LivePlays';
 import { periodName } from '../scoring';
 import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 
@@ -140,7 +141,8 @@ function StartCoaching({ user, onBack, onSignOut }: { user: User; onBack: () => 
 const sideGroups = (): { title: string; items: [Tab, string][] }[] => [
   { title: 'Plan', items: [['schedule', NAV_ICONS.practices], ['homework', NAV_ICONS.homework], ['video', NAV_ICONS.video]] },
   { title: 'Library', items: [['drills', NAV_ICONS.library], ['playbook', NAV_ICONS.playbook], ['resources', NAV_ICONS.resources]] },
-  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['stats', NAV_ICONS.stats], ['chat', NAV_ICONS.chat], ['messages', NAV_ICONS.community], ['inbox', NAV_ICONS.messages]] },
+  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['stats', NAV_ICONS.stats]] },
+  { title: 'Community', items: [['chat', NAV_ICONS.chat], ['inbox', NAV_ICONS.messages], ['messages', NAV_ICONS.community]] },
 ];
 
 /**
@@ -381,16 +383,19 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
     );
   if (!data) return framed(<p className="page muted">Loading…</p>);
   const { team, can } = data;
+  const hasVideo = data.video.watch || data.video.broadcast;
+  const hasPlays = can.schedule && can.games;
   const tabs: [Tab, string, number?][] = [
-    ['home', 'Home'],
+    ['home', 'Dashboard'],
     ...(can.schedule ? [['schedule', 'Schedule'] as [Tab, string]] : []),
     // Chat is the person's own, like their inbox: the team's chat and any they started with other people.
     ...(frame ? [['chat', 'Chat'] as [Tab, string]] : []),
     ...(can.news || can.board ? [['messages', 'Team news'] as [Tab, string]] : []),
     // Their own inbox, which is not about this team alone. A coach who also follows the team has theirs in the coach's menu.
-    ...(frame ? [['inbox', 'Messages'] as [Tab, string], ['stats', 'My stats'] as [Tab, string]] : []),
+    ...(frame ? [['inbox', 'Messages'] as [Tab, string], ['stats', 'Stats'] as [Tab, string]] : []),
     ...(can.homework ? [['homework', 'Homework', data.homework.length] as [Tab, string, number]] : []),
-    ...(data.video.watch || data.video.broadcast ? [['video', 'Game video'] as [Tab, string]] : []),
+    // Live game: its video for those allowed to watch or broadcast, and its play by play for those told about games.
+    ...(hasVideo || hasPlays ? [['video', 'Live game'] as [Tab, string]] : []),
     ...(can.playbook ? [['playbook', 'Playbook', data.plays.length] as [Tab, string, number]] : []),
     ...(can.drills ? [['drills', 'Drills', data.drills.length] as [Tab, string, number]] : []),
     ...(can.resources ? [['resources', 'Resources', data.resources.length] as [Tab, string, number]] : []),
@@ -429,11 +434,6 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
         </nav>
       )}
 
-      {tab === 'home' && data.video.live && (
-        <button type="button" className="fam-live" onClick={() => go('video')}>
-          <span className="gv-badge">LIVE</span> A game is being broadcast now. <strong>Watch</strong>
-        </button>
-      )}
       {tab === 'home' && (
         <div className={`fam-home ${can.schedule ? 'with-schedule' : ''}`}>
           {can.schedule && (
@@ -456,6 +456,46 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
                     </>
                   )}
                 </>
+              )}
+            </section>
+          )}
+          {/* What is going on this minute: video going out, or a game being scored. First on the right, above the coaches. */}
+          {(hasVideo || hasPlays) && (
+            <section className={`card cx-card fam-now ${data.video.live || data.live_game ? 'on' : ''}`} aria-label="Live now">
+              <div className="cx-card-head">
+                <h2>Live now</h2>
+              </div>
+              {!data.video.live && !data.live_game ? (
+                <p className="muted">Nothing is live right now. A game's video or play by play shows here the moment it starts.</p>
+              ) : (
+                <ul className="fam-now-list">
+                  {data.live_game && (
+                    <li>
+                      <button type="button" className="fam-now-row" onClick={() => go('video', { mode: 'plays' })}>
+                        <span className="gv-badge">LIVE</span>
+                        <span className="fam-now-text">
+                          <strong>
+                            {team.name} {data.live_game.us} · {data.live_game.opponent} {data.live_game.them}
+                          </strong>
+                          <span className="muted small">Play by play · {periodName(data.live_game.period, data.live_game.halves)}</span>
+                        </span>
+                        <span className="fam-now-go">Follow</span>
+                      </button>
+                    </li>
+                  )}
+                  {data.video.live && (
+                    <li>
+                      <button type="button" className="fam-now-row" onClick={() => go('video', { mode: 'video' })}>
+                        <span className="gv-badge">LIVE</span>
+                        <span className="fam-now-text">
+                          <strong>Game video</strong>
+                          <span className="muted small">A game is being broadcast now</span>
+                        </span>
+                        <span className="fam-now-go">Watch</span>
+                      </button>
+                    </li>
+                  )}
+                </ul>
               )}
             </section>
           )}
@@ -511,7 +551,27 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
       {tab === 'messages' && <Messages teamId={id} data={data} me={frame?.user.name} start={params.get('show') === 'board' || !can.news ? 'board' : 'news'} setBoard={(board) => setData({ ...data, board })} />}
       {tab === 'chat' && frame && <Chat me={frame.user} openId={Number(params.get('chat')) || 0} onOpen={openChat} />}
       {tab === 'stats' && frame && <MyStats />}
-      {tab === 'video' && <GameVideo teamId={team.id} />}
+      {tab === 'video' &&
+        (() => {
+          // Two ways to follow a game. Whichever this person has; play by play first when a game is being scored and no video is out.
+          const asked = params.get('mode');
+          const mode = hasVideo && hasPlays ? (asked === 'plays' || asked === 'video' ? asked : data.live_game && !data.video.live ? 'plays' : 'video') : hasPlays ? 'plays' : 'video';
+          return (
+            <>
+              {hasVideo && hasPlays && (
+                <div className="seg lp-modes" role="group" aria-label="How to follow the game">
+                  <button type="button" className={mode === 'video' ? 'on' : ''} aria-pressed={mode === 'video'} onClick={() => go('video', { mode: 'video' })}>
+                    Video {data.video.live && <span className="lp-dot" aria-label="live" />}
+                  </button>
+                  <button type="button" className={mode === 'plays' ? 'on' : ''} aria-pressed={mode === 'plays'} onClick={() => go('video', { mode: 'plays' })}>
+                    Play by play {data.live_game && <span className="lp-dot" aria-label="live" />}
+                  </button>
+                </div>
+              )}
+              {mode === 'plays' ? <LivePlays teamId={id} teamName={team.name} /> : <GameVideo teamId={team.id} />}
+            </>
+          );
+        })()}
       {tab === 'inbox' && frame && (
         <Inbox
           user={frame.user}
@@ -833,7 +893,7 @@ function DayPeek({ day, at }: { day: FamilyDay; at: { left: number; right: numbe
 
 /** A practice or game opened: everything the coach lets this person see about it. */
 /** "Final 42–38", or "Live · Q2 · 20–18" while a game is being scored. '' for anything without a score. */
-const scoreText = (d: FamilyDay) => (d.score ? `${d.score.status === 'final' ? 'Final' : `Live · ${periodName(d.score.period)}`} · ${d.score.us}–${d.score.them}` : '');
+const scoreText = (d: FamilyDay) => (d.score ? `${d.score.status === 'final' ? 'Final' : `Live · ${periodName(d.score.period, d.score.halves)}`} · ${d.score.us}–${d.score.them}` : '');
 function DayDetails({ day, onClose }: { day: FamilyDay; onClose: () => void }) {
   return (
     <Modal title={day.title} onClose={onClose}>

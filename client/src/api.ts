@@ -827,7 +827,7 @@ export interface FamilyDay {
   /** What a practice covers, when the coach shares that: its parts and how long each runs. */
   summary: { minutes: number; items: { title: string; minutes: number; rest: boolean }[] } | null;
   /** A game that is being scored, or was: the score, how far along it is, and each period's points. */
-  score?: { us: number; them: number; status: 'live' | 'final'; period: number; periods: { us: number; them: number }[] } | null;
+  score?: { us: number; them: number; status: 'live' | 'final'; period: number; halves?: boolean; periods: { us: number; them: number }[] } | null;
 }
 /** Live video of a game, or one that was saved. It is made of `segments` pieces, each `segment_seconds` long. */
 export interface GameStream {
@@ -917,6 +917,8 @@ export interface FamilyTeam {
   team: { id: number; slug: string; name: string; sport: string; season: string; organization: string; coaches: { name: string; title: string }[] };
   me: { kind: FamilyKind; players: string[] };
   video: { watch: boolean; broadcast: boolean; live: boolean };
+  /** A game being scored right now, when games are open to this person. */
+  live_game: LiveGame | null;
   can: Record<FamilySection, boolean>;
   schedule: FamilyDay[];
   news: TeamPost[];
@@ -1245,6 +1247,8 @@ export const api = {
   startCoaching: () => req<{ ok: true }>('POST', '/family/start-coaching', {}),
   followedTeams: () => req<FollowedTeam[]>('GET', '/family/teams'),
   familyTeam: (teamId: string) => req<FamilyTeam>('GET', `/family/teams/${teamId}`),
+  /** The game being scored right now, play by play. */
+  familyLive: (teamId: string) => req<LiveFeed>('GET', `/family/teams/${teamId}/live`),
   familyPost: (teamId: string, body: string) => req<TeamPost[]>('POST', `/family/teams/${teamId}/board`, { body }),
   familyDeletePost: (teamId: string, postId: number) => req<TeamPost[]>('DELETE', `/family/teams/${teamId}/board/${postId}`),
   addTeamContact: (teamId: number, b: ContactFields & { invite: boolean; note: string }) => req<TeamContacts>('POST', `/teams/${teamId}/contacts`, b),
@@ -1399,4 +1403,41 @@ export interface UnscoredGame {
   /** "17:30", or empty when the game has no time. */
   start_time: string;
   opponent: string;
+}
+
+/** A game being scored, as a follower is told of it. */
+export interface LiveGame {
+  plan_id: number;
+  opponent: string;
+  /** Whether the team is at home. */
+  home: boolean;
+  us: number;
+  them: number;
+  period: number;
+  halves: boolean;
+}
+/** One play of a game being followed, with the score after it. */
+export interface LivePlay {
+  id: string;
+  side: 'us' | 'them';
+  type: string;
+  /** Who did it, as far as this person may be told. Empty when the play was not given to a player. */
+  who: string;
+  period: number;
+  us: number;
+  them: number;
+  /** A rebound: whether it was offensive. */
+  off?: boolean;
+  /** An assist: the id of the shot it set up. */
+  shot?: string;
+  forced?: boolean;
+  by?: string;
+  fts?: number;
+  x?: number;
+  y?: number;
+  path?: [number, number][];
+}
+export interface LiveFeed {
+  game: LiveGame | null;
+  plays: LivePlay[];
 }
