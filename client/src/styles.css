@@ -18914,3 +18914,129 @@ mark.hit {
   font-size: 0.72rem;
   font-weight: 500;
 }
+
+/* ---------- The team's record under its name, and the latest results it opens ---------- */
+.team-record {
+  position: relative;
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 0 6px;
+}
+.team-record-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  font-weight: 650;
+  cursor: default;
+}
+.team-record-word {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.team-record-pop {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  display: none;
+  gap: 4px;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  font-size: 0.86rem;
+  color: var(--ink);
+}
+.team-record:hover .team-record-pop,
+.team-record:focus-within .team-record-pop {
+  display: grid;
+}
+.team-record-list {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+}
+.team-record-row {
+  display: grid;
+  grid-template-columns: 20px 46px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+}
+.team-record-row b {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--surface-3);
+  font-size: 0.72rem;
+}
+.team-record-row b.w {
+  background: var(--ok-soft);
+}
+.team-record-row b.l {
+  background: var(--danger-soft);
+}
+.team-record-score {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+.team-record-opp {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-record-row .muted {
+  font-size: 0.78rem;
+}
+
+/* ---------- Stats: games that are over and have no score ---------- */
+.st-missing {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  border-style: dashed;
+}
+a.chip.st-miss {
+  border: 1px dashed var(--line-strong);
+  background: var(--warn-soft);
+  color: var(--ink);
+  text-decoration: none;
+}
+a.chip.st-miss:hover {
+  border-color: var(--ink);
+}
+.st-miss-go {
+  font-weight: 700;
+}
+.st-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  background: var(--warn-soft);
+  font-size: 0.72rem;
+  font-weight: 650;
+  vertical-align: middle;
+}
+.track-list li > .btn {
+  flex: none;
+  margin-right: 6px;
+}

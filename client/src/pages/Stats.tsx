@@ -3,7 +3,7 @@
 // and never part of the team's numbers unless they choose to show one to the coaches.
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type TrackTeam } from '../api';
+import { api, type TrackTeam, type UnscoredGame } from '../api';
 import { useApp } from '../App';
 import PageTitle from '../components/PageTitle';
 import { SubTabs } from '../components/cx';
@@ -205,13 +205,52 @@ export function MyStats() {
   );
 }
 
+/** A game that is over and has no score. */
+type Missing = { plan_id: number; title: string; date: string; opponent: string };
+const gameName = (g: { opponent?: string; title: string }) => (g.opponent ? `vs. ${g.opponent}` : g.title || 'Game');
+
+/** One scored game in the list of games. */
+function ScoredRow({ g }: { g: Scoresheet }) {
+  return (
+    <li>
+      <Link className="track-row" to={`/plans/${g.plan_id}?view=score`}>
+        <strong>
+          {gameName(g)} · {g.us}–{g.them}
+        </strong>
+        <span className="muted small">
+          {fmtDateShort(g.date)} · {g.status === 'final' ? 'Final' : 'Not finished'}
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+/** The games that are over with no score, each one a way straight into scoring it. */
+function NotScored({ games }: { games: Missing[] }) {
+  if (games.length === 0) return null;
+  return (
+    <div className="card st-missing">
+      <strong>
+        Not scored yet <span className="muted small">{games.length === 1 ? '1 game is over with no score.' : `${games.length} games are over with no score.`} Press one to score it.</span>
+      </strong>
+      <div className="st-games">
+        {games.map((g) => (
+          <Link key={g.plan_id} className="chip st-miss" to={`/plans/${g.plan_id}?view=score`}>
+            {fmtDateShort(g.date)} · {gameName(g)} <span className="st-miss-go">Score it →</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type View = 'season' | 'games' | 'mine' | 'shared';
 /** A coach's Stats page. */
 export default function Stats() {
   const app = useApp();
   const team = app.team;
   const [view, setView] = useState<View>('season');
-  const [data, setData] = useState<{ games: Scoresheet[]; shared: Scoresheet[] } | null>(null);
+  const [data, setData] = useState<{ games: Scoresheet[]; shared: Scoresheet[]; unscored: UnscoredGame[] } | null>(null);
   const [players, setPlayers] = useState<{ id: number; name: string; number: string }[]>([]);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -224,7 +263,15 @@ export default function Stats() {
   const [out, setOut] = useState<Set<number>>(new Set());
   const [show, setShow] = useState<'table' | 'charts'>('table');
   const [average, setAverage] = useState(false);
-  const picked = (data?.games ?? []).filter((g) => !out.has(g.id));
+  // A sheet that was opened and never used counts as a game not scored.
+  const unused = (g: Scoresheet) => g.status !== 'final' && g.events.length === 0 && g.us === 0 && g.them === 0;
+  const scored = (data?.games ?? []).filter((g) => !unused(g));
+  // Games that are over with no score: over is two hours after the start, or the end of the day for a game with no time.
+  const missing: Missing[] = [
+    ...(data?.unscored ?? []).filter((g) => Date.now() > (g.start_time ? new Date(`${g.date}T${g.start_time}`).getTime() + 2 * 3600000 : new Date(`${g.date}T23:59:59`).getTime())),
+    ...(data?.games ?? []).filter((g) => unused(g) && g.plan_id !== null && g.date <= todayISO()).map((g) => ({ plan_id: g.plan_id as number, title: g.title, date: g.date, opponent: g.opponent || '' })),
+  ].sort((x, y) => y.date.localeCompare(x.date) || y.plan_id - x.plan_id);
+  const picked = scored.filter((g) => !out.has(g.id));
   // The season: every picked game added up for each player, with how many games they have a stat in.
   const season = new Map<number, { games: number; line: StatLine }>();
   const teamLines: StatLine[] = [];
@@ -256,7 +303,7 @@ export default function Stats() {
         onChange={setView}
         tabs={[
           ['season', 'Season'],
-          ['games', 'Games', data?.games.length],
+          ['games', 'Games', data ? scored.length + missing.length : undefined],
           ['mine', 'My stats'],
           ['shared', 'From parents', data?.shared.length],
         ]}
@@ -266,29 +313,32 @@ export default function Stats() {
       ) : !data ? (
         <p className="muted">Loading…</p>
       ) : view === 'season' ? (
-        data.games.length === 0 ? (
-          <div className="empty">
-            <h2>No games scored yet</h2>
-            <p>Open a game on the Schedule and press "Score this game". Its stats add up here.</p>
-          </div>
+        scored.length === 0 ? (
+          <>
+            <div className="empty">
+              <h2>No games scored yet</h2>
+              <p>Open a game on the Schedule and go to its Score tab. Its stats add up here.</p>
+            </div>
+            <NotScored games={missing} />
+          </>
         ) : (
           <>
             <div className="card st-pick">
               <div className="st-pick-head">
                 <strong>
-                  Games <span className="muted small">{picked.length} of {data.games.length} chosen</span>
+                  Games <span className="muted small">{picked.length} of {scored.length} chosen</span>
                 </strong>
                 <span className="st-pick-all">
                   <button type="button" className="link small" disabled={out.size === 0} onClick={() => setOut(new Set())}>
                     All
                   </button>
-                  <button type="button" className="link small" disabled={picked.length === 0} onClick={() => setOut(new Set(data.games.map((g) => g.id)))}>
+                  <button type="button" className="link small" disabled={picked.length === 0} onClick={() => setOut(new Set(scored.map((g) => g.id)))}>
                     None
                   </button>
                 </span>
               </div>
               <div className="st-games" role="group" aria-label="Games to count">
-                {[...data.games]
+                {[...scored]
                   .sort((x, y) => x.date.localeCompare(y.date) || x.id - y.id)
                   .map((g) => {
                     const on = !out.has(g.id);
@@ -314,6 +364,7 @@ export default function Stats() {
                   })}
               </div>
             </div>
+            <NotScored games={missing} />
             <div className="st-show">
               <div className="seg" role="group" aria-label="Table or charts">
                 <button type="button" className={show === 'table' ? 'on' : ''} aria-pressed={show === 'table'} onClick={() => setShow('table')}>
@@ -353,27 +404,36 @@ export default function Stats() {
           </>
         )
       ) : view === 'games' ? (
-        data.games.length === 0 ? (
-          <p className="muted">No games scored yet.</p>
+        scored.length + missing.length === 0 ? (
+          <p className="muted">No games played yet.</p>
         ) : (
           <div className="card">
             <ul className="track-list">
-              {data.games.map((g) => (
-                <li key={g.id}>
-                  <Link className="track-row" to={`/plans/${g.plan_id}?view=score`}>
-                    <strong>
-                      {g.opponent ? `vs. ${g.opponent}` : g.title || 'Game'} · {g.us}–{g.them}
-                    </strong>
-                    <span className="muted small">
-                      {fmtDateShort(g.date)} · {g.status === 'final' ? 'Final' : 'Not finished'}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+              {/* Every game that is over, newest first: the ones with no score say so and open straight into scoring. */}
+              {[...scored.map((g) => ({ date: g.date, sheet: g, gap: null as Missing | null })), ...missing.map((g) => ({ date: g.date, sheet: null as Scoresheet | null, gap: g }))]
+                .sort((x, y) => y.date.localeCompare(x.date))
+                .map(({ sheet, gap }) =>
+                  gap ? (
+                    <li key={`p${gap.plan_id}`}>
+                      <Link className="track-row st-gap" to={`/plans/${gap.plan_id}?view=score`}>
+                        <strong>
+                          {gameName(gap)} <span className="st-badge">Not scored</span>
+                        </strong>
+                        <span className="muted small">{fmtDateShort(gap.date)}</span>
+                      </Link>
+                      <Link className="btn small primary" to={`/plans/${gap.plan_id}?view=score`} aria-label={`Score the game ${gameName(gap)}`}>
+                        Score this game
+                      </Link>
+                    </li>
+                  ) : (
+                    sheet && <ScoredRow key={sheet.id} g={sheet} />
+                  ),
+                )}
             </ul>
           </div>
         )
       ) : data.shared.length === 0 ? (
+
         <p className="muted">Nothing shared yet. When a parent keeps stats for their own player and shares the sheet, it shows here. It is never added into the team's numbers.</p>
       ) : (
         <div className="card">

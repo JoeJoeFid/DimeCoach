@@ -1007,7 +1007,8 @@ export const api = {
     const body = await res.json().catch(() => ({}));
     return { status: res.status, sheet: body.sheet, error: body.error };
   },
-  teamScores: (teamId: number) => req<{ games: Scoresheet[]; shared: Scoresheet[] }>('GET', `/teams/${teamId}/scores`),
+  teamRecord: (teamId: number) => req<{ games: RecordGame[] }>('GET', `/teams/${teamId}/record`),
+  teamScores: (teamId: number) => req<{ games: Scoresheet[]; shared: Scoresheet[]; unscored: UnscoredGame[] }>('GET', `/teams/${teamId}/scores`),
   streams: (teamId: number) => req<StreamList>('GET', `/streams?team_id=${teamId}`),
   stream: (id: number) => req<GameStream>('GET', `/streams/${id}`),
   savedStreams: () => req<GameStream[]>('GET', '/streams/saved'),
@@ -1368,4 +1369,24 @@ export interface MailRulePreview {
 export interface ResourcePeople {
   mail: boolean;
   people: { id: number; name: string; where: string }[];
+}
+
+/** One finished game, as its score only. */
+export interface RecordGame {
+  plan_id: number;
+  date: string;
+  opponent: string;
+  title: string;
+  us: number;
+  them: number;
+}
+
+/** A game on the schedule with no scoresheet yet. */
+export interface UnscoredGame {
+  plan_id: number;
+  title: string;
+  date: string;
+  /** "17:30", or empty when the game has no time. */
+  start_time: string;
+  opponent: string;
 }

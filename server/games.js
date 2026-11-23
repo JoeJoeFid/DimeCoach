@@ -263,7 +263,26 @@ export function mountGames(app) {
       "SELECT s.*, u.name AS by_name FROM scoresheets s JOIN users u ON u.id=s.user_id WHERE s.team_id=? AND s.scope='personal' AND s.shared_at IS NOT NULL ORDER BY s.date DESC, s.id DESC",
       team.id,
     ).map((s) => ({ ...sheetOut(s), by: s.by_name }));
-    res.json({ games, shared });
+    // Games on the schedule that nobody has opened a scoresheet for. Up to tomorrow by the server's clock: the
+    // reader's own clock decides which of them are over, since the server does not know their time zone.
+    const until = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const unscored = all(
+      "SELECT id, title, date, start_time, game_json FROM plans WHERE team_id=? AND is_game=1 AND is_template=0 AND date<>'' AND date<=? AND id NOT IN (SELECT plan_id FROM scoresheets WHERE plan_id IS NOT NULL) ORDER BY date DESC, id DESC",
+      team.id,
+      until,
+    ).map((p) => ({ plan_id: p.id, title: p.title, date: p.date, start_time: p.start_time || '', opponent: parse(p.game_json, {}).opponent || '' }));
+    res.json({ games, shared, unscored });
+  });
+  // The team's finished games as scores only, oldest first: enough for its record of wins and losses.
+  app.get('/api/teams/:id/record', (req, res) => {
+    const team = get('SELECT id FROM teams WHERE id=? AND owner_id=?', Number(req.params.id), req.ownerId);
+    if (!team) return res.status(404).json({ error: 'Not found' });
+    res.json({
+      games: all(
+        "SELECT s.plan_id, s.us, s.them, p.title, p.date, p.game_json FROM scoresheets s JOIN plans p ON p.id=s.plan_id WHERE s.team_id=? AND s.scope='team' AND s.status='final' ORDER BY p.date, s.id",
+        team.id,
+      ).map((s) => ({ plan_id: s.plan_id, date: s.date, opponent: parse(s.game_json, {}).opponent || '', title: s.title, us: s.us, them: s.them })),
+    });
   });
 
   // --- One person following one player ---

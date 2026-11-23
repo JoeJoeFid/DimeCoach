@@ -1,10 +1,78 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { api, type RecordGame } from '../api';
 import { useApp } from '../App';
+import { fmtDateShort } from '../util';
 import SportIcon from './SportIcon';
 
+/** The games last read for each team, so the record is there at once when the next page opens. */
+const known = new Map<number, RecordGame[]>();
+/** How many of the latest games the summary lists. */
+const LISTED = 8;
+
 /**
- * The heading of a page about a team: the team's name, largest, with its sport's ball beside it,
- * and under it the name of the part of the app being looked at.
+ * The team's wins and losses over its finished games, such as "5-3". Pointing at it, or pressing
+ * it, opens a short list of the latest results. Nothing is shown until a game has been finished.
+ */
+function TeamRecord({ teamId }: { teamId: number }) {
+  const [games, setGames] = useState<RecordGame[]>(known.get(teamId) || []);
+  useEffect(() => {
+    let live = true;
+    setGames(known.get(teamId) || []);
+    api
+      .teamRecord(teamId)
+      .then((r) => {
+        known.set(teamId, r.games);
+        if (live) setGames(r.games);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [teamId]);
+  if (games.length === 0) return null;
+  const wins = games.filter((g) => g.us > g.them).length;
+  const losses = games.filter((g) => g.us < g.them).length;
+  const ties = games.length - wins - losses;
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const words = [count(wins, 'win', 'wins'), count(losses, 'loss', 'losses'), ties > 0 && count(ties, 'tie', 'ties')].filter(Boolean).join(', ');
+  // How the latest games in a row went: "Won 2 in a row".
+  const last = games[games.length - 1];
+  const went = (g: RecordGame) => Math.sign(g.us - g.them);
+  let run = 0;
+  for (let i = games.length - 1; i >= 0 && went(games[i]) === went(last); i--) run++;
+  const streak = run > 1 && went(last) !== 0 ? `${went(last) > 0 ? 'Won' : 'Lost'} ${run} in a row` : '';
+  const latest = games.slice(-LISTED).reverse();
+  return (
+    <span className="team-record">
+      <button type="button" className="team-record-btn" aria-label={`Record: ${words}. Show the latest results.`}>
+        <span className="team-record-word">Record</span>
+        {wins}-{losses}
+        {ties > 0 && `-${ties}`}
+      </button>
+      <span className="team-record-pop" role="tooltip">
+        <strong>{words}</strong>
+        {streak && <span className="muted small">{streak}</span>}
+        <span className="team-record-list">
+          {latest.map((g) => (
+            <span key={g.plan_id} className="team-record-row">
+              <b className={went(g) > 0 ? 'w' : went(g) < 0 ? 'l' : ''}>{went(g) > 0 ? 'W' : went(g) < 0 ? 'L' : 'T'}</b>
+              <span className="team-record-score">
+                {g.us}-{g.them}
+              </span>
+              <span className="team-record-opp">{g.opponent ? `vs ${g.opponent}` : g.title || 'Game'}</span>
+              <span className="muted">{fmtDateShort(g.date)}</span>
+            </span>
+          ))}
+        </span>
+        {games.length > LISTED && <span className="muted small">and {count(games.length - LISTED, 'earlier game', 'earlier games')}</span>}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * The heading of a page about a team: the team's name, largest, with its sport's ball beside it
+ * and its record of wins and losses under it, then the name of the part of the app being looked at.
  */
 export default function PageTitle({ children }: { children: ReactNode }) {
   const { team, sport } = useApp();
@@ -17,6 +85,7 @@ export default function PageTitle({ children }: { children: ReactNode }) {
           {team.season && <span className="team-title-season">{team.season}</span>}
         </p>
       )}
+      {team && <TeamRecord teamId={team.id} />}
       <h1 className="section-name">{children}</h1>
     </>
   );
