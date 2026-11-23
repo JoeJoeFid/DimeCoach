@@ -100,7 +100,7 @@ const extrasOut = (row) => {
   return { links: Array.isArray(e?.links) ? e.links : [], videos: Array.isArray(e?.videos) ? e.videos : [] };
 };
 const extrasJson = (b, ownerId) => JSON.stringify({ links: cleanLinks(b.links), videos: cleanVideos(b.videos, ownerId) });
-const TEAM_COLS = 'id, sport_id, name, season, notes, calendar_url, calendar_synced_at, positions, position_prefs, community_id';
+const TEAM_COLS = 'id, sport_id, name, season, notes, calendar_url, calendar_synced_at, positions, position_prefs, community_id, logo';
 
 // --- Bootstrap ------------------------------------------------------------
 app.get('/api/bootstrap', (req, res) => {
@@ -148,6 +148,15 @@ app.put('/api/teams/:id', (req, res) => {
   if (!ownTeam(req, req.params.id)) return notFound(res);
   const b = req.body;
   run('UPDATE teams SET name=?, season=?, notes=? WHERE id=?', str(b.name).trim(), str(b.season), str(b.notes), id(req.params.id));
+  res.json(get(`SELECT ${TEAM_COLS} FROM teams WHERE id=?`, id(req.params.id)));
+});
+/** Sets or clears the team's logo. The browser has already shrunk it: anything large or not a picture is turned away. */
+app.put('/api/teams/:id/logo', (req, res) => {
+  if (!ownTeam(req, req.params.id)) return notFound(res);
+  const logo = str(req.body.logo);
+  if (logo && !/^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/=]+$/.test(logo)) return res.status(400).json({ error: 'That is not a picture that can be used as a logo.' });
+  if (logo.length > 200000) return res.status(400).json({ error: 'That logo is too large.' });
+  run('UPDATE teams SET logo=? WHERE id=?', logo, id(req.params.id));
   res.json(get(`SELECT ${TEAM_COLS} FROM teams WHERE id=?`, id(req.params.id)));
 });
 /** The names this team uses for its positions, in order. Anyone who can change plans can set them. */

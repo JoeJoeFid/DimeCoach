@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { prepareLogo } from '../components/ItemImages';
 import { useSearchParams } from 'react-router-dom';
 import Papa from 'papaparse';
 import { api, type TeamContact, type TeamContacts } from '../api';
@@ -763,6 +764,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
       onError((e as Error).message);
     }
   };
+  const logoInput = useRef<HTMLInputElement>(null);
   const saveTeam = () => {
     if (!name.trim()) return setName(team.name);
     if (name.trim() !== team.name || season !== team.season)
@@ -845,6 +847,51 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
           </div>
         </div>
         {team.notes && <p className="muted small">{team.notes}</p>}
+        {(app.can('manage') || team.logo) && (
+          <div className="team-logo-row">
+            {team.logo ? <img className="team-logo-preview" src={team.logo} alt={`${team.name} logo`} /> : <span className="team-logo-preview none" aria-hidden="true" />}
+            <div>
+              <strong>Team logo</strong>
+              <p className="muted small">Shown beside the team's name at the top of each page. Any picture works: it is shrunk to a small size when you choose it.</p>
+              {app.can('manage') && (
+                <span className="team-logo-actions">
+                  <input
+                    ref={logoInput}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file)
+                        guard(async () => {
+                          await api.setTeamLogo(team.id, await prepareLogo(file));
+                          await app.reload();
+                        });
+                    }}
+                  />
+                  <button type="button" className="btn small" onClick={() => logoInput.current?.click()}>
+                    {team.logo ? 'Change logo' : 'Upload a logo'}
+                  </button>
+                  {team.logo && (
+                    <button
+                      type="button"
+                      className="btn small"
+                      onClick={() =>
+                        guard(async () => {
+                          await api.setTeamLogo(team.id, '');
+                          await app.reload();
+                        })
+                      }
+                    >
+                      Remove
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       )}
 

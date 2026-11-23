@@ -18,3 +18,17 @@ export async function prepareImage(file: File): Promise<{ data: string; width: n
   const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
   return { data: dataUrl.split(',')[1] || '', width: canvas.width, height: canvas.height };
 }
+
+const LOGO_EDGE = 160;
+/** Shrinks a picture to logo size, keeping any see-through background, and gives it back as a data address. */
+export async function prepareLogo(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) throw new Error(`${file.name || 'That file'} is not a picture this browser can open. Use a JPEG or PNG.`);
+  const scale = Math.min(1, LOGO_EDGE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  // WebP where the browser can write it, which is far smaller. Others give back a PNG by themselves.
+  return canvas.toDataURL('image/webp', 0.9);
+}

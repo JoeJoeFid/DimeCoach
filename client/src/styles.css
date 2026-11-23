@@ -18918,10 +18918,47 @@ mark.hit {
 /* ---------- The team's record under its name, and the latest results it opens ---------- */
 .team-record {
   position: relative;
-  display: block;
-  width: max-content;
-  max-width: 100%;
-  margin: 0 0 6px;
+  display: inline-block;
+  /* It sits on the line with the team's name, at its own size. */
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+.team-logo {
+  width: auto;
+  max-width: 96px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+.team-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.team-logo-row p {
+  margin: 2px 0 8px;
+}
+.team-logo-preview {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  object-fit: contain;
+}
+.team-logo-preview.none {
+  border-style: dashed;
+}
+.team-logo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .team-record-btn {
   display: inline-flex;

@@ -71,8 +71,9 @@ function TeamRecord({ teamId }: { teamId: number }) {
 }
 
 /**
- * The heading of a page about a team: the team's name, largest, with its sport's ball beside it
- * and its record of wins and losses under it, then the name of the part of the app being looked at.
+ * The heading of a page about a team: its logo if it has one, its sport's ball, the team's name,
+ * largest, then the season and the record of wins and losses; under that, the name of the part
+ * of the app being looked at.
  */
 export default function PageTitle({ children }: { children: ReactNode }) {
   const { team, sport } = useApp();
@@ -80,12 +81,13 @@ export default function PageTitle({ children }: { children: ReactNode }) {
     <>
       {team && (
         <p className="team-title">
+          {team.logo && <img className="team-logo" src={team.logo} alt="" />}
           <SportIcon sport={sport?.name} size={34} />
           <span>{team.name}</span>
           {team.season && <span className="team-title-season">{team.season}</span>}
+          <TeamRecord teamId={team.id} />
         </p>
       )}
-      {team && <TeamRecord teamId={team.id} />}
       <h1 className="section-name">{children}</h1>
     </>
   );

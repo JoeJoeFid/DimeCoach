@@ -17,6 +17,8 @@ export interface Team {
   positions?: string;
   /** Each player's first, second and third choice of position, as JSON by player id. */
   position_prefs?: string;
+  /** The team's logo as a small picture's data address, or '' when it has none. */
+  logo?: string;
 }
 /** A game, practice or other event read from the team's linked calendar. */
 export interface ScheduleEvent {

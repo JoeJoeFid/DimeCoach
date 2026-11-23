@@ -388,6 +388,8 @@ CREATE INDEX IF NOT EXISTS plan_posts_plan ON plan_posts (plan_id, id);`);
 addColumn('teams', 'positions', "TEXT DEFAULT ''");
 // Each player's first, second and third choice of position, as JSON by player id. Used when sharing out a lineup.
 addColumn('teams', 'position_prefs', "TEXT DEFAULT '{}'");
+// The team's logo: a small picture, shrunk in the browser before it is sent, kept as a data address.
+addColumn('teams', 'logo', "TEXT DEFAULT ''");
 // The plan for a game: lineup, keys, play sheet and the rest. It sits beside the practice items on
 // the same plan, so turning a practice into a game and back loses nothing on either side.
 addColumn('plans', 'game_json', "TEXT DEFAULT '{}'");
