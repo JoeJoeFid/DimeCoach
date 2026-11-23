@@ -1,7 +1,7 @@
 // Game by game: one stat as a line across the games picked, for the team and then for each
 // player in a small chart of their own. Every chart shares the same games along the bottom, and
 // pointing at a game marks it in all of them at once.
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { linesOf, scoreOf, type Scoresheet, type StatLine } from '../scoring';
 import { fmtDateShort } from '../util';
 
@@ -22,6 +22,41 @@ function ceiling(max: number) {
   if (max <= 4) return 4;
   const step = max <= 10 ? 2 : max <= 20 ? 5 : max <= 50 ? 10 : max <= 100 ? 20 : 50;
   return Math.ceil(max / step) * step;
+}
+
+/**
+ * A smooth line through the points that never rises above or dips below the values it joins, so
+ * the curve does not show a number nobody scored.
+ */
+function curve(pts: [number, number][]) {
+  const n = pts.length;
+  if (n < 3) return pts.map(([px, py], i) => `${i ? 'L' : 'M'}${px},${py}`).join(' ');
+  const d: number[] = [];
+  for (let i = 0; i < n - 1; i++) d.push((pts[i + 1][1] - pts[i][1]) / (pts[i + 1][0] - pts[i][0]));
+  const m = [d[0]];
+  for (let i = 1; i < n - 1; i++) m.push(d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2);
+  m.push(d[n - 2]);
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / d[i];
+    const b = m[i + 1] / d[i];
+    const far = a * a + b * b;
+    if (far > 9) {
+      const k = 3 / Math.sqrt(far);
+      m[i] = k * a * d[i];
+      m[i + 1] = k * b * d[i];
+    }
+  }
+  let out = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = (pts[i + 1][0] - pts[i][0]) / 3;
+    out += ` C${pts[i][0] + h},${pts[i][1] + m[i] * h} ${pts[i + 1][0] - h},${pts[i + 1][1] - m[i + 1] * h} ${pts[i + 1][0]},${pts[i + 1][1]}`;
+  }
+  return out;
 }
 
 /**
@@ -50,7 +85,8 @@ function Line({
 }) {
   const W = big ? 720 : 260;
   const H = big ? 220 : 130;
-  const pad = { l: 30, r: 12, t: 12, b: 22 };
+  const pad = { l: 30, r: big ? 34 : 12, t: big ? 18 : 12, b: 22 };
+  const fade = useId();
   const n = labels.length;
   const x = (i: number) => (n <= 1 ? (pad.l + W - pad.r) / 2 : pad.l + (i * (W - pad.l - pad.r)) / (n - 1));
   const y = (v: number) => H - pad.b - (v / top) * (H - pad.t - pad.b);
@@ -63,7 +99,7 @@ function Line({
   };
   const shown = at !== null && at < n ? at : null;
   return (
-    <figure className={`sc-chart ${big ? 'big' : ''}`}>
+    <figure className={`sc-chart ${big ? 'big' : ''} ${shown !== null ? 'at' : ''}`}>
       <figcaption>
         <strong>{title}</strong>
         {/* The game pointed at, or else the total over the games shown. */}
@@ -79,6 +115,12 @@ function Line({
         onMouseLeave={() => onAt(null)}
         onTouchStart={(e) => onAt(nearest(e.touches[0].clientX, e.currentTarget.getBoundingClientRect()))}
       >
+        <defs>
+          <linearGradient id={fade} x1="0" x2="0" y1="0" y2="1">
+            <stop className="sc-fade-top" offset="0" />
+            <stop className="sc-fade-end" offset="1" />
+          </linearGradient>
+        </defs>
         {ticks.map((t) => (
           <g key={t}>
             <line className="sc-grid" x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} />
@@ -103,10 +145,18 @@ function Line({
           const other = series.length - 1 - k > 0;
           return (
             <g key={s.name} className={other ? 'sc-other' : 'sc-main'}>
-              {n > 1 && <polyline points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')} />}
-              {s.values.map((v, i) => (
-                <circle key={i} cx={x(i)} cy={y(v)} r={shown === i ? 5 : n > 12 ? 2.5 : 4} />
-              ))}
+              {n > 1 && !other && <path className="sc-area" fill={`url(#${fade})`} d={`${curve(s.values.map((v, i) => [x(i), y(v)]))} L${x(n - 1)},${y(0)} L${x(0)},${y(0)} Z`} />}
+              {n > 1 && <path className="sc-line" pathLength={other ? undefined : 1} d={curve(s.values.map((v, i) => [x(i), y(v)]))} />}
+              {/* A small chart shows only where the line ends and the game pointed at: the line carries the rest. */}
+              {s.values.map((v, i) =>
+                big || shown === i || i === n - 1 ? <circle key={i} className={i === n - 1 ? 'last' : ''} style={{ animationDelay: `${0.25 + (n > 1 ? i / (n - 1) : 0) * 0.85}s` }} cx={x(i)} cy={y(v)} r={shown === i ? 5.5 : i === n - 1 ? (big ? 5 : 3.5) : n > 12 ? 2.5 : 3.5} /> : null,
+              )}
+              {/* Where each line ends is written beside it, on the side away from the other line. */}
+              {big && n > 1 && (
+                <text className="sc-end" x={x(n - 1) + 9} y={y(s.values[n - 1]) + 4 + (series.length > 1 && s.values[n - 1] === series[other ? 0 : 1].values[n - 1] ? (other ? 7 : -7) : 0)}>
+                  {s.values[n - 1]}
+                </text>
+              )}
             </g>
           );
         })}
@@ -153,13 +203,13 @@ export default function StatCharts({ games, nameOf, teamName }: { games: Scoresh
           ))}
         </div>
       </div>
-      <Line big title={`${teamName}: ${word.toLowerCase()} each game`} series={stat === 'pts' ? [{ name: teamName, values: team }, { name: 'Other team', values: them }] : [{ name: teamName, values: team }]} labels={labels} top={ceiling(Math.max(1, ...team, ...(stat === 'pts' ? them : [])))} at={at} onAt={setAt} />
+      <Line big key={stat} title={`${teamName}: ${word.toLowerCase()} each game`} series={stat === 'pts' ? [{ name: teamName, values: team }, { name: 'Other team', values: them }] : [{ name: teamName, values: team }]} labels={labels} top={ceiling(Math.max(1, ...team, ...(stat === 'pts' ? them : [])))} at={at} onAt={setAt} />
       {players.length > 0 && (
         <>
           <p className="muted small sc-note">Each player, on the same scale so the charts can be compared. Point at a game to read it in every chart.</p>
           <div className="sc-grid-wrap">
             {players.map((p) => (
-              <Line key={p.id} title={nameOf(p.id)} series={[{ name: nameOf(p.id), values: p.values }]} labels={labels} top={playerTop} at={at} onAt={setAt} />
+              <Line key={`${p.id}-${stat}`} title={nameOf(p.id)} series={[{ name: nameOf(p.id), values: p.values }]} labels={labels} top={playerTop} at={at} onAt={setAt} />
             ))}
           </div>
         </>

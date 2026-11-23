@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Play } from '../types';
 import { COURT, Ball, Court, VIEW_PAD, courtHeight } from './PlayDiagram';
+import SportIcon from './SportIcon';
+import { SPORT_CHOICES } from '../sports';
 
 const TICKER = ['Dynamic warm-up', 'Shell drill', 'Ground ball triangles', 'Routes on air', 'Give and go', 'Cutoffs and relays', 'Form tackling', 'Free throws', 'Live batting practice', 'Special teams', 'Water break', 'Late-game situations'];
 
@@ -194,12 +196,21 @@ export default function AuthHero() {
 
       <div className="hero-main hero-main-wide">
         <h2 className="hero-title">
-          Plan the practice. <em>Draw the play.</em>
+          Your whole season, <em>one place.</em>
         </h2>
-        <p className="hero-lead">A practice planner and playbook for basketball, baseball, football and volleyball coaches. Walk in knowing exactly what comes next.</p>
+        <p className="hero-lead">Practices, plays, schedule, team chat and stats. Everyone knows what comes next.</p>
         <HeroVideo still={still} />
+        {/* The sports a team can be made for, as their balls. */}
+        <ul className="hero-balls" aria-label="Sports you can make a team for">
+          {SPORT_CHOICES.map((s) => (
+            <li key={s}>
+              <SportIcon sport={s} size={30} />
+              {s}
+            </li>
+          ))}
+        </ul>
         <p className="hero-dime">
-          <strong>Why "Dime"?</strong> A dime is a perfect pass that sets a teammate up to score. A good plan does the same for your team.
+          Just like a dime is a perfect pass that sets a teammate up to score, Dime Coach sets your whole team up: coaches, players and families.
         </p>
       </div>
 
