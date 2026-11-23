@@ -24,40 +24,8 @@ function ceiling(max: number) {
   return Math.ceil(max / step) * step;
 }
 
-/**
- * A smooth line through the points that never rises above or dips below the values it joins, so
- * the curve does not show a number nobody scored.
- */
-function curve(pts: [number, number][]) {
-  const n = pts.length;
-  if (n < 3) return pts.map(([px, py], i) => `${i ? 'L' : 'M'}${px},${py}`).join(' ');
-  const d: number[] = [];
-  for (let i = 0; i < n - 1; i++) d.push((pts[i + 1][1] - pts[i][1]) / (pts[i + 1][0] - pts[i][0]));
-  const m = [d[0]];
-  for (let i = 1; i < n - 1; i++) m.push(d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2);
-  m.push(d[n - 2]);
-  for (let i = 0; i < n - 1; i++) {
-    if (d[i] === 0) {
-      m[i] = 0;
-      m[i + 1] = 0;
-      continue;
-    }
-    const a = m[i] / d[i];
-    const b = m[i + 1] / d[i];
-    const far = a * a + b * b;
-    if (far > 9) {
-      const k = 3 / Math.sqrt(far);
-      m[i] = k * a * d[i];
-      m[i + 1] = k * b * d[i];
-    }
-  }
-  let out = `M${pts[0][0]},${pts[0][1]}`;
-  for (let i = 0; i < n - 1; i++) {
-    const h = (pts[i + 1][0] - pts[i][0]) / 3;
-    out += ` C${pts[i][0] + h},${pts[i][1] + m[i] * h} ${pts[i + 1][0] - h},${pts[i + 1][1] - m[i + 1] * h} ${pts[i + 1][0]},${pts[i + 1][1]}`;
-  }
-  return out;
-}
+/** A straight line from each game's point to the next. */
+const path = (pts: [number, number][]) => pts.map(([px, py], i) => `${i ? 'L' : 'M'}${px},${py}`).join(' ');
 
 /**
  * One line chart. `series` are drawn in order: the first in the chart's one color, a second in
@@ -145,8 +113,8 @@ function Line({
           const other = series.length - 1 - k > 0;
           return (
             <g key={s.name} className={other ? 'sc-other' : 'sc-main'}>
-              {n > 1 && !other && <path className="sc-area" fill={`url(#${fade})`} d={`${curve(s.values.map((v, i) => [x(i), y(v)]))} L${x(n - 1)},${y(0)} L${x(0)},${y(0)} Z`} />}
-              {n > 1 && <path className="sc-line" pathLength={other ? undefined : 1} d={curve(s.values.map((v, i) => [x(i), y(v)]))} />}
+              {n > 1 && !other && <path className="sc-area" fill={`url(#${fade})`} d={`${path(s.values.map((v, i) => [x(i), y(v)]))} L${x(n - 1)},${y(0)} L${x(0)},${y(0)} Z`} />}
+              {n > 1 && <path className="sc-line" pathLength={other ? undefined : 1} d={path(s.values.map((v, i) => [x(i), y(v)]))} />}
               {/* A small chart shows only where the line ends and the game pointed at: the line carries the rest. */}
               {s.values.map((v, i) =>
                 big || shown === i || i === n - 1 ? <circle key={i} className={i === n - 1 ? 'last' : ''} style={{ animationDelay: `${0.25 + (n > 1 ? i / (n - 1) : 0) * 0.85}s` }} cx={x(i)} cy={y(v)} r={shown === i ? 5.5 : i === n - 1 ? (big ? 5 : 3.5) : n > 12 ? 2.5 : 3.5} /> : null,

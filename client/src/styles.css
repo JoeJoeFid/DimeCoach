@@ -18897,3 +18897,20 @@ button.play-card {
     margin-top: 12px;
   }
 }
+
+/* ---------- Search: the words typed, marked where they are found ---------- */
+mark.hit {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.palette-hit {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+}

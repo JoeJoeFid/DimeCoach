@@ -6,7 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { api, newKey } from '../api';
 import { useApp } from '../App';
 import type { Drill, ImportDraft, Item, Plan, Play, Player, Tag, Team } from '../types';
-import { blankItem, clean, fmtClock, fmtDateShort, parseClock, fmtDuration, htmlPreview, isBlankHtml, planMinutes, roomyScreen, schedule, slotGroups, slotLabel, type Slot } from '../util';
+import { blankItem, clean, fmtClock, fmtDateShort, parseClock, fmtDuration, hasTerms, htmlPreview, htmlText, isBlankHtml, searchSnippet, searchTerms, planMinutes, roomyScreen, schedule, slotGroups, slotLabel, type Slot } from '../util';
 import ItemBody from '../components/ItemBody';
 import { Field, Modal, MoreMenu, TagChip, type MenuItem, ShareIcon } from '../components/bits';
 import { CommunityPicker, ShareDialog } from '../components/community';
@@ -14,6 +14,7 @@ import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, showUndo } from '../components/toasts';
 import CategoryRows from '../components/CategoryRows';
 import PlanDiscussion, { PlanCollaborators } from '../components/PlanDiscussion';
+import Hit from '../components/Hit';
 import GamePlanner from '../components/GamePlanner';
 import GameVideo from '../components/GameVideo';
 import { ScoreGameView } from './ScoreGame';
@@ -1008,9 +1009,9 @@ function PaletteTile({ id, kind, onAdd, children }: { id: string; kind: string; 
 function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; tags: Tag[]; withBreak: boolean; sheet: string; onAdd: (id: string) => void }) {
   const [q, setQ] = useState('');
   const [tagId, setTagId] = useState(0);
-  const text = q.trim().toLowerCase();
+  const terms = searchTerms(q);
   const shown = drills
-    .filter((d) => (!text || `${d.name} ${htmlPreview(d.notes_html)}`.toLowerCase().includes(text)) && (tagId === 0 || d.tag_ids.includes(tagId)))
+    .filter((d) => hasTerms(`${d.name} ${htmlText(d.notes_html)}`, terms) && (tagId === 0 || d.tag_ids.includes(tagId)))
     .sort((a, b) => a.name.localeCompare(b.name));
   // Only offer categories that some drill actually has.
   const usedTags = tags.filter((t) => drills.some((d) => d.tag_ids.includes(t.id)));
@@ -1043,7 +1044,7 @@ function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; t
         </p>
       ) : (
         <>
-          <input className="input search-input" type="search" aria-label="Search drills" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="input search-input" type="search" aria-label="Search drills by name or notes" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
           {usedTags.length > 0 && (
             <select className="input" aria-label="Filter drills by category" value={tagId} onChange={(e) => setTagId(Number(e.target.value))}>
               <option value={0}>All categories</option>
@@ -1061,7 +1062,9 @@ function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; t
                 <span className="palette-grip" aria-hidden="true">
                   ⠿
                 </span>
-                <span className="palette-name">{d.name}</span>
+                <span className="palette-name">
+                  <Hit text={d.name} terms={terms} />
+                </span>
                 <span className="palette-meta">
                   {tags
                     .filter((t) => d.tag_ids.includes(t.id))
@@ -1070,6 +1073,12 @@ function Palette({ drills, tags, withBreak, sheet, onAdd }: { drills: Drill[]; t
                     ))}
                   {d.duration_min} min
                 </span>
+                {/* Found in the notes: the words around it, so it is plain why this drill is listed. */}
+                {terms.length > 0 && searchSnippet(htmlText(d.notes_html), terms, 12) && (
+                  <span className="palette-hit">
+                    <Hit text={searchSnippet(htmlText(d.notes_html), terms, 12)} terms={terms} />
+                  </span>
+                )}
               </PaletteTile>
             ))}
           </div>
@@ -1479,10 +1488,8 @@ function DrillPicker({
   const [tagId, setTagId] = useState(0);
   // On a phone each drill is one short line. "Details" opens the rest of it under the line.
   const [open, setOpen] = useState(0);
-  const text = q.trim().toLowerCase();
-  const shown = drills.filter(
-    (d) => (!text || `${d.name} ${htmlPreview(d.notes_html)}`.toLowerCase().includes(text)) && (tagId === 0 || d.tag_ids.includes(tagId)),
-  );
+  const terms = searchTerms(q);
+  const shown = drills.filter((d) => hasTerms(`${d.name} ${htmlText(d.notes_html)}`, terms) && (tagId === 0 || d.tag_ids.includes(tagId)));
   // Only offer categories that some drill actually has.
   const usedTags = tags.filter((t) => drills.some((d) => d.tag_ids.includes(t.id)));
   return (
@@ -1511,7 +1518,7 @@ function DrillPicker({
         <ul className="picker drill-picker">
           {shown.map((d) => {
             const resources = (d.images || []).length + (d.videos || []).length + (d.links || []).length;
-            const preview = htmlPreview(d.notes_html);
+            const preview = (terms.length > 0 && searchSnippet(htmlText(d.notes_html), terms)) || htmlPreview(d.notes_html);
             const mine = tags.filter((t) => d.tag_ids.includes(t.id));
             const extras = [resources > 0 && `${resources} resource${resources === 1 ? '' : 's'}`, (d.play_ids || []).length > 0 && `${d.play_ids.length} play${d.play_ids.length === 1 ? '' : 's'}`].filter(Boolean);
             return (
@@ -1519,7 +1526,9 @@ function DrillPicker({
                 <div className="dp-row">
                   <button type="button" className="dp-pick" onClick={() => onPick(d)}>
                     <span className="picker-top">
-                      <span className="picker-name">{d.name}</span>
+                      <span className="picker-name">
+                        <Hit text={d.name} terms={terms} />
+                      </span>
                       <span className="muted small dp-meta">{[`${d.duration_min} min`, ...extras].join(' · ')}</span>
                       <span className="chips dp-chips">
                         {mine.map((t) => (
@@ -1534,7 +1543,11 @@ function DrillPicker({
                         ))}
                       </span>
                     </span>
-                    {preview && <span className="picker-notes muted small">{preview}</span>}
+                    {preview && (
+                      <span className="picker-notes muted small">
+                        <Hit text={preview} terms={terms} />
+                      </span>
+                    )}
                   </button>
                   <button type="button" className="btn small dp-view" aria-expanded={open === d.id} onClick={() => setOpen(open === d.id ? 0 : d.id)}>
                     {open === d.id ? 'Hide' : 'Details'}

@@ -10,7 +10,8 @@ import DrillImport from '../components/DrillImport';
 import { Field, Modal, TagChip, ShareIcon } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
-import { htmlPreview, roomyScreen } from '../util';
+import { hasTerms, htmlPreview, htmlText, roomyScreen, searchSnippet, searchTerms } from '../util';
+import Hit from '../components/Hit';
 import SportIcon from '../components/SportIcon';
 
 type Draft = ItemContent & { id?: number };
@@ -67,8 +68,10 @@ export default function Library() {
   };
 
   const gone = usePendingDeletes();
+  // Every word typed has to be in the drill's name or its notes.
+  const terms = searchTerms(q);
   const shown = (drills || []).filter(
-    (d) => !gone.has(`drill:${d.id}`) && d.name.toLowerCase().includes(q.toLowerCase()) && (tagId === 0 || d.tag_ids.includes(tagId)),
+    (d) => !gone.has(`drill:${d.id}`) && hasTerms(`${d.name} ${htmlText(d.notes_html)}`, terms) && (tagId === 0 || d.tag_ids.includes(tagId)),
   );
 
   return (
@@ -97,7 +100,7 @@ export default function Library() {
       {notice && <p className="banner ok">{notice}</p>}
 
       <div className="picker-filters">
-        <input className="input grow search-input" type="search" aria-label="Search drills" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input grow search-input" type="search" aria-label="Search drills by name or notes" placeholder="Search drills by name or notes" value={q} onChange={(e) => setQ(e.target.value)} />
         <select className="input" aria-label="Filter by category" value={tagId} onChange={(e) => setTagId(Number(e.target.value))}>
           <option value={0}>All categories</option>
           {sportTags.map((t) => (
@@ -118,13 +121,16 @@ export default function Library() {
       ) : (
         <ul className="drill-cards">
           {shown.map((d) => {
-            const preview = htmlPreview(d.notes_html);
+            // While searching, the notes are shown from where a word was found in them.
+            const preview = (terms.length > 0 && searchSnippet(htmlText(d.notes_html), terms)) || htmlPreview(d.notes_html);
             const plays = (d.play_ids || []).length;
             return (
               <li key={d.id} className="drill-card">
                 <button className="drill-card-main" onClick={() => setDraft(toDraft(d))}>
                   <span className="drill-card-top">
-                    <span className="drill-card-name">{d.name}</span>
+                    <span className="drill-card-name">
+                      <Hit text={d.name} terms={terms} />
+                    </span>
                     <span className="drill-card-time">{d.duration_min} min</span>
                   </span>
                   <span className="chips">
@@ -134,7 +140,11 @@ export default function Library() {
                         <TagChip key={t.id} tag={t} />
                       ))}
                   </span>
-                  {preview && <span className="drill-card-notes">{preview}</span>}
+                  {preview && (
+                    <span className="drill-card-notes">
+                      <Hit text={preview} terms={terms} />
+                    </span>
+                  )}
                   <span className="plan-meta">
                     {[resourceLabel((d.images || []).length + (d.videos || []).length + (d.links || []).length), plays > 0 && `${plays} play${plays === 1 ? '' : 's'}`]
                       .filter(Boolean)

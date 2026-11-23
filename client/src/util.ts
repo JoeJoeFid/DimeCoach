@@ -259,3 +259,39 @@ export function htmlPreview(html: string) {
     .filter(Boolean)
     .join(' · ');
 }
+
+/** Every word of some notes as plain text, lists and all, for searching. Kept per text, since a list of drills asks again on every letter typed. */
+const plainOf = new Map<string, string>();
+export function htmlText(html: string) {
+  if (!html) return '';
+  let text = plainOf.get(html);
+  if (text === undefined) {
+    const d = document.createElement('div');
+    // A space before each tag, so the last word of one line and the first of the next stay apart.
+    d.innerHTML = DOMPurify.sanitize(html).replace(/</g, ' <');
+    text = (d.textContent || '').replace(/\s+/g, ' ').trim();
+    if (plainOf.size > 2000) plainOf.clear();
+    plainOf.set(html, text);
+  }
+  return text;
+}
+/** The separate words typed into a search box, in small letters. */
+export const searchTerms = (q: string) => [...new Set(q.toLowerCase().split(/\s+/).filter(Boolean))];
+/** Whether every word searched for is somewhere in the text. */
+export function hasTerms(text: string, terms: string[]) {
+  const t = text.toLowerCase();
+  return terms.every((w) => t.includes(w));
+}
+/**
+ * The stretch of some notes to show for a search: from a little before the first word found, so
+ * the match is in view even when it is far down. Empty when none of the words are in the notes.
+ */
+export function searchSnippet(text: string, terms: string[], before = 40) {
+  const t = text.toLowerCase();
+  const found = terms.map((w) => t.indexOf(w)).filter((i) => i >= 0);
+  if (found.length === 0) return '';
+  const first = Math.min(...found);
+  if (first <= before) return text;
+  const from = text.indexOf(' ', first - before);
+  return `\u2026${text.slice(from >= 0 && from < first ? from + 1 : first)}`;
+}
