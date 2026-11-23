@@ -5,7 +5,8 @@
 //
 // It keeps nothing itself: every tap hands the new list of plays to whoever is showing it.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { byPeriod, clockText, linesOf, newId, periodName, playWords, scoreOf, type EvType, type GameEvent, type ScoreState, type StatLine } from '../scoring';
+import { DEFAULT_SCORING, byPeriod, clockText, linesOf, newId, periodName, playWords, scoreOf, type EvType, type GameEvent, type ScoreState, type ScoringConfig, type StatLine } from '../scoring';
+import { COURT, Court } from './PlayDiagram';
 import { confirmDialog } from './dialogs';
 
 export interface PadPlayer {
@@ -28,6 +29,8 @@ type Sheet =
   | { kind: 'who'; side: 'us' | 'them'; action: Action }
   | { kind: 'follow'; follow: 'ast' | 'reb'; shooter: number | null; shot: EvType; /** The shot's own play, so what follows is tied to it. */ shotId: string }
   | { kind: 'ft'; side: 'us' | 'them'; player: number | null }
+  | { kind: 'forced'; id: string; side: 'us' | 'them' }
+  | { kind: 'place'; id: string; /** What is asked once the spot is marked or skipped. */ next: Sheet | null }
   | { kind: 'assign'; id: string }
   | { kind: 'court' }
   | { kind: 'options' };
@@ -124,7 +127,10 @@ export default function ScorePad({
   onVideo,
   tabs,
   children,
+  config = DEFAULT_SCORING,
 }: {
+  /** What this team tracks: a stat that is off has no button, and the extra questions are only asked when on. */
+  config?: ScoringConfig;
   state: ScoreState;
   events: GameEvent[];
   onChange: (state: ScoreState, events: GameEvent[]) => void;
@@ -161,6 +167,7 @@ export default function ScorePad({
   latest.current = { state, events };
 
   const final = state.status === 'final';
+  const pName = (p: number) => periodName(p, config.halves);
   const score = scoreOf(events);
   const us = linesOf(events, 'us');
   const them = linesOf(events, 'them');
@@ -191,16 +198,29 @@ export default function ScorePad({
   const act = (side: 'us' | 'them', action: Action) => {
     if (asksWho(side)) return setSheet({ kind: 'who', side, action });
     if (action === 'ft') return setSheet({ kind: 'ft', side, player: null });
-    record(side, null, action, alone(action));
+    afterPlay(side, action, null, record(side, null, action, alone(action)));
+  };
+  /** Changes one play already recorded: where a shot was taken, or who forced a turnover. */
+  const amend = (id: string, change: Partial<GameEvent>) => onChange(latest.current.state, latest.current.events.map((e) => (e.id === id ? { ...e, ...change } : e)));
+  /** What is asked once a play is down: whether a turnover was forced, where a shot was taken, then who assisted or rebounded. */
+  const afterPlay = (side: 'us' | 'them', action: EvType, player: number | null, id: string) => {
+    if (action === 'to' && config.forced && !solo) return setSheet({ kind: 'forced', id, side });
+    const made = action === 'm2' || action === 'm3';
+    const missed = action === 'x2' || action === 'x3';
+    // A shot by one's own team goes on to who assisted, or who got the rebound.
+    const next: Sheet | null =
+      side === 'us' && asksWho('us') && made && config.ast
+        ? { kind: 'follow', follow: 'ast', shooter: player, shot: action, shotId: id }
+        : side === 'us' && asksWho('us') && missed && config.reb
+          ? { kind: 'follow', follow: 'reb', shooter: player, shot: action, shotId: id }
+          : null;
+    if (side === 'us' && (made || missed) && config.place && !solo) return setSheet({ kind: 'place', id, next });
+    setSheet(next);
   };
   /** The player was chosen (or left for later) for the play being asked about. */
   const chose = (side: 'us' | 'them', action: Action, player: number | null) => {
     if (action === 'ft') return setSheet({ kind: 'ft', side, player });
-    const shotId = record(side, player, action, alone(action));
-    // A shot by one's own team goes on to who assisted, or who got the rebound.
-    if (side === 'us' && (action === 'm2' || action === 'm3')) return setSheet({ kind: 'follow', follow: 'ast', shooter: player, shot: action, shotId });
-    if (side === 'us' && (action === 'x2' || action === 'x3')) return setSheet({ kind: 'follow', follow: 'reb', shooter: player, shot: action, shotId });
-    setSheet(null);
+    afterPlay(side, action, player, record(side, player, action, alone(action)));
   };
   const undo = () => events.length > 0 && onChange(state, events.slice(0, -1));
   const stopClock = () => {
@@ -254,7 +274,7 @@ export default function ScorePad({
         <span>PT FG</span>
       </button>
       <div className="sp-small">
-        {SMALL.map(([t, label]) => (
+        {SMALL.filter(([t]) => config[t as 'reb' | 'ast' | 'to' | 'stl' | 'blk' | 'pf']).map(([t, label]) => (
           <button key={t} type="button" className="sp-key" onClick={() => act(side, t)}>
             {label}
           </button>
@@ -282,7 +302,7 @@ export default function ScorePad({
           ) : (
             <span />
           )}
-          <button type="button" className="sp-period-pill" onClick={() => setSheet({ kind: 'options' })} aria-label={`${final ? 'Final' : periodName(state.period)}. Period and options.`}>
+          <button type="button" className="sp-period-pill" onClick={() => setSheet({ kind: 'options' })} aria-label={`${final ? 'Final' : pName(state.period)}. Period and options.`}>
             {final ? 'Final' : `Period ${state.period}`} <span aria-hidden="true">▾</span>
           </button>
           {solo ? (
@@ -351,7 +371,7 @@ export default function ScorePad({
                 </button>
               </div>
               <div className="sp-lite four">
-                {([['pf', 'Foul'], ['reb', 'REB'], ['to', 'TO'], ['stl', 'STL']] as [EvType, string][]).map(([t, label]) => (
+                {([['pf', 'Foul'], ['reb', 'REB'], ['to', 'TO'], ['stl', 'STL']] as [EvType, string][]).filter(([t]) => config[t as 'pf' | 'reb' | 'to' | 'stl']).map(([t, label]) => (
                   <button key={t} type="button" className="sp-key" onClick={() => act('them', t)}>
                     {label} <span className="chip-num">{them.total[t as 'pf' | 'reb' | 'to' | 'stl']}</span>
                   </button>
@@ -394,7 +414,7 @@ export default function ScorePad({
             <tr>
               <th />
               {periods.map((_, i) => (
-                <th key={i}>{periodName(i + 1)}</th>
+                <th key={i}>{pName(i + 1)}</th>
               ))}
               <th>T</th>
             </tr>
@@ -437,11 +457,13 @@ export default function ScorePad({
                         by {playerName(e.side, e.player)}
                         {/* An assist says whose basket it was. */}
                         {said.get(e.id)?.scorer != null ? ` · to ${playerName('us', said.get(e.id)!.scorer)}` : ''}
+                        {e.type === 'to' && e.forced && e.by !== undefined ? ` · forced by ${playerName(e.side === 'us' ? 'them' : 'us', e.by)}` : ''}
+                        {e.x !== undefined ? ' · spot marked' : ''}
                         {e.player === null && asksWho(e.side) ? ' · not assigned' : ''}
                       </span>
                     </span>
                     <span className="muted small sp-when">
-                      {periodName(e.period)}
+                      {pName(e.period)}
                       {e.clock !== null ? ` ${clockText(e.clock)}` : ''}
                     </span>
                   </button>
@@ -503,6 +525,53 @@ export default function ScorePad({
           <PlayerGrid players={players.filter((p) => sheet.follow === 'reb' || p.id !== sheet.shooter)} on={state.on} onPick={(p) => (record('us', p.id, sheet.follow, sheet.shotId), setSheet(null))} />
         </BottomSheet>
       )}
+      {/* A turnover: was it forced, and by whom on the other side. */}
+      {sheet?.kind === 'forced' &&
+        (() => {
+          const other = sheet.side === 'us' ? 'them' : 'us';
+          const list = other === 'us' ? players : state.opp_advanced ? oppPlayers : [];
+          return (
+            <BottomSheet title="Was the turnover forced?" sub={`Turnover by ${teamName(sheet.side)}`} onClose={() => setSheet(null)}>
+              <div className="sp-two">
+                <button type="button" className="btn sp-no" onClick={() => (amend(sheet.id, { forced: false }), setSheet(null))}>
+                  Not forced
+                </button>
+                <button type="button" className="btn" onClick={() => (amend(sheet.id, { forced: true }), setSheet(null))}>
+                  {list.length > 0 ? 'Forced, assign later' : 'Forced'}
+                </button>
+              </div>
+              {list.length > 0 && (
+                <>
+                  <p className="sp-ask-line">
+                    <strong>Forced by</strong> <span className="muted small">{teamName(other)}</span>
+                  </p>
+                  <PlayerGrid players={list} on={other === 'us' ? state.on : []} onPick={(p) => (amend(sheet.id, { forced: true, by: p.id }), setSheet(null))} />
+                </>
+              )}
+            </BottomSheet>
+          );
+        })()}
+      {/* Where a shot was taken: a tap on the half court, or skip it. */}
+      {sheet?.kind === 'place' && (
+        <BottomSheet title="Where was the shot taken?" sub="Tap the spot on the court." onClose={() => setSheet(sheet.next)}>
+          <svg
+            className="sp-place play-svg"
+            viewBox={`0 0 ${COURT.width} ${COURT.half}`}
+            role="img"
+            aria-label="Half court. Tap where the shot was taken."
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              amend(sheet.id, { x: Math.round(((e.clientX - r.left) / r.width) * 1000) / 1000, y: Math.round(((e.clientY - r.top) / r.height) * 1000) / 1000 });
+              setSheet(sheet.next);
+            }}
+          >
+            <Court court="half" flipped={false} />
+          </svg>
+          <button type="button" className="btn sp-wide" onClick={() => setSheet(sheet.next)}>
+            Skip
+          </button>
+        </BottomSheet>
+      )}
       {/* A trip to the line: each throw made or missed, then done. */}
       {sheet?.kind === 'ft' && (
         <BottomSheet title="Free throws" sub={playerName(sheet.side, sheet.player)} onClose={() => setSheet(null)}>
@@ -528,7 +597,7 @@ export default function ScorePad({
       )}
       {/* A play already recorded: say who it was, or take it out. */}
       {sheet?.kind === 'assign' && assigning && (
-        <BottomSheet title={title(assigning)} sub={`by ${playerName(assigning.side, assigning.player)} · ${periodName(assigning.period)}`} onClose={() => setSheet(null)}>
+        <BottomSheet title={title(assigning)} sub={`by ${playerName(assigning.side, assigning.player)} · ${pName(assigning.period)}`} onClose={() => setSheet(null)}>
           {!solo && (assigning.side === 'us' ? players.length > 0 : oppPlayers.length > 0) && (
             <PlayerGrid
               players={assigning.side === 'us' ? players : oppPlayers}
@@ -552,7 +621,7 @@ export default function ScorePad({
       )}
       {/* The period, and how the game is being kept. */}
       {sheet?.kind === 'options' && (
-        <BottomSheet title={final ? 'Final' : `Period ${state.period}`} sub={final ? undefined : periodName(state.period)} onClose={() => setSheet(null)}>
+        <BottomSheet title={final ? 'Final' : `Period ${state.period}`} sub={final ? undefined : pName(state.period)} onClose={() => setSheet(null)}>
           {!final && (
             <div className="sp-two">
               <button type="button" className="btn" disabled={state.period <= 1} onClick={() => toPeriod(state.period - 1)}>
@@ -603,7 +672,7 @@ export function CourtPicker({ players, on, onChange }: { players: PadPlayer[]; o
   );
 }
 
-const COLS: [keyof StatLine | 'fg' | 'tp' | 'ft', string][] = [['pts', 'PTS'], ['fg', 'FG'], ['tp', '3PT'], ['ft', 'FT'], ['oreb', 'OREB'], ['dreb', 'DREB'], ['reb', 'REB'], ['ast', 'AST'], ['stl', 'STL'], ['blk', 'BLK'], ['to', 'TO'], ['pf', 'PF']];
+const COLS: [keyof StatLine | 'fg' | 'tp' | 'ft', string][] = [['pts', 'PTS'], ['fg', 'FG'], ['tp', '3PT'], ['ft', 'FT'], ['oreb', 'OREB'], ['dreb', 'DREB'], ['reb', 'REB'], ['ast', 'AST'], ['stl', 'STL'], ['blk', 'BLK'], ['to', 'TO'], ['fto', 'FTO'], ['pf', 'PF']];
 const cell = (l: StatLine, k: (typeof COLS)[number][0]) => (k === 'fg' ? `${l.fgm}/${l.fga}` : k === 'tp' ? `${l.tpm}/${l.tpa}` : k === 'ft' ? `${l.ftm}/${l.fta}` : l[k]);
 type SortKey = (typeof COLS)[number][0] | 'name' | 'extra';
 /** What a column is put in order by: shooting by makes, then by fewer attempts. */
@@ -648,7 +717,9 @@ export function StatTable({
   average?: boolean;
 }) {
   const [sort, setSort] = useState<{ key: SortKey; down: boolean } | null>(null);
-  const cols = oneReb ? COLS.filter(([k]) => k !== 'oreb' && k !== 'dreb') : COLS;
+  // Turnovers forced are only asked about by teams that turn that on: with none anywhere, the column is left out.
+  const anyForced = rows.some((r) => r.line.fto > 0) || (total?.line.fto ?? 0) > 0;
+  const cols = COLS.filter(([k]) => (k !== 'fto' || anyForced) && (!oneReb || (k !== 'oreb' && k !== 'dreb')));
   const ordered = sort
     ? [...rows].sort((a, b) => {
         const x = sortValue(a, sort.key, !!average);

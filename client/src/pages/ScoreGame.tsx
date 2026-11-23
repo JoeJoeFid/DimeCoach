@@ -9,7 +9,8 @@ import ScorePad, { CourtPicker, StatTable } from '../components/ScorePad';
 import AssistDuos from '../components/AssistDuos';
 import { Modal } from '../components/bits';
 import type { StatsFile } from '../api';
-import { linesOf, newState, periodName, scoreOf, type GameEvent, type ScoreState, type Scoresheet } from '../scoring';
+import { DEFAULT_SCORING, linesOf, newState, periodName, scoreOf, type GameEvent, type ScoreState, type ScoringConfig, type Scoresheet } from '../scoring';
+import { confirmDialog } from '../components/dialogs';
 
 type Saved = { status: number; sheet?: Scoresheet; error?: string };
 type Kept = { state: ScoreState; events: GameEvent[]; rev: number; dirty: boolean };
@@ -365,6 +366,8 @@ export function ScoreGameView({ planId }: { planId: number }) {
   const [tab, setTab] = useState<'score' | 'box' | 'roster'>('score');
   const navigate = useNavigate();
   const [canImport, setCanImport] = useState(false);
+  // What this team tracks while scoring: which buttons the pad has and what it asks.
+  const [config, setConfig] = useState<ScoringConfig>(DEFAULT_SCORING);
   const [importing, setImporting] = useState(false);
   // Whether this game is going out on video right now, for the mark at the top.
   const [live, setLive] = useState(false);
@@ -377,6 +380,7 @@ export function ScoreGameView({ planId }: { planId: number }) {
         planRef.current = p;
         setPlan(p);
         api.players(p.team_id).then((list) => setPlayers(list.filter((x) => x.active)), () => {});
+        api.teamScoring(p.team_id).then((r) => setConfig(r.scoring), () => {});
       },
       (e) => setFailed((e as Error).message),
     );
@@ -422,6 +426,19 @@ export function ScoreGameView({ planId }: { planId: number }) {
   const theirs = sheet.sync === 'taken' || (!!sheet.server && sheet.server.status === 'live' && !!sheet.server.scorer_id && sheet.server.scorer_id !== app.user.id && sheet.server.events.length > 0 && !sheet.adopted);
   const score = scoreOf(events);
 
+  /** Throws away everything recorded for this game and starts its scoring again from nothing. */
+  const redo = async () => {
+    const ok = await confirmDialog({
+      title: "Delete this game's stats and start over?",
+      body: `ALL of the stats recorded for this game will be deleted: ${events.length} ${events.length === 1 ? 'play' : 'plays'}, and the score of ${usName} ${score.us}, ${themName} ${score.them}. They are gone for good and cannot be brought back. The game then starts again at 0 to 0.`,
+      confirmLabel: 'Delete the old stats and start over',
+      danger: true,
+    });
+    if (!ok) return;
+    // How the game is kept stays as it was set: the clock, the other team's numbers, who is on the court.
+    sheet.change({ ...newState('full'), on: state.on, timed: state.timed, period_secs: state.period_secs, opp_advanced: state.opp_advanced, opp_players: state.opp_players }, []);
+    setTab('score');
+  };
   const seg = (
     <div className="sp-tabs" role="tablist" aria-label="Scoring, stats and roster">
       {(
@@ -445,6 +462,11 @@ export function ScoreGameView({ planId }: { planId: number }) {
             Import stats
           </button>
         )}
+        {!theirs && events.length > 0 && (
+          <button type="button" className="btn small danger" onClick={redo}>
+            Redo stats
+          </button>
+        )}
         <SyncNote sync={sheet.sync} />
       </div>
       {state.imported && <p className="muted small sp-imported">These stats were brought in from {state.imported}, as totals for the game. There is no play by play for them.</p>}
@@ -465,7 +487,7 @@ export function ScoreGameView({ planId }: { planId: number }) {
         <>
           <div className="card sp-theirs">
             <h2>
-              {usName} {score.us} · {themName} {score.them} <span className="muted small">{state.status === 'final' ? 'Final' : periodName(state.period)}</span>
+              {usName} {score.us} · {themName} {score.them} <span className="muted small">{state.status === 'final' ? 'Final' : periodName(state.period, config.halves)}</span>
             </h2>
             <p className="muted">{sheet.server?.scorer || 'Someone else'} is keeping score for this game. One person keeps score at a time; this page follows along.</p>
             <button type="button" className="btn primary" onClick={sheet.takeOver}>
@@ -487,6 +509,7 @@ export function ScoreGameView({ planId }: { planId: number }) {
           video={live ? 'live' : 'none'}
           onVideo={() => navigate(`/plans/${planId}?view=video`)}
           tabs={seg}
+          config={config}
         >
           {tab === 'box' ? (
             <BoxScore events={events} players={players} usName={usName} themName={themName} state={state} />

@@ -79,7 +79,7 @@ export function SavedVideoCard({ run }: { run: (fn: () => Promise<unknown>, done
   return (
     <div className="card">
       <h2>Saved game video and stat import</h2>
-      <p className="muted small">Both are turned on team by team. Anyone allowed to can broadcast a game live; keeping the video afterwards takes room on the disk, and saved video is for the team's coaches. Stat import adds "Import stats" to each of the team's games, to bring in the stats another scorekeeping app exports.</p>
+      <p className="muted small">Both are turned on team by team. Anyone allowed to can broadcast a game live; keeping the video afterwards takes room on the disk, and saved video is for the team's coaches. Stat import adds "Import stats" to each of the team's games, to bring in the stats another scorekeeping app exports. The shot efficiency chart adds "Volume and efficiency" under Stats, Shooting.</p>
       {teams === null ? (
         <p className="muted small">Loading…</p>
       ) : teams.length === 0 ? (
@@ -98,6 +98,10 @@ export function SavedVideoCard({ run }: { run: (fn: () => Promise<unknown>, done
               <label className="check">
                 <input type="checkbox" checked={t.stats} onChange={(e) => run(async () => setTeams(await api.adminSetStreamTeam(t.id, { stats: e.target.checked })), e.target.checked ? `${t.name} can now import stats.` : `${t.name} can no longer import stats. What it brought in already is kept.`)} />
                 <span>Import stats</span>
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={t.shots} onChange={(e) => run(async () => setTeams(await api.adminSetStreamTeam(t.id, { shots: e.target.checked })), e.target.checked ? `${t.name} now has the shot volume and efficiency chart.` : `${t.name} no longer has the shot volume and efficiency chart.`)} />
+                <span>Shot efficiency chart</span>
               </label>
             </li>
           ))}

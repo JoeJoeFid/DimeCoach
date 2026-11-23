@@ -6,6 +6,7 @@
 // at a time. A personal one ("My stats") is one person following one player: it is theirs alone,
 // never part of the team's numbers, unless they choose to show it to the team's coaches.
 import { all, db, get, run } from './db.js';
+import { cleanScoring, shotChartAllowed, shotCounts } from './shotStats.js';
 import { poke } from './live.js';
 import { coachesOfTeam, followersOfTeam } from './inbox.js';
 import { isSystemAdmin } from './auth.js';
@@ -45,6 +46,11 @@ const TYPES = new Set(['p1', 'm1', 'm2', 'm3', 'x1', 'x2', 'x3', 'reb', 'ast', '
 const MAX_EVENTS = 3000;
 // Whether a team may bring a game's stats in from a file: the system administrator's call, team by team.
 if (!all('PRAGMA table_info(teams)').some((c) => c.name === 'stat_import')) db.exec('ALTER TABLE teams ADD COLUMN stat_import INTEGER DEFAULT 0');
+// The shot volume and efficiency chart is turned on team by team, by the system administrator only.
+if (!all('PRAGMA table_info(teams)').some((c) => c.name === 'shot_efficiency_chart')) db.exec('ALTER TABLE teams ADD COLUMN shot_efficiency_chart INTEGER DEFAULT 0');
+// What each team tracks while it scores a game, as JSON. Empty until the team changes something.
+if (!all('PRAGMA table_info(teams)').some((c) => c.name === 'scoring_json')) db.exec("ALTER TABLE teams ADD COLUMN scoring_json TEXT DEFAULT ''");
+const scoringOf = (team) => cleanScoring(parse(team?.scoring_json || '', {}));
 const mayImport = (user, teamId) => isSystemAdmin(user) || !!get('SELECT stat_import FROM teams WHERE id=?', teamId)?.stat_import;
 
 /** The plays as sent, with anything unexpected dropped. */
@@ -57,6 +63,11 @@ function cleanEvents(list) {
       period: Math.min(20, Math.max(1, Number(e.period) || 1)), clock: Number.isFinite(e.clock) ? Math.max(0, Math.round(e.clock)) : null, at: Number(e.at) || 0,
       // The shot an assist or a rebound came from, by its id: null when it came from none, left out on plays from before this was kept.
       ...(typeof e.for === 'string' ? { for: str(e.for, 40) } : e.for === null ? { for: null } : {}),
+      // A turnover: whether it was forced, and by which player of the other side.
+      ...(typeof e.forced === 'boolean' ? { forced: e.forced } : {}),
+      ...(Number.isInteger(e.by) ? { by: e.by } : {}),
+      // Where a shot was taken on the half court, as shares of its width and depth.
+      ...(Number.isFinite(e.x) && Number.isFinite(e.y) ? { x: Math.round(Math.min(1, Math.max(0, e.x)) * 1000) / 1000, y: Math.round(Math.min(1, Math.max(0, e.y)) * 1000) / 1000 } : {}),
     });
   }
   return out;
@@ -273,7 +284,30 @@ export function mountGames(app) {
       team.id,
       until,
     ).map((p) => ({ plan_id: p.id, title: p.title, date: p.date, start_time: p.start_time || '', opponent: parse(p.game_json, {}).opponent || '' }));
-    res.json({ games, shared, unscored });
+    res.json({ games, shared, unscored, scoring: scoringOf(team), shot_efficiency: shotChartAllowed(team) });
+  });
+  // What the team tracks while scoring. Anyone coaching the team reads it; changing it needs "manage this team".
+  app.get('/api/teams/:id/scoring', (req, res) => {
+    const team = get('SELECT * FROM teams WHERE id=? AND owner_id=?', Number(req.params.id), req.ownerId);
+    if (!team) return res.status(404).json({ error: 'Not found' });
+    res.json({ scoring: scoringOf(team) });
+  });
+  app.put('/api/teams/:id/scoring', (req, res) => {
+    const team = get('SELECT * FROM teams WHERE id=? AND owner_id=?', Number(req.params.id), req.ownerId);
+    if (!team) return res.status(404).json({ error: 'Not found' });
+    const scoring = cleanScoring(req.body.scoring, scoringOf(team));
+    run('UPDATE teams SET scoring_json=? WHERE id=?', JSON.stringify(scoring), team.id);
+    res.json({ scoring });
+  });
+  // The numbers behind the shot volume and efficiency chart: each game's field goal attempts, player by
+  // player. Nothing is handed over unless the system administrator has turned the chart on for the team.
+  app.get('/api/teams/:id/shot-efficiency', (req, res) => {
+    const team = get('SELECT * FROM teams WHERE id=? AND owner_id=?', Number(req.params.id), req.ownerId);
+    if (!team) return res.status(404).json({ error: 'Not found' });
+    if (!shotChartAllowed(team)) return res.status(403).json({ error: 'The shot volume and efficiency chart is not turned on for this team.' });
+    res.json({
+      games: all("SELECT plan_id, events_json FROM scoresheets WHERE team_id=? AND scope='team' AND plan_id IS NOT NULL", team.id).map((s) => ({ plan_id: s.plan_id, ...shotCounts(parse(s.events_json, [])) })),
+    });
   });
   // The team's finished games as scores only, oldest first: enough for its record of wins and losses.
   app.get('/api/teams/:id/record', (req, res) => {

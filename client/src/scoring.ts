@@ -19,7 +19,30 @@ export interface GameEvent {
    * recorded before this was kept: those are matched to the shot recorded just before them.
    */
   for?: string | null;
+  /** A turnover: whether it was forced. Left out when nobody was asked. */
+  forced?: boolean;
+  /** Who forced the turnover: a player of the other side from the one that lost the ball. */
+  by?: number;
+  /** Where a shot was taken on the half court, as shares of its width and of its depth from the baseline. */
+  x?: number;
+  y?: number;
 }
+/** What a team tracks while it scores a game. A stat that is off has no button on the pad and is never asked about. */
+export interface ScoringConfig {
+  reb: boolean;
+  ast: boolean;
+  stl: boolean;
+  blk: boolean;
+  to: boolean;
+  pf: boolean;
+  /** After a turnover, ask whether it was forced and by whom. */
+  forced: boolean;
+  /** After a shot, ask where on the court it was taken. */
+  place: boolean;
+  /** The game is played in halves, not quarters. */
+  halves: boolean;
+}
+export const DEFAULT_SCORING: ScoringConfig = { reb: true, ast: true, stl: true, blk: true, to: true, pf: true, forced: false, place: false, halves: false };
 export interface ScoreState {
   /** "score" is just the two scores. "full" is who did what. */
   mode: 'score' | 'full';
@@ -75,8 +98,11 @@ export const scoreOf = (events: GameEvent[]) => ({
 });
 /** "4:05" from seconds. */
 export const clockText = (secs: number) => `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`;
-/** "Q2", or "OT" after the fourth. */
-export const periodName = (p: number) => (p <= 4 ? `Q${p}` : p === 5 ? 'OT' : `OT${p - 4}`);
+/** "Q2", or "OT" after the fourth. For a game of halves: "H1", "H2", then "OT". */
+export const periodName = (p: number, halves = false) => {
+  const last = halves ? 2 : 4;
+  return p <= last ? `${halves ? 'H' : 'Q'}${p}` : p === last + 1 ? 'OT' : `OT${p - last}`;
+};
 
 /** One player's (or one side's) numbers. */
 export interface StatLine {
@@ -97,9 +123,11 @@ export interface StatLine {
   stl: number;
   blk: number;
   to: number;
+  /** Turnovers by the other side that this player, or this side, forced. */
+  fto: number;
   pf: number;
 }
-export const emptyLine = (): StatLine => ({ pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0 });
+export const emptyLine = (): StatLine => ({ pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, to: 0, fto: 0, pf: 0 });
 export function addTo(line: StatLine, e: GameEvent) {
   line.pts += POINTS[e.type] ?? 0;
   if (e.type === 'm2' || e.type === 'm3') line.fgm++;
@@ -137,6 +165,14 @@ export function linesOf(events: GameEvent[], side: 'us' | 'them') {
   const players = new Map<number, StatLine>();
   const shot = shotFinder(events);
   events.forEach((e, i) => {
+    // A turnover the other side was forced into is this side's doing, and the doing of whoever forced it.
+    if (e.side !== side && e.type === 'to' && e.forced) {
+      total.fto++;
+      if (e.by !== undefined) {
+        if (!players.has(e.by)) players.set(e.by, emptyLine());
+        players.get(e.by)!.fto++;
+      }
+    }
     if (e.side !== side) return;
     const kind = e.type === 'reb' ? (offensive(e, shot(i)) ? 'oreb' : 'dreb') : null;
     if (e.player !== null && !players.has(e.player)) players.set(e.player, emptyLine());
@@ -167,7 +203,7 @@ export function playWords(events: GameEvent[]) {
   const out = new Map<string, { words: string; scorer: number | null }>();
   events.forEach((e, i) => {
     const s = shot(i);
-    const words = e.type === 'reb' && e.side === 'us' ? `${offensive(e, s) ? 'offensive' : 'defensive'} rebound` : EV_WORDS[e.type];
+    const words = e.type === 'reb' && e.side === 'us' ? `${offensive(e, s) ? 'offensive' : 'defensive'} rebound` : e.type === 'to' && e.forced ? 'forced turnover' : EV_WORDS[e.type];
     out.set(e.id, { words, scorer: e.type === 'ast' && s ? s.player : null });
   });
   return out;

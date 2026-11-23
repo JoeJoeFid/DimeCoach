@@ -11,7 +11,8 @@ import { confirmDialog } from '../components/dialogs';
 import ScorePad, { LineText, StatTable } from '../components/ScorePad';
 import StatCharts from '../components/StatCharts';
 import AssistDuos from '../components/AssistDuos';
-import { emptyLine, linesOf, sumLines, type Scoresheet, type StatLine } from '../scoring';
+import ShotCharts from '../components/ShotCharts';
+import { emptyLine, linesOf, sumLines, type Scoresheet, type ScoringConfig, type StatLine } from '../scoring';
 import { fmtDateShort, todayISO } from '../util';
 import { SyncNote, useSheet } from './ScoreGame';
 
@@ -245,13 +246,57 @@ function NotScored({ games }: { games: Missing[] }) {
   );
 }
 
-type View = 'season' | 'games' | 'mine' | 'shared';
+/** What the team tracks while scoring a game: a switch for each stat and each extra question. Only someone who manages the team changes it. */
+function ScoringSetup({ teamId, config, canEdit, onSaved }: { teamId: number; config: ScoringConfig; canEdit: boolean; onSaved: (c: ScoringConfig) => void }) {
+  const [error, setError] = useState('');
+  const set = (key: keyof ScoringConfig, on: boolean) => {
+    onSaved({ ...config, [key]: on });
+    api.saveTeamScoring(teamId, { [key]: on }).then((r) => (onSaved(r.scoring), setError('')), (e) => (onSaved(config), setError((e as Error).message)));
+  };
+  const row = (key: keyof ScoringConfig, title: string, about: string) => (
+    <label className="check setting" key={key}>
+      <input type="checkbox" checked={config[key]} disabled={!canEdit} onChange={(e) => set(key, e.target.checked)} />
+      <span>
+        <strong>{title}</strong>
+        <span className="muted small">{about}</span>
+      </span>
+    </label>
+  );
+  return (
+    <>
+      {error && <p className="error">{error}</p>}
+      {!canEdit && <p className="muted small">Only a coach who manages this team can change these.</p>}
+      <div className="card st-setup">
+        <h2>Stats to track</h2>
+        <p className="muted small">Each one that is on has a button on the scoring pad. Made and missed shots and free throws are always tracked.</p>
+        {row('reb', 'Rebounds', 'The REB button, and "who rebounded?" after a missed shot.')}
+        {row('ast', 'Assists', 'The AST button, and "who assisted?" after a made shot.')}
+        {row('stl', 'Steals', 'The STL button.')}
+        {row('blk', 'Blocks', 'The BLK button.')}
+        {row('to', 'Turnovers', 'The TO button.')}
+        {row('pf', 'Fouls', 'The Foul button.')}
+      </div>
+      <div className="card st-setup">
+        <h2>Extra questions</h2>
+        <p className="muted small">Each of these adds one more tap while scoring, so they are off until you want them.</p>
+        {row('forced', 'Forced turnovers', 'After a turnover, ask whether it was forced and by whom. Needs Turnovers on.')}
+        {row('place', 'Shot placement', 'After a 2 or a 3, made or missed, ask where on the court it was taken. It can be skipped each time.')}
+      </div>
+      <div className="card st-setup">
+        <h2>Periods</h2>
+        {row('halves', 'This team plays halves', 'Periods are named H1 and H2, then overtime. Off, they are Q1 to Q4.')}
+      </div>
+    </>
+  );
+}
+
+type View = 'season' | 'shooting' | 'games' | 'mine' | 'shared' | 'setup';
 /** A coach's Stats page. */
 export default function Stats() {
   const app = useApp();
   const team = app.team;
   const [view, setView] = useState<View>('season');
-  const [data, setData] = useState<{ games: Scoresheet[]; shared: Scoresheet[]; unscored: UnscoredGame[] } | null>(null);
+  const [data, setData] = useState<{ games: Scoresheet[]; shared: Scoresheet[]; unscored: UnscoredGame[]; scoring: ScoringConfig; shot_efficiency: boolean } | null>(null);
   const [players, setPlayers] = useState<{ id: number; name: string; number: string }[]>([]);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -288,6 +333,50 @@ export default function Stats() {
     const p = players.find((x) => x.id === id);
     return p ? `${p.number ? `#${p.number} ` : ''}${p.name}` : 'Former player';
   };
+  /** The games to count, each one pressed in or out. */
+  const picker = data && (
+    <div className="card st-pick">
+      <div className="st-pick-head">
+        <strong>
+          Games <span className="muted small">{picked.length} of {scored.length} chosen</span>
+        </strong>
+        <span className="st-pick-all">
+          <button type="button" className="link small" disabled={out.size === 0} onClick={() => setOut(new Set())}>
+            All
+          </button>
+          <button type="button" className="link small" disabled={picked.length === 0} onClick={() => setOut(new Set(scored.map((g) => g.id)))}>
+            None
+          </button>
+        </span>
+      </div>
+      <div className="st-games" role="group" aria-label="Games to count">
+        {[...scored]
+          .sort((x, y) => x.date.localeCompare(y.date) || x.id - y.id)
+          .map((g) => {
+            const on = !out.has(g.id);
+            return (
+              <button
+                key={g.id}
+                type="button"
+                className={`chip toggle ${on ? 'on' : ''}`}
+                aria-pressed={on}
+                onClick={() => {
+                  const next = new Set(out);
+                  if (on) next.add(g.id);
+                  else next.delete(g.id);
+                  setOut(next);
+                }}
+              >
+                {fmtDateShort(g.date)} · {g.opponent ? `vs. ${g.opponent}` : g.title || 'Game'}{' '}
+                <span className="chip-num">
+                  {g.us}–{g.them}
+                </span>
+              </button>
+            );
+          })}
+      </div>
+    </div>
+  );
   return (
     <div className="page">
       <div className="page-head">
@@ -304,15 +393,21 @@ export default function Stats() {
         onChange={setView}
         tabs={[
           ['season', 'Season'],
+          ['shooting', 'Shooting'],
           ['games', 'Games', data ? scored.length + missing.length : undefined],
           ['mine', 'My stats'],
           ['shared', 'From parents', data?.shared.length],
+          ['setup', 'Scoring setup'],
         ]}
       />
       {view === 'mine' ? (
         <MyStats />
       ) : !data ? (
         <p className="muted">Loading…</p>
+      ) : view === 'setup' ? (
+        <ScoringSetup teamId={team?.id ?? 0} config={data.scoring} canEdit={app.can('manage')} onSaved={(scoring) => setData((d) => (d ? { ...d, scoring } : d))} />
+      ) : view === 'shooting' ? (
+        <ShotCharts games={scored} picked={picked} picker={picker} nameOf={nameOf} teamName={team?.name ?? 'Team'} teamId={team?.id ?? 0} halves={data.scoring.halves} flag={data.shot_efficiency} />
       ) : view === 'season' ? (
         scored.length === 0 ? (
           <>
@@ -324,47 +419,7 @@ export default function Stats() {
           </>
         ) : (
           <>
-            <div className="card st-pick">
-              <div className="st-pick-head">
-                <strong>
-                  Games <span className="muted small">{picked.length} of {scored.length} chosen</span>
-                </strong>
-                <span className="st-pick-all">
-                  <button type="button" className="link small" disabled={out.size === 0} onClick={() => setOut(new Set())}>
-                    All
-                  </button>
-                  <button type="button" className="link small" disabled={picked.length === 0} onClick={() => setOut(new Set(scored.map((g) => g.id)))}>
-                    None
-                  </button>
-                </span>
-              </div>
-              <div className="st-games" role="group" aria-label="Games to count">
-                {[...scored]
-                  .sort((x, y) => x.date.localeCompare(y.date) || x.id - y.id)
-                  .map((g) => {
-                    const on = !out.has(g.id);
-                    return (
-                      <button
-                        key={g.id}
-                        type="button"
-                        className={`chip toggle ${on ? 'on' : ''}`}
-                        aria-pressed={on}
-                        onClick={() => {
-                          const next = new Set(out);
-                          if (on) next.add(g.id);
-                          else next.delete(g.id);
-                          setOut(next);
-                        }}
-                      >
-                        {fmtDateShort(g.date)} · {g.opponent ? `vs. ${g.opponent}` : g.title || 'Game'}{' '}
-                        <span className="chip-num">
-                          {g.us}–{g.them}
-                        </span>
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
+            {picker}
             <NotScored games={missing} />
             <div className="st-show">
               <div className="seg" role="group" aria-label="Table or charts">

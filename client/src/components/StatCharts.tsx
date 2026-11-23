@@ -5,7 +5,7 @@ import { useId, useState } from 'react';
 import { linesOf, scoreOf, type Scoresheet, type StatLine } from '../scoring';
 import { fmtDateShort } from '../util';
 
-export type ChartStat = 'pts' | 'reb' | 'oreb' | 'dreb' | 'ast' | 'stl' | 'blk' | 'to' | 'pf' | 'tpm';
+export type ChartStat = 'pts' | 'reb' | 'oreb' | 'dreb' | 'ast' | 'stl' | 'blk' | 'to' | 'fto' | 'pf' | 'fg2' | 'tp';
 export const CHART_STATS: [ChartStat, string, string][] = [
   ['pts', 'PTS', 'Points'],
   ['reb', 'REB', 'Rebounds'],
@@ -15,8 +15,10 @@ export const CHART_STATS: [ChartStat, string, string][] = [
   ['stl', 'STL', 'Steals'],
   ['blk', 'BLK', 'Blocks'],
   ['to', 'TO', 'Turnovers'],
+  ['fto', 'FTO', 'Turnovers forced'],
   ['pf', 'PF', 'Fouls'],
-  ['tpm', '3PM', 'Threes made'],
+  ['fg2', 'FG', '2-point field goals made'],
+  ['tp', '3PT', '3-pointers made'],
 ];
 const gameName = (g: Scoresheet) => (g.opponent ? `vs. ${g.opponent}` : g.title || 'Game');
 /** A round number at or above the largest value, so the top line of the chart is easy to read. */
@@ -120,7 +122,7 @@ function Line({
               {n > 1 && <path className="sc-line" pathLength={other ? undefined : 1} d={path(s.values.map((v, i) => [x(i), y(v)]))} />}
               {/* A small chart shows only where the line ends and the game pointed at: the line carries the rest. */}
               {s.values.map((v, i) =>
-                big || shown === i || i === n - 1 ? <circle key={i} className={i === n - 1 ? 'last' : ''} style={{ animationDelay: `${0.25 + (n > 1 ? i / (n - 1) : 0) * 0.85}s` }} cx={x(i)} cy={y(v)} r={shown === i ? 5.5 : i === n - 1 ? (big ? 5 : 3.5) : n > 12 ? 2.5 : 3.5} /> : null,
+                big || shown === i || i === n - 1 ? <circle key={i} className={i === n - 1 ? 'last' : ''} style={{ animationDelay: `${0.1 + (n > 1 ? i / (n - 1) : 0) * 0.48}s` }} cx={x(i)} cy={y(v)} r={shown === i ? 5.5 : i === n - 1 ? (big ? 5 : 3.5) : n > 12 ? 2.5 : 3.5} /> : null,
               )}
               {/* Where each line ends is written beside it, on the side away from the other line. */}
               {big && n > 1 && (
@@ -153,7 +155,10 @@ export default function StatCharts({ games, nameOf, teamName }: { games: Scoresh
   const labels = ordered.map((g) => ({ name: gameName(g), date: g.date }));
   const lines = ordered.map((g) => linesOf(g.events, 'us'));
   const word = CHART_STATS.find(([id]) => id === stat)![2];
-  const of = (l: StatLine | undefined) => (l ? l[stat] : 0);
+  const of = (l: StatLine | undefined) => (!l ? 0 : stat === 'fg2' ? l.fgm - l.tpm : stat === 'tp' ? l.tpm : l[stat]);
+  // Shooting has its attempts to set beside the makes.
+  const shooting = stat === 'fg2' || stat === 'tp';
+  const tried = lines.map((l) => (stat === 'fg2' ? l.total.fga - l.total.tpa : l.total.tpa));
   const team = lines.map((l) => of(l.total));
   // Points have the other team's to set beside them. Nothing else is known about the other team for every game.
   const them = ordered.map((g) => scoreOf(g.events).them);
@@ -174,7 +179,7 @@ export default function StatCharts({ games, nameOf, teamName }: { games: Scoresh
           ))}
         </div>
       </div>
-      <Line big key={stat} title={`${teamName}: ${word.toLowerCase()} each game`} series={stat === 'pts' ? [{ name: teamName, values: team }, { name: 'Other team', values: them }] : [{ name: teamName, values: team }]} labels={labels} top={ceiling(Math.max(1, ...team, ...(stat === 'pts' ? them : [])))} at={at} onAt={setAt} />
+      <Line big key={stat} title={`${teamName}: ${word.toLowerCase()} each game`} series={stat === 'pts' ? [{ name: teamName, values: team }, { name: 'Other team', values: them }] : shooting ? [{ name: 'Made', values: team }, { name: 'Attempted', values: tried }] : [{ name: teamName, values: team }]} labels={labels} top={ceiling(Math.max(1, ...team, ...(stat === 'pts' ? them : shooting ? tried : [])))} at={at} onAt={setAt} />
       {players.length > 0 && (
         <>
           <p className="muted small sc-note">Each player, on the same scale so the charts can be compared. Point at a game to read it in every chart.</p>

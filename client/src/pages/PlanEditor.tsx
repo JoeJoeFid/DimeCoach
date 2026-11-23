@@ -501,6 +501,7 @@ export default function PlanEditor() {
         {/* A game has three parts: what is planned, keeping score, and its video. */}
         {gameMode && (
           <SubTabs<'plan' | 'score' | 'video'>
+            boxed
             label="Parts of the game"
             value={gameView}
             onChange={(v) => setSearchParams(v === 'plan' ? {} : { view: v }, { replace: true })}

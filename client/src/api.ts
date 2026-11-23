@@ -1,4 +1,5 @@
-import type { GameEvent, ScoreState, Scoresheet } from './scoring';
+import type { GameEvent, ScoreState, ScoringConfig, Scoresheet } from './scoring';
+import type { GameShots } from './shots';
 import type { Drill, ImportDraft, InviteInfo, Item, Plan, PlanKind, PlanSummary, Play, Player, Resource, ScheduleEvent, SharedTeam, Sport, StaffMember, Tag, Team, TeamAccess, TeamInvite, TeamPerms } from './types';
 
 /** Fired when the server says the session is gone, so the app can show the sign-in screen. */
@@ -870,6 +871,8 @@ export interface StreamTeam {
   save: boolean;
   /** May bring a game's stats in from a file. */
   stats: boolean;
+  /** Sees the shot volume and efficiency chart. */
+  shots: boolean;
   videos: number;
   bytes: number;
 }
@@ -1008,7 +1011,12 @@ export const api = {
     return { status: res.status, sheet: body.sheet, error: body.error };
   },
   teamRecord: (teamId: number) => req<{ games: RecordGame[] }>('GET', `/teams/${teamId}/record`),
-  teamScores: (teamId: number) => req<{ games: Scoresheet[]; shared: Scoresheet[]; unscored: UnscoredGame[] }>('GET', `/teams/${teamId}/scores`),
+  teamScores: (teamId: number) => req<{ games: Scoresheet[]; shared: Scoresheet[]; unscored: UnscoredGame[]; scoring: ScoringConfig; shot_efficiency: boolean }>('GET', `/teams/${teamId}/scores`),
+  /** What the team tracks while scoring a game. */
+  teamScoring: (teamId: number) => req<{ scoring: ScoringConfig }>('GET', `/teams/${teamId}/scoring`),
+  saveTeamScoring: (teamId: number, scoring: Partial<ScoringConfig>) => req<{ scoring: ScoringConfig }>('PUT', `/teams/${teamId}/scoring`, { scoring }),
+  /** Each game's field goal attempts by player. Refused unless the chart is turned on for the team. */
+  shotEfficiency: (teamId: number) => req<{ games: ({ plan_id: number } & GameShots)[] }>('GET', `/teams/${teamId}/shot-efficiency`),
   streams: (teamId: number) => req<StreamList>('GET', `/streams?team_id=${teamId}`),
   stream: (id: number) => req<GameStream>('GET', `/streams/${id}`),
   savedStreams: () => req<GameStream[]>('GET', '/streams/saved'),
@@ -1023,7 +1031,7 @@ export const api = {
   streamPeople: (teamId: number) => req<{ save: boolean; people: StreamPerson[] }>('GET', `/streams/teams/${teamId}/people`),
   setStreamPerson: (teamId: number, contactId: number, b: { watch?: boolean; broadcast?: boolean }) => req<{ save: boolean; people: StreamPerson[] }>('PUT', `/streams/teams/${teamId}/people/${contactId}`, b),
   adminStreamTeams: () => req<StreamTeam[]>('GET', '/streams/admin/teams'),
-  adminSetStreamTeam: (teamId: number, b: { save?: boolean; stats?: boolean }) => req<StreamTeam[]>('PUT', `/streams/admin/teams/${teamId}`, b),
+  adminSetStreamTeam: (teamId: number, b: { save?: boolean; stats?: boolean; shots?: boolean }) => req<StreamTeam[]>('PUT', `/streams/admin/teams/${teamId}`, b),
   tracks: () => req<{ teams: TrackTeam[]; sheets: Scoresheet[] }>('GET', '/tracks'),
   addTrack: (b: { team_id?: number; player_id?: number; player_name: string; title: string; date: string }) => req<{ id: number; teams: TrackTeam[]; sheets: Scoresheet[] }>('POST', '/tracks', b),
   saveTrack: (id: number, b: { state: ScoreState; events: GameEvent[] }) => req<{ sheet: Scoresheet }>('PUT', `/tracks/${id}`, b),
