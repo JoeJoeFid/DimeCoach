@@ -2,7 +2,7 @@
 // For one person: the sheets they keep for a single player ("My stats"), which are theirs alone
 // and never part of the team's numbers unless they choose to show one to the coaches.
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, type TrackTeam, type UnscoredGame } from '../api';
 import { useApp } from '../App';
 import PageTitle from '../components/PageTitle';
@@ -12,6 +12,8 @@ import ScorePad, { LineText, StatTable } from '../components/ScorePad';
 import StatCharts from '../components/StatCharts';
 import AssistDuos from '../components/AssistDuos';
 import ShotCharts from '../components/ShotCharts';
+import WhatWins from '../components/WhatWins';
+import { MoreMenu } from '../components/bits';
 import { emptyLine, linesOf, sumLines, type Scoresheet, type ScoringConfig, type StatLine } from '../scoring';
 import { fmtDateShort, todayISO } from '../util';
 import { SyncNote, useSheet } from './ScoreGame';
@@ -211,19 +213,18 @@ export function MyStats() {
 type Missing = { plan_id: number; title: string; date: string; opponent: string };
 const gameName = (g: { opponent?: string; title: string }) => (g.opponent ? `vs. ${g.opponent}` : g.title || 'Game');
 
-/** One scored game in the list of games. */
-function ScoredRow({ g }: { g: Scoresheet }) {
+/** What a game's "..." opens: the game itself, keeping its score, and its video. */
+function GameMenu({ planId, name }: { planId: number; name: string }) {
+  const navigate = useNavigate();
   return (
-    <li>
-      <Link className="track-row" to={`/plans/${g.plan_id}?view=score`}>
-        <strong>
-          {gameName(g)} · {g.us}–{g.them}
-        </strong>
-        <span className="muted small">
-          {fmtDateShort(g.date)} · {g.status === 'final' ? 'Final' : 'Not finished'}
-        </span>
-      </Link>
-    </li>
+    <MoreMenu
+      label={`More for ${name}`}
+      items={[
+        { label: 'Game details', onSelect: () => navigate(`/plans/${planId}`) },
+        { label: 'Score game', onSelect: () => navigate(`/plans/${planId}?view=score`) },
+        { label: 'Game video', onSelect: () => navigate(`/plans/${planId}?view=video`) },
+      ]}
+    />
   );
 }
 
@@ -237,9 +238,12 @@ function NotScored({ games }: { games: Missing[] }) {
       </strong>
       <div className="st-games">
         {games.map((g) => (
-          <Link key={g.plan_id} className="chip st-miss" to={`/plans/${g.plan_id}?view=score`}>
-            {fmtDateShort(g.date)} · {gameName(g)} <span className="st-miss-go">Score it →</span>
-          </Link>
+          <span key={g.plan_id} className="st-game">
+            <Link className="chip st-miss" to={`/plans/${g.plan_id}?view=score`}>
+              {fmtDateShort(g.date)} · {gameName(g)} <span className="st-miss-go">Score it →</span>
+            </Link>
+            <GameMenu planId={g.plan_id} name={gameName(g)} />
+          </span>
         ))}
       </div>
     </div>
@@ -286,7 +290,7 @@ function ScoringSetup({ teamId, config, canEdit, onSaved }: { teamId: number; co
   );
 }
 
-type View = 'season' | 'shooting' | 'games' | 'mine' | 'shared' | 'setup';
+type View = 'season' | 'mine' | 'shared' | 'setup';
 /** A coach's Stats page. */
 export default function Stats() {
   const app = useApp();
@@ -303,7 +307,7 @@ export default function Stats() {
   }, [team?.id]);
   // The games left out of the season's numbers and charts. Everything is in until it is taken out.
   const [out, setOut] = useState<Set<number>>(new Set());
-  const [show, setShow] = useState<'table' | 'charts' | 'duos'>('table');
+  const [show, setShow] = useState<'table' | 'charts' | 'duos' | 'shooting' | 'wins'>('table');
   const [average, setAverage] = useState(false);
   // A sheet that was opened and never used counts as a game not scored.
   const unused = (g: Scoresheet) => g.status !== 'final' && g.events.length === 0 && g.us === 0 && g.them === 0;
@@ -351,8 +355,8 @@ export default function Stats() {
           .map((g) => {
             const on = !out.has(g.id);
             return (
+              <span key={g.id} className="st-game">
               <button
-                key={g.id}
                 type="button"
                 className={`chip toggle ${on ? 'on' : ''}`}
                 aria-pressed={on}
@@ -368,6 +372,8 @@ export default function Stats() {
                   {g.us}–{g.them}
                 </span>
               </button>
+              {g.plan_id !== null && <GameMenu planId={g.plan_id} name={g.opponent ? `vs. ${g.opponent}` : g.title || 'Game'} />}
+              </span>
             );
           })}
       </div>
@@ -389,8 +395,6 @@ export default function Stats() {
         onChange={setView}
         tabs={[
           ['season', 'Season'],
-          ['shooting', 'Shooting'],
-          ['games', 'Games', data ? scored.length + missing.length : undefined],
           ['mine', 'My stats'],
           ['shared', 'From parents', data?.shared.length],
           ['setup', 'Scoring setup'],
@@ -402,8 +406,6 @@ export default function Stats() {
         <p className="muted">Loading…</p>
       ) : view === 'setup' ? (
         <ScoringSetup teamId={team?.id ?? 0} config={data.scoring} canEdit={app.can('manage')} onSaved={(scoring) => setData((d) => (d ? { ...d, scoring } : d))} />
-      ) : view === 'shooting' ? (
-        <ShotCharts games={scored} picked={picked} picker={picker} nameOf={nameOf} teamName={team?.name ?? 'Team'} teamId={team?.id ?? 0} flag={data.shot_efficiency} />
       ) : view === 'season' ? (
         scored.length === 0 ? (
           <>
@@ -418,35 +420,41 @@ export default function Stats() {
             {picker}
             <NotScored games={missing} />
             <div className="st-show">
-              <div className="seg" role="group" aria-label="Table or charts">
-                <button type="button" className={show === 'table' ? 'on' : ''} aria-pressed={show === 'table'} onClick={() => setShow('table')}>
-                  Table
-                </button>
-                <button type="button" className={show === 'charts' ? 'on' : ''} aria-pressed={show === 'charts'} onClick={() => setShow('charts')}>
-                  Game by game
-                </button>
-                <button type="button" className={show === 'duos' ? 'on' : ''} aria-pressed={show === 'duos'} onClick={() => setShow('duos')}>
-                  Assist duos
-                </button>
+              <div className="seg" role="group" aria-label="What to look at">
+                {(
+                  [
+                    ['table', 'Summary'],
+                    ['charts', 'Game by game'],
+                    ['duos', 'Assist duos'],
+                    ['shooting', 'Shooting'],
+                    ['wins', 'What wins'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button key={id} type="button" className={show === id ? 'on' : ''} aria-pressed={show === id} onClick={() => setShow(id)}>
+                    {label}
+                  </button>
+                ))}
               </div>
-              {show === 'table' && (
-                <div className="seg" role="group" aria-label="Totals or averages">
-                  <button type="button" className={!average ? 'on' : ''} aria-pressed={!average} onClick={() => setAverage(false)}>
-                    Totals
-                  </button>
-                  <button type="button" className={average ? 'on' : ''} aria-pressed={average} onClick={() => setAverage(true)}>
-                    Averages
-                  </button>
-                </div>
-              )}
             </div>
-            {picked.length === 0 ? (
+            {show === 'shooting' ? (
+              <ShotCharts games={scored} picked={picked} nameOf={nameOf} teamName={team?.name ?? 'Team'} teamId={team?.id ?? 0} flag={data.shot_efficiency} />
+            ) : picked.length === 0 ? (
               <p className="muted">Choose at least one game above.</p>
             ) : show === 'table' ? (
               <div className="card">
-                <h2>
-                  {average ? 'Averages per game' : 'Totals'} <span className="muted small">{picked.length} {picked.length === 1 ? 'game' : 'games'} · press a heading to sort</span>
-                </h2>
+                <div className="st-sum-head">
+                  <h2>
+                    Summary <span className="muted small">{picked.length} {picked.length === 1 ? 'game' : 'games'} · press a heading to sort</span>
+                  </h2>
+                  <div className="seg" role="group" aria-label="Totals or averages">
+                    <button type="button" className={!average ? 'on' : ''} aria-pressed={!average} onClick={() => setAverage(false)}>
+                      Totals
+                    </button>
+                    <button type="button" className={average ? 'on' : ''} aria-pressed={average} onClick={() => setAverage(true)}>
+                      Averages
+                    </button>
+                  </div>
+                </div>
                 {season.size === 0 && <p className="muted small">These games have a score and nothing per player.</p>}
                 {average && <p className="muted small">Each player's numbers are divided by the games they have a stat in. Shooting is the share that went in.</p>}
                 <StatTable sortable average={average} rows={[...season.entries()].map(([id, s]) => ({ key: id, name: nameOf(id), line: s.line, extra: s.games })).sort((a, b) => b.line.pts - a.line.pts)} total={{ name: 'Team', line: sumLines(teamLines), games: picked.length }} extra="Games" />
@@ -458,41 +466,19 @@ export default function Stats() {
                 </h2>
                 <AssistDuos games={picked} nameOf={nameOf} />
               </div>
+            ) : show === 'wins' ? (
+              <div className="card">
+                <h2>
+                  What wins <span className="muted small">which stats move with the result, over the games chosen above</span>
+                </h2>
+                <WhatWins games={picked} />
+              </div>
             ) : (
               <div className="card">
                 <StatCharts games={picked} nameOf={nameOf} teamName={team?.name ?? 'Team'} />
               </div>
             )}
           </>
-        )
-      ) : view === 'games' ? (
-        scored.length + missing.length === 0 ? (
-          <p className="muted">No games played yet.</p>
-        ) : (
-          <div className="card">
-            <ul className="track-list">
-              {/* Every game that is over, newest first: the ones with no score say so and open straight into scoring. */}
-              {[...scored.map((g) => ({ date: g.date, sheet: g, gap: null as Missing | null })), ...missing.map((g) => ({ date: g.date, sheet: null as Scoresheet | null, gap: g }))]
-                .sort((x, y) => y.date.localeCompare(x.date))
-                .map(({ sheet, gap }) =>
-                  gap ? (
-                    <li key={`p${gap.plan_id}`}>
-                      <Link className="track-row st-gap" to={`/plans/${gap.plan_id}?view=score`}>
-                        <strong>
-                          {gameName(gap)} <span className="st-badge">Not scored</span>
-                        </strong>
-                        <span className="muted small">{fmtDateShort(gap.date)}</span>
-                      </Link>
-                      <Link className="btn small primary" to={`/plans/${gap.plan_id}?view=score`} aria-label={`Score the game ${gameName(gap)}`}>
-                        Score this game
-                      </Link>
-                    </li>
-                  ) : (
-                    sheet && <ScoredRow key={sheet.id} g={sheet} />
-                  ),
-                )}
-            </ul>
-          </div>
         )
       ) : data.shared.length === 0 ? (
 

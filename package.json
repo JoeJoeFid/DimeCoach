@@ -9,7 +9,7 @@
     "build": "tsc --noEmit -p client && vite build",
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "typecheck": "tsc --noEmit -p client",
-    "test": "node --test --disable-warning=ExperimentalWarning client/src/shots.test.mjs server/shotStats.test.js"
+    "test": "node --test --disable-warning=ExperimentalWarning client/src/shots.test.mjs client/src/wins.test.mjs server/shotStats.test.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

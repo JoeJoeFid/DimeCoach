@@ -23,6 +23,8 @@ const ASK: Record<Action, string> = {
 };
 const SHOT: Partial<Record<EvType, string>> = { m2: '2-point FG made', m3: '3-point FG made', x2: '2-point FG missed', x3: '3-point FG missed', x1: 'Free throw missed' };
 const SMALL: [EvType, string][] = [['reb', 'REB'], ['ast', 'AST'], ['to', 'TO'], ['stl', 'STL'], ['blk', 'BLK'], ['pf', 'Foul']];
+/** Every kind of play, for putting one in after the fact or changing what one was. */
+const KINDS: [EvType, string][] = [['m2', 'Made 2'], ['x2', 'Missed 2'], ['m3', 'Made 3'], ['x3', 'Missed 3'], ['m1', 'Made free throw'], ['x1', 'Missed free throw'], ['reb', 'Rebound'], ['ast', 'Assist'], ['stl', 'Steal'], ['blk', 'Block'], ['to', 'Turnover'], ['pf', 'Foul']];
 const byNumber = (a: PadPlayer, b: PadPlayer) => (Number(a.number) || 999) - (Number(b.number) || 999) || a.name.localeCompare(b.name);
 
 type Sheet =
@@ -33,6 +35,8 @@ type Sheet =
   | { kind: 'loose'; title: string; sub: string; ask: string }
   | { kind: 'place'; id: string; /** What is asked once the spot is marked or skipped. */ next: Sheet | null }
   | { kind: 'assign'; id: string }
+  | { kind: 'insert'; /** Where in the list of plays the new one goes. */ index: number; period: number; side: 'us' | 'them'; type: EvType | null }
+  | { kind: 'retype'; id: string }
   | { kind: 'court' }
   | { kind: 'options' };
 
@@ -202,6 +206,14 @@ export default function ScorePad({
     if (asksWho(side)) return setSheet({ kind: 'who', side, action });
     if (action === 'ft') return toLine(side, null);
     afterPlay(side, action, null, record(side, null, action, alone(action)));
+  };
+  /** Puts a play into the list at a place of its own, between two that are already there. */
+  const insertAt = (index: number, side: 'us' | 'them', player: number | null, type: EvType, period: number) => {
+    const e: GameEvent = { id: newId(), side, player, type, period, clock: null, at: Date.now(), ...(type === 'reb' || type === 'ast' ? { for: null } : {}) };
+    const list = latest.current.events;
+    latest.current = { state: latest.current.state, events: [...list.slice(0, index), e, ...list.slice(index)] };
+    onChange(latest.current.state, latest.current.events);
+    setSheet(null);
   };
   /** Free throws were pressed: first, how many. A foul by the other side put in just before is the one that caused them. */
   const toLine = (side: 'us' | 'them', player: number | null) => {
@@ -469,12 +481,12 @@ export default function ScorePad({
             </button>
           </header>
           {plays.length === 0 ? (
-            <p className="muted small">Nothing yet. Each play shows here, newest first. Tap one to say who it was, or to take it out.</p>
+            <p className="muted small">Nothing yet. Each play shows here, newest first. Tap one to say who it was, change it, put another in beside it, or take it out.</p>
           ) : (
             <ul>
               {plays.slice(0, allPlays ? plays.length : 8).map((e) => (
                 <li key={e.id}>
-                  <button type="button" className="sp-play" disabled={final} onClick={() => setSheet({ kind: 'assign', id: e.id })}>
+                  <button type="button" className="sp-play" onClick={() => setSheet({ kind: 'assign', id: e.id })}>
                     <span className="sp-what">
                       <strong>{title(e)}</strong>
                       <span className="muted small">
@@ -665,19 +677,72 @@ export default function ScorePad({
           </div>
         </BottomSheet>
       )}
-      {/* A play already recorded: say who it was, or take it out. */}
+      {/* A play already recorded: say who it was, change what it was, put another in beside it, or take it out. */}
       {sheet?.kind === 'assign' && assigning && (
         <BottomSheet title={title(assigning)} sub={`by ${playerName(assigning.side, assigning.player)} · ${pName(assigning.period)}`} onClose={() => setSheet(null)}>
           {!solo && (assigning.side === 'us' ? players.length > 0 : oppPlayers.length > 0) && (
             <PlayerGrid
               players={assigning.side === 'us' ? players : oppPlayers}
               on={assigning.side === 'us' ? state.on : []}
-              onPick={(p) => (onChange(state, events.map((e) => (e.id === assigning.id ? { ...e, player: p.id } : e))), setSheet(null))}
+              onPick={(p) => (amend(assigning.id, { player: p.id }), setSheet(null))}
             />
           )}
+          <button type="button" className="btn sp-wide" onClick={() => setSheet({ kind: 'retype', id: assigning.id })}>
+            Change what it was
+          </button>
+          <div className="sp-two">
+            <button type="button" className="btn" onClick={() => setSheet({ kind: 'insert', index: events.findIndex((e) => e.id === assigning.id), period: assigning.period, side: assigning.side, type: null })}>
+              Add a play before this
+            </button>
+            <button type="button" className="btn" onClick={() => setSheet({ kind: 'insert', index: events.findIndex((e) => e.id === assigning.id) + 1, period: assigning.period, side: assigning.side, type: null })}>
+              Add a play after this
+            </button>
+          </div>
+          <p className="muted small sp-edit-note">Before means earlier in the game: the list shows the newest play first.</p>
           <button type="button" className="btn danger sp-wide" onClick={() => (onChange(state, events.filter((e) => e.id !== assigning.id)), setSheet(null))}>
             Remove this play
           </button>
+        </BottomSheet>
+      )}
+      {/* Changing what a play was: a made 2 that was really a 3, a rebound that was a steal. */}
+      {sheet?.kind === 'retype' && (
+        <BottomSheet title="Change what it was" sub="The player and the period stay as they are." onClose={() => setSheet(null)} onBack={() => setSheet({ kind: 'assign', id: sheet.id })}>
+          <div className="sp-kinds">
+            {KINDS.map(([t, label]) => (
+              <button key={t} type="button" className="sp-key" onClick={() => (amend(sheet.id, { type: t, ...(t === 'reb' || t === 'ast' ? { for: events.find((e) => e.id === sheet.id)?.for ?? null } : {}) }), setSheet(null))}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </BottomSheet>
+      )}
+      {/* A play put in after the fact, between two that are there: what it was, then who. */}
+      {sheet?.kind === 'insert' && sheet.type === null && (
+        <BottomSheet title="Add a play here" sub={`${pName(sheet.period)} · it goes into the list at this spot`} onClose={() => setSheet(null)}>
+          {!solo && (
+            <div className="seg sp-side" role="group" aria-label="Which team">
+              {(['us', 'them'] as const).map((side) => (
+                <button key={side} type="button" className={sheet.side === side ? 'on' : ''} aria-pressed={sheet.side === side} onClick={() => setSheet({ ...sheet, side })}>
+                  {teamName(side)}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="sp-kinds">
+            {KINDS.map(([t, label]) => (
+              <button key={t} type="button" className="sp-key" onClick={() => (asksWho(sheet.side) ? setSheet({ ...sheet, type: t }) : insertAt(sheet.index, sheet.side, null, t, sheet.period))}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </BottomSheet>
+      )}
+      {sheet?.kind === 'insert' && sheet.type !== null && (
+        <BottomSheet title={`${KINDS.find(([t]) => t === sheet.type)?.[1]} by`} sub={teamName(sheet.side)} onClose={() => setSheet(null)} onBack={() => setSheet({ ...sheet, type: null })}>
+          <button type="button" className="btn sp-wide" onClick={() => insertAt(sheet.index, sheet.side, null, sheet.type!, sheet.period)}>
+            Assign later
+          </button>
+          <PlayerGrid players={sheet.side === 'us' ? players : oppPlayers} on={sheet.side === 'us' ? state.on : []} onPick={(q) => insertAt(sheet.index, sheet.side, q.id, sheet.type!, sheet.period)} />
         </BottomSheet>
       )}
       {/* Who is on the court. */}

@@ -17910,9 +17910,38 @@ button.play-card {
 .st-games {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  max-height: 132px;
-  overflow-y: auto;
+  gap: 6px 10px;
+}
+/* A game and its "..." side by side. */
+.st-game {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.st-game .more-btn {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border-color: transparent;
+  background: none;
+}
+.st-game .more-btn:hover,
+.st-game .more-btn[aria-expanded='true'] {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+/* The summary's heading, with totals or averages at its end. */
+.st-sum-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin-bottom: 8px;
+}
+.st-sum-head h2 {
+  margin: 0;
 }
 .st-show {
   margin-bottom: 12px;
@@ -19383,5 +19412,134 @@ select.input.shot-game {
 }
 .sp-ft-foul {
   margin: 10px 0 0;
+  text-align: center;
+}
+
+/* ---------- Stats: what goes with winning ---------- */
+.ww {
+  display: grid;
+  gap: 14px;
+}
+/* How far the number of games can be trusted: four steps, and the words for the one reached. */
+.ww-conf {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-left-width: 5px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.ww-conf.l1 {
+  border-left-color: var(--danger);
+}
+.ww-conf.l2 {
+  border-left-color: var(--warn);
+}
+.ww-conf.l3 {
+  border-left-color: var(--series);
+}
+.ww-conf.l4 {
+  border-left-color: var(--good);
+}
+.ww-pips {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 4px;
+  height: 30px;
+}
+.ww-pips i {
+  width: 8px;
+  border: 1.5px solid var(--muted);
+  border-radius: 3px;
+}
+.ww-pips i:nth-child(1) {
+  height: 10px;
+}
+.ww-pips i:nth-child(2) {
+  height: 16px;
+}
+.ww-pips i:nth-child(3) {
+  height: 23px;
+}
+.ww-pips i:nth-child(4) {
+  height: 30px;
+}
+.ww-pips i.on {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+.ww-conf-words {
+  display: grid;
+  gap: 2px;
+}
+.ww-conf-words strong {
+  font-size: 1.02rem;
+}
+.ww-conf-words strong .muted {
+  font-weight: 500;
+}
+.ww-table th[scope='row'] {
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.ww-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 190px;
+}
+.ww-link b {
+  flex: none;
+  width: 44px;
+  font-family: var(--mono);
+  font-weight: 600;
+  text-align: right;
+}
+/* Nothing in the middle; more of the stat with winning grows right, less grows left. */
+.ww-bar {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(to right, transparent calc(50% - 1px), var(--muted) calc(50% - 1px), var(--muted) calc(50% + 1px), transparent calc(50% + 1px)), var(--surface-3);
+}
+.ww-bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.ww-bar.up i {
+  left: 50%;
+  border-radius: 0 5px 5px 0;
+  background: var(--series);
+}
+.ww-bar.down i {
+  right: 50%;
+  border-radius: 5px 0 0 5px;
+  background: var(--shot-3);
+}
+
+/* Editing the play by play: the kinds of play to choose from, and which team. */
+.sp-kinds {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.sp-kinds .sp-key {
+  min-height: 46px;
+}
+.sp-side {
+  display: flex;
+  margin-bottom: 10px;
+}
+.sp-side button {
+  flex: 1;
+}
+.sp-edit-note {
+  margin: 6px 0 10px;
   text-align: center;
 }

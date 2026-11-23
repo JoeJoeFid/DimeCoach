@@ -4,7 +4,7 @@
 //
 // A made shot is a filled dot and a miss is a ring in the same color, so made and missed are never
 // told apart by color alone.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { periodName, type Scoresheet } from '../scoring';
 import { attemptsOf, efficiency, hasOrder, sections, streaks, tally, type Attempt, type GameShots, type ShotKind, type Tally } from '../shots';
@@ -370,9 +370,9 @@ function ShotMap({ list, nameOf, teamName, halvesOf }: { list: Attempt[]; nameOf
 type View = 'run' | 'grid' | 'map' | 'volume';
 /**
  * The Shooting part of the stats page. `flag` is whether this team has the shot volume and
- * efficiency chart turned on; `picker` is the list of games to count, for that chart.
+ * efficiency chart turned on; `picked` is the games chosen above, which that chart counts.
  */
-export default function ShotCharts({ games, picked, picker, nameOf, teamName, teamId, flag }: { games: Scoresheet[]; picked: Scoresheet[]; picker: ReactNode; nameOf: (id: number) => string; teamName: string; teamId: number; flag: boolean }) {
+export default function ShotCharts({ games, picked, nameOf, teamName, teamId, flag }: { games: Scoresheet[]; picked: Scoresheet[]; nameOf: (id: number) => string; teamName: string; teamId: number; flag: boolean }) {
   const [view, setView] = useState<View>('run');
   const byDate = [...games].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
   const [gameId, setGameId] = useState(0);
@@ -442,7 +442,6 @@ export default function ShotCharts({ games, picked, picker, nameOf, teamName, te
       </div>
       {now === 'volume' ? (
         <>
-          {picker}
           <div className="card">
             <h2>
               Shot volume and efficiency <span className="muted small">{picked.length} {picked.length === 1 ? 'game' : 'games'}</span>
