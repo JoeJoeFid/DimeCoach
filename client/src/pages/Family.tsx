@@ -336,6 +336,23 @@ export function FamilyHome({ name }: { name: string }) {
   );
 }
 
+/** The little picture at the head of each box on the dashboard: a calendar, a broadcast, a megaphone, a book. Each on a tile of its own color. */
+function BoxIcon({ kind }: { kind: 'schedule' | 'live' | 'news' | 'homework' }) {
+  const art = {
+    schedule: 'M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M8.500 14.500l2.300 2.300 4.700-4.700',
+    live: 'M12 13.500a1.500 1.500 0 1 0 0-3 1.500 1.500 0 0 0 0 3ZM8.500 15.500a5 5 0 0 1 0-7M15.500 8.500a5 5 0 0 1 0 7M5.800 18.200a9 9 0 0 1 0-12.400M18.200 5.800a9 9 0 0 1 0 12.400',
+    news: 'M4 10v4h3l7 4V6l-7 4H4ZM17.500 9.500a3.500 3.500 0 0 1 0 5M8 14.500l1 4.500h2.500',
+    homework: 'M5 5.500A1.500 1.500 0 0 1 6.500 4H19v13H6.500A1.500 1.500 0 0 0 5 18.500v-13ZM5 18.500A1.500 1.500 0 0 0 6.500 20H19M9 8.500h6M9 12h4',
+  }[kind];
+  return (
+    <span className={`fam-ico ${kind}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d={art} />
+      </svg>
+    </span>
+  );
+}
+
 type Tab = 'home' | 'schedule' | 'chat' | 'messages' | 'inbox' | 'stats' | 'video' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
 
 /** One team, as a follower sees it. */
@@ -439,7 +456,10 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
           {can.schedule && (
             <section className="card cx-card fam-home-schedule">
               <div className="cx-card-head">
-                <h2>Schedule</h2>
+                <h2 className="fam-h">
+                  <BoxIcon kind="schedule" />
+                  Schedule
+                </h2>
                 <button type="button" className="link cx-card-action" onClick={() => go('schedule')}>
                   Full schedule
                 </button>
@@ -463,7 +483,10 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
           {(hasVideo || hasPlays) && (
             <section className={`card cx-card fam-now ${data.video.live || data.live_game ? 'on' : ''}`} aria-label="Live now">
               <div className="cx-card-head">
-                <h2>Live now</h2>
+                <h2 className="fam-h">
+                  <BoxIcon kind="live" />
+                  Live now
+                </h2>
               </div>
               {!data.video.live && !data.live_game ? (
                 <p className="muted">Nothing is live right now. A game's video or play by play shows here the moment it starts.</p>
@@ -502,7 +525,10 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
           {can.news && (
             <section className="card cx-card">
               <div className="cx-card-head">
-                <h2>From the coaches</h2>
+                <h2 className="fam-h">
+                  <BoxIcon kind="news" />
+                  From the coaches
+                </h2>
                 {data.news.length > 1 && (
                   <button type="button" className="link cx-card-action" onClick={() => go('messages')}>
                     All {data.news.length} announcements
@@ -515,7 +541,10 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
           {can.homework && data.homework.length > 0 && (
             <section className="card cx-card">
               <div className="cx-card-head">
-                <h2>Homework</h2>
+                <h2 className="fam-h">
+                  <BoxIcon kind="homework" />
+                  Homework
+                </h2>
                 <button type="button" className="link cx-card-action" onClick={() => go('homework')}>
                   Open
                 </button>
@@ -527,18 +556,6 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
               </ul>
             </section>
           )}
-          <section className="card cx-card">
-            <h2>Coaches</h2>
-            {team.coaches.length === 0 ? (
-              <p className="muted">No coach is named yet.</p>
-            ) : (
-              <ul className="cx-rows">
-                {team.coaches.map((c, i) => (
-                  <Row key={i} title={c.name} sub={c.title} />
-                ))}
-              </ul>
-            )}
-          </section>
           {tabs.length === 1 && (
             <section className="card cx-card">
               <p className="muted">The coaches have not opened any other part of the team's page to you. Ask them if you were expecting to see more here.</p>

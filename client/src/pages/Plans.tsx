@@ -403,6 +403,17 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   const shown = entries.map((e, i) => ({ e, i })).filter(({ e }) => only === 'all' || e.kind === only);
   // The months that have something in them, for jumping straight to one.
   const months = [...new Set(shown.map(({ e }) => e.date.slice(0, 7)))];
+  // How tall the part that stays at the top is, so a month jumped to lands under it and not behind it.
+  const stickyHead = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = stickyHead.current;
+    if (!el) return;
+    const set = () => el.parentElement?.style.setProperty('--ps-sticky-h', `${el.offsetHeight}px`);
+    set();
+    const watch = new ResizeObserver(set);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
   const jumpToMonth = (ym: string) => document.getElementById(`month-${ym}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   const weeks: { label: string; rows: typeof shown }[] = [];
   for (const item of shown) {
@@ -424,6 +435,8 @@ export default function Plans({ kind }: { kind: PlanKind }) {
 
   return (
     <div className={`page ${calendar ? '' : 'plans-page'}`}>
+      {/* The heading, the filters and the calendar's sync bar stay at the top while the list scrolls under them. */}
+      <div className="ps-sticky" ref={stickyHead}>
       <div className="page-head ps-head">
         <div>
           <PageTitle>{kind === 'practice' ? 'Schedule' : 'Homework'}</PageTitle>
@@ -486,6 +499,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           </button>
         </div>
       )}
+      </div>
       {/* The calendar offer, for a team with no calendar linked. It shrinks to one line once a practice has been built. */}
       {kind === 'practice' && !hasCalendar && plans !== null && (
         <section className={`start-cal ${built ? 'compact' : ''}`} aria-label="Bring in your schedule">

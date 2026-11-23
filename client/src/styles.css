@@ -20176,3 +20176,79 @@ select.input.shot-game {
     animation: none;
   }
 }
+
+/* ---------- Schedule: the heading, filters and sync bar stay at the top ---------- */
+@media (min-width: 761px) and (min-height: 620px) {
+  .ps-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    /* Out to the edges of the page and up to its top, so nothing shows past it as the list goes under. */
+    margin: -36px -40px 0;
+    padding: 36px 40px 10px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .ps-sticky > :last-child {
+    margin-bottom: 0;
+  }
+  .ps-sticky + * {
+    margin-top: 14px;
+  }
+  .ps-month-head,
+  .ps-month-anchor {
+    scroll-margin-top: calc(var(--ps-sticky-h, 0px) + 12px);
+  }
+}
+
+/* ---------- Parent dashboard: a little picture at the head of each box ---------- */
+.fam-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fam-ico {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  transform: rotate(-6deg);
+  transition: transform 0.18s ease;
+}
+.card:hover > .cx-card-head .fam-ico {
+  transform: rotate(4deg) scale(1.08);
+}
+.fam-ico.schedule {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.fam-ico.live {
+  background: var(--danger);
+  color: #fff;
+}
+.fam-ico.news {
+  background: var(--series);
+  color: #fff;
+}
+.fam-ico.homework {
+  background: var(--shot-3);
+  color: #fff;
+}
+/* Something is live: the broadcast picture beats. */
+.fam-now.on .fam-ico.live {
+  animation: fam-beat 1.4s ease-in-out infinite;
+}
+@keyframes fam-beat {
+  50% {
+    transform: rotate(-6deg) scale(1.14);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fam-ico,
+  .fam-now.on .fam-ico.live {
+    transition: none;
+    animation: none;
+  }
+}
