@@ -19769,3 +19769,44 @@ select.input.shot-game {
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent), var(--shadow-2);
   }
 }
+
+/* A press on the pad that records a play straight away: the button pulses once, so it is plain it took. */
+.sp-key.hit.a {
+  animation: sp-hit-a 0.5s ease-out;
+}
+.sp-key.hit.b {
+  animation: sp-hit-b 0.5s ease-out;
+}
+@keyframes sp-hit-a {
+  0% {
+    background-color: var(--accent);
+    color: var(--accent-ink);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 80%, transparent);
+    transform: scale(0.95);
+  }
+  45% {
+    background-color: var(--accent);
+    color: var(--accent-ink);
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+/* The same pulse under a second name, so pressing the same button again starts it over. */
+@keyframes sp-hit-b {
+  0% {
+    background-color: var(--accent);
+    color: var(--accent-ink);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 80%, transparent);
+    transform: scale(0.95);
+  }
+  45% {
+    background-color: var(--accent);
+    color: var(--accent-ink);
+    transform: scale(1);
+  }
+  100% {
+    box-shadow: 0 0 0 12px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}

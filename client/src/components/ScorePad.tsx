@@ -309,6 +309,10 @@ export default function ScorePad({
 }) {
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [allPlays, setAllPlays] = useState(false);
+  /** The button just pressed that recorded a play with nothing more to ask: it pulses once. Counted, so a second press pulses again. */
+  const [hit, setHit] = useState<{ key: string; n: number } | null>(null);
+  const hitTimer = useRef(0);
+  const hitCls = (side: 'us' | 'them', action: Action) => (hit?.key === `${side}:${action}` ? `hit ${hit.n % 2 ? 'a' : 'b'}` : '');
   const [oppNumber, setOppNumber] = useState('');
   // The clock runs here and is written down when it stops, so a page loaded again finds it paused.
   const [runningSince, setRunningSince] = useState<number | null>(null);
@@ -357,6 +361,10 @@ export default function ScorePad({
   const act = (side: 'us' | 'them', action: Action) => {
     if (asksWho(side)) return setSheet({ kind: 'who', side, action });
     if (action === 'ft') return toLine(side, null);
+    // Nothing comes up to say it took, so the button itself shows it was pressed.
+    setHit({ key: `${side}:${action}`, n: (hit?.n ?? 0) + 1 });
+    window.clearTimeout(hitTimer.current);
+    hitTimer.current = window.setTimeout(() => setHit(null), 520);
     afterPlay(side, action, null, record(side, null, action, alone(action)));
   };
   /** Puts a play into the list at a place of its own, between two that are already there. */
@@ -450,29 +458,29 @@ export default function ScorePad({
   /** The big pad for one's own team, laid out as on a scorer's table: makes at the sides, the rest between. */
   const bigPad = (side: 'us' | 'them') => (
     <div className="sp-big">
-      <button type="button" className="sp-key make two" onClick={() => act(side, 'm2')}>
+      <button type="button" className={`sp-key make two ${hitCls(side, 'm2')}`} onClick={() => act(side, 'm2')}>
         <b>+2</b>
         <span>PT FG</span>
       </button>
-      <button type="button" className="sp-key ft" onClick={() => act(side, 'ft')}>
+      <button type="button" className={`sp-key ft ${hitCls(side, 'ft')}`} onClick={() => act(side, 'ft')}>
         Free Throw
       </button>
-      <button type="button" className="sp-key make three" onClick={() => act(side, 'm3')}>
+      <button type="button" className={`sp-key make three ${hitCls(side, 'm3')}`} onClick={() => act(side, 'm3')}>
         <b>+3</b>
         <span>PT FG</span>
       </button>
       <div className="sp-small">
         {SMALL.filter(([t]) => config[t as 'reb' | 'ast' | 'to' | 'stl' | 'blk' | 'pf']).map(([t, label]) => (
-          <button key={t} type="button" className="sp-key" onClick={() => act(side, t)}>
+          <button key={t} type="button" className={`sp-key ${hitCls(side, t)}`} onClick={() => act(side, t)}>
             {label}
           </button>
         ))}
       </div>
-      <button type="button" className="sp-key miss two" onClick={() => act(side, 'x2')}>
+      <button type="button" className={`sp-key miss two ${hitCls(side, 'x2')}`} onClick={() => act(side, 'x2')}>
         <b>2PT</b>
         <span>Miss</span>
       </button>
-      <button type="button" className="sp-key miss three" onClick={() => act(side, 'x3')}>
+      <button type="button" className={`sp-key miss three ${hitCls(side, 'x3')}`} onClick={() => act(side, 'x3')}>
         <b>3PT</b>
         <span>Miss</span>
       </button>
@@ -546,21 +554,21 @@ export default function ScorePad({
                 </button>
               </header>
               <div className="sp-lite">
-                <button type="button" className="sp-key ft" onClick={() => act('them', 'ft')}>
+                <button type="button" className={`sp-key ft ${hitCls('them', 'ft')}`} onClick={() => act('them', 'ft')}>
                   Free Throw
                 </button>
-                <button type="button" className="sp-key make" onClick={() => act('them', 'm2')}>
+                <button type="button" className={`sp-key make ${hitCls('them', 'm2')}`} onClick={() => act('them', 'm2')}>
                   <b>+2</b>
                   <span>PT FG</span>
                 </button>
-                <button type="button" className="sp-key make" onClick={() => act('them', 'm3')}>
+                <button type="button" className={`sp-key make ${hitCls('them', 'm3')}`} onClick={() => act('them', 'm3')}>
                   <b>+3</b>
                   <span>PT FG</span>
                 </button>
               </div>
               <div className="sp-lite four">
                 {([['pf', 'Foul'], ['reb', 'REB'], ['to', 'TO'], ['stl', 'STL']] as [EvType, string][]).filter(([t]) => config[t as 'pf' | 'reb' | 'to' | 'stl']).map(([t, label]) => (
-                  <button key={t} type="button" className="sp-key" onClick={() => act('them', t)}>
+                  <button key={t} type="button" className={`sp-key ${hitCls('them', t)}`} onClick={() => act('them', t)}>
                     {label} <span className="chip-num">{them.total[t as 'pf' | 'reb' | 'to' | 'stl']}</span>
                   </button>
                 ))}
