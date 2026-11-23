@@ -118,6 +118,89 @@ export function LineText({ line }: { line: StatLine }) {
   );
 }
 
+/** How much larger the court is under the magnifying glass. */
+const LENS_ZOOM = 2.2;
+/** How wide the magnifying glass is, in pixels. */
+const LENS = 124;
+/** How long the pin is shown, and the court takes to fade, before the spot is handed over. */
+const PIN_SHOWN_MS = 620;
+
+/**
+ * The half court to mark a shot on. A tap drops a pin. Holding down brings up a magnifying glass
+ * over the spot, which follows the finger until it is lifted, and the pin drops there. The pin is
+ * shown pointing at the spot for a moment while the court fades, and then the spot is handed over.
+ */
+function PlacePicker({ onPick }: { onPick: (x: number, y: number) => void }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  /** Where the finger is, as shares of the court, while it is down. */
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+  /** The finger has been down long enough, or has moved, for the magnifying glass to show. */
+  const [held, setHeld] = useState(false);
+  const [pin, setPin] = useState<{ x: number; y: number } | null>(null);
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+  const spot = (e: { clientX: number; clientY: number }) => {
+    const r = wrap.current!.getBoundingClientRect();
+    return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+  };
+  const down = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (pin) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setAt(spot(e));
+    timers.current.push(window.setTimeout(() => setHeld(true), 140));
+  };
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!at || pin) return;
+    setAt(spot(e));
+    setHeld(true);
+  };
+  const up = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!at || pin) return;
+    const here = spot(e);
+    timers.current.forEach((t) => window.clearTimeout(t));
+    setAt(null);
+    setHeld(false);
+    setPin(here);
+    timers.current.push(window.setTimeout(() => onPick(Math.round(here.x * 1000) / 1000, Math.round(here.y * 1000) / 1000), PIN_SHOWN_MS));
+  };
+  // The glass sits above the finger, where a hand does not cover it. Near the top of the court there is no
+  // room above, so it goes to the side instead: towards the middle of the court, level with the finger.
+  const size = wrap.current?.getBoundingClientRect();
+  const place = (w: number, h: number, x: number, y: number) => {
+    const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), max);
+    if (y - LENS - 34 >= 0) return { left: clamp(x - LENS / 2, w - LENS), top: y - LENS - 34 };
+    return { left: clamp(x < w / 2 ? x + 44 : x - 44 - LENS, w - LENS), top: clamp(y - LENS / 2, h - LENS) };
+  };
+  const lens = at && held && size ? { ...place(size.width, size.height, at.x * size.width, at.y * size.height), span: ((LENS / size.width) * COURT.width) / LENS_ZOOM } : null;
+  const mark = pin ?? (at && !held ? null : at);
+  return (
+    <div ref={wrap} className={`sp-place-wrap ${pin ? 'done' : ''}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => (setAt(null), setHeld(false))} role="img" aria-label="Half court. Tap where the shot was taken, or hold to look closer.">
+      <svg className="sp-place play-svg" viewBox={`0 0 ${COURT.width} ${COURT.half}`}>
+        <Court court="half" flipped={false} />
+        {/* While it is held: a small ring where the pin would drop. Once dropped: the pin, its point on the spot. */}
+        {mark && !pin && <circle className="sp-aim" cx={mark.x * COURT.width} cy={mark.y * COURT.half} r={0.7} />}
+        {pin && (
+          <g className="sp-pin" transform={`translate(${pin.x * COURT.width} ${pin.y * COURT.half})`}>
+            <g>
+              <path d="M0 0C-0.5 -1.3 -1.55 -2.3 -1.55 -3.55A1.55 1.55 0 1 1 1.55 -3.55C1.55 -2.3 0.5 -1.3 0 0Z" />
+              <circle cx={0} cy={-3.55} r={0.55} />
+            </g>
+          </g>
+        )}
+      </svg>
+      {lens && at && (
+        <div className="sp-lens" style={{ left: lens.left, top: lens.top, width: LENS, height: LENS }} aria-hidden="true">
+          <svg className="play-svg" viewBox={`${at.x * COURT.width - lens.span / 2} ${at.y * COURT.half - lens.span / 2} ${lens.span} ${lens.span}`}>
+            <rect className="court-floor" x={-20} y={-20} width={COURT.width + 40} height={COURT.half + 40} />
+            <Court court="half" flipped={false} />
+            <circle className="sp-aim" cx={at.x * COURT.width} cy={at.y * COURT.half} r={0.45} />
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ScorePad({
   state,
   events,
@@ -607,20 +690,13 @@ export default function ScorePad({
         })()}
       {/* Where a shot was taken: a tap on the half court, or skip it. */}
       {sheet?.kind === 'place' && (
-        <BottomSheet title="Where was the shot taken?" sub="Tap the spot on the court." onClose={() => setSheet(sheet.next)}>
-          <svg
-            className="sp-place play-svg"
-            viewBox={`0 0 ${COURT.width} ${COURT.half}`}
-            role="img"
-            aria-label="Half court. Tap where the shot was taken."
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              amend(sheet.id, { x: Math.round(((e.clientX - r.left) / r.width) * 1000) / 1000, y: Math.round(((e.clientY - r.top) / r.height) * 1000) / 1000 });
+        <BottomSheet title="Where was the shot taken?" sub="Tap the spot, or hold to look closer." onClose={() => setSheet(sheet.next)}>
+          <PlacePicker
+            onPick={(x, y) => {
+              amend(sheet.id, { x, y });
               setSheet(sheet.next);
             }}
-          >
-            <Court court="half" flipped={false} />
-          </svg>
+          />
           <button type="button" className="btn sp-wide" onClick={() => setSheet(sheet.next)}>
             Skip
           </button>

@@ -19543,3 +19543,73 @@ select.input.shot-game {
   margin: 6px 0 10px;
   text-align: center;
 }
+
+/* Marking a shot: the court takes the press, a magnifying glass follows a held finger, and a pin drops. */
+.sp-place-wrap {
+  position: relative;
+  margin-bottom: 10px;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.sp-place-wrap .sp-place {
+  margin-bottom: 0;
+  pointer-events: none;
+}
+/* Once the pin is down the court fades away quickly, the pin last. */
+.sp-place-wrap.done {
+  animation: sp-place-out 0.26s ease-in 0.34s forwards;
+}
+@keyframes sp-place-out {
+  to {
+    opacity: 0;
+  }
+}
+.sp-aim {
+  fill: none;
+  stroke: var(--accent-edge);
+  stroke-width: 0.22;
+}
+.sp-pin > g {
+  animation: sp-pin-drop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+.sp-pin path {
+  fill: var(--accent);
+  stroke: var(--accent-ink);
+  stroke-width: 0.16;
+  stroke-linejoin: round;
+}
+.sp-pin circle {
+  fill: var(--accent-ink);
+}
+@keyframes sp-pin-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+}
+.sp-lens {
+  position: absolute;
+  z-index: 2;
+  overflow: hidden;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--court-floor);
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+}
+.sp-lens svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.sp-lens .sp-aim {
+  stroke-width: 0.14;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-place-wrap.done,
+  .sp-pin > g {
+    animation-duration: 0.01s;
+  }
+}
