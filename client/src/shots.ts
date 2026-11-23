@@ -23,6 +23,8 @@ export interface Attempt {
   /** Where on the half court it was taken, as shares of its width and depth, when that was marked. */
   x?: number;
   y?: number;
+  /** How the shooter moved to the spot, when that was drawn: points in the same shares, ending at the spot. */
+  path?: [number, number][];
 }
 const SHOTS: Record<string, [ShotKind, boolean]> = { m1: [1, true], x1: [1, false], m2: [2, true], x2: [2, false], m3: [3, true], x3: [3, false] };
 
@@ -48,7 +50,7 @@ export function attemptsOf(events: GameEvent[]): Attempt[] {
     if (!shot) continue;
     const points = shot[1] ? shot[0] : 0;
     score += points;
-    out.push({ id: e.id, player: e.player, kind: shot[0], made: shot[1], period: e.period, points, score, ...(e.x !== undefined && e.y !== undefined ? { x: e.x, y: e.y } : {}) });
+    out.push({ id: e.id, player: e.player, kind: shot[0], made: shot[1], period: e.period, points, score, ...(e.x !== undefined && e.y !== undefined ? { x: e.x, y: e.y } : {}), ...(e.path && e.path.length > 1 ? { path: e.path } : {}) });
   }
   return out;
 }

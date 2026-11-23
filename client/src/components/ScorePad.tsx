@@ -123,21 +123,43 @@ export function LineText({ line }: { line: StatLine }) {
 const LENS_ZOOM = 1.6;
 /** How wide the magnifying glass is, in pixels. */
 const LENS = 124;
+/** Held still this long, the spot under the finger becomes where the player set off from, and dragging draws their way to the shot. */
+const ROUTE_HOLD_MS = 520;
+/** A finger that has gone further than this, in pixels, is moving the spot, not holding still. */
+const STILL_PX = 9;
+/** The most points a drawn way is kept as. */
+const ROUTE_POINTS = 20;
 /** How long the pin is shown, and the court takes to fade, before the spot is handed over. */
 const PIN_SHOWN_MS = 620;
 
+/** A drawn way thinned to a few points spread evenly along it, each rounded, keeping its two ends. */
+function thin(points: { x: number; y: number }[]): [number, number][] {
+  const step = Math.max(1, (points.length - 1) / (ROUTE_POINTS - 1));
+  const out: [number, number][] = [];
+  for (let i = 0; i < points.length - 1; i += step) out.push([Math.round(points[Math.round(i)].x * 1000) / 1000, Math.round(points[Math.round(i)].y * 1000) / 1000]);
+  const last = points[points.length - 1];
+  out.push([Math.round(last.x * 1000) / 1000, Math.round(last.y * 1000) / 1000]);
+  return out;
+}
+
 /**
  * The half court to mark a shot on. A tap drops a pin. Holding down brings up a magnifying glass
- * over the spot, which follows the finger until it is lifted, and the pin drops there. The pin is
- * shown pointing at the spot for a moment while the court fades, and then the spot is handed over.
+ * over the spot, which follows the finger until it is lifted, and the pin drops there. Holding
+ * still a little longer fixes that place as where the player set off from: dragging from it draws
+ * how they moved, and the pin drops where the finger is lifted. The pin is shown for a moment
+ * while the court fades, and then the spot, and the way to it when one was drawn, is handed over.
  */
-function PlacePicker({ onPick }: { onPick: (x: number, y: number) => void }) {
+function PlacePicker({ onPick }: { onPick: (x: number, y: number, path?: [number, number][]) => void }) {
   const wrap = useRef<HTMLDivElement>(null);
   /** Where the finger is, as shares of the court, while it is down. */
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   /** The finger has been down long enough, or has moved, for the magnifying glass to show. */
   const [held, setHeld] = useState(false);
   const [pin, setPin] = useState<{ x: number; y: number } | null>(null);
+  /** The way being drawn, from where the player set off: empty until the finger has been held still long enough. */
+  const [route, setRoute] = useState<{ x: number; y: number }[]>([]);
+  const drawing = useRef<{ x: number; y: number }[]>([]);
+  const start = useRef<{ px: number; py: number; moved: boolean } | null>(null);
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
   const spot = (e: { clientX: number; clientY: number }) => {
@@ -147,22 +169,49 @@ function PlacePicker({ onPick }: { onPick: (x: number, y: number) => void }) {
   const down = (e: React.PointerEvent<HTMLDivElement>) => {
     if (pin) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    setAt(spot(e));
+    const here = spot(e);
+    setAt(here);
+    start.current = { px: e.clientX, py: e.clientY, moved: false };
+    drawing.current = [];
+    setRoute([]);
     timers.current.push(window.setTimeout(() => setHeld(true), 140));
+    timers.current.push(
+      window.setTimeout(() => {
+        if (!start.current || start.current.moved) return;
+        // Still held in the same place: this is where the player set off from.
+        drawing.current = [here];
+        setRoute([here]);
+        navigator.vibrate?.(12);
+      }, ROUTE_HOLD_MS),
+    );
   };
   const move = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!at || pin) return;
-    setAt(spot(e));
+    if (!at || pin || !start.current) return;
+    const here = spot(e);
+    setAt(here);
     setHeld(true);
+    if (drawing.current.length > 0) {
+      const last = drawing.current[drawing.current.length - 1];
+      if (Math.hypot(here.x - last.x, here.y - last.y) > 0.012) {
+        drawing.current = [...drawing.current, here];
+        setRoute(drawing.current);
+      }
+    } else if (Math.hypot(e.clientX - start.current.px, e.clientY - start.current.py) > STILL_PX) start.current.moved = true;
   };
   const up = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!at || pin) return;
     const here = spot(e);
     timers.current.forEach((t) => window.clearTimeout(t));
+    start.current = null;
+    // A way is only kept if it went somewhere: lifting where it began is just a spot.
+    const from = drawing.current[0];
+    const way = from && Math.hypot(here.x - from.x, here.y - from.y) > 0.03 ? thin([...drawing.current, here]) : undefined;
+    if (!way) setRoute([]);
+    else setRoute([...drawing.current, here]);
     setAt(null);
     setHeld(false);
     setPin(here);
-    timers.current.push(window.setTimeout(() => onPick(Math.round(here.x * 1000) / 1000, Math.round(here.y * 1000) / 1000), PIN_SHOWN_MS));
+    timers.current.push(window.setTimeout(() => onPick(Math.round(here.x * 1000) / 1000, Math.round(here.y * 1000) / 1000, way), PIN_SHOWN_MS + (way ? 180 : 0)));
   };
   // The glass always sits above the finger, where a hand does not cover it. It is drawn over the whole
   // page, not inside the court, so high on the court it rises over the heading instead of moving aside.
@@ -177,9 +226,16 @@ function PlacePicker({ onPick }: { onPick: (x: number, y: number) => void }) {
       : null;
   const mark = pin ?? (at && !held ? null : at);
   return (
-    <div ref={wrap} className={`sp-place-wrap ${pin ? 'done' : ''}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => (setAt(null), setHeld(false))} role="img" aria-label="Half court. Tap where the shot was taken, or hold to look closer.">
+    <div ref={wrap} className={`sp-place-wrap ${pin ? 'done' : ''}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => (setAt(null), setHeld(false), setRoute([]), (drawing.current = []), (start.current = null))} role="img" aria-label="Half court. Tap where the shot was taken, or hold to look closer.">
       <svg className="sp-place play-svg" viewBox={`0 0 ${COURT.width} ${COURT.half}`}>
         <Court court="half" flipped={false} />
+        {/* The way being drawn: from the dot where the player set off, to the finger. */}
+        {route.length > 0 && (
+          <g className="sp-route">
+            <polyline points={[...route, ...(at ? [at] : [])].map((q) => `${q.x * COURT.width},${q.y * COURT.half}`).join(' ')} />
+            <circle cx={route[0].x * COURT.width} cy={route[0].y * COURT.half} r={0.6} />
+          </g>
+        )}
         {/* While it is held: a small ring where the pin would drop. Once dropped: the pin, its point on the spot. */}
         {mark && !pin && <circle className="sp-aim" cx={mark.x * COURT.width} cy={mark.y * COURT.half} r={0.7} />}
         {pin && (
@@ -700,10 +756,10 @@ export default function ScorePad({
         })()}
       {/* Where a shot was taken: a tap on the half court, or skip it. */}
       {sheet?.kind === 'place' && (
-        <BottomSheet title="Where was the shot taken?" sub="Tap the spot, or hold to look closer." onClose={() => setSheet(sheet.next)}>
+        <BottomSheet title="Where was the shot taken?" sub="Tap the spot. Hold to look closer; keep holding, then drag, to draw how they got there." onClose={() => setSheet(sheet.next)}>
           <PlacePicker
-            onPick={(x, y) => {
-              amend(sheet.id, { x, y });
+            onPick={(x, y, path) => {
+              amend(sheet.id, { x, y, ...(path ? { path } : {}) });
               setSheet(sheet.next);
             }}
           />

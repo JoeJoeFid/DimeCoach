@@ -66,6 +66,15 @@ function cleanEvents(list) {
       // A turnover: whether it was forced, and by which player of the other side.
       ...(typeof e.forced === 'boolean' ? { forced: e.forced } : {}),
       ...(Number.isInteger(e.by) ? { by: e.by } : {}),
+      // How the shooter moved to the spot, as a short run of points across the half court ending where the shot went up.
+      ...(Array.isArray(e.path) && e.path.length >= 2
+        ? {
+            path: e.path
+              .slice(0, 30)
+              .filter((pt) => Array.isArray(pt) && Number.isFinite(pt[0]) && Number.isFinite(pt[1]))
+              .map((pt) => [Math.round(Math.min(1, Math.max(0, pt[0])) * 1000) / 1000, Math.round(Math.min(1, Math.max(0, pt[1])) * 1000) / 1000]),
+          }
+        : {}),
       // A foul that sent the other side to the line: how many free throws it gave them.
       ...(Number.isInteger(e.fts) && e.fts >= 1 && e.fts <= 3 ? { fts: e.fts } : {}),
       // Where a shot was taken on the half court, as shares of its width and depth.

@@ -19717,3 +19717,29 @@ select.input.shot-game {
     grid-template-columns: 80px minmax(0, 1fr);
   }
 }
+
+/* How a shooter got to the spot: drawn on the pad while it is being marked, and shown on the shot map when asked for. */
+.sp-route polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.42;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sp-route circle {
+  fill: var(--accent);
+  stroke: var(--accent-ink);
+  stroke-width: 0.12;
+}
+.shot-route polyline {
+  fill: none;
+  stroke: var(--shot);
+  stroke-width: 0.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+.shot-route circle {
+  fill: var(--shot);
+  opacity: 0.75;
+}

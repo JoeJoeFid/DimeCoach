@@ -28,6 +28,8 @@ export interface GameEvent {
   /** Where a shot was taken on the half court, as shares of its width and of its depth from the baseline. */
   x?: number;
   y?: number;
+  /** How the shooter got to the spot: points across the half court, in the same shares, the last one where the shot went up. */
+  path?: [number, number][];
 }
 /** What a team tracks while it scores a game. A stat that is off has no button on the pad and is never asked about. */
 export interface ScoringConfig {

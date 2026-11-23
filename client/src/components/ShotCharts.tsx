@@ -340,15 +340,32 @@ function Volume({ games, nameOf }: { games: GameShots[]; nameOf: (id: number) =>
 /** Where the shots were taken: each one that had its spot marked, on the half court. */
 function ShotMap({ list, nameOf, teamName, halvesOf }: { list: Attempt[]; nameOf: (id: number) => string; teamName: string; /** Whether the game an attempt is from was played in halves. */ halvesOf: (a: Attempt) => boolean }) {
   const tip = useTip();
+  const [moves, setMoves] = useState(false);
   const field = list.filter((a) => a.kind !== 1);
   const placed = field.filter((a) => a.x !== undefined && a.y !== undefined);
   if (placed.length === 0)
     return <p className="muted">No shots have a spot marked here. Turn on "Shot placement" under Scoring setup and the pad asks where each shot was taken.</p>;
   const t = tally(placed);
+  const drawn = placed.filter((a) => a.path && a.path.length > 1);
   return (
     <>
+      {drawn.length > 0 && (
+        <div className="shot-toggles">
+          <button type="button" className={`chip toggle ${moves ? 'on' : ''}`} aria-pressed={moves} onClick={() => setMoves(!moves)}>
+            Movement lines <span className="chip-num">{drawn.length}</span>
+          </button>
+        </div>
+      )}
       <svg className="shot-map play-svg" viewBox={`0 0 ${COURT.width} ${COURT.half}`} role="img" aria-label={`Shot map: ${placed.length} shots with a spot marked, ${t.fgm} made.`}>
         <Court court="half" flipped={false} />
+        {/* How each shooter got to the spot, from the small dot where they set off. Under the shots, so the dots stay clear. */}
+        {moves &&
+          drawn.map((a) => (
+            <g key={`r${a.id}`} className={`shot-route k${a.kind}`}>
+              <polyline points={a.path!.map(([px, py]) => `${px * COURT.width},${py * COURT.half}`).join(' ')} />
+              <circle cx={a.path![0][0] * COURT.width} cy={a.path![0][1] * COURT.half} r={0.38} />
+            </g>
+          ))}
         {/* Misses first, so a make at the same spot is not hidden under one. */}
         {[...placed]
           .sort((a, b) => Number(a.made) - Number(b.made))
@@ -361,6 +378,7 @@ function ShotMap({ list, nameOf, teamName, halvesOf }: { list: Attempt[]; nameOf
       <Legend kinds={[2, 3]} />
       <p className="muted small shot-note">
         {placed.length} of {field.length} field goal attempts have a spot marked: {of(t.fgm, t.fga)} made, threes {of(t.tpm, t.tpa)}.
+        {moves && ' Each line runs from where the player set off, the small dot, to where the shot went up.'}
       </p>
       {tip.box}
     </>
