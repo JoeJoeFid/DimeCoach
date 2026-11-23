@@ -28,9 +28,9 @@ const byNumber = (a: PadPlayer, b: PadPlayer) => (Number(a.number) || 999) - (Nu
 type Sheet =
   | { kind: 'who'; side: 'us' | 'them'; action: Action }
   | { kind: 'follow'; follow: 'ast' | 'reb'; shooter: number | null; shot: EvType; /** The shot's own play, so what follows is tied to it. */ shotId: string }
-  | { kind: 'ft'; side: 'us' | 'them'; player: number | null }
+  | { kind: 'ft'; side: 'us' | 'them'; player: number | null; /** How many throws this trip is: not chosen yet when null. */ total: number | null; taken: number; /** One and one: a second throw only if the first goes in. */ bonus: boolean; /** The foul that sent them to the line, when it was the play just before. */ foul: string | null }
   | { kind: 'forced'; id: string; side: 'us' | 'them' }
-  | { kind: 'blocked'; blocker: number | null }
+  | { kind: 'loose'; title: string; sub: string; ask: string }
   | { kind: 'place'; id: string; /** What is asked once the spot is marked or skipped. */ next: Sheet | null }
   | { kind: 'assign'; id: string }
   | { kind: 'court' }
@@ -190,7 +190,9 @@ export default function ScorePad({
    */
   const record = (side: 'us' | 'them', player: number | null, type: EvType, after?: string | null) => {
     const e: GameEvent = { id: newId(), side, player, type, period: latest.current.state.period, clock: latest.current.state.timed ? left() : null, at: Date.now(), ...(after !== undefined ? { for: after } : {}) };
-    onChange(latest.current.state, [...latest.current.events, e]);
+    // Kept here at once, so a second change made in the same press builds on this one.
+    latest.current = { state: latest.current.state, events: [...latest.current.events, e] };
+    onChange(latest.current.state, latest.current.events);
     return e.id;
   };
   /** A rebound or an assist pressed by itself came from no shot: that is what makes the rebound a defensive one. */
@@ -198,16 +200,35 @@ export default function ScorePad({
   /** A button on the pad was pressed. */
   const act = (side: 'us' | 'them', action: Action) => {
     if (asksWho(side)) return setSheet({ kind: 'who', side, action });
-    if (action === 'ft') return setSheet({ kind: 'ft', side, player: null });
+    if (action === 'ft') return toLine(side, null);
     afterPlay(side, action, null, record(side, null, action, alone(action)));
   };
+  /** Free throws were pressed: first, how many. A foul by the other side put in just before is the one that caused them. */
+  const toLine = (side: 'us' | 'them', player: number | null) => {
+    const last = latest.current.events[latest.current.events.length - 1];
+    setSheet({ kind: 'ft', side, player, total: null, taken: 0, bonus: false, foul: last && last.type === 'pf' && last.side !== side ? last.id : null });
+  };
+  /** One free throw of the trip, made or missed. The last one, missed, goes on to who got the rebound. */
+  const throwOne = (trip: Extract<Sheet, { kind: 'ft' }>, made: boolean) => {
+    const id = record(trip.side, trip.player, made ? 'm1' : 'x1');
+    // One and one: making the first earns the second.
+    const total = trip.bonus && trip.taken === 0 && made ? 2 : (trip.total ?? 1);
+    if (total !== trip.total && trip.foul) amend(trip.foul, { fts: total });
+    if (trip.taken + 1 < total) return setSheet({ ...trip, total, taken: trip.taken + 1 });
+    if (made || !config.reb || !asksWho('us')) return setSheet(null);
+    if (trip.side === 'us') return setSheet({ kind: 'follow', follow: 'reb', shooter: trip.player, shot: 'x1', shotId: id });
+    setSheet({ kind: 'loose', title: playerName('them', trip.player), sub: 'Free throw missed', ask: 'Rebound by' });
+  };
   /** Changes one play already recorded: where a shot was taken, or who forced a turnover. */
-  const amend = (id: string, change: Partial<GameEvent>) => onChange(latest.current.state, latest.current.events.map((e) => (e.id === id ? { ...e, ...change } : e)));
+  const amend = (id: string, change: Partial<GameEvent>) => {
+    latest.current = { state: latest.current.state, events: latest.current.events.map((e) => (e.id === id ? { ...e, ...change } : e)) };
+    onChange(latest.current.state, latest.current.events);
+  };
   /** What is asked once a play is down: whether a turnover was forced, where a shot was taken, then who assisted or rebounded. */
   const afterPlay = (side: 'us' | 'them', action: EvType, player: number | null, id: string) => {
     if (action === 'to' && config.forced && !solo) return setSheet({ kind: 'forced', id, side });
     // A blocked shot comes down to someone: ask who.
-    if (side === 'us' && action === 'blk' && config.reb && asksWho('us')) return setSheet({ kind: 'blocked', blocker: player });
+    if (side === 'us' && action === 'blk' && config.reb && asksWho('us')) return setSheet({ kind: 'loose', title: playerName('us', player), sub: 'Block', ask: 'Rebound after the block by' });
     const made = action === 'm2' || action === 'm3';
     const missed = action === 'x2' || action === 'x3';
     // A shot by one's own team goes on to who assisted, or who got the rebound.
@@ -222,7 +243,7 @@ export default function ScorePad({
   };
   /** The player was chosen (or left for later) for the play being asked about. */
   const chose = (side: 'us' | 'them', action: Action, player: number | null) => {
-    if (action === 'ft') return setSheet({ kind: 'ft', side, player });
+    if (action === 'ft') return toLine(side, player);
     afterPlay(side, action, player, record(side, player, action, alone(action)));
   };
   const undo = () => events.length > 0 && onChange(state, events.slice(0, -1));
@@ -462,6 +483,7 @@ export default function ScorePad({
                         {said.get(e.id)?.scorer != null ? ` · to ${playerName('us', said.get(e.id)!.scorer)}` : ''}
                         {e.type === 'to' && e.forced && e.by !== undefined ? ` · forced by ${playerName(e.side === 'us' ? 'them' : 'us', e.by)}` : ''}
                         {e.x !== undefined ? ' · spot marked' : ''}
+                        {e.type === 'pf' && e.fts ? ` · ${e.fts} free ${e.fts === 1 ? 'throw' : 'throws'}` : ''}
                         {e.player === null && asksWho(e.side) ? ' · not assigned' : ''}
                       </span>
                     </span>
@@ -528,11 +550,11 @@ export default function ScorePad({
           <PlayerGrid players={players.filter((p) => sheet.follow === 'reb' || p.id !== sheet.shooter)} on={state.on} onPick={(p) => (record('us', p.id, sheet.follow, sheet.shotId), setSheet(null))} />
         </BottomSheet>
       )}
-      {/* After a block: who came up with the ball. For this team it is a defensive rebound. */}
-      {sheet?.kind === 'blocked' && (
-        <BottomSheet title={playerName('us', sheet.blocker)} sub="Block" onClose={() => setSheet(null)}>
+      {/* After a block, or the other team's missed last free throw: who came up with the ball. For this team it is a defensive rebound. */}
+      {sheet?.kind === 'loose' && (
+        <BottomSheet title={sheet.title} sub={sheet.sub} onClose={() => setSheet(null)}>
           <p className="sp-ask-line">
-            <strong>Rebound after the block by</strong> <span className="muted small">{usName}</span>
+            <strong>{sheet.ask}</strong> <span className="muted small">{usName}</span>
           </p>
           <div className="sp-two">
             <button type="button" className="btn sp-no" onClick={() => setSheet(null)}>
@@ -592,9 +614,40 @@ export default function ScorePad({
           </button>
         </BottomSheet>
       )}
-      {/* A trip to the line: each throw made or missed, then done. */}
-      {sheet?.kind === 'ft' && (
-        <BottomSheet title="Free throws" sub={playerName(sheet.side, sheet.player)} onClose={() => setSheet(null)}>
+      {/* A trip to the line: how many throws, then each one made or missed. */}
+      {sheet?.kind === 'ft' && sheet.total === null && (
+        <BottomSheet title="How many free throws?" sub={playerName(sheet.side, sheet.player)} onClose={() => setSheet(null)}>
+          <div className="sp-ft-how">
+            {[1, 2, 3].map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="sp-key"
+                onClick={() => {
+                  if (sheet.foul) amend(sheet.foul, { fts: n });
+                  setSheet({ ...sheet, total: n });
+                }}
+              >
+                <b>{n}</b>
+              </button>
+            ))}
+            <button
+              type="button"
+              className="sp-key"
+              onClick={() => {
+                if (sheet.foul) amend(sheet.foul, { fts: 1 });
+                setSheet({ ...sheet, total: 1, bonus: true });
+              }}
+            >
+              <b>1 and 1</b>
+              <span>A second if the first goes in</span>
+            </button>
+          </div>
+          {sheet.foul && <p className="muted small sp-ft-foul">The foul just before these is marked as a shooting foul.</p>}
+        </BottomSheet>
+      )}
+      {sheet?.kind === 'ft' && sheet.total !== null && (
+        <BottomSheet title={sheet.bonus && sheet.taken === 0 ? 'Free throw 1, one and one' : `Free throw ${sheet.taken + 1} of ${sheet.total}`} sub={playerName(sheet.side, sheet.player)} onClose={() => setSheet(null)}>
           <p className="sp-ft-count">
             <b>
               {ftNow?.ftm ?? 0}/{ftNow?.fta ?? 0}
@@ -602,17 +655,14 @@ export default function ScorePad({
             <span className="muted small">made this game</span>
           </p>
           <div className="sp-two tall">
-            <button type="button" className="sp-key make" onClick={() => record(sheet.side, sheet.player, 'm1')}>
+            <button type="button" className="sp-key make" onClick={() => throwOne(sheet, true)}>
               <b>Made</b>
               <span>+1</span>
             </button>
-            <button type="button" className="sp-key miss" onClick={() => record(sheet.side, sheet.player, 'x1')}>
+            <button type="button" className="sp-key miss" onClick={() => throwOne(sheet, false)}>
               <b>Missed</b>
             </button>
           </div>
-          <button type="button" className="btn primary sp-wide" onClick={() => setSheet(null)}>
-            Done
-          </button>
         </BottomSheet>
       )}
       {/* A play already recorded: say who it was, or take it out. */}

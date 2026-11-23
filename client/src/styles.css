@@ -19365,3 +19365,23 @@ select.input.shot-game {
 .sp-halves > span {
   display: grid;
 }
+
+/* Free throws: how many this trip. */
+.sp-ft-how {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.sp-ft-how .sp-key {
+  min-height: 64px;
+}
+.sp-ft-how .sp-key:last-child {
+  grid-column: 1 / -1;
+}
+.sp-ft-how .sp-key b {
+  font-size: 1.3rem;
+}
+.sp-ft-foul {
+  margin: 10px 0 0;
+  text-align: center;
+}

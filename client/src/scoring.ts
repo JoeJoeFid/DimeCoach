@@ -23,6 +23,8 @@ export interface GameEvent {
   forced?: boolean;
   /** Who forced the turnover: a player of the other side from the one that lost the ball. */
   by?: number;
+  /** A foul that sent the other side to the line: how many free throws it gave them. Set when their free throws are the very next thing put in. */
+  fts?: number;
   /** Where a shot was taken on the half court, as shares of its width and of its depth from the baseline. */
   x?: number;
   y?: number;
@@ -203,7 +205,7 @@ export function playWords(events: GameEvent[]) {
   const out = new Map<string, { words: string; scorer: number | null }>();
   events.forEach((e, i) => {
     const s = shot(i);
-    const words = e.type === 'reb' && e.side === 'us' ? `${offensive(e, s) ? 'offensive' : 'defensive'} rebound` : e.type === 'to' && e.forced ? 'forced turnover' : EV_WORDS[e.type];
+    const words = e.type === 'reb' && e.side === 'us' ? `${offensive(e, s) ? 'offensive' : 'defensive'} rebound` : e.type === 'to' && e.forced ? 'forced turnover' : e.type === 'pf' && e.fts ? 'shooting foul' : EV_WORDS[e.type];
     out.set(e.id, { words, scorer: e.type === 'ast' && s ? s.player : null });
   });
   return out;
