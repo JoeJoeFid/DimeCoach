@@ -25,6 +25,7 @@ import { mountLinkThumbs } from './linkThumbs.js';
 import { mountStaff, staffBootstrap } from './staff.js';
 import { mountGames } from './games.js';
 import { mountStreams } from './streams.js';
+import { mountFilm } from './film.js';
 import { mountPush } from './push.js';
 import { mountChat } from './chat.js';
 
@@ -60,6 +61,7 @@ mountStaff(app);
 mountFamilyCoach(app);
 mountGames(app);
 mountStreams(app);
+mountFilm(app);
 mountPush(app);
 mountChat(app);
 mountImages(app);

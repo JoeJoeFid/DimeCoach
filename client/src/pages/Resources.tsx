@@ -1,8 +1,7 @@
 import PageTitle from '../components/PageTitle';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type GameStream, type StorageSpace } from '../api';
-import { GameVideoCard, StreamPlayer } from '../components/GameVideo';
+import { api, type StorageSpace } from '../api';
 import { SpaceMeter } from '../components/SpaceMeter';
 import type { Resource, Tag } from '../types';
 import { useApp } from '../App';
@@ -138,29 +137,20 @@ export default function Resources() {
       });
   };
 
-  // Saved video of the team's games. It is kept with the game it is of, and listed here with the other videos.
-  const [games, setGames] = useState<GameStream[]>([]);
-  const [watching, setWatching] = useState<GameStream | null>(null);
-  const loadGames = () => api.savedStreams().then(setGames, () => {});
-  useEffect(() => {
-    loadGames();
-  }, []);
+  // Saved video of the team's games is not here: it is in the Filmroom, with the clips cut from it.
   const counts = useMemo(() => {
-    const c: Record<Filter, number> = { all: games.length, link: 0, image: 0, video: games.length };
+    const c: Record<Filter, number> = { all: 0, link: 0, image: 0, video: 0 };
     for (const r of resources || []) {
       c.all++;
       c[r.kind]++;
     }
     return c;
-  }, [resources, games]);
+  }, [resources]);
   const gone = usePendingDeletes();
   const tagged = tagging ? (resources || []).find((r) => r.key === tagging) : undefined;
   // What the search and the kind leave, before a category narrows it: the categories are counted from these.
   const inKind = (resources || []).filter((r) => !(r.resource_id && gone.has(`resource:${r.resource_id}`)) && (filter === 'all' || r.kind === filter) && (!q.trim() || searchText(r).includes(q.trim().toLowerCase())));
   const shown = inKind.filter(inTag);
-  const term = q.trim().toLowerCase();
-  // Game video has no categories, so it shows only while no category is picked.
-  const shownGames = games.filter((g) => (filter === 'all' || filter === 'video') && inKind.length === shown.length && (!term || `${g.title} ${g.game?.title ?? ''} game video`.toLowerCase().includes(term)));
 
   return (
     <div className="page">
@@ -231,7 +221,7 @@ export default function Resources() {
 
       {resources === null ? (
         <p className="muted">Loading…</p>
-      ) : resources.length === 0 && games.length === 0 ? (
+      ) : resources.length === 0 ? (
         <div className="empty">
           <h2>No resources yet</h2>
           <p>Save a link to a video, or upload a picture or clip. Links, pictures and videos you add to drills, plays and practices appear here too.</p>
@@ -239,21 +229,12 @@ export default function Resources() {
             + Link
           </button>
         </div>
-      ) : shown.length === 0 && shownGames.length === 0 ? (
+      ) : shown.length === 0 ? (
         <p className="muted">Nothing matches.</p>
       ) : (
         <div className={`res-grid ${compact ? 'compact' : ''}`}>
           {shown.map((r) => (
             <ResourceCard key={r.key} resource={r} tags={sportTags} sharedWith={sharedWith[r.key] || []} onShare={() => setSharing(r)} onTag={() => setTagging(r.key)} onView={() => setViewing(r)} onRename={(title) => run(() => api.renameResource(r.resource_id!, title))} onRemove={() => remove(r)} />
-          ))}
-          {shownGames.map((g) => (
-            <GameVideoCard key={`game-${g.id}`} stream={g} onPlay={() => setWatching(g)}>
-              {g.game && (
-                <Link className="btn small" to={`/plans/${g.game.id}?view=video`}>
-                  Open the game
-                </Link>
-              )}
-            </GameVideoCard>
           ))}
         </div>
       )}
@@ -295,14 +276,6 @@ export default function Resources() {
             setShareVersion((v) => v + 1);
           }}
         />
-      )}
-      {watching && (
-        <Modal title={watching.title || 'Game video'} onClose={() => setWatching(null)} wide>
-          <StreamPlayer stream={watching} />
-          <p className="muted small">
-            Video of a game, kept for this team's coaches. {watching.game && <Link to={`/plans/${watching.game.id}?view=video`}>Open the game</Link>}
-          </p>
-        </Modal>
       )}
       {viewing && (
         <Modal title={viewing.title} onClose={() => setViewing(null)} wide>

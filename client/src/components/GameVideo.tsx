@@ -4,9 +4,9 @@
 // own, and sent out. A viewer plays the pieces one after another, some seconds behind what is
 // happening. How the pieces travel is in ../video.ts, and why it is built this way is in
 // server/streams.js.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
-import { joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Broadcaster, type JoinedPlayer } from '../video';
+import { QUALITIES, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
 import { Modal } from './bits';
 import { confirmDialog } from './dialogs';
 
@@ -35,21 +35,21 @@ const TELL = [
   { key: 'friends', label: 'Friends' },
 ];
 /** What the broadcaster chose last time, on this device, so they are not asked from scratch every game. */
-function lastSetup(): { keep: Keep; sound: boolean; tell: string[] } | null {
+function lastSetup(): { keep: Keep; sound: boolean; tell: string[]; quality: Quality } | null {
   try {
     const v = JSON.parse(localStorage.getItem('dime.broadcast') || 'null');
     if (!v || !['none', 'device', 'site', 'both'].includes(v.keep)) return null;
-    return { keep: v.keep, sound: v.sound !== false, tell: Array.isArray(v.tell) ? TELL.map((g) => g.key).filter((k) => v.tell.includes(k)) : TELL.map((g) => g.key) };
+    return { keep: v.keep, sound: v.sound !== false, tell: Array.isArray(v.tell) ? TELL.map((g) => g.key).filter((k) => v.tell.includes(k)) : TELL.map((g) => g.key), quality: v.quality in QUALITIES ? v.quality : 'medium' };
   } catch {
     return null;
   }
 }
 /** A name for the file a broadcast is saved to on this device. */
-function fileName(title: string, type: string) {
+function fileName(title: string, type: string, part = 0) {
   const d = new Date();
   const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const safe = (title || 'Game video').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Game video';
-  return `${safe} ${day}.${type.includes('mp4') ? 'mp4' : 'webm'}`;
+  return `${safe} ${day}${part ? ` part ${part}` : ''}.${type.includes('mp4') ? 'mp4' : 'webm'}`;
 }
 
 /**
@@ -77,9 +77,15 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
   // Who is told it has begun: everyone, unless the broadcaster opens the list and picks groups. None is nobody.
   const [tell, setTell] = useState<string[]>(() => lastSetup()?.tell ?? TELL.map((g) => g.key));
   const [choosing, setChoosing] = useState(false);
+  // How sharp the picture is. It can be changed while live, when the connection turns out better or worse than hoped.
+  const [quality, setQuality] = useState<Quality>(() => lastSetup()?.quality ?? 'medium');
+  const qualityRef = useRef(quality);
+  qualityRef.current = quality;
   // The video kept on this device, once the broadcast is over, waiting to be saved out of the page.
-  const [file, setFile] = useState<{ blob: Blob; seconds: number; note: string } | null>(null);
-  const [fileSaved, setFileSaved] = useState(false);
+  // More than one file when the quality was changed along the way.
+  const [file, setFile] = useState<{ blobs: Blob[]; seconds: number; note: string } | null>(null);
+  const [savedParts, setSavedParts] = useState<number[]>([]);
+  const fileSaved = !!file && file.blobs.every((_, i) => savedParts.includes(i));
   const state = useRef<{ id: number; cast: Broadcaster | null }>({ id: 0, cast: null });
   const mediaRef = useRef<MediaStream | null>(null);
   const soundRef = useRef(sound);
@@ -96,7 +102,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       return;
     }
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24, max: 30 } }, audio: true })
+      .getUserMedia({ video: { facingMode: facing, ...cameraSize(qualityRef.current), frameRate: { ideal: 24, max: 30 } }, audio: true })
       .then((m) => {
         if (gone) return m.getTracks().forEach((t) => t.stop());
         mediaRef.current?.getTracks().forEach((t) => t.stop());
@@ -116,11 +122,18 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
   }, [sound, media]);
   useEffect(() => {
     try {
-      localStorage.setItem('dime.broadcast', JSON.stringify({ keep, sound, tell }));
+      localStorage.setItem('dime.broadcast', JSON.stringify({ keep, sound, tell, quality }));
     } catch {
       /* not kept for next time */
     }
-  }, [keep, sound, tell]);
+  }, [keep, sound, tell, quality]);
+  /** Changes the quality: of the camera's picture before going live, and of the broadcast itself once it is. */
+  const pickQuality = (q: Quality) => {
+    if (q === quality) return;
+    setQuality(q);
+    if (state.current.cast) state.current.cast.quality(q).catch(() => {});
+    else mediaRef.current?.getVideoTracks()[0]?.applyConstraints(cameraSize(q)).catch(() => {});
+  };
   const letGo = () => {
     mediaRef.current?.getTracks().forEach((t) => t.stop());
     lock.current?.release().catch(() => {});
@@ -156,7 +169,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
     if (!type) return setError('This browser cannot record video, so it cannot broadcast.');
     setOpening(true);
     // The camera starts recording now, which also shows whether this browser can make one unbroken video. It takes a couple of seconds.
-    const open = await openBroadcast(() => mediaRef.current, type);
+    const open = await openBroadcast(() => mediaRef.current, type, quality);
     try {
       const today = new Date();
       const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -170,7 +183,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       // The server has the last word on the layout.
       const agreed = r.stream.layout === open.layout;
       if (!agreed) open.cancel();
-      const cast = agreed ? open.begin(r.stream, r.send, heard, toDevice) : pieceBroadcaster(() => mediaRef.current, r.stream, r.send, type, heard, toDevice);
+      const cast = agreed ? open.begin(r.stream, r.send, heard, toDevice) : pieceBroadcaster(() => mediaRef.current, r.stream, r.send, type, heard, toDevice, quality);
       state.current = { id: r.stream.id, cast };
       setLive(r.stream);
       setStarted(Date.now());
@@ -192,7 +205,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
     setEnding(true);
     // What is still waiting is given a moment to go out before the stream is closed.
     await st.cast?.stop();
-    const blob = toDevice ? (st.cast?.recording() ?? null) : null;
+    const blobs = toDevice ? (st.cast?.recording() ?? []).filter((b) => b.size > 0) : [];
     const seconds = (Date.now() - started) / 1000;
     const id = st.id;
     st.id = 0;
@@ -205,21 +218,22 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       note = (e as Error).message;
     }
     // A copy for this device stays on the screen until it has been saved out of the page.
-    if (blob && blob.size > 0) {
+    if (blobs.length > 0) {
       setLive(null);
       setEnding(false);
-      setFile({ blob, seconds, note });
+      setFile({ blobs, seconds, note });
     } else onDone(toDevice ? `${note} The video could not be kept on this device.` : note);
   };
   /** Hands the kept video to the device: its share sheet on a phone or tablet, a download anywhere else. */
-  const saveFile = async () => {
+  const saveFile = async (i: number) => {
     if (!file) return;
-    const f = new File([file.blob], fileName(title, file.blob.type), { type: file.blob.type });
+    const done = () => setSavedParts((was) => (was.includes(i) ? was : [...was, i]));
+    const f = new File([file.blobs[i]], fileName(title, file.blobs[i].type, file.blobs.length > 1 ? i + 1 : 0), { type: file.blobs[i].type });
     const touch = window.matchMedia('(pointer: coarse)').matches;
     if (touch && navigator.canShare?.({ files: [f] })) {
       try {
         await navigator.share({ files: [f], title: title || 'Game video' });
-        return setFileSaved(true);
+        return done();
       } catch (e) {
         // Closing the sheet is not a failure. Anything else falls through to a download.
         if ((e as Error).name === 'AbortError') return;
@@ -233,7 +247,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
     a.click();
     a.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    setFileSaved(true);
+    done();
   };
   const leave = async () => {
     if (file && !fileSaved && !(await confirmDialog({ title: 'Leave without saving the video?', body: 'The video is only on this page. Once you leave, it cannot be saved to this device.', confirmLabel: 'Leave', danger: true }))) return;
@@ -245,13 +259,16 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       <div className="gv-cast gv-done card">
         <h2>Save the video to this device</h2>
         <p className="muted">
-          {file.note} The video is {span(file.seconds)} long and {mb(file.blob.size)}. It is only on this page until you save it.
+          {file.note} The video is {span(file.seconds)} long and {mb(file.blobs.reduce((n, b) => n + b.size, 0))}. It is only on this page until you save it.
+          {file.blobs.length > 1 && ` The quality was changed during the broadcast, so it is in ${file.blobs.length} parts, one for each quality: save each one.`}
         </p>
         {fileSaved && <p className="notice">Sent to this device. Check that it is there before you leave this page.</p>}
         <div className="gv-actions">
-          <button type="button" className="btn primary" onClick={saveFile}>
-            {fileSaved ? 'Save it again' : 'Save to this device'}
-          </button>
+          {file.blobs.map((b, i) => (
+            <button key={i} type="button" className={`btn ${savedParts.includes(i) ? '' : 'primary'}`} onClick={() => saveFile(i)}>
+              {file.blobs.length === 1 ? (fileSaved ? 'Save it again' : 'Save to this device') : `${savedParts.includes(i) ? 'Save again: part' : 'Save part'} ${i + 1} (${mb(b.size)})`}
+            </button>
+          ))}
           <button type="button" className="btn" onClick={leave}>
             Done
           </button>
@@ -274,10 +291,17 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       {live ? (
         <>
           <p className="muted small gv-note">
-            {sent === 0 ? 'Starting…' : `Going out to the team, a few seconds behind.`} {behind > 2 && 'The connection is slow, so viewers are further behind.'} Keep this page open and the screen on.{' '}
+            {sent === 0 ? 'Starting…' : `Going out to the team, a few seconds behind.`} {behind > 2 && 'The connection is slow, so viewers are further behind. A lower quality may help.'} Keep this page open and the screen on.{' '}
             {kept ? `When you end, the video is ${kept}.` : 'The video is not kept when you end.'}
           </p>
           <div className="gv-actions">
+            <div className="seg gv-quality" role="group" aria-label="Quality">
+              {(Object.keys(QUALITIES) as Quality[]).map((q) => (
+                <button key={q} type="button" className={quality === q ? 'on' : ''} aria-pressed={quality === q} disabled={ending} title={QUALITIES[q].says} onClick={() => pickQuality(q)}>
+                  {QUALITIES[q].label}
+                </button>
+              ))}
+            </div>
             <button type="button" className="btn" aria-pressed={!sound} disabled={ending} onClick={() => setSound(!sound)}>
               {sound ? 'Mute sound' : 'Turn sound on'}
             </button>
@@ -355,6 +379,17 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
               )}
             </div>
             <div className="gv-opt">
+              <span>Quality</span>
+              <div className="seg" role="group" aria-label="Quality">
+                {(Object.keys(QUALITIES) as Quality[]).map((q) => (
+                  <button key={q} type="button" className={quality === q ? 'on' : ''} aria-pressed={quality === q} onClick={() => pickQuality(q)}>
+                    {QUALITIES[q].label}
+                  </button>
+                ))}
+              </div>
+              <span className="muted small">{QUALITIES[quality].says} You can change this while you are live.</span>
+            </div>
+            <div className="gv-opt">
               <span>Sound</span>
               <div className="seg" role="group" aria-label="Sound">
                 <button type="button" className={sound ? 'on' : ''} aria-pressed={sound} onClick={() => setSound(true)}>
@@ -394,12 +429,83 @@ export function StreamPlayer({ stream, onGone }: { stream: GameStream; onGone?: 
   return stream.layout === 'joined' && !plain ? <JoinedVideo stream={stream} onGone={onGone} onFail={() => setPlain(true)} /> : <PieceVideo stream={stream} onGone={onGone} />;
 }
 
+type Fullable = HTMLElement & { webkitRequestFullscreen?: () => void };
+type FullDoc = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void };
+/**
+ * Filling the whole screen with a player, and coming back. The player goes full screen with what
+ * is drawn over the picture and its slider. An iPhone will only do that for the video itself, so
+ * there it is the video alone, with the phone's own controls.
+ */
+export function useFullScreen(frame: RefObject<HTMLDivElement | null>, video: RefObject<HTMLVideoElement | null>): [boolean, () => void] {
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    const d = document as FullDoc;
+    const changed = () => setFull(!!frame.current && (d.fullscreenElement ?? d.webkitFullscreenElement ?? null) === frame.current);
+    document.addEventListener('fullscreenchange', changed);
+    document.addEventListener('webkitfullscreenchange', changed);
+    return () => {
+      document.removeEventListener('fullscreenchange', changed);
+      document.removeEventListener('webkitfullscreenchange', changed);
+    };
+  }, [frame]);
+  const toggle = () => {
+    const d = document as FullDoc;
+    const el = frame.current as Fullable | null;
+    if (d.fullscreenElement ?? d.webkitFullscreenElement) return void (d.exitFullscreen ? d.exitFullscreen() : d.webkitExitFullscreen?.());
+    if (el?.requestFullscreen) return void el.requestFullscreen().catch(() => {});
+    if (el?.webkitRequestFullscreen) return el.webkitRequestFullscreen();
+    (video.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null)?.webkitEnterFullscreen?.();
+  };
+  return [full, toggle];
+}
+export function FullButton({ full, onClick }: { full: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className="gv-full" onClick={onClick} aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen' : 'Full screen'}>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d={full ? 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5' : 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'} />
+      </svg>
+    </button>
+  );
+}
+
+/**
+ * The bar under a video for moving through it. A saved video runs from its start to its end. A
+ * live one runs from its start to now, and keeps growing: a viewer can go back to see something
+ * again, forward as far as the newest, and straight back to live.
+ */
+function SeekBar({ at, meta, behind, onSeek, onLive }: { at: number; meta: GameStream; behind: boolean; onSeek: (piece: number) => void; onLive: () => void }) {
+  if (meta.segments <= 1) return null;
+  const live = meta.status === 'live';
+  const last = meta.segments - 1;
+  // Watching live, the handle sits at the end and stays there as the video grows.
+  const shown = live && !behind ? last : Math.min(at, last);
+  return (
+    <div className="gv-seek">
+      <span className="muted small">{span(shown * meta.segment_seconds)}</span>
+      <input type="range" min={0} max={last} value={shown} aria-label={live ? 'Go back or forward through the broadcast' : 'Move through the video'} onChange={(e) => onSeek(Number(e.target.value))} />
+      {!live ? (
+        <span className="muted small">{span(meta.segments * meta.segment_seconds)}</span>
+      ) : behind ? (
+        <button type="button" className="btn small" onClick={onLive}>
+          Go to live
+        </button>
+      ) : (
+        <span className="gv-atlive">Live</span>
+      )}
+    </div>
+  );
+}
+
 /** A video whose pieces join up, played as one. */
 function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: () => void; onFail: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const [meta, setMeta] = useState(stream);
-  // Where playing starts from. Moving through a saved video starts it again from there.
-  const [from, setFrom] = useState(stream.status === 'live' ? Math.max(0, stream.segments - 2) : 0);
+  const frame = useRef<HTMLDivElement>(null);
+  const [full, toggleFull] = useFullScreen(frame, video);
+  // Where playing starts from: moving through the video starts it again from there. `follow` is
+  // watching live, kept near the newest; going back through a live broadcast turns it off.
+  const [start, setStart] = useState({ from: stream.status === 'live' ? Math.max(0, stream.segments - 2) : 0, follow: stream.status === 'live' });
+  const from = start.from;
   const [at, setAt] = useState(from);
   const [waiting, setWaiting] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -420,7 +526,7 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
   useEffect(() => {
     const el = video.current;
     if (!el) return;
-    const made = joinedPlayer(el, metaRef.current, from, (p) => {
+    const made = joinedPlayer(el, metaRef.current, from, start.follow, (p) => {
       if (p.failed) return onFail();
       if (p.piece !== undefined) setAt(Math.min(p.piece, Math.max(0, metaRef.current.segments - 1)));
       if (p.waiting !== undefined) setWaiting(p.waiting);
@@ -438,14 +544,27 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
       made.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from]);
+  }, [start]);
   useEffect(() => player.current?.more(meta), [meta]);
+  const toLive = () => {
+    const n = Math.max(0, metaRef.current.segments - 2);
+    setOver(false);
+    setAt(n);
+    setStart({ from: n, follow: true });
+  };
+  const seek = (n: number) => {
+    // Dragged to the end of a live broadcast is asking for live.
+    if (metaRef.current.status === 'live' && n >= metaRef.current.segments - 2) return toLive();
+    setOver(false);
+    setAt(n);
+    setStart({ from: n, follow: false });
+  };
   const play = () => {
     setPlaying(true);
     video.current?.play().catch(() => setPlaying(false));
   };
   return (
-    <div className="gv-player">
+    <div className="gv-player" ref={frame}>
       <div className={`gv-screen ${live ? 'live' : ''}`}>
         <video ref={video} playsInline data-n={at} data-joined="" onPlay={() => setPlaying(true)} onPause={() => video.current && !video.current.ended && setPlaying(false)} />
         {live && !over && <span className="gv-badge">LIVE</span>}
@@ -456,25 +575,9 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
         )}
         {waiting && playing && !over && <span className="gv-wait">Waiting for the next few seconds…</span>}
         {over && <span className="gv-wait">This broadcast has ended.</span>}
+        <FullButton full={full} onClick={toggleFull} />
       </div>
-      {!live && meta.segments > 1 && (
-        <div className="gv-seek">
-          <span className="muted small">{span(Math.min(at, meta.segments) * meta.segment_seconds)}</span>
-          <input
-            type="range"
-            min={0}
-            max={meta.segments - 1}
-            value={Math.min(at, meta.segments - 1)}
-            aria-label="Move through the video"
-            onChange={(e) => {
-              setOver(false);
-              setAt(Number(e.target.value));
-              setFrom(Number(e.target.value));
-            }}
-          />
-          <span className="muted small">{span(meta.segments * meta.segment_seconds)}</span>
-        </div>
-      )}
+      {!over && <SeekBar at={at} meta={meta} behind={live && !start.follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
     </div>
   );
 }
@@ -483,6 +586,8 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
 function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const [meta, setMeta] = useState(stream);
+  const frame = useRef<HTMLDivElement>(null);
+  const [full, toggleFull] = useFullScreen(frame, video);
   const [at, setAt] = useState(stream.status === 'live' ? Math.max(0, stream.segments - 2) : 0);
   const [waiting, setWaiting] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -502,7 +607,9 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
   const loaded = useRef(-1);
   const blobUrl = useRef('');
   // Where the pieces come from is the server's to say.
-  const fetchPiece = useRef(pieceFetcher(stream)).current.whole;
+  const pieces = useRef(pieceFetcher(stream)).current;
+  const fetchPiece = pieces.whole;
+  useEffect(() => pieces.know(meta), [pieces, meta]);
   const here = useRef(true);
   const playingRef = useRef(playing);
   playingRef.current = playing;
@@ -549,17 +656,32 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
       if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
     };
   }, []);
+  // Watching live, kept near the newest. Going back through a live broadcast turns it off.
+  const [follow, setFollow] = useState(stream.status === 'live');
+  const followRef = useRef(follow);
+  followRef.current = follow;
   const next = () => {
     const m = metaRef.current;
-    // Fallen far behind a live stream: jump back near the front.
-    setAt((n) => (m.status === 'live' && m.segments - n > 6 ? m.segments - 2 : n + 1));
+    // Fallen far behind a live stream while watching it live: jump back near the front.
+    setAt((n) => (m.status === 'live' && followRef.current && m.segments - n > 6 ? m.segments - 2 : n + 1));
+  };
+  const toLive = () => {
+    setOver(false);
+    setFollow(true);
+    setAt(Math.max(0, metaRef.current.segments - 2));
+  };
+  const seek = (n: number) => {
+    if (metaRef.current.status === 'live' && n >= metaRef.current.segments - 2) return toLive();
+    setOver(false);
+    setFollow(false);
+    setAt(n);
   };
   const play = () => {
     setPlaying(true);
     video.current?.play().catch(() => setPlaying(false));
   };
   return (
-    <div className="gv-player">
+    <div className="gv-player" ref={frame}>
       <div className={`gv-screen ${live ? 'live' : ''}`}>
         <video ref={video} playsInline onEnded={next} onError={next} onPlay={() => setPlaying(true)} onPause={() => video.current && !video.current.ended && setPlaying(false)} />
         {live && !over && <span className="gv-badge">LIVE</span>}
@@ -570,14 +692,9 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
         )}
         {waiting && playing && <span className="gv-wait">Waiting for the next few seconds…</span>}
         {over && <span className="gv-wait">This broadcast has ended.</span>}
+        <FullButton full={full} onClick={toggleFull} />
       </div>
-      {!live && meta.segments > 1 && (
-        <div className="gv-seek">
-          <span className="muted small">{span(Math.min(at, meta.segments) * meta.segment_seconds)}</span>
-          <input type="range" min={0} max={meta.segments - 1} value={Math.min(at, meta.segments - 1)} aria-label="Move through the video" onChange={(e) => (setOver(false), setAt(Number(e.target.value)))} />
-          <span className="muted small">{span(meta.segments * meta.segment_seconds)}</span>
-        </div>
-      )}
+      {!over && <SeekBar at={at} meta={meta} behind={live && !follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
     </div>
   );
 }
@@ -643,7 +760,7 @@ export function StreamPeople({ teamId }: { teamId: number }) {
  * One saved video as a card, the way Resources shows its things: a picture from the game to
  * press and play, what it is, and what can be done with it (`children`).
  */
-export function GameVideoCard({ stream: s, onPlay, children }: { stream: GameStream; onPlay: () => void; children?: ReactNode }) {
+export function GameVideoCard({ stream: s, onPlay, playLabel = 'Play', children }: { stream: GameStream; onPlay: () => void; playLabel?: string; children?: ReactNode }) {
   return (
     <div className="res-card kind-video game-video">
       <button type="button" className="res-preview" onClick={onPlay} title="Play">
@@ -669,7 +786,7 @@ export function GameVideoCard({ stream: s, onPlay, children }: { stream: GameStr
         </span>
         <div className="res-actions">
           <button type="button" className="btn small" onClick={onPlay}>
-            Play
+            {playLabel}
           </button>
           {children}
         </div>
@@ -760,7 +877,7 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
         <div className="card">
           <h2>Saved video{planId ? ' of this game' : ''}</h2>
           <p className="muted small">
-            For this team's coaches. It is also under Resources. {can.save ? '' : 'Saving video is not turned on for this team: the administrator decides which teams may keep video.'}
+            For this team's coaches. It is also in the Filmroom, where it can be cut into clips. {can.save ? '' : 'Saving video is not turned on for this team: the administrator decides which teams may keep video.'}
             {list.free_bytes !== undefined && Number.isFinite(list.free_bytes) && ` The site has ${mb(list.free_bytes)} of room left.`}
           </p>
           {saved.length === 0 ? (

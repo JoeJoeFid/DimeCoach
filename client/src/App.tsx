@@ -40,6 +40,9 @@ import { FamilyApp, FamilyHome, FamilyTeamPage } from './pages/Family';
 import ImportPlans from './pages/ImportPlans';
 import Playbook from './pages/Playbook';
 import Resources from './pages/Resources';
+import Filmroom from './pages/Filmroom';
+import FilmEditor from './pages/FilmEditor';
+import FilmReel from './pages/FilmReel';
 import PlayEditor from './pages/PlayEditor';
 import PlayPrint from './pages/PlayPrint';
 import Help from './pages/Help';
@@ -81,6 +84,7 @@ export const NAV_ICONS = {
   homework: 'M4 6.5c2.5-1.2 5.2-1.2 8 0v13c-2.8-1.2-5.5-1.2-8 0zM12 6.5c2.8-1.2 5.5-1.2 8 0v13c-2.5-1.2-5.2-1.2-8 0',
   playbook: 'M5 4h14v16H5zM9 8.500l2 2M11 8.500l-2 2M15 15a1.500 1.500 0 1 0 0-3 1.500 1.500 0 0 0 0 3ZM9.500 15.500c1.500 0 2.500-1 3-2.500',
   resources: 'M4 6.500h6l2 2.500h8v10H4zM9.500 15.500l2-2.500 2 2 1.500-1.500 2 2',
+  filmroom: 'M4 5h16v14H4zM8 5v14M16 5v14M4 9.500h4M4 14.500h4M16 9.500h4M16 14.500h4',
   library: 'M12 4 3.5 8.5 12 13l8.5-4.5zM3.5 12.5 12 17l8.5-4.5M3.5 16.5 12 21l8.5-4.5',
   tags: 'M4 4h7.5l8.5 8.5-7.5 7.5L4 11.5zM8.5 8.5h.01',
   teams: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.900c1.900.700 3.100 2.400 3.500 5.100',
@@ -117,6 +121,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { to: '/library', label: 'Drills', icon: icons.library },
       { to: '/playbook', label: 'Playbook', icon: icons.playbook },
       { to: '/resources', label: 'Resources', icon: icons.resources },
+      { to: '/filmroom', label: 'Filmroom', icon: icons.filmroom },
     ],
   },
   {
@@ -532,6 +537,10 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           <Route path="/library" element={<Library />} />
           <Route path="/playbook" element={<Playbook />} />
           <Route path="/resources" element={<Resources />} />
+          <Route path="/filmroom" element={<Filmroom />} />
+          <Route path="/filmroom/video/:id" element={<FilmEditor />} />
+          <Route path="/filmroom/new" element={<FilmReel />} />
+          <Route path="/filmroom/reel/:id" element={<FilmReel />} />
           <Route path="/plays/:id" element={<PlayEditor />} />
           <Route path="/plays/:id/print" element={<PlayPrint />} />
           <Route path="/tags" element={<Tags />} />

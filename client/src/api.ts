@@ -841,6 +841,8 @@ export interface GameStream {
   watch: 'server' | 'links';
   /** Whether its pieces carry on from one another and play as one video, or are each a video of their own. */
   layout: 'joined' | 'separate';
+  /** For a joined video, the piece each of its opening parts applies from: one at the start, and one for each change of quality. */
+  inits: number[];
   /** Whether there is a picture to show it by, at /api/streams/:id/poster. */
   has_poster: boolean;
   mime: string;
@@ -861,6 +863,46 @@ export interface StreamList {
   live: GameStream[];
   saved: GameStream[];
   free_bytes?: number;
+}
+/** A moment in a video: a piece of it, and how far into that piece in seconds. */
+export interface FilmMark {
+  n: number;
+  off: number;
+}
+/** A clip cut from a saved game video: two marks on it, with a title and notes. */
+export interface FilmClip {
+  id: number;
+  stream_id: number;
+  title: string;
+  notes: string;
+  start: FilmMark;
+  end: FilmMark;
+  seconds: number;
+  created_at: string;
+  by: string;
+}
+/** One thing in a video put together in the Filmroom: a clip, or a whole game video. */
+export interface FilmItem {
+  clip_id: number | null;
+  stream_id: number | null;
+  /** Whether the clip's title and notes show over the picture while it plays. */
+  show_notes: boolean;
+}
+/** A video put together in the Filmroom from clips and game videos, in an order. */
+export interface FilmReel {
+  id: number;
+  title: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  by: string;
+  items: FilmItem[];
+}
+/** Everything in a team's Filmroom. */
+export interface Film {
+  videos: GameStream[];
+  clips: FilmClip[];
+  reels: FilmReel[];
 }
 /** One of a team's parents, family or friends, and what they may do with its live video. */
 export interface StreamPerson {
@@ -1026,14 +1068,21 @@ export const api = {
   saveTeamScoring: (teamId: number, scoring: Partial<ScoringConfig>) => req<{ scoring: ScoringConfig }>('PUT', `/teams/${teamId}/scoring`, { scoring }),
   /** Each game's field goal attempts by player. Refused unless the chart is turned on for the team. */
   shotEfficiency: (teamId: number) => req<{ games: ({ plan_id: number } & GameShots)[] }>('GET', `/teams/${teamId}/shot-efficiency`),
+  film: (teamId: number) => req<Film>('GET', `/film?team_id=${teamId}`),
+  addClip: (b: { stream_id: number; title: string; notes: string; start: FilmMark; end: FilmMark; seconds: number }) => req<Film>('POST', '/film/clips', b),
+  saveClip: (id: number, b: { title: string; notes: string }) => req<Film>('PUT', `/film/clips/${id}`, b),
+  deleteClip: (id: number) => req<Film>('DELETE', `/film/clips/${id}`),
+  addReel: (b: { team_id: number; title: string; notes: string; items: FilmItem[] }) => req<Film & { id: number }>('POST', '/film/reels', b),
+  saveReel: (id: number, b: { title: string; notes: string; items: FilmItem[] }) => req<Film & { id: number }>('PUT', `/film/reels/${id}`, b),
+  deleteReel: (id: number) => req<Film>('DELETE', `/film/reels/${id}`),
   streams: (teamId: number) => req<StreamList>('GET', `/streams?team_id=${teamId}`),
   stream: (id: number) => req<GameStream>('GET', `/streams/${id}`),
   savedStreams: () => req<GameStream[]>('GET', '/streams/saved'),
   /** `send` is how the server wants this broadcast's pieces sent: to itself, or by links it hands out. */
   startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string; date: string; layout?: 'joined' | 'separate'; /** The groups to tell it has begun: any of coaches, parents, family, friends. Everyone when left out. */ tell?: string[] }) => req<{ stream: GameStream; can_save: boolean; send: 'server' | 'links' }>('POST', '/streams', b),
   /** Links to send the next few pieces straight to where the video is kept. Never throws for an answer the server gave: the caller decides what each means. */
-  sendLinks: async (id: number): Promise<{ status: number; error?: string; links?: { n: number; url: string }[]; init?: string }> => {
-    const res = await fetch(`/api/streams/${id}/links`, { method: 'POST' });
+  sendLinks: async (id: number, init = false): Promise<{ status: number; error?: string; links?: { n: number; url: string }[]; init?: string }> => {
+    const res = await fetch(`/api/streams/${id}/links`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init }) });
     return { ...(await res.json().catch(() => ({}))), status: res.status };
   },
   /** Tells the server piece `n` is where the video is kept. */
@@ -1042,7 +1091,7 @@ export const api = {
     return { ...(await res.json().catch(() => ({}))), status: res.status };
   },
   /** Links to fetch the pieces from `from` on, for as long as `good_for` seconds. */
-  watchLinks: (id: number, from: number) => req<{ links: { n: number; url: string }[]; init?: string; type: string; good_for: number }>('GET', `/streams/${id}/links?from=${from}`),
+  watchLinks: (id: number, from: number) => req<{ links: { n: number; url: string }[]; inits?: { k: number; from: number; url: string }[]; type: string; good_for: number }>('GET', `/streams/${id}/links?from=${from}`),
   /** Sends one piece of video as it is, not as JSON. `init` marks the opening part of a joined video. */
   sendSegment: async (id: number, piece: Blob, init = false) => {
     const res = await fetch(`/api/streams/${id}/segments${init ? '?init=1' : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: piece });

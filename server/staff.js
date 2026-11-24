@@ -96,6 +96,8 @@ function gate(req) {
     case 'tracks':
     // Live video checks for itself who is on the team and what they may do.
     case 'streams':
+    // The Filmroom is saved game video and what is cut from it, and checks the same way.
+    case 'film':
     // Notifications are each person's own, on each of their devices.
     case 'push':
     // A chat is between its own people, whatever team is open.
