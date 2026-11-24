@@ -8,7 +8,7 @@ import { api, type Film, type FilmClip, type FilmMark } from '../api';
 import { useApp } from '../App';
 import { Field, MoreMenu } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
-import { FilmPlayer, FilmRow, ReelPlayer, Strip, TheaterButton, canClip, clock, markSeconds, scenes, stripItem, stripSeconds, useTheater, type FilmHandle, type StripItem } from '../components/Film';
+import { CutIcon, FilmPlayer, FilmRow, ReelPlayer, Strip, TheaterButton, canClip, clock, markSeconds, scenes, stripItem, stripSeconds, useTheater, type FilmHandle, type StripItem } from '../components/Film';
 import { ClipForm } from './Filmroom';
 
 export default function FilmEditor() {
@@ -215,6 +215,34 @@ export default function FilmEditor() {
               )}
             </>
           )}
+          {/* The timeline sits right under the video, so a long list of clips beside it never pushes it down. */}
+          {cuttable && (
+            <div className="card film-new">
+              <div className="tl2-head">
+                <h2>
+                  <CutIcon /> Make the cut <span className="muted small">Every clip you make lands here. Drag them into order, then save it.</span>
+                </h2>
+                {onStrip.length > 0 && (
+                  <span className="muted small">
+                    {onStrip.length} clip{onStrip.length === 1 ? '' : 's'} · {clock(stripSeconds(film, strip))}
+                  </span>
+                )}
+              </div>
+              <Strip film={film} items={strip} at={stripAt} onChange={setStrip} onPlay={setStripAt} onAdd={(item) => setStrip((s) => [...s, stripItem({ ...item, show_notes: false })])} />
+              {onStrip.length > 0 && (
+                <div className="gv-actions">
+                  <input className="input film-reel-title" value={reelTitle} maxLength={120} placeholder="Title for the new cut" aria-label="Title for the new cut" onChange={(e) => setReelTitle(e.target.value)} />
+                  <button type="button" className="btn primary" disabled={!reelTitle.trim() || saving} onClick={saveReel}>
+                    Save as a cut
+                  </button>
+                  <button type="button" className="btn" onClick={() => setStripAt(0)}>
+                    Play it through
+                  </button>
+                  <span className="muted small">To mix in clips from other games, use "Create a new cut" in the Filmroom.</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="card film-side">
           <h2>This video</h2>
@@ -266,33 +294,6 @@ export default function FilmEditor() {
           )}
         </div>
       </div>
-      {cuttable && (
-        <div className="card film-new">
-          <div className="tl2-head">
-            <h2>
-              Timeline <span className="muted small">Drag to reorder. Each clip you make is set down here.</span>
-            </h2>
-            {onStrip.length > 0 && (
-              <span className="muted small">
-                {onStrip.length} clip{onStrip.length === 1 ? '' : 's'} · {clock(stripSeconds(film, strip))}
-              </span>
-            )}
-          </div>
-          <Strip film={film} items={strip} at={stripAt} onChange={setStrip} onPlay={setStripAt} onAdd={(item) => setStrip((s) => [...s, stripItem({ ...item, show_notes: false })])} />
-          {onStrip.length > 0 && (
-            <div className="gv-actions">
-              <input className="input film-reel-title" value={reelTitle} maxLength={120} placeholder="Title for the new cut" aria-label="Title for the new cut" onChange={(e) => setReelTitle(e.target.value)} />
-              <button type="button" className="btn primary" disabled={!reelTitle.trim() || saving} onClick={saveReel}>
-                Save as a cut
-              </button>
-              <button type="button" className="btn" onClick={() => setStripAt(0)}>
-                Play it through
-              </button>
-              <span className="muted small">To mix in clips from other games, use "Create a new cut" in the Filmroom.</span>
-            </div>
-          )}
-        </div>
-      )}
       {editing && <ClipForm clip={editing} onClose={() => setEditing(null)} onSaved={(f) => (setFilm(f), setEditing(null))} />}
     </div>
   );

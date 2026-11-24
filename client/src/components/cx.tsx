@@ -210,7 +210,7 @@ export function Crumbs({ items }: { items: Crumb[] }) {
 }
 
 /** Smaller tabs inside a page. */
-export function SubTabs<T extends string>({ tabs, value, onChange, label, boxed }: { tabs: [T, string, number?][]; value: T; onChange: (t: T) => void; label: string; /** Drawn as the boxed bar at the top of a page, as on Team. */ boxed?: boolean }) {
+export function SubTabs<T extends string>({ tabs, value, onChange, label, boxed }: { /** Each tab: what it is, what it says (words, or words with an icon), and a count when it has one. */ tabs: [T, ReactNode, number?][]; value: T; onChange: (t: T) => void; label: string; /** Drawn as the boxed bar at the top of a page, as on Team. */ boxed?: boolean }) {
   return (
     <div className={boxed ? 'seg team-tabs cx-seg-tabs' : 'cx-subtabs'} role="tablist" aria-label={label}>
       {tabs.map(([id, text, count]) => (

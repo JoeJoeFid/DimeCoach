@@ -473,6 +473,12 @@ export function useTheater(): [boolean, () => void] {
   };
   return [on, toggle];
 }
+/** The mark of a cut: a pair of scissors. Used wherever cuts are named. */
+export const CutIcon = ({ size = 18 }: { size?: number }) => (
+  <svg className="cut-icon" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" />
+  </svg>
+);
 export function TheaterButton({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
     <button type="button" className="btn film-theater-btn" aria-pressed={on} onClick={onClick} title={on ? 'Back to the video with the lists beside it' : 'A bigger video, with the lists underneath'}>

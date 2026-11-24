@@ -21277,3 +21277,25 @@ button.film-clip-play {
   color: var(--ink-2);
   overflow-wrap: anywhere;
 }
+
+/* The scissors that mark a cut, wherever cuts are named. */
+.cut-icon {
+  flex: none;
+  vertical-align: -0.18em;
+}
+.tl2-head h2 .cut-icon {
+  align-self: center;
+}
+.cut-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cut-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn .cut-icon {
+  margin-right: 6px;
+}

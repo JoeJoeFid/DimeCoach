@@ -9,7 +9,7 @@ import { Field, Modal, ShareIcon } from '../components/bits';
 import { SubTabs } from '../components/cx';
 import { confirmDialog } from '../components/dialogs';
 import { GameVideoCard } from '../components/GameVideo';
-import { FilmPlayer, ReelPlayer, canClip, clock, scenes, stripItem } from '../components/Film';
+import { CutIcon, FilmPlayer, ReelPlayer, canClip, clock, scenes, stripItem } from '../components/Film';
 
 type Tab = 'games' | 'clips' | 'videos';
 /** The bin on a Delete button, as on the Drills page. */
@@ -113,7 +113,7 @@ export default function Filmroom() {
           <p className="muted">Saved game video, the clips you cut from it, and the cuts you put together from them: film review, highlights, scouting.</p>
         </div>
         <Link className="btn primary" to="/filmroom/new">
-          Create a new cut
+          <CutIcon /> Create a new cut
         </Link>
       </div>
       <SubTabs<Tab>
@@ -124,7 +124,13 @@ export default function Filmroom() {
         tabs={[
           ['games', 'Game videos', film?.videos.length],
           ['clips', 'Clips', film?.clips.length],
-          ['videos', 'Cuts', film?.reels.length],
+          [
+            'videos',
+            <span className="cut-tab" key="cuts">
+              <CutIcon size={16} /> Cuts
+            </span>,
+            film?.reels.length,
+          ],
         ]}
       />
       {error && <p className="error">{error}</p>}
@@ -182,7 +188,7 @@ export default function Filmroom() {
           <h2>No cuts yet</h2>
           <p>Put clips and game videos together, in the order you want, into a cut of your own.</p>
           <Link className="btn primary" to="/filmroom/new">
-            Create a new cut
+            <CutIcon /> Create a new cut
           </Link>
         </div>
       ) : (

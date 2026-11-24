@@ -8,7 +8,7 @@ import { api, type Film } from '../api';
 import { useApp } from '../App';
 import { Field } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
-import { FilmRow, ReelPlayer, Strip, TheaterButton, canClip, clock, scenes, stripItem, stripSeconds, useTheater, type StripItem } from '../components/Film';
+import { CutIcon, FilmRow, ReelPlayer, Strip, TheaterButton, canClip, clock, scenes, stripItem, stripSeconds, useTheater, type StripItem } from '../components/Film';
 
 const day = (at: string) => new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
@@ -112,7 +112,9 @@ export default function FilmReel() {
       </p>
       <div className="page-head">
         <div>
-          <h1>{id ? title || 'Cut' : 'New cut'}</h1>
+          <h1 className="cut-title">
+            <CutIcon size={26} /> {id ? title || 'Cut' : 'New cut'}
+          </h1>
           <p className="muted">
             {list.length === 0 ? 'Add clips and game videos from the list, in the order they should play.' : `${list.length} part${list.length === 1 ? '' : 's'} · ${clock(stripSeconds(film, strip))}`}
             {dirty && list.length > 0 && ' · not saved yet'}
@@ -145,7 +147,7 @@ export default function FilmReel() {
           <div className="card film-new">
             <div className="tl2-head">
               <h2>
-                Timeline <span className="muted small">Drag to reorder. Click a part to play from there.</span>
+                <CutIcon /> Make the cut <span className="muted small">Drag parts into order. Click one to play from there.</span>
               </h2>
               {list.length > 0 && (
                 <span className="muted small">
