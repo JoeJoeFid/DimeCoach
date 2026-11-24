@@ -15,6 +15,7 @@ import { notify } from './notices.js';
 import { RESET_MINUTES, claimInvites, clearResets, inviteByToken, mailReset, resetByToken } from './invites.js';
 import { claimOrgInvites, orgInviteByToken } from './orgs.js';
 import { claimFamily, familyInviteByToken } from './contacts.js';
+import { addressAwaited, claimFilmLink, filmLinkByToken } from './filmLinks.js';
 import { isActive, markActive } from './live.js';
 import { recentActivity, trackActivity } from './activity.js';
 import { MAX_CAP_MB, capMbFor, defaultCapMb, parseCapMb, usageOf } from './quota.js';
@@ -563,6 +564,43 @@ export function mountAuth(app) {
     });
     startSession(req, res, userId);
     res.json({ ok: true, user: userOut(get('SELECT * FROM users WHERE id=?', userId)) });
+  });
+
+  // --- A link to a video in a team's Filmroom, made by the system administrator to be passed around (filmLinks.js) ---
+  const BAD_FILM_LINK = 'This link does not work any more. Ask whoever sent it for a new one.';
+  // What the link is to, for someone who has opened it and may not be signed in.
+  app.get('/api/auth/film-link', (req, res) => {
+    const found = filmLinkByToken(str(req.query.token));
+    if (!found) return res.status(404).json({ error: BAD_FILM_LINK });
+    res.json(found.info);
+  });
+  // Comes in by the link: as whoever is signed in, or by making an account, which follows the team as a guest.
+  app.post('/api/auth/film-link', (req, res) => {
+    const found = filmLinkByToken(str(req.body.token));
+    if (!found) return res.status(404).json({ error: BAD_FILM_LINK });
+    let user = currentUser(req);
+    if (!user) {
+      const email = normEmail(req.body.email);
+      const name = nameFrom(req.body);
+      if (!name) return res.status(400).json({ error: 'Enter your name.' });
+      if (name.length > 80) return res.status(400).json({ error: 'Keep your name under 80 characters.' });
+      if (!validEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+      const problem = passwordProblem(req.body.password);
+      if (problem) return res.status(400).json({ error: problem });
+      if (tooManySignups(req.ip)) return res.status(429).json({ error: 'Too many new accounts from here. Try again in an hour.' });
+      if (get('SELECT id FROM users WHERE email=?', email)) return res.status(409).json({ error: 'There is already an account with that email. Sign in with it instead.' });
+      // Nothing shows this address is theirs, so one that an invitation is waiting for is left for the invitation.
+      if (addressAwaited(email)) return res.status(409).json({ error: 'An invitation has been emailed to that address. Make your account from the link in that email, then open this link again.' });
+      const id = tx(() => {
+        const made = createUser({ email, name, password: str(req.body.password) });
+        run('UPDATE users SET follower=1 WHERE id=?', made);
+        return made;
+      });
+      signups.get(req.ip).push(Date.now());
+      startSession(req, res, id);
+      user = get('SELECT * FROM users WHERE id=?', id);
+    }
+    res.json({ ok: true, ...claimFilmLink(found, user) });
   });
 
   // --- Everything below this line needs a signed-in user ---------------------

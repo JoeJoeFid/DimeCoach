@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, type User } from '../api';
 import type { InviteInfo } from '../types';
 import { ThemeToggle } from '../theme';
@@ -650,6 +650,105 @@ export function SignedOut({ registrationOpen, confirmEmail, canReset, onSignedIn
       <Route path="/register" element={registrationOpen ? <Register confirm={confirmEmail} onSignedIn={onSignedIn} /> : <InviteOnly />} />
       <Route path="*" element={<Login registrationOpen={registrationOpen} canReset={canReset} onSignedIn={onSignedIn} />} />
     </Routes>
+  );
+}
+
+/**
+ * A link to a video from a team's Filmroom, opened by whoever it was passed to. Watching takes an
+ * account: someone signed in goes straight on, and anyone else signs in or makes one here, and
+ * joins the team as a guest who sees only what is shared with them.
+ */
+export function WatchLink({ signedInAs, onSignedIn, onSignOut }: { signedInAs?: User | null; onSignedIn: () => void; onSignOut?: () => void }) {
+  const { token = '' } = useParams();
+  const navigate = useNavigate();
+  const [info, setInfo] = useState<{ team: string; title: string; kind: 'video' | 'clip' | 'reel'; by: string } | null>(null);
+  const [bad, setBad] = useState('');
+  const [mode, setMode] = useState<'new' | 'have'>('new');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  useEffect(() => {
+    api.filmLinkInfo(token).then(setInfo, (e) => setBad((e as Error).message));
+  }, [token]);
+  /** In: the video is theirs to watch, on the team's page, or in the Filmroom for one of the team's own coaches. */
+  const enter = async (made?: { name: string; email: string; password: string }) => {
+    const r = await api.openFilmLink({ token, ...made });
+    navigate(r.coach ? '/filmroom' : `/family/${r.team_id}?tab=film${r.share ? `&share=${r.share}` : ''}`, { replace: true });
+    onSignedIn();
+  };
+  const { busy, error, submit } = useSubmit(async () => {
+    if (signedInAs) return enter();
+    if (mode === 'new') return enter({ name, email, password });
+    await api.login(email, password);
+    await enter();
+  });
+  if (bad)
+    return (
+      <AuthShell title="That link did not work" lead={bad}>
+        <p className="muted small auth-foot">
+          <Link to="/">Go to Dime Coach</Link>
+        </p>
+      </AuthShell>
+    );
+  if (!info) return <AuthShell title="Opening the video…">{null}</AuthShell>;
+  const card = (
+    <div className="invite-team">
+      <strong>{info.title}</strong>
+      <span className="muted small">
+        {info.kind === 'video' ? 'Game video' : info.kind === 'clip' ? 'A clip' : 'A video'} from {info.team}
+      </span>
+      <span className="muted small">Shared by {info.by}</span>
+    </div>
+  );
+  if (signedInAs)
+    return (
+      <AuthShell title="A video was shared with you" lead={`You are signed in as ${signedInAs.name}.`}>
+        {card}
+        <form className="fields stack" onSubmit={submit}>
+          {error && <p className="error">{error}</p>}
+          <button className="btn primary" disabled={busy}>
+            {busy ? 'Opening…' : 'Watch it'}
+          </button>
+        </form>
+        {onSignOut && (
+          <p className="muted small auth-foot">
+            Not you?{' '}
+            <button type="button" className="link" onClick={onSignOut}>
+              Sign out
+            </button>
+          </p>
+        )}
+      </AuthShell>
+    );
+  return (
+    <AuthShell title="A video was shared with you" lead="It takes a Dime Coach account to watch. Making one is free and takes a moment, and it shows you only what is shared with you.">
+      {card}
+      <div className="seg" role="group" aria-label="Whether you have an account">
+        <button type="button" className={mode === 'new' ? 'on' : ''} aria-pressed={mode === 'new'} onClick={() => setMode('new')}>
+          I am new here
+        </button>
+        <button type="button" className={mode === 'have' ? 'on' : ''} aria-pressed={mode === 'have'} onClick={() => setMode('have')}>
+          I have an account
+        </button>
+      </div>
+      <form className="fields stack" onSubmit={submit}>
+        {error && <p className="error">{error}</p>}
+        {mode === 'new' && (
+          <Field label="Your name">
+            <input className="input" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+          </Field>
+        )}
+        <Field label="Email address">
+          <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        </Field>
+        <Field label={mode === 'new' ? `Choose a password (at least ${MIN_PASSWORD} characters)` : 'Password'}>
+          <input className="input" type="password" required minLength={mode === 'new' ? MIN_PASSWORD : undefined} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'new' ? 'new-password' : 'current-password'} />
+        </Field>
+        <button className="btn primary" disabled={busy}>
+          {busy ? 'Opening…' : mode === 'new' ? 'Make my account and watch' : 'Sign in and watch'}
+        </button>
+      </form>
+    </AuthShell>
   );
 }
 

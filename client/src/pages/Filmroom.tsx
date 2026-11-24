@@ -2,16 +2,22 @@
 // out of clips. One list at a time; a game video opens in the editor, where clips are made.
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { api, type Film, type FilmClip, type FilmPeople, type FilmReel, type FilmShare, type GameStream } from '../api';
+import { api, type Film, type FilmClip, type FilmLink, type FilmPeople, type FilmReel, type FilmShare, type GameStream } from '../api';
 import { useApp } from '../App';
 import PageTitle from '../components/PageTitle';
-import { Field, Modal } from '../components/bits';
+import { Field, Modal, ShareIcon } from '../components/bits';
 import { SubTabs } from '../components/cx';
 import { confirmDialog } from '../components/dialogs';
 import { GameVideoCard } from '../components/GameVideo';
 import { FilmPlayer, ReelPlayer, canClip, clock, scenes, stripItem } from '../components/Film';
 
 type Tab = 'games' | 'clips' | 'videos';
+/** The bin on a Delete button, as on the Drills page. */
+const BinIcon = () => (
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5" />
+  </svg>
+);
 const day = (at: string) => new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 /** Which game a video is of, in words, for asking before anything of it is deleted. */
 const gameOf = (v: GameStream | undefined) => {
@@ -45,7 +51,7 @@ function FilmCard({ poster, length, title, meta, notes, onPlay, children }: { po
 }
 
 export default function Filmroom() {
-  const { team } = useApp();
+  const { team, user } = useApp();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const tab: Tab = params.get('tab') === 'clips' ? 'clips' : params.get('tab') === 'videos' ? 'videos' : 'games';
@@ -60,8 +66,9 @@ export default function Filmroom() {
   const shareButton = (what: Shared) => {
     const n = film?.shares.filter((s) => s.kind === what.kind && s.ref_id === what.id).length ?? 0;
     return (
-      <button type="button" className="btn small" onClick={() => setSharing(what)} title={n ? `Shared with ${n} ${n === 1 ? 'person' : 'people'}` : 'Share it with someone'}>
-        Share{n > 0 && <span className="cm-count">{n}</span>}
+      <button type="button" className="btn small icon-btn film-share-btn" onClick={() => setSharing(what)} aria-label={`Share ${what.title}${n ? `. Shared with ${n} ${n === 1 ? 'person' : 'people'}` : ''}`} title={n ? `Share. Shared with ${n} ${n === 1 ? 'person' : 'people'} so far` : 'Share'}>
+        <ShareIcon size={17} />
+        {n > 0 && <span className="cm-count">{n}</span>}
       </button>
     );
   };
@@ -139,8 +146,8 @@ export default function Filmroom() {
                   {canClip(v) ? '' : ' · watch only'}
                 </span>
                 {shareButton({ kind: 'video', id: v.id, title: v.title || 'Game video' })}
-                <button type="button" className="btn small res-remove" onClick={() => removeVideo(v)}>
-                  Delete
+                <button type="button" className="btn small icon-btn danger res-remove" aria-label={`Delete ${v.title || 'Game video'}`} title="Delete" onClick={() => removeVideo(v)}>
+                  <BinIcon />
                 </button>
               </GameVideoCard>
             ))}
@@ -163,8 +170,8 @@ export default function Filmroom() {
                   Edit
                 </button>
                 {shareButton({ kind: 'clip', id: c.id, title: c.title })}
-                <button type="button" className="btn small res-remove" onClick={() => removeClip(c)}>
-                  Delete
+                <button type="button" className="btn small icon-btn danger res-remove" aria-label={`Delete ${c.title}`} title="Delete" onClick={() => removeClip(c)}>
+                  <BinIcon />
                 </button>
               </FilmCard>
             ))}
@@ -191,8 +198,8 @@ export default function Filmroom() {
                   Edit
                 </Link>
                 {shareButton({ kind: 'reel', id: r.id, title: r.title })}
-                <button type="button" className="btn small res-remove" onClick={() => removeReel(r)}>
-                  Delete
+                <button type="button" className="btn small icon-btn danger res-remove" aria-label={`Delete ${r.title}`} title="Delete" onClick={() => removeReel(r)}>
+                  <BinIcon />
                 </button>
               </FilmCard>
             );
@@ -216,7 +223,7 @@ export default function Filmroom() {
         </Modal>
       )}
       {editing && <ClipForm clip={editing} onClose={() => setEditing(null)} onSaved={(f) => (setFilm(f), setEditing(null))} />}
-      {sharing && film && <ShareForm teamId={team.id} what={sharing} film={film} onFilm={setFilm} onClose={() => setSharing(null)} />}
+      {sharing && film && <ShareForm teamId={team.id} what={sharing} film={film} links={user.is_system_admin} onFilm={setFilm} onClose={() => setSharing(null)} />}
     </div>
   );
 }
@@ -232,7 +239,7 @@ const SHARED_WORD: Record<FilmShare['kind'], string> = { video: 'game video', cl
  * Who one thing in the Filmroom is shared with, and sharing it with more people: ones on the
  * team's list, or new ones by email, who are added to the team as guests and see nothing else.
  */
-function ShareForm({ teamId, what, film, onFilm, onClose }: { teamId: number; what: Shared; film: Film; onFilm: (f: Film) => void; onClose: () => void }) {
+function ShareForm({ teamId, what, film, links, onFilm, onClose }: { teamId: number; what: Shared; film: Film; /** Whether links that can be passed around are offered: the system administrator's alone. */ links: boolean; onFilm: (f: Film) => void; onClose: () => void }) {
   const [people, setPeople] = useState<FilmPeople | null>(null);
   const [picked, setPicked] = useState<number[]>([]);
   const [fresh, setFresh] = useState<{ name: string; email: string }[]>([]);
@@ -355,6 +362,7 @@ function ShareForm({ teamId, what, film, onFilm, onClose }: { teamId: number; wh
         <textarea className="input" rows={2} value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
       </Field>
       {people && !people.mail && <p className="muted small">Email is not set up on this site, so only people who already have an account can be told.</p>}
+      {links && <ShareLinks teamId={teamId} what={what} onCameIn={() => api.film(teamId).then(onFilm, () => {})} />}
       {error && <p className="error">{error}</p>}
       {notice && <p className="notice">{notice}</p>}
       <div className="modal-actions">
@@ -366,6 +374,80 @@ function ShareForm({ teamId, what, film, onFilm, onClose }: { teamId: number; wh
         </button>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Links to one thing that can be passed around, in a text message say. Whoever opens one signs
+ * in or makes an account, and joins the team as a guest with this shared with them.
+ */
+function ShareLinks({ teamId, what, onCameIn }: { teamId: number; what: Shared; onCameIn: () => void }) {
+  const [list, setList] = useState<FilmLink[] | null>(null);
+  const [fresh, setFresh] = useState<{ id: number; url: string; days: number } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState('');
+  const failed = (e: unknown) => setError((e as Error).message);
+  useEffect(() => {
+    api.filmLinks(teamId).then(setList, failed);
+  }, [teamId]);
+  const mine = list?.filter((l) => l.kind === what.kind && l.ref_id === what.id) ?? [];
+  const make = () =>
+    api.makeFilmLink({ team_id: teamId, kind: what.kind, ref_id: what.id }).then((r) => {
+      setList(r.links);
+      setFresh(r);
+      setCopied(false);
+      setError('');
+    }, failed);
+  const copy = async () => {
+    if (!fresh) return;
+    try {
+      await navigator.clipboard.writeText(fresh.url);
+      setCopied(true);
+    } catch {
+      setError('It could not be copied from here. Select the address and copy it yourself.');
+    }
+  };
+  const drop = async (l: FilmLink) => {
+    if (!(await confirmDialog({ title: 'Turn this link off?', body: `It stops working for anyone who has not used it yet. The ${l.opened} ${l.opened === 1 ? 'person' : 'people'} who came in by it keep the video until you stop sharing with them above.`, confirmLabel: 'Turn off', danger: true }))) return;
+    api.dropFilmLink(teamId, l.id).then((r) => (setList(r), fresh?.id === l.id && setFresh(null), onCameIn()), failed);
+  };
+  return (
+    <div className="film-share-links">
+      <h3 className="film-share-h">
+        A link you can send <span className="kind system">System administrator</span>
+      </h3>
+      <p className="muted small">For a text message or anywhere else. Whoever opens it signs in, or makes an account, and joins this team as a guest with this shared with them. They show under "Shared with" once they have, and you can stop any of them there.</p>
+      {error && <p className="error">{error}</p>}
+      {fresh && (
+        <div className="film-share-url">
+          <input className="input" readOnly value={fresh.url} aria-label="The link" onFocus={(e) => e.target.select()} />
+          <button type="button" className="btn small primary" onClick={copy}>
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          <span className="muted small">Copy it now: it is not shown again. It works for {fresh.days} days.</span>
+        </div>
+      )}
+      {mine.length > 0 && (
+        <ul className="film-share-list">
+          {mine.map((l) => (
+            <li key={l.id}>
+              <span>
+                <strong>Link made {day(l.created_at)}</strong>
+                <span className="muted small">
+                  {l.opened === 0 ? 'Nobody has used it yet' : `${l.opened} ${l.opened === 1 ? 'person has' : 'people have'} come in by it`} · works until {day(l.expires_at)}
+                </span>
+              </span>
+              <button type="button" className="link small" onClick={() => drop(l)}>
+                Turn off
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button type="button" className="btn small" onClick={make}>
+        {mine.length > 0 ? 'Make another link' : 'Make a link'}
+      </button>
+    </div>
   );
 }
 

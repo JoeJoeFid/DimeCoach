@@ -10,7 +10,7 @@ import { ToastHost, flushDeletes, showNews } from './components/toasts';
 import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
 import TeamPicker from './components/TeamPicker';
-import { Join, PasswordForm, Setup, SignedOut, Welcome } from './pages/Auth';
+import { Join, PasswordForm, Setup, SignedOut, WatchLink, Welcome } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
 import Messages from './pages/Messages';
@@ -208,6 +208,13 @@ export default function App() {
       <Routes>
         <Route path="/shared/i/:token" element={<SharedItem user={auth.user} />} />
         <Route path="/shared/:token" element={<SharedPlan user={auth.user} />} />
+      </Routes>
+    );
+  // And a link to a video from a team's Filmroom: it is opened signed in or not, and signs the person in on the way.
+  else if (/^\/watch\/[^/]+\/?$/.test(pathname) && !auth.setup_needed)
+    view = (
+      <Routes>
+        <Route path="/watch/:token" element={<WatchLink signedInAs={auth.user} onSignedIn={refresh} onSignOut={() => api.logout().catch(() => {}).then(refresh)} />} />
       </Routes>
     );
   else if (auth.setup_needed) view = <Setup onDone={refresh} />;

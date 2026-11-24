@@ -17,6 +17,8 @@ import { publicBase } from './invites.js';
 import { mailerStatus, sendMail } from './mailer.js';
 import { notify } from './notices.js';
 import { slugOf } from './family.js';
+import { isSystemAdmin } from './auth.js';
+import { FILM_LINK_DAYS, dropFilmLink, filmLinksOf, makeFilmLink } from './filmLinks.js';
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS film_clips (
@@ -259,6 +261,31 @@ export function mountFilm(app) {
     run('DELETE FROM film_shares WHERE id=?', f.id);
     res.json(filmOf(team.id));
   });
+  // --- Links that can be passed around (filmLinks.js): the system administrator's alone, since anyone holding one can make an account ---
+  const linkTeam = (req, res, teamId) => {
+    if (!isSystemAdmin(req.user)) return void res.status(403).json({ error: 'Only the system administrator can make links to video.' });
+    return coached(req, res, teamId);
+  };
+  app.get('/api/film/links', (req, res) => {
+    const team = linkTeam(req, res, req.query.team_id);
+    if (team) res.json(filmLinksOf(team.id));
+  });
+  app.post('/api/film/links', (req, res) => {
+    const team = linkTeam(req, res, req.body.team_id);
+    if (!team) return;
+    const kind = SHARE_KINDS.includes(req.body.kind) ? req.body.kind : '';
+    if (!kind || !sharedThing({ team_id: team.id, kind, ref_id: Number(req.body.ref_id) })) return res.status(404).json({ error: 'That video is no longer in the Filmroom.' });
+    const made = makeFilmLink(team.id, kind, Number(req.body.ref_id), req.user.id);
+    // The address is given this once: only a hash of its code is kept.
+    res.json({ id: made.id, url: `${publicBase(req)}/watch/${made.token}`, days: FILM_LINK_DAYS, links: filmLinksOf(team.id) });
+  });
+  app.delete('/api/film/links/:id', (req, res) => {
+    const team = linkTeam(req, res, req.query.team_id);
+    if (!team) return;
+    dropFilmLink(req.params.id, team.id);
+    res.json(filmLinksOf(team.id));
+  });
+
   // What has been shared with the person asking, from one team, ready to play. Under /family so an account that only follows teams can ask.
   app.get('/api/family/film', (req, res) => {
     const out = [];

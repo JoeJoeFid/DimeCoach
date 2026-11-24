@@ -917,6 +917,16 @@ export interface FilmShare {
   created_at: string;
   watched_at: string | null;
 }
+/** A link to something in the Filmroom that can be passed around. Whoever opens it signs in or makes an account, and joins the team as a guest. */
+export interface FilmLink {
+  id: number;
+  kind: FilmShare['kind'];
+  ref_id: number;
+  created_at: string;
+  expires_at: string;
+  /** How many people have come in by it. */
+  opened: number;
+}
 /** Everything in a team's Filmroom. */
 export interface Film {
   videos: GameStream[];
@@ -1116,6 +1126,15 @@ export const api = {
   /** Shares one thing with people on the team's list (`contact_ids`) and with new people by email, who join it as guests. */
   shareFilm: (b: { team_id: number; kind: FilmShare['kind']; ref_id: number; contact_ids: number[]; people: { name: string; email: string }[]; note: string }) => req<Film & { warning: string }>('POST', '/film/shares', b),
   unshareFilm: (id: number) => req<Film>('DELETE', `/film/shares/${id}`),
+  /** Links to video that can be passed around. The system administrator's alone. */
+  filmLinks: (teamId: number) => req<FilmLink[]>('GET', `/film/links?team_id=${teamId}`),
+  /** Makes a link. Its address comes back this once. */
+  makeFilmLink: (b: { team_id: number; kind: FilmShare['kind']; ref_id: number }) => req<{ id: number; url: string; days: number; links: FilmLink[] }>('POST', '/film/links', b),
+  dropFilmLink: (teamId: number, id: number) => req<FilmLink[]>('DELETE', `/film/links/${id}?team_id=${teamId}`),
+  /** What a link to a video is to. Open to someone not signed in. */
+  filmLinkInfo: (token: string) => req<{ team: string; title: string; kind: FilmShare['kind']; by: string }>('GET', `/auth/film-link?token=${encodeURIComponent(token)}`),
+  /** Comes in by a link: as whoever is signed in, or by making an account with a name, an address and a password. */
+  openFilmLink: (b: { token: string; name?: string; email?: string; password?: string }) => req<{ ok: true; team_id: number; coach: boolean; share: number }>('POST', '/auth/film-link', b),
   /** What has been shared with the person signed in, from one team. */
   sharedFilm: (teamId: number) => req<SharedFilm[]>('GET', `/family/film?team_id=${teamId}`),
   watchedShare: (id: number) => req<{ ok: true }>('POST', `/family/film/${id}/watched`),
