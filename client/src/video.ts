@@ -473,6 +473,8 @@ export interface Playing {
 export interface JoinedPlayer {
   /** How far the stream has got, told again as it grows. */
   more: (stream: GameStream) => void;
+  /** Moves to a moment that is already loaded, and says whether it could: if not, the video is started again from there. */
+  seek: (to: Mark) => boolean;
   close: () => void;
 }
 /** How much is kept ready ahead of what is showing, in pieces, and how much is kept behind, in seconds. */
@@ -644,6 +646,24 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
       st.live = s.status === 'live';
       get.know(s);
       fill();
+    },
+    seek: (to) => {
+      const sb = st.sb;
+      const begins = starts.get(to.n);
+      if (!sb || begins === undefined || st.closed || st.done || el.ended) return false;
+      const t = begins + to.off;
+      try {
+        for (let i = 0; i < sb.buffered.length; i++) {
+          if (sb.buffered.start(i) <= t && t < sb.buffered.end(i) - 0.1) {
+            el.currentTime = t;
+            fill();
+            return true;
+          }
+        }
+      } catch {
+        // The player has let go of its video: started again instead.
+      }
+      return false;
     },
     close: () => {
       st.closed = true;

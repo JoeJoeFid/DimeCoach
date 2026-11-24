@@ -10,7 +10,7 @@ import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyb
 import { CSS } from '@dnd-kit/utilities';
 import type { Film, FilmClip, FilmItem, FilmMark, GameStream } from '../api';
 import { joinedPlayer, type JoinedPlayer } from '../video';
-import { FullButton, StreamPlayer, useFullScreen } from './GameVideo';
+import { FullButton, SeekInput, StreamPlayer, useFullScreen } from './GameVideo';
 
 /** Minutes and seconds. */
 export const clock = (secs: number) => `${Math.floor(Math.max(0, secs) / 60)}:${String(Math.floor(Math.max(0, secs) % 60)).padStart(2, '0')}`;
@@ -163,6 +163,17 @@ export const FilmPlayer = forwardRef<FilmHandle, FilmPlayerProps>(function FilmP
     }
   };
   const last = stream.segments - 1;
+  const total = stream.segments * stream.segment_seconds;
+  const seek = (seconds: number) => {
+    const s = Math.max(0, Math.min(seconds, total - 1));
+    const to = { n: Math.floor(s / stream.segment_seconds), off: s % stream.segment_seconds };
+    // Somewhere already loaded is simply moved to. Anywhere else, the video starts again from there.
+    if (player.current?.seek(to)) {
+      moved.current += 1;
+      atRef.current = to;
+      setAt(to);
+    } else go(to);
+  };
   return (
     <div className="gv-player film-player" ref={frame}>
       <div className="gv-screen">
@@ -177,8 +188,7 @@ export const FilmPlayer = forwardRef<FilmHandle, FilmPlayerProps>(function FilmP
       </div>
       {!end && !range.end && last > 0 && (
         <div className="gv-seek">
-          <span className="muted small">{clock(markSeconds(at, stream))}</span>
-          <input type="range" min={0} max={last} value={Math.min(at.n, last)} aria-label="Move through the video" onChange={(e) => go({ n: Number(e.target.value), off: 0 })} />
+          <SeekInput value={Math.floor(markSeconds(at, stream))} max={total} label="Move through the video" say={clock} onSeek={seek} />
           <span className="muted small">{clock(stream.seconds)}</span>
         </div>
       )}

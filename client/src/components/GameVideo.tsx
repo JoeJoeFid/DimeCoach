@@ -469,20 +469,53 @@ export function FullButton({ full, onClick }: { full: boolean; onClick: () => vo
 }
 
 /**
+ * The slider of a bar for moving through a video, a second to a step, with the time it is at
+ * before it. While it is being dragged it shows where it is held, and the video is only moved
+ * once the hand rests: moving it at every step would fetch video nobody watches.
+ */
+export function SeekInput({ value, max, label, say, onSeek }: { value: number; max: number; label: string; say: (seconds: number) => string; onSeek: (seconds: number) => void }) {
+  const [held, setHeld] = useState<number | null>(null);
+  const timer = useRef(0);
+  const seek = useRef(onSeek);
+  seek.current = onSeek;
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const change = (v: number) => {
+    setHeld(v);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      setHeld(null);
+      seek.current(v);
+    }, 150);
+  };
+  const shown = held ?? Math.min(value, max);
+  return (
+    <>
+      <span className="muted small">{say(shown)}</span>
+      <input type="range" min={0} max={max} step={1} value={shown} aria-label={label} onChange={(e) => change(Number(e.target.value))} />
+    </>
+  );
+}
+
+/** A number of seconds into a video as the piece it falls in and how far into that piece. */
+const markAt = (seconds: number, meta: GameStream) => {
+  const s = Math.max(0, Math.min(seconds, meta.segments * meta.segment_seconds - 1));
+  return { n: Math.floor(s / meta.segment_seconds), off: s % meta.segment_seconds, s };
+};
+
+/**
  * The bar under a video for moving through it. A saved video runs from its start to its end. A
  * live one runs from its start to now, and keeps growing: a viewer can go back to see something
  * again, forward as far as the newest, and straight back to live.
  */
-function SeekBar({ at, meta, behind, onSeek, onLive }: { at: number; meta: GameStream; behind: boolean; onSeek: (piece: number) => void; onLive: () => void }) {
+function SeekBar({ at, meta, behind, onSeek, onLive }: { at: number; meta: GameStream; behind: boolean; onSeek: (seconds: number) => void; onLive: () => void }) {
   if (meta.segments <= 1) return null;
   const live = meta.status === 'live';
-  const last = meta.segments - 1;
+  const total = meta.segments * meta.segment_seconds;
   // Watching live, the handle sits at the end and stays there as the video grows.
-  const shown = live && !behind ? last : Math.min(at, last);
+  const shown = live && !behind ? total : Math.min(at, total);
   return (
     <div className="gv-seek">
-      <span className="muted small">{span(shown * meta.segment_seconds)}</span>
-      <input type="range" min={0} max={last} value={shown} aria-label={live ? 'Go back or forward through the broadcast' : 'Move through the video'} onChange={(e) => onSeek(Number(e.target.value))} />
+      <SeekInput value={shown} max={total} label={live ? 'Go back or forward through the broadcast' : 'Move through the video'} say={span} onSeek={onSeek} />
       {!live ? (
         <span className="muted small">{span(meta.segments * meta.segment_seconds)}</span>
       ) : behind ? (
@@ -504,9 +537,11 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
   const [full, toggleFull] = useFullScreen(frame, video);
   // Where playing starts from: moving through the video starts it again from there. `follow` is
   // watching live, kept near the newest; going back through a live broadcast turns it off.
-  const [start, setStart] = useState({ from: stream.status === 'live' ? Math.max(0, stream.segments - 2) : 0, follow: stream.status === 'live' });
+  const [start, setStart] = useState({ from: stream.status === 'live' ? Math.max(0, stream.segments - 2) : 0, off: 0, follow: stream.status === 'live' });
   const from = start.from;
   const [at, setAt] = useState(from);
+  // How far in it is, in whole seconds: what the bar shows.
+  const [secs, setSecs] = useState(from * stream.segment_seconds);
   const [waiting, setWaiting] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [over, setOver] = useState(false);
@@ -529,13 +564,14 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
     const made = joinedPlayer(el, metaRef.current, from, start.follow, (p) => {
       if (p.failed) return onFail();
       if (p.piece !== undefined) setAt(Math.min(p.piece, Math.max(0, metaRef.current.segments - 1)));
+      if (p.at) setSecs(Math.floor(p.at.n * metaRef.current.segment_seconds + p.at.off));
       if (p.waiting !== undefined) setWaiting(p.waiting);
       if (p.ended) {
         setPlaying(false);
         // A broadcast that was not saved is gone once it has played out.
         setOver(!metaRef.current.saved);
       }
-    });
+    }, { offset: start.off });
     if (!made) return onFail();
     player.current = made;
     if (playingRef.current) el.play().catch(() => setPlaying(false));
@@ -550,14 +586,20 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
     const n = Math.max(0, metaRef.current.segments - 2);
     setOver(false);
     setAt(n);
-    setStart({ from: n, follow: true });
+    setSecs(n * metaRef.current.segment_seconds);
+    setStart({ from: n, off: 0, follow: true });
   };
-  const seek = (n: number) => {
+  const seek = (seconds: number) => {
+    const m = metaRef.current;
     // Dragged to the end of a live broadcast is asking for live.
-    if (metaRef.current.status === 'live' && n >= metaRef.current.segments - 2) return toLive();
+    if (m.status === 'live' && seconds >= (m.segments - 2) * m.segment_seconds) return toLive();
+    const to = markAt(seconds, m);
     setOver(false);
-    setAt(n);
-    setStart({ from: n, follow: false });
+    setAt(to.n);
+    setSecs(to.s);
+    // Somewhere already loaded is simply moved to. Anywhere else, the video starts again from there.
+    if (!start.follow && player.current?.seek(to)) return;
+    setStart({ from: to.n, off: to.off, follow: false });
   };
   const play = () => {
     setPlaying(true);
@@ -577,7 +619,7 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
         {over && <span className="gv-wait">This broadcast has ended.</span>}
         <FullButton full={full} onClick={toggleFull} />
       </div>
-      {!over && <SeekBar at={at} meta={meta} behind={live && !start.follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
+      {!over && <SeekBar at={secs} meta={meta} behind={live && !start.follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
     </div>
   );
 }
@@ -589,6 +631,9 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
   const frame = useRef<HTMLDivElement>(null);
   const [full, toggleFull] = useFullScreen(frame, video);
   const [at, setAt] = useState(stream.status === 'live' ? Math.max(0, stream.segments - 2) : 0);
+  // How far into the piece showing, in whole seconds, and where a piece on its way is to start from.
+  const [off, setOff] = useState(0);
+  const startAt = useRef(0);
   const [waiting, setWaiting] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [over, setOver] = useState(false);
@@ -637,6 +682,10 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
           blobUrl.current = URL.createObjectURL(piece);
           el.setAttribute('data-n', String(at));
           el.src = blobUrl.current;
+          // Starting part-way into it: set once the player knows the piece.
+          const into = startAt.current;
+          startAt.current = 0;
+          if (into) el.addEventListener('loadedmetadata', () => el.getAttribute('data-n') === String(at) && (el.currentTime = into), { once: true });
           if (playingRef.current) el.play().catch(() => setPlaying(false));
         },
         () => here.current && loaded.current === at && next(),
@@ -662,19 +711,34 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
   followRef.current = follow;
   const next = () => {
     const m = metaRef.current;
+    startAt.current = 0;
+    setOff(0);
     // Fallen far behind a live stream while watching it live: jump back near the front.
     setAt((n) => (m.status === 'live' && followRef.current && m.segments - n > 6 ? m.segments - 2 : n + 1));
   };
   const toLive = () => {
     setOver(false);
     setFollow(true);
+    startAt.current = 0;
+    setOff(0);
     setAt(Math.max(0, metaRef.current.segments - 2));
   };
-  const seek = (n: number) => {
-    if (metaRef.current.status === 'live' && n >= metaRef.current.segments - 2) return toLive();
+  const seek = (seconds: number) => {
+    const m = metaRef.current;
+    if (m.status === 'live' && seconds >= (m.segments - 2) * m.segment_seconds) return toLive();
+    const to = markAt(seconds, m);
+    const el = video.current;
     setOver(false);
     setFollow(false);
-    setAt(n);
+    setOff(to.off);
+    // Within the piece that is showing, it is simply moved. Another piece starts from there once it is in.
+    if (el && to.n === at && el.getAttribute('data-n') === String(at)) el.currentTime = to.off;
+    else startAt.current = to.off;
+    setAt(to.n);
+  };
+  const onTime = () => {
+    const el = video.current;
+    if (el && el.getAttribute('data-n') === String(at) && !startAt.current) setOff(Math.min(Math.floor(el.currentTime), meta.segment_seconds - 1));
   };
   const play = () => {
     setPlaying(true);
@@ -683,7 +747,7 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
   return (
     <div className="gv-player" ref={frame}>
       <div className={`gv-screen ${live ? 'live' : ''}`}>
-        <video ref={video} playsInline onEnded={next} onError={next} onPlay={() => setPlaying(true)} onPause={() => video.current && !video.current.ended && setPlaying(false)} />
+        <video ref={video} playsInline onEnded={next} onError={next} onTimeUpdate={onTime} onPlay={() => setPlaying(true)} onPause={() => video.current && !video.current.ended && setPlaying(false)} />
         {live && !over && <span className="gv-badge">LIVE</span>}
         {!playing && !over && (
           <button type="button" className="gv-play" onClick={play} aria-label="Play">
@@ -694,7 +758,7 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
         {over && <span className="gv-wait">This broadcast has ended.</span>}
         <FullButton full={full} onClick={toggleFull} />
       </div>
-      {!over && <SeekBar at={at} meta={meta} behind={live && !follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
+      {!over && <SeekBar at={at * meta.segment_seconds + off} meta={meta} behind={live && !follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
     </div>
   );
 }
