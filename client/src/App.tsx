@@ -17,7 +17,7 @@ import Messages from './pages/Messages';
 import ChatPage from './pages/ChatPage';
 import { useChatUnread } from './components/Chat';
 import { InstallDialog, InstallHint, isInstalled } from './components/InstallApp';
-import { syncPush } from './push';
+import { setAppBadge, syncPush, useAppBadge } from './push';
 import { NotifyAsk } from './components/NotifyAsk';
 import ScoreGame from './pages/ScoreGame';
 import Stats from './pages/Stats';
@@ -160,7 +160,10 @@ export default function App() {
   }, [signedInAs]);
   const refresh = useCallback(async () => {
     try {
-      setAuth(await api.authStatus());
+      const now = await api.authStatus();
+      // Signed out: whatever was waiting is no longer this device's to count.
+      if (!now.user) setAppBadge(0);
+      setAuth(now);
       setError('');
     } catch (e) {
       setError((e as Error).message);
@@ -311,6 +314,8 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
   // checking when the page changes and once a minute covers a dropped connection.
   const [communityUnread, setUnread] = useState(0);
   const chatUnread = useChatUnread();
+  // The same count goes on the app's icon, where it has one.
+  useAppBadge(communityUnread + chatUnread);
   /** Unread messages already known about, so only one that has just arrived gets a notice in the corner. */
   const known = useRef<Set<string> | null>(null);
   const whereNow = useRef(location.pathname);

@@ -95,16 +95,35 @@ self.addEventListener('push', (event) => {
     note = { title: 'Dime Coach', body: event.data ? event.data.text() : '' };
   }
   event.waitUntil(
-    self.registration.showNotification(note.title || 'Dime Coach', {
-      body: note.body || '',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      // Two about the same thing take one place, the newer over the older.
-      tag: note.tag || undefined,
-      data: { link: note.link || '/' },
-    }),
+    Promise.all([
+      self.registration.showNotification(note.title || 'Dime Coach', {
+        body: note.body || '',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        // Two about the same thing take one place, the newer over the older.
+        tag: note.tag || undefined,
+        data: { link: note.link || '/' },
+      }),
+      countUnread(),
+    ]),
   );
 });
+/**
+ * Puts how much is waiting unread on the app's own icon, where it has one: messages and chats
+ * together, asked of the server as the person signed in on this device. An open page keeps the
+ * number right by itself (client/src/push.ts); this is for when none is.
+ */
+function countUnread() {
+  if (!self.navigator.setAppBadge) return Promise.resolve();
+  const unread = (path) =>
+    fetch(path, { credentials: 'same-origin', cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((said) => Number(said.unread) || 0)
+      .catch(() => 0);
+  return Promise.all([unread('/api/messages'), unread('/api/chat')])
+    .then(([messages, chats]) => (messages + chats > 0 ? self.navigator.setAppBadge(messages + chats) : self.navigator.clearAppBadge()))
+    .catch(() => {});
+}
 // Pressing one opens the place it is about: in the app if it is already open, or else by opening it.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

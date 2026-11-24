@@ -19,6 +19,7 @@ import { MyStats } from './Stats';
 import GameVideo from '../components/GameVideo';
 import LivePlays from '../components/LivePlays';
 import { SharedFilms } from '../components/Film';
+import { useAppBadge } from '../push';
 import { periodName } from '../scoring';
 import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 
@@ -156,6 +157,8 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
   // Unread messages light up Messages in the menu, as they do for a coach.
   const chatUnread = useChatUnread();
   const [unread, setUnread] = useState(0);
+  // The same count goes on the app's icon, where it has one.
+  useAppBadge(unread + chatUnread);
   useEffect(() => {
     const look = () => api.messages().then((n) => setUnread(n.unread), () => {});
     look();
@@ -418,7 +421,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
     ...(can.drills ? [['drills', 'Drills', data.drills.length] as [Tab, string, number]] : []),
     ...(can.resources ? [['resources', 'Resources', data.resources.length] as [Tab, string, number]] : []),
     // Video from the Filmroom that a coach shared with this person. All a guest is here for.
-    ...(data.film > 0 || data.me.kind === 'guest' ? [['film', 'Shared video', data.film] as [Tab, string, number]] : []),
+    ...(data.film > 0 || data.me.kind === 'guest' ? [['film', 'Filmroom', data.film] as [Tab, string, number]] : []),
     ...(can.roster ? [['roster', 'Team'] as [Tab, string]] : []),
   ];
   const asked = params.get('tab') as Tab | null;

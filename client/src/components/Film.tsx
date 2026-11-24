@@ -10,7 +10,7 @@ import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyb
 import { CSS } from '@dnd-kit/utilities';
 import { api, type Film, type FilmClip, type FilmItem, type FilmMark, type GameStream, type SharedFilm } from '../api';
 import { Modal } from './bits';
-import { joinedPlayer, type JoinedPlayer } from '../video';
+import { joinedPlayer, reelPlayer, type JoinedPlayer, type ReelHandle } from '../video';
 import { FullButton, SeekInput, StreamPlayer, useFullScreen } from './GameVideo';
 
 /** Minutes and seconds. */
@@ -202,12 +202,179 @@ export interface ReelPause {
   seconds: number;
   notes: boolean;
 }
+interface ReelProps {
+  scenes: Scene[];
+  at: number;
+  onAt: (index: number) => void;
+  pause?: ReelPause;
+}
 /**
  * Plays a run of clips one after another, as one video, with each one's notes over the picture
  * when it asks for them. With a `pause`, a screen is held between one and the next for that long,
- * counting down, and can say what the next one is.
+ * counting down, and can say what the next one is. Where the browser can, it truly is one video:
+ * one player for all of it, with one bar to move through the whole. Where it cannot, or a part
+ * was recorded the older way, the parts are played one at a time.
  */
-export function ReelPlayer({ scenes: list, at, onAt, pause }: { scenes: Scene[]; at: number; onAt: (index: number) => void; pause?: ReelPause }) {
+export function ReelPlayer(props: ReelProps) {
+  const [stepped, setStepped] = useState(false);
+  return stepped || !props.scenes.every((s) => canClip(s.stream)) ? <SteppedReel {...props} /> : <JoinedReel {...props} onFail={() => setStepped(true)} />;
+}
+
+const untilPart = (list: Scene[], i: number) => list.slice(0, i).reduce((n, s) => n + s.seconds, 0);
+/** A run of clips as a single video (reelPlayer in ../video.ts). */
+function JoinedReel({ scenes: list, at, onAt, pause, onFail }: ReelProps & { onFail: () => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const frame = useRef<HTMLDivElement>(null);
+  const [full, toggleFull] = useFullScreen(frame, video);
+  const [playing, setPlaying] = useState(false);
+  // The pause that is up: the part it is ahead of, and the seconds left of it.
+  const [held, setHeld] = useState<{ next: number; left: number } | null>(null);
+  const [waiting, setWaiting] = useState(false);
+  const [ended, setEnded] = useState(false);
+  // How far into the whole of it, in seconds.
+  const [played, setPlayed] = useState(() => Math.floor(untilPart(list, at)));
+  const player = useRef<ReelHandle | null>(null);
+  const cur = useRef(Math.min(at, list.length - 1));
+  const now = useRef({ list, pause, onAt, onFail });
+  now.current = { list, pause, onAt, onFail };
+  // What is played, and from where to where: the player is made again only when that changes, not when a title or a tick does.
+  const made = list.map((s) => `${s.stream.id}:${s.start?.n ?? ''}:${s.start?.off ?? ''}:${s.end?.n ?? ''}:${s.end?.off ?? ''}`).join('|');
+  useEffect(() => {
+    const el = video.current;
+    if (!el) return;
+    const parts = now.current.list;
+    cur.current = Math.max(0, Math.min(cur.current, parts.length - 1));
+    setHeld(null);
+    setEnded(false);
+    setPlaying(false);
+    const p = reelPlayer(
+      el,
+      parts.map((s) => ({ stream: s.stream, start: s.start, end: s.end })),
+      cur.current,
+      () => (now.current.pause?.seconds ?? 0) > 0,
+      (said) => {
+        if (said.failed) return now.current.onFail();
+        if (said.part !== undefined) {
+          setHeld(null);
+          setEnded(false);
+          if (said.part !== cur.current) {
+            cur.current = said.part;
+            now.current.onAt(said.part);
+          }
+          setPlayed(Math.floor(untilPart(parts, said.part)));
+        }
+        if (said.at) {
+          const s = parts[cur.current];
+          const into = markSeconds(said.at, s.stream) - (s.start ? markSeconds(s.start, s.stream) : 0);
+          setPlayed(Math.floor(untilPart(parts, cur.current) + Math.max(0, Math.min(into, s.seconds))));
+        }
+        if (said.hold !== undefined) setHeld({ next: said.hold, left: Math.max(1, Math.round(now.current.pause?.seconds ?? 0)) });
+        if (said.waiting !== undefined) setWaiting(said.waiting);
+        if (said.ended) {
+          setEnded(true);
+          setPlaying(false);
+        }
+      },
+    );
+    if (!p) return now.current.onFail();
+    player.current = p;
+    return () => {
+      player.current = null;
+      p.close();
+    };
+  }, [made]);
+  // Moved to another part from outside: by pressing one on the strip.
+  useEffect(() => {
+    if (at === cur.current || at < 0 || at >= list.length) return;
+    cur.current = at;
+    player.current?.go(at, undefined, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at]);
+  useEffect(() => {
+    if (!held) return;
+    if (held.left <= 0) {
+      setHeld(null);
+      player.current?.resume();
+      return;
+    }
+    const t = window.setTimeout(() => setHeld((h) => h && { ...h, left: h.left - 1 }), 1000);
+    return () => window.clearTimeout(t);
+  }, [held]);
+  const scene = list[Math.min(at, list.length - 1)];
+  if (!scene) return null;
+  const total = untilPart(list, list.length);
+  const toggle = () => {
+    const el = video.current;
+    // The pause screen has its own way on.
+    if (!el || held) return;
+    if (!el.paused) return el.pause();
+    // Played to the end: again from the start.
+    if (ended) return player.current?.go(0, undefined, true);
+    el.play().catch(() => setPlaying(false));
+  };
+  /** Moves to a number of seconds into the whole: the part that falls in, and how far into it. */
+  const seek = (seconds: number) => {
+    let i = 0;
+    while (i < list.length - 1 && seconds >= untilPart(list, i + 1)) i++;
+    const s = list[i];
+    const into = (s.start ? markSeconds(s.start, s.stream) : 0) + Math.max(0, Math.min(seconds - untilPart(list, i), s.seconds - 0.5));
+    setPlayed(Math.floor(seconds));
+    player.current?.go(i, { n: Math.floor(into / s.stream.segment_seconds), off: into % s.stream.segment_seconds });
+  };
+  const coming = held ? list[held.next] : undefined;
+  return (
+    <div className="film-reel">
+      <div className="gv-player film-player" ref={frame}>
+        <div className="gv-screen">
+          <video ref={video} playsInline data-film="" data-reel="" onClick={toggle} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
+          {!playing && !held && (
+            <button type="button" className="gv-play" onClick={toggle} aria-label={ended ? 'Play again' : 'Play'}>
+              ▶
+            </button>
+          )}
+          {waiting && playing && !held && <span className="gv-wait">Loading…</span>}
+          {held && coming ? (
+            <div className="film-pause film-pause-over" role="status">
+              {pause?.notes && (
+                <div className="film-pause-text">
+                  <span className="film-pause-next">Next</span>
+                  <strong>{coming.title}</strong>
+                  {coming.notes && <p>{coming.notes}</p>}
+                </div>
+              )}
+              <span className="film-pause-left" aria-label={`The next part starts in ${held.left} second${held.left === 1 ? '' : 's'}`}>
+                {held.left}
+              </span>
+              <button type="button" className="btn small film-pause-skip" onClick={() => (setHeld(null), player.current?.resume())}>
+                Skip
+              </button>
+            </div>
+          ) : (
+            scene.show && (
+              <div className="film-over">
+                <strong>{scene.title}</strong>
+                {scene.notes && <p>{scene.notes}</p>}
+              </div>
+            )
+          )}
+          <FullButton full={full} onClick={toggleFull} />
+        </div>
+        {total >= 2 && (
+          <div className="gv-seek">
+            <SeekInput value={played} max={Math.floor(total)} label="Move through the video" say={clock} onSeek={seek} />
+            <span className="muted small">{clock(total)}</span>
+          </div>
+        )}
+      </div>
+      <p className="muted small film-count">
+        {held && coming ? `Next, ${held.next + 1} of ${list.length}: ${coming.title}` : `${Math.min(at, list.length - 1) + 1} of ${list.length}: ${scene.title}`}
+      </p>
+    </div>
+  );
+}
+
+/** A run of clips played one at a time, each in a player of its own: for a browser, or a recording, that cannot be played as one. */
+function SteppedReel({ scenes: list, at, onAt, pause }: ReelProps) {
   // Once it has been started it keeps going from clip to clip.
   const [running, setRunning] = useState(false);
   // The pause that is up: the part it is ahead of, and the seconds left of it.

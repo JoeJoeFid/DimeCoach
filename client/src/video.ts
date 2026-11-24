@@ -746,3 +746,299 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
     },
   };
 }
+
+// ---------- Several clips as one video ----------
+
+/** One part of a video put together from clips: a saved game video, and for a clip where in it to start and stop. */
+export interface ReelPart {
+  stream: GameStream;
+  start?: Mark;
+  end?: Mark;
+}
+/** What the player of such a video has to say as it plays. */
+export interface ReelPlaying {
+  /** The part now playing, said when it changes. */
+  part?: number;
+  /** Exactly where it is, in the game video that part is from. */
+  at?: Mark;
+  /** A part has ended and the next, this one, is being held back: the page shows its pause and then calls `resume`. */
+  hold?: number;
+  /** Waiting for video to arrive. */
+  waiting?: boolean;
+  /** The last part has played out. */
+  ended?: boolean;
+  /** This browser could not play it this way: the page plays the parts one at a time instead. */
+  failed?: boolean;
+}
+export interface ReelHandle {
+  /** Moves to a part: its start, or `mark` in it. With `play`, it is set playing once it is there. */
+  go: (part: number, mark?: Mark, play?: boolean) => void;
+  /** Carries on to the part that was being held back. */
+  resume: () => void;
+  close: () => void;
+}
+
+/**
+ * Plays clips and whole game videos one after another as a single video: one player, fed the
+ * pieces of each part in turn, so nothing is loaded afresh between them and the screen never
+ * blanks. A piece is fed whole, so what lies before a clip's start and after its end is in the
+ * player too, and is stepped over: when a part reaches its end the player moves straight to the
+ * start of the next. `hold` is asked at each such moment whether to stop there first, for a pause
+ * between parts. Gives null when this browser has no such player.
+ */
+export function reelPlayer(el: HTMLVideoElement, parts: ReelPart[], from: number, hold: () => boolean, onChange: (p: ReelPlaying) => void): ReelHandle | null {
+  const w = window as unknown as { ManagedMediaSource?: typeof MediaSource; MediaSource?: typeof MediaSource };
+  const Source = w.ManagedMediaSource ?? w.MediaSource;
+  const types = parts.map((p) => sourceType(p.stream.mime));
+  if (!Source || parts.length === 0 || types.some((t) => !Source.isTypeSupported(t))) return null;
+  const gets = parts.map((p) => pieceFetcher(p.stream));
+  const first = (i: number) => parts[i].start?.n ?? 0;
+  const last = (i: number) => Math.min(parts[i].end?.n ?? Infinity, parts[i].stream.segments - 1);
+  /** Each piece now in the player: which part it is of, and where it lies on the player's own clock. */
+  const fed: { part: number; n: number; t0: number; t1: number }[] = [];
+  const st = {
+    cur: from,
+    // What is fed next, and whether that begins a part, which is told its opening part again.
+    feedPart: from,
+    feedN: first(from),
+    fresh: true,
+    // Somewhere to move to as soon as it has been fed.
+    want: { part: from, n: first(from), off: parts[from].start?.off ?? 0 } as { part: number; n: number; off: number } | null,
+    // Everything in the player is to be thrown out first: it was moved to somewhere not loaded.
+    clear: false,
+    // Counts the times it was moved that way, so feeding that was under way knows to stop.
+    turn: 0,
+    type: types[from],
+    sb: null as SourceBuffer | null,
+    busy: false,
+    closed: false,
+    holding: -1,
+    done: false,
+    // Whether the person wants it playing, whatever the player was told to do meanwhile.
+    playing: false,
+    ours: false,
+  };
+  const ms = new Source();
+  const url = URL.createObjectURL(ms);
+  if (w.ManagedMediaSource) (el as HTMLVideoElement & { disableRemotePlayback: boolean }).disableRemotePlayback = true;
+  el.src = url;
+  const fail = () => !st.closed && onChange({ failed: true });
+  const settled = (sb: SourceBuffer) =>
+    new Promise<void>((ok, no) => {
+      const done = () => (off(), ok());
+      const bad = () => (off(), no(new Error('The player would not take the video')));
+      const off = () => (sb.removeEventListener('updateend', done), sb.removeEventListener('error', bad));
+      sb.addEventListener('updateend', done);
+      sb.addEventListener('error', bad);
+    });
+  const give = async (sb: SourceBuffer, part: Blob) => {
+    const taken = settled(sb);
+    sb.appendBuffer(await part.arrayBuffer());
+    await taken;
+  };
+  const end = (sb: SourceBuffer) => (sb.buffered.length ? sb.buffered.end(sb.buffered.length - 1) : 0);
+  const loaded = (t: number) => {
+    const sb = st.sb;
+    if (!sb) return false;
+    for (let i = 0; i < sb.buffered.length; i++) if (sb.buffered.start(i) <= t + 0.01 && t < sb.buffered.end(i) - 0.05) return true;
+    return false;
+  };
+  /** Stops the player without that counting as the person stopping it. */
+  const stop = () => {
+    if (el.paused) return;
+    st.ours = true;
+    el.pause();
+  };
+  const play = () => st.playing && el.play().catch(() => {});
+  /** Where a part ends on the player's clock, once its last piece has been fed. */
+  const endOf = (i: number) => {
+    const f = fed.find((x) => x.part === i && x.n === last(i));
+    if (!f) return undefined;
+    const to = parts[i].end;
+    // A clip stops at its mark. A whole video runs out, a little short of the very end, where a player can stall.
+    return to && to.n === f.n ? Math.min(f.t0 + to.off, f.t1 - 0.05) : f.t1 - 0.15;
+  };
+  /** Feeds the player what it has room for, in the order the parts play. */
+  const fill = async () => {
+    const sb = st.sb;
+    if (st.closed || st.busy || !sb) return;
+    st.busy = true;
+    const turn = st.turn;
+    try {
+      if (st.clear) {
+        st.clear = false;
+        if (ms.readyState === 'open') sb.abort();
+        if (sb.buffered.length) {
+          const gone = settled(sb);
+          sb.remove(0, Infinity);
+          await gone;
+        }
+      } else if (!st.want && sb.buffered.length && sb.buffered.start(0) < el.currentTime - 2 * KEEP_BEHIND) {
+        const to = el.currentTime - KEEP_BEHIND;
+        const gone = settled(sb);
+        sb.remove(0, to);
+        await gone;
+        for (let i = fed.length - 1; i >= 0; i--) if (fed[i].t0 < to) fed.splice(i, 1);
+      }
+      while (!st.closed && turn === st.turn && st.feedPart < parts.length && (st.want || end(sb) - el.currentTime < AHEAD_PIECES * parts[st.feedPart].stream.segment_seconds)) {
+        const [i, n] = [st.feedPart, st.feedN];
+        let opening: Blob | null = null;
+        let piece: Blob | null;
+        try {
+          if (st.fresh) opening = await gets[i].init(gets[i].initFor(n));
+          piece = await gets[i].piece(n);
+        } catch {
+          // The connection: tried again on the next turn.
+          return;
+        }
+        if (st.closed || turn !== st.turn) return;
+        if (st.fresh || gets[i].initFor(n) !== gets[i].initFor(Math.max(first(i), n - 1))) {
+          opening = opening ?? (await gets[i].init(gets[i].initFor(n)).catch(() => null));
+          if (!opening || st.closed || turn !== st.turn) return;
+          // A new part is set down exactly where the last one ended, whatever times are written inside it, and may be another kind of video.
+          if (ms.readyState === 'open') sb.abort();
+          if (types[i] !== st.type) {
+            sb.changeType(types[i]);
+            st.type = types[i];
+          }
+          sb.timestampOffset = end(sb);
+          await give(sb, opening);
+          st.fresh = false;
+        }
+        if (piece) {
+          const t0 = end(sb);
+          await give(sb, piece);
+          if (st.closed || turn !== st.turn) return;
+          fed.push({ part: i, n, t0, t1: end(sb) });
+        }
+        const want = st.want;
+        if (want && want.part === i && want.n === n) {
+          // Where it was waiting to go. A piece that could not be had leaves it at the start of the next.
+          if (piece) {
+            el.currentTime = fed[fed.length - 1].t0 + want.off;
+            st.want = null;
+            onChange({ waiting: false });
+            play();
+          } else if (n < last(i)) st.want = { part: i, n: n + 1, off: 0 };
+          else if (i + 1 < parts.length) st.want = { part: i + 1, n: first(i + 1), off: parts[i + 1].start?.off ?? 0 };
+          else st.want = null;
+        }
+        if (n >= last(i)) {
+          st.feedPart = i + 1;
+          st.feedN = i + 1 < parts.length ? first(i + 1) : 0;
+          st.fresh = true;
+        } else st.feedN = n + 1;
+      }
+    } catch {
+      fail();
+    } finally {
+      st.busy = false;
+    }
+  };
+  /** Moves to somewhere in a part: at once when it is loaded, and by loading from there when it is not. */
+  const move = (part: number, mark?: Mark) => {
+    st.cur = part;
+    st.holding = -1;
+    st.done = false;
+    const n = Math.max(first(part), Math.min(mark?.n ?? first(part), last(part)));
+    const off = mark ? mark.off : (parts[part].start?.off ?? 0);
+    onChange({ part });
+    const f = fed.find((x) => x.part === part && x.n === n);
+    if (f && loaded(f.t0 + off)) {
+      st.want = null;
+      el.currentTime = f.t0 + off;
+      play();
+    } else {
+      st.turn += 1;
+      st.clear = true;
+      fed.length = 0;
+      st.feedPart = part;
+      st.feedN = n;
+      st.fresh = true;
+      st.want = { part, n, off };
+      onChange({ waiting: true });
+    }
+    fill();
+  };
+  /** A part has played out: on to the next, by way of a pause when one is wanted, or the end. */
+  const onward = () => {
+    const next = st.cur + 1;
+    if (next >= parts.length) {
+      st.done = true;
+      st.playing = false;
+      stop();
+      return onChange({ ended: true });
+    }
+    if (hold()) {
+      st.holding = next;
+      stop();
+      return onChange({ hold: next });
+    }
+    move(next);
+  };
+  const tick = () => {
+    if (st.closed || st.holding >= 0 || st.done || st.want || !st.sb) return;
+    const t = el.currentTime;
+    const here = fed.find((x) => t >= x.t0 - 0.001 && t < x.t1);
+    if (here && here.part === st.cur) onChange({ at: { n: here.n, off: Math.max(0, t - here.t0) } });
+    const to = endOf(st.cur);
+    // Past the end of the part, or already in a later one because its end could not be had.
+    if ((to !== undefined && t >= to) || (here && here.part > st.cur)) onward();
+  };
+  const opened = window.setTimeout(() => !st.sb && fail(), 6000);
+  ms.addEventListener(
+    'sourceopen',
+    () => {
+      try {
+        const sb = ms.addSourceBuffer(st.type);
+        // Each piece follows the last, whatever times are written inside it.
+        sb.mode = 'sequence';
+        st.sb = sb;
+        fill();
+      } catch {
+        fail();
+      }
+    },
+    { once: true },
+  );
+  const feeding = window.setInterval(fill, 400);
+  // A part ends between two of the player's own reports of the time, so it is watched more closely than that.
+  const watching = window.setInterval(tick, 40);
+  const onPlay = () => (st.playing = true);
+  const onPause = () => {
+    if (!st.ours) st.playing = false;
+    st.ours = false;
+  };
+  // Run dry on the last part, with nothing more to come: that is its end.
+  const onWaiting = () => {
+    if (st.cur === parts.length - 1 && st.feedPart >= parts.length && !st.want && st.holding < 0 && !st.done && endOf(st.cur) !== undefined && el.currentTime >= endOf(st.cur)! - 0.5) onward();
+  };
+  el.addEventListener('play', onPlay);
+  el.addEventListener('pause', onPause);
+  el.addEventListener('waiting', onWaiting);
+  return {
+    go: (part, mark, andPlay) => {
+      if (part < 0 || part >= parts.length) return;
+      if (andPlay) st.playing = true;
+      move(part, mark);
+    },
+    resume: () => {
+      if (st.holding < 0) return;
+      st.playing = true;
+      move(st.holding);
+    },
+    close: () => {
+      st.closed = true;
+      window.clearTimeout(opened);
+      window.clearInterval(feeding);
+      window.clearInterval(watching);
+      el.removeEventListener('play', onPlay);
+      el.removeEventListener('pause', onPause);
+      el.removeEventListener('waiting', onWaiting);
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+      URL.revokeObjectURL(url);
+    },
+  };
+}

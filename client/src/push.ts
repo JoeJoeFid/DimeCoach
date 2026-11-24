@@ -1,7 +1,27 @@
 // Notifications on this device: asking the browser for them, and telling the server where to
 // send them. The showing is done by the helper in public/sw.js, which runs even when no page is open.
+import { useEffect } from 'react';
 import { api } from './api';
 import { isInstalled } from './components/InstallApp';
+
+/**
+ * The number on the app's own icon, where the app has been put on a home screen, a taskbar or a
+ * dock: how much is waiting unread. None at 0. A browser that has no such number does nothing.
+ * While no page is open it is kept up by public/sw.js, each time a notification arrives.
+ */
+export function setAppBadge(count: number) {
+  const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+  try {
+    if (count > 0) nav.setAppBadge?.(count).catch(() => {});
+    else nav.clearAppBadge?.().catch(() => {});
+  } catch {
+    // Not allowed here: there is simply no number.
+  }
+}
+/** Keeps the number on the app's icon at `count` for as long as the page is open. */
+export function useAppBadge(count: number) {
+  useEffect(() => setAppBadge(count), [count]);
+}
 
 /** Where this device stands. */
 export type PushState =
