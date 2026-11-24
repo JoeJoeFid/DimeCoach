@@ -18,11 +18,12 @@ import Inbox from '../components/Inbox';
 import { MyStats } from './Stats';
 import GameVideo from '../components/GameVideo';
 import LivePlays from '../components/LivePlays';
+import { SharedFilms } from '../components/Film';
 import { periodName } from '../scoring';
 import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const AS: Record<FamilyKind, string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
+const AS: Record<FamilyKind | 'guest', string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team', guest: 'a guest, to watch video shared with you' };
 const ROLE: Record<TeamPost['role'], string> = { coach: 'Coach', parent: 'Parent', family: 'Family', friend: 'Friend' };
 const KIND_WORD: Record<FamilyDay['kind'], string> = { practice: 'Practice', game: 'Game', other: 'Event' };
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -31,7 +32,7 @@ const isoOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
 const clock = (t: string) => (t ? fmtClock(parseClock(t)) : '');
 const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 /** "a parent of Ava and Ben", or how else this person is on the team's list. */
-const asWhat = (kind: FamilyKind, players: string[]) => `${AS[kind]}${players.length ? ` of ${players.join(' and ')}` : ''}`;
+const asWhat = (kind: FamilyKind | 'guest', players: string[]) => `${AS[kind]}${players.length ? ` of ${players.join(' and ')}` : ''}`;
 
 /** What the frame around a follower's pages needs: who they are, and what its buttons do. */
 interface Frame {
@@ -140,7 +141,7 @@ function StartCoaching({ user, onBack, onSignOut }: { user: User; onBack: () => 
 // Worked out when it is drawn: the icons belong to the app's own file, which is still loading when this one is read.
 const sideGroups = (): { title: string; items: [Tab, string][] }[] => [
   { title: 'Plan', items: [['schedule', NAV_ICONS.practices], ['homework', NAV_ICONS.homework], ['video', NAV_ICONS.video]] },
-  { title: 'Library', items: [['drills', NAV_ICONS.library], ['playbook', NAV_ICONS.playbook], ['resources', NAV_ICONS.resources]] },
+  { title: 'Library', items: [['drills', NAV_ICONS.library], ['playbook', NAV_ICONS.playbook], ['resources', NAV_ICONS.resources], ['film', NAV_ICONS.filmroom]] },
   { title: 'Team', items: [['roster', NAV_ICONS.teams], ['stats', NAV_ICONS.stats]] },
   { title: 'Community', items: [['chat', NAV_ICONS.chat], ['inbox', NAV_ICONS.messages], ['messages', NAV_ICONS.community]] },
 ];
@@ -353,7 +354,7 @@ function BoxIcon({ kind }: { kind: 'schedule' | 'live' | 'news' | 'homework' }) 
   );
 }
 
-type Tab = 'home' | 'schedule' | 'chat' | 'messages' | 'inbox' | 'stats' | 'video' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
+type Tab = 'home' | 'schedule' | 'chat' | 'messages' | 'inbox' | 'stats' | 'video' | 'homework' | 'playbook' | 'drills' | 'resources' | 'film' | 'roster';
 
 /** One team, as a follower sees it. */
 export function FamilyTeamPage({ frame }: { /** Present for an account that only follows teams: the page then wears the menu at the side. */ frame?: Frame } = {}) {
@@ -416,10 +417,12 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
     ...(can.playbook ? [['playbook', 'Playbook', data.plays.length] as [Tab, string, number]] : []),
     ...(can.drills ? [['drills', 'Drills', data.drills.length] as [Tab, string, number]] : []),
     ...(can.resources ? [['resources', 'Resources', data.resources.length] as [Tab, string, number]] : []),
+    // Video from the Filmroom that a coach shared with this person. All a guest is here for.
+    ...(data.film > 0 || data.me.kind === 'guest' ? [['film', 'Shared video', data.film] as [Tab, string, number]] : []),
     ...(can.roster ? [['roster', 'Team'] as [Tab, string]] : []),
   ];
   const asked = params.get('tab') as Tab | null;
-  const tab: Tab = tabs.some(([t]) => t === asked) ? asked! : 'home';
+  const tab: Tab = tabs.some(([t]) => t === asked) ? asked! : data.me.kind === 'guest' ? 'film' : 'home';
   const go = (t: Tab, extra: Record<string, string> = {}) => setParams(t === 'home' ? {} : { tab: t, ...extra }, { replace: true });
   const openChat = (chatId: number) => go('chat', chatId ? { chat: String(chatId) } : {});
   const today = todayISO();
@@ -565,6 +568,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
       )}
 
       {tab === 'schedule' && <Schedule days={data.schedule} today={today} />}
+      {tab === 'film' && <SharedFilms teamId={team.id} openId={Number(params.get('share')) || undefined} />}
       {tab === 'messages' && <Messages teamId={id} data={data} me={frame?.user.name} start={params.get('show') === 'board' || !can.news ? 'board' : 'news'} setBoard={(board) => setData({ ...data, board })} />}
       {tab === 'chat' && frame && <Chat me={frame.user} openId={Number(params.get('chat')) || 0} onOpen={openChat} />}
       {tab === 'stats' && frame && <MyStats />}

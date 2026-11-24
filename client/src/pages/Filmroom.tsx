@@ -2,16 +2,26 @@
 // out of clips. One list at a time; a game video opens in the editor, where clips are made.
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { api, type Film, type FilmClip, type FilmReel } from '../api';
+import { api, type Film, type FilmClip, type FilmPeople, type FilmReel, type FilmShare, type GameStream } from '../api';
 import { useApp } from '../App';
 import PageTitle from '../components/PageTitle';
 import { Field, Modal } from '../components/bits';
+import { SubTabs } from '../components/cx';
 import { confirmDialog } from '../components/dialogs';
 import { GameVideoCard } from '../components/GameVideo';
 import { FilmPlayer, ReelPlayer, canClip, clock, scenes, stripItem } from '../components/Film';
 
 type Tab = 'games' | 'clips' | 'videos';
 const day = (at: string) => new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+/** Which game a video is of, in words, for asking before anything of it is deleted. */
+const gameOf = (v: GameStream | undefined) => {
+  if (!v) return 'Game: not known.';
+  if (!v.game) return `Game: not tied to a game. Recorded ${day(v.started_at)}.`;
+  // A game's date is a day, not a moment: read as it is written, wherever the reader is.
+  const [y, m, d] = v.game.date.split('-').map(Number);
+  const on = y && m && d ? new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  return `Game: ${v.game.title || v.title || 'Untitled game'}${on ? `, ${on}` : ''}.`;
+};
 
 /** A clip or a put-together video as a card: the picture of the game it is from, what it is, and what can be done with it. */
 function FilmCard({ poster, length, title, meta, notes, onPlay, children }: { poster: number | null; length: string; title: string; meta: string; notes?: string; onPlay: () => void; children: React.ReactNode }) {
@@ -41,9 +51,20 @@ export default function Filmroom() {
   const tab: Tab = params.get('tab') === 'clips' ? 'clips' : params.get('tab') === 'videos' ? 'videos' : 'games';
   const [film, setFilm] = useState<Film | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [watching, setWatching] = useState<FilmClip | null>(null);
   const [showing, setShowing] = useState<{ reel: FilmReel; at: number } | null>(null);
   const [editing, setEditing] = useState<FilmClip | null>(null);
+  const [sharing, setSharing] = useState<Shared | null>(null);
+  /** The button that opens sharing for one thing, saying how many people have it already. */
+  const shareButton = (what: Shared) => {
+    const n = film?.shares.filter((s) => s.kind === what.kind && s.ref_id === what.id).length ?? 0;
+    return (
+      <button type="button" className="btn small" onClick={() => setSharing(what)} title={n ? `Shared with ${n} ${n === 1 ? 'person' : 'people'}` : 'Share it with someone'}>
+        Share{n > 0 && <span className="cm-count">{n}</span>}
+      </button>
+    );
+  };
   const failed = (e: unknown) => setError((e as Error).message);
   const load = useCallback(() => {
     if (team) api.film(team.id).then(setFilm, failed);
@@ -56,19 +77,27 @@ export default function Filmroom() {
 
   const removeClip = async (c: FilmClip) => {
     const used = film?.reels.filter((r) => r.items.some((i) => i.clip_id === c.id)).length ?? 0;
-    if (!(await confirmDialog({ title: 'Delete this clip?', body: `"${c.title}" is deleted${used ? `, and taken out of the ${used === 1 ? 'video' : `${used} videos`} it is in` : ''}. The game video it was cut from is not touched.`, confirmLabel: 'Delete', danger: true }))) return;
-    api.deleteClip(c.id).then(setFilm, failed);
+    if (!(await confirmDialog({ title: `Delete the clip "${c.title}"?`, body: `${gameOf(videoOf(c.stream_id))} The clip is deleted${used ? `, and taken out of the ${used === 1 ? 'video' : `${used} videos`} it is in` : ''}. The game video it was cut from is not touched.`, confirmLabel: 'Delete clip', danger: true }))) return;
+    api.deleteClip(c.id).then((f) => (setFilm(f), setNotice(`The clip "${c.title}" was deleted.`)), failed);
+  };
+  /** Deletes a whole game video, with every clip cut from it. */
+  const removeVideo = async (v: GameStream) => {
+    const clips = film?.clips.filter((c) => c.stream_id === v.id) ?? [];
+    const used = film?.reels.filter((r) => r.items.some((i) => i.stream_id === v.id || clips.some((c) => c.id === i.clip_id))).length ?? 0;
+    const body = [
+      gameOf(v),
+      `The whole video (${clock(v.seconds)}, recorded ${day(v.started_at)}, from ${v.by || 'a coach'}) is deleted for good.`,
+      clips.length ? `Its ${clips.length === 1 ? 'clip is' : `${clips.length} clips are`} deleted with it${used ? `, and taken out of the ${used === 1 ? 'video' : `${used} videos`} that use ${clips.length === 1 && used === 1 ? 'it' : 'them'}` : ''}.` : used ? `It is taken out of the ${used === 1 ? 'video' : `${used} videos`} that use it.` : '',
+      'The game itself, its plan and its score are not touched.',
+    ];
+    if (!(await confirmDialog({ title: `Delete the video "${v.title || 'Game video'}"?`, body: body.filter(Boolean).join(' '), confirmLabel: 'Delete video', danger: true }))) return;
+    api.deleteStream(v.id).then(() => (setNotice(`The video "${v.title || 'Game video'}" was deleted.`), load()), failed);
   };
   const removeReel = async (r: FilmReel) => {
-    if (!(await confirmDialog({ title: 'Delete this video?', body: `"${r.title}" is deleted. Its clips and the game videos they came from are not touched.`, confirmLabel: 'Delete', danger: true }))) return;
-    api.deleteReel(r.id).then(setFilm, failed);
+    if (!(await confirmDialog({ title: `Delete the video "${r.title}"?`, body: 'This is a video you put together. Its clips and the game videos they came from are not touched.', confirmLabel: 'Delete video', danger: true }))) return;
+    api.deleteReel(r.id).then((f) => (setFilm(f), setNotice(`The video "${r.title}" was deleted.`)), failed);
   };
   const videoOf = (id: number) => film?.videos.find((v) => v.id === id);
-  const tabs: { key: Tab; label: string; n: number }[] = [
-    { key: 'games', label: 'Game videos', n: film?.videos.length ?? 0 },
-    { key: 'clips', label: 'Clips', n: film?.clips.length ?? 0 },
-    { key: 'videos', label: 'Videos', n: film?.reels.length ?? 0 },
-  ];
   return (
     <div className="page">
       <div className="page-head">
@@ -80,14 +109,19 @@ export default function Filmroom() {
           Create a new video
         </Link>
       </div>
-      <div className="cx-subtabs" role="tablist">
-        {tabs.map((t) => (
-          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'on' : ''} onClick={() => setParams(t.key === 'games' ? {} : { tab: t.key }, { replace: true })}>
-            {t.label} <span className="muted small">{t.n}</span>
-          </button>
-        ))}
-      </div>
+      <SubTabs<Tab>
+        boxed
+        label="Parts of the Filmroom"
+        value={tab}
+        onChange={(t) => (setNotice(''), setParams(t === 'games' ? {} : { tab: t }, { replace: true }))}
+        tabs={[
+          ['games', 'Game videos', film?.videos.length],
+          ['clips', 'Clips', film?.clips.length],
+          ['videos', 'Videos', film?.reels.length],
+        ]}
+      />
       {error && <p className="error">{error}</p>}
+      {notice && <p className="notice">{notice}</p>}
       {!film ? (
         <p className="muted">Loading…</p>
       ) : tab === 'games' ? (
@@ -104,6 +138,10 @@ export default function Filmroom() {
                   {film.clips.filter((c) => c.stream_id === v.id).length || 'No'} clip{film.clips.filter((c) => c.stream_id === v.id).length === 1 ? '' : 's'}
                   {canClip(v) ? '' : ' · watch only'}
                 </span>
+                {shareButton({ kind: 'video', id: v.id, title: v.title || 'Game video' })}
+                <button type="button" className="btn small res-remove" onClick={() => removeVideo(v)}>
+                  Delete
+                </button>
               </GameVideoCard>
             ))}
           </div>
@@ -124,6 +162,7 @@ export default function Filmroom() {
                 <button type="button" className="btn small" onClick={() => setEditing(c)}>
                   Edit
                 </button>
+                {shareButton({ kind: 'clip', id: c.id, title: c.title })}
                 <button type="button" className="btn small res-remove" onClick={() => removeClip(c)}>
                   Delete
                 </button>
@@ -151,6 +190,7 @@ export default function Filmroom() {
                 <Link className="btn small" to={`/filmroom/reel/${r.id}`}>
                   Edit
                 </Link>
+                {shareButton({ kind: 'reel', id: r.id, title: r.title })}
                 <button type="button" className="btn small res-remove" onClick={() => removeReel(r)}>
                   Delete
                 </button>
@@ -171,12 +211,161 @@ export default function Filmroom() {
       )}
       {showing && film && (
         <Modal title={showing.reel.title} onClose={() => setShowing(null)} wide>
-          <ReelPlayer scenes={scenes(film, showing.reel.items.map((i, k) => ({ ...i, key: `r${k}` })))} at={showing.at} onAt={(at) => setShowing({ ...showing, at })} />
+          <ReelPlayer scenes={scenes(film, showing.reel.items.map((i, k) => ({ ...i, key: `r${k}` })))} at={showing.at} onAt={(at) => setShowing({ ...showing, at })} pause={{ seconds: showing.reel.pause_seconds, notes: showing.reel.pause_notes }} />
           {showing.reel.notes && <p className="film-notes">{showing.reel.notes}</p>}
         </Modal>
       )}
       {editing && <ClipForm clip={editing} onClose={() => setEditing(null)} onSaved={(f) => (setFilm(f), setEditing(null))} />}
+      {sharing && film && <ShareForm teamId={team.id} what={sharing} film={film} onFilm={setFilm} onClose={() => setSharing(null)} />}
     </div>
+  );
+}
+
+/** One thing in the Filmroom that can be shared. */
+interface Shared {
+  kind: FilmShare['kind'];
+  id: number;
+  title: string;
+}
+const SHARED_WORD: Record<FilmShare['kind'], string> = { video: 'game video', clip: 'clip', reel: 'video' };
+/**
+ * Who one thing in the Filmroom is shared with, and sharing it with more people: ones on the
+ * team's list, or new ones by email, who are added to the team as guests and see nothing else.
+ */
+function ShareForm({ teamId, what, film, onFilm, onClose }: { teamId: number; what: Shared; film: Film; onFilm: (f: Film) => void; onClose: () => void }) {
+  const [people, setPeople] = useState<FilmPeople | null>(null);
+  const [picked, setPicked] = useState<number[]>([]);
+  const [fresh, setFresh] = useState<{ name: string; email: string }[]>([]);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const failed = (e: unknown) => setError((e as Error).message);
+  useEffect(() => {
+    api.filmPeople(teamId).then(setPeople, failed);
+  }, [teamId]);
+  const has = film.shares.filter((s) => s.kind === what.kind && s.ref_id === what.id);
+  const open = people?.people.filter((p) => !has.some((s) => s.contact_id === p.id)) ?? [];
+  // Someone typed in but not yet added to the list below goes too.
+  const typed = email.trim() ? [{ name: name.trim(), email: email.trim() }] : [];
+  const going = picked.length + fresh.length + typed.length;
+  const addFresh = () => {
+    if (!email.trim()) return;
+    setFresh([...fresh.filter((f) => f.email.toLowerCase() !== email.trim().toLowerCase()), { name: name.trim(), email: email.trim() }]);
+    setName('');
+    setEmail('');
+  };
+  const share = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const r = await api.shareFilm({ team_id: teamId, kind: what.kind, ref_id: what.id, contact_ids: picked, people: [...fresh, ...typed], note });
+      onFilm(r);
+      setPicked([]);
+      setFresh([]);
+      setName('');
+      setEmail('');
+      setNote('');
+      // People added as guests are on the team's list from now on.
+      api.filmPeople(teamId).then(setPeople, () => {});
+      if (r.warning) setError(r.warning);
+      else setNotice(`Shared with ${going} ${going === 1 ? 'person' : 'people'}. They have been told.`);
+    } catch (e) {
+      failed(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const stop = async (s: FilmShare) => {
+    if (!(await confirmDialog({ title: `Stop sharing with ${s.name}?`, body: `They can no longer watch "${what.title}". ${s.guest ? 'They stay on the team\u2019s list as a guest until you take them off it on the Team page.' : 'Nothing else of theirs changes.'}`, confirmLabel: 'Stop sharing', danger: true }))) return;
+    api.unshareFilm(s.id).then(onFilm, failed);
+  };
+  return (
+    <Modal title={`Share the ${SHARED_WORD[what.kind]} "${what.title}"`} onClose={onClose}>
+      <p className="muted small">
+        Whoever you share it with needs a Dime Coach account to watch. Someone new is sent a link to make one, joins this team as a guest, and sees only what you share with them: not the schedule, the roster or anything else. It cannot be passed on.
+      </p>
+      {has.length > 0 && (
+        <>
+          <h3 className="film-share-h">Shared with</h3>
+          <ul className="film-share-list">
+            {has.map((s) => (
+              <li key={s.id}>
+                <span>
+                  <strong>{s.name}</strong> {s.guest && <span className="kind">Guest</span>}
+                  <span className="muted small">{s.watched_at ? `Watched ${day(s.watched_at)}` : s.joined ? 'Not watched yet' : 'Has not made an account yet'}</span>
+                </span>
+                <button type="button" className="link small" onClick={() => stop(s)}>
+                  Stop sharing
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <h3 className="film-share-h">Share with</h3>
+      {!people ? (
+        !error && <p className="muted">Loading…</p>
+      ) : people.hidden ? (
+        <p className="muted small">The team's list of parents, family and friends is hidden for you, so share by email address below.</p>
+      ) : open.length === 0 ? (
+        <p className="muted small">{people.people.length === 0 ? 'Nobody on the team\u2019s list has an email address yet.' : 'Everyone on the team\u2019s list has it already.'}</p>
+      ) : (
+        <ul className="film-share-list film-share-pick">
+          {open.map((p) => (
+            <li key={p.id}>
+              <label>
+                <input type="checkbox" checked={picked.includes(p.id)} onChange={(e) => setPicked(e.target.checked ? [...picked, p.id] : picked.filter((x) => x !== p.id))} />
+                <span>
+                  <strong>{p.name}</strong>
+                  <span className="muted small">
+                    {p.kind === 'guest' ? 'Guest' : p.kind === 'parent' ? 'Parent' : p.kind === 'family' ? 'Family' : 'Friend'}
+                    {p.joined ? '' : ' · no account yet'}
+                  </span>
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      <h3 className="film-share-h">Or someone new, by email</h3>
+      {fresh.length > 0 && (
+        <span className="chips">
+          {fresh.map((f) => (
+            <span key={f.email} className="chip">
+              {f.name ? `${f.name} (${f.email})` : f.email}
+              <button type="button" aria-label={`Take ${f.email} off`} onClick={() => setFresh(fresh.filter((x) => x !== f))}>
+                ✕
+              </button>
+            </span>
+          ))}
+        </span>
+      )}
+      <div className="film-share-new">
+        <input className="input" value={name} maxLength={120} placeholder="Name" aria-label="Their name" onChange={(e) => setName(e.target.value)} />
+        <input className="input" type="email" value={email} maxLength={200} placeholder="Email address" aria-label="Their email address" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addFresh())} />
+        <button type="button" className="btn small" disabled={!email.trim()} onClick={addFresh}>
+          Add another
+        </button>
+      </div>
+      <Field label="A note to go with it (optional)">
+        <textarea className="input" rows={2} value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)} />
+      </Field>
+      {people && !people.mail && <p className="muted small">Email is not set up on this site, so only people who already have an account can be told.</p>}
+      {error && <p className="error">{error}</p>}
+      {notice && <p className="notice">{notice}</p>}
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onClose}>
+          Done
+        </button>
+        <button type="button" className="btn primary" disabled={going === 0 || busy} onClick={share}>
+          {busy ? 'Sharing…' : going > 1 ? `Share with ${going} people` : 'Share'}
+        </button>
+      </div>
+    </Modal>
   );
 }
 

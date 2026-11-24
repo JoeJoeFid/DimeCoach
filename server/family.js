@@ -149,6 +149,8 @@ function follow(userId, ref) {
   if (!team) return null;
   const mine = new Set(parse(c.player_ids_json, []).map(Number));
   const players = all('SELECT id, name FROM players WHERE team_id=? AND active=1 ORDER BY name COLLATE NOCASE', team.id).filter((p) => mine.has(p.id));
+  // A guest is on the list only to be shown video (film.js): no part of the team's page is open to them.
+  if (c.kind === 'guest') return { team, kind: 'guest', players: [], settings: settingsOf(team), can: Object.fromEntries(FAMILY_SECTIONS.map((s) => [s, false])) };
   const kind = FAMILY_KINDS.includes(c.kind) ? c.kind : 'friend';
   return { team, kind, players, settings: settingsOf(team), can: settingsOf(team).access[kind] };
 }
@@ -288,6 +290,8 @@ export function mountFamily(app) {
     res.json({
       team: { id: team.id, slug: slugOf(team), name: team.name, sport: sportOf(team), season: team.season || '', organization: team.community_id ? get('SELECT name FROM communities WHERE id=?', team.community_id)?.name || '' : '', coaches: coachesOf(team) },
       me: { kind: f.kind, players: f.players.map((p) => p.name) },
+      // How many videos from the Filmroom have been shared with this person.
+      film: get('SELECT COUNT(*) AS n FROM film_shares f JOIN team_contacts c ON c.id=f.contact_id WHERE c.user_id=? AND f.team_id=?', req.user.id, team.id).n,
       // Live video: whether this person may watch or broadcast, and whether something is going out now.
       video: (() => {
         const mine = all('SELECT can_watch, can_broadcast FROM team_contacts WHERE team_id=? AND user_id=?', team.id, req.user.id);

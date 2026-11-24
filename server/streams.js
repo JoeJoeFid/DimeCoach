@@ -22,6 +22,11 @@
 // and assumes neither, so a stream that goes through a video service later would be another
 // `transport`, and nothing else here would change.
 //
+// A video somebody already has can be brought in as well (client/src/mp4file.ts): their browser
+// cuts the file into the same joined pieces and sends them the same way, as a stream that is
+// 'uploading' rather than 'live'. Nobody is told and nobody can watch until it is all here, and
+// then it is a saved video like any other.
+//
 // A stream is thrown away when it ends, unless its team is allowed to keep video (set by the
 // system administrator, team by team) and the broadcaster asked to save it. A saved one is for
 // the team's coaches.
@@ -50,7 +55,7 @@ CREATE TABLE IF NOT EXISTS streams (
   title TEXT NOT NULL DEFAULT '',
   transport TEXT NOT NULL DEFAULT 'segments',
   mime TEXT NOT NULL DEFAULT 'video/webm',
-  status TEXT NOT NULL DEFAULT 'live',            -- 'live' | 'ended'
+  status TEXT NOT NULL DEFAULT 'live',            -- 'live' | 'uploading' | 'ended'
   saved INTEGER NOT NULL DEFAULT 0,
   segments INTEGER NOT NULL DEFAULT 0, bytes INTEGER NOT NULL DEFAULT 0, seconds INTEGER NOT NULL DEFAULT 0,
   started_at TEXT NOT NULL, last_at TEXT NOT NULL, ended_at TEXT
@@ -110,6 +115,8 @@ const MAX_STREAM_SECONDS = 3 * 60 * 60;
 const KEEP_FREE_BYTES = 80 * 1024 * 1024;
 /** A live stream that has sent nothing for this long has stopped, whatever it meant to do. */
 const STALE_MS = 90_000;
+/** A video being brought in that has sent nothing for this long was given up on. Longer, since one large piece on a slow connection takes a while. */
+const STALE_UPLOAD_MS = 15 * 60_000;
 /** How long a link to send a piece to R2 is good for, and how many are handed out at a time. Long enough to catch up after a bad patch of signal. */
 const SEND_LINK_SECONDS = 10 * 60;
 const SEND_LINKS = 10;
@@ -145,7 +152,7 @@ const nextInit = (s) => {
 const gotInit = (s, k, bytes) => {
   const list = initsOf(s);
   list[k] = s.segments;
-  run("UPDATE streams SET init_bytes=?, inits=?, last_at=? WHERE id=? AND status='live'", bytes, list.join(','), nowIso(), s.id);
+  run("UPDATE streams SET init_bytes=?, inits=?, last_at=? WHERE id=? AND status!='ended'", bytes, list.join(','), nowIso(), s.id);
 };
 /** Adds to what a team has used this month. */
 function tally(teamId, { seconds = 0, watch = 0, bytes = 0 }) {
@@ -207,6 +214,13 @@ function freeBytes() {
   }
 }
 
+/**
+ * How much of a saved video someone it was shared with may have: 'all', a list of [first, last]
+ * pieces, or null for none of it. The Filmroom knows who was shown what, and says so here (film.js).
+ */
+let sharedPieces = () => null;
+export const setSharedPieces = (fn) => void (sharedPieces = fn);
+
 /** What someone may do with a team's video: null when they have nothing to do with the team. */
 export function videoRole(user, teamId) {
   const team = get('SELECT * FROM teams WHERE id=?', Number(teamId));
@@ -230,6 +244,7 @@ function end(s, keep) {
 /** Streams whose camera went away without saying so are ended, keeping nothing. */
 function sweep(teamId) {
   for (const s of all("SELECT * FROM streams WHERE team_id=? AND status='live'", teamId)) if (Date.now() - new Date(s.last_at).getTime() > STALE_MS) end(s, false);
+  for (const s of all("SELECT * FROM streams WHERE team_id=? AND status='uploading'", teamId)) if (Date.now() - new Date(s.last_at).getTime() > STALE_UPLOAD_MS) end(s, false);
 }
 export const streamOut = (s) => ({
   id: s.id, team_id: s.team_id, plan_id: s.plan_id, title: s.title, transport: s.transport, mime: s.mime, status: s.status, saved: !!s.saved,
@@ -282,16 +297,22 @@ export function mountStreams(app) {
     const role = videoRole(req.user, req.body.team_id);
     if (!role) return res.status(404).json({ error: 'Not found' });
     if (!role.broadcast) return res.status(403).json({ error: 'You have not been given permission to broadcast for this team. Ask one of its coaches.' });
+    // A video brought in from a file is a saved video from the start: for a coach, on a team that may keep video.
+    const upload = req.body.upload === true;
+    if (upload && !role.coach) return res.status(403).json({ error: 'Only the coaches of a team can add video to its games.' });
+    if (upload && !role.save) return res.status(403).json({ error: 'Saving video is not turned on for this team. The administrator decides which teams may keep video.' });
+    if (upload && !(req.body.layout === 'joined' && String(req.body.mime).startsWith('video/mp4'))) return res.status(400).json({ error: 'That video cannot be brought in.' });
     const cfg = r2Config();
     if (!cfg && freeBytes() < KEEP_FREE_BYTES) return res.status(507).json({ error: 'The site is out of room for video right now. Tell the administrator.' });
-    // One camera per person: starting again ends what they had going.
-    for (const s of all("SELECT * FROM streams WHERE user_id=? AND status='live'", req.user.id)) end(s, false);
+    // One camera per person: starting again ends what they had going. The same for bringing a video in.
+    for (const s of all('SELECT * FROM streams WHERE user_id=? AND status=?', req.user.id, upload ? 'uploading' : 'live')) end(s, false);
     const mime = /^video\/(mp4|webm)/.test(String(req.body.mime)) ? str(req.body.mime, 80) : 'video/webm';
     // Video belongs to a game: the one it was started from, or failing that the team's game on the day (the broadcaster's own date, since the server's clock may be a day off theirs).
     const day = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.date)) ? req.body.date : nowIso().slice(0, 10);
     const plan =
       (req.body.plan_id && get('SELECT * FROM plans WHERE id=? AND team_id=? AND is_game=1', Number(req.body.plan_id), role.team.id)) ||
-      get("SELECT * FROM plans WHERE team_id=? AND is_game=1 AND is_template=0 AND date=? ORDER BY start_time, id LIMIT 1", role.team.id, day) ||
+      // A video brought in is of the game it was added to, and of none when it was added to none: it may be of any day.
+      (!upload && get("SELECT * FROM plans WHERE team_id=? AND is_game=1 AND is_template=0 AND date=? ORDER BY start_time, id LIMIT 1", role.team.id, day)) ||
       null;
     // Kept in R2 when it is set up, under a folder nobody could guess, and on this disk when it is not.
     const prefix = cfg ? `video/${crypto.randomBytes(12).toString('hex')}/` : null;
@@ -300,13 +321,13 @@ export function mountStreams(app) {
     // Who to tell: everyone unless the broadcaster said which groups, which may be none.
     const tell = Array.isArray(req.body.tell) ? TELL.filter((g) => req.body.tell.includes(g)) : TELL;
     const made = run(
-      'INSERT INTO streams (team_id, plan_id, user_id, title, transport, store_key, mime, layout, tell, started_at, last_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-      role.team.id, plan?.id ?? null, req.user.id, str(req.body.title, 120).trim() || (plan ? gameName(plan) : ''), cfg ? 'r2' : 'segments', prefix, mime, layout, tell.join(','), nowIso(), nowIso(),
+      'INSERT INTO streams (team_id, plan_id, user_id, title, transport, store_key, mime, layout, tell, status, started_at, last_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      role.team.id, plan?.id ?? null, req.user.id, str(req.body.title, 120).trim() || (plan ? gameName(plan) : ''), cfg ? 'r2' : 'segments', prefix, mime, layout, upload ? '' : tell.join(','), upload ? 'uploading' : 'live', nowIso(), nowIso(),
     );
     if (cfg) run('INSERT INTO stream_objects (prefix, ext, issued_at) VALUES (?,?,?)', prefix, extOf(mime), nowIso());
     else fs.mkdirSync(dirOf(made.lastInsertRowid), { recursive: true });
     // `send` is how the app gets its pieces out: to this server, or by links it asks for.
-    res.json({ stream: streamOut(get('SELECT * FROM streams WHERE id=?', made.lastInsertRowid)), can_save: role.save, send: cfg ? 'links' : 'server' });
+    res.json({ stream: streamOut(get('SELECT * FROM streams WHERE id=?', made.lastInsertRowid)), can_save: role.save, send: cfg ? 'links' : 'server', max_piece_bytes: MAX_SEGMENT_BYTES });
   });
   // Every saved video of the teams being worked on, for Resources. A coach's page, so it goes by the workspace.
   app.get('/api/streams/saved', (req, res) => {
@@ -315,7 +336,7 @@ export function mountStreams(app) {
     res.json(teams.flatMap((id) => all("SELECT * FROM streams WHERE team_id=? AND status='ended' AND saved=1 ORDER BY id DESC", id)).map(streamOut));
   });
   const own = (req, res) => {
-    const s = get("SELECT * FROM streams WHERE id=? AND user_id=? AND status='live'", Number(req.params.id), req.user.id);
+    const s = get("SELECT * FROM streams WHERE id=? AND user_id=? AND status!='ended'", Number(req.params.id), req.user.id);
     if (!s) res.status(404).json({ error: 'This broadcast has ended.' });
     return s;
   };
@@ -324,7 +345,8 @@ export function mountStreams(app) {
     run('UPDATE streams SET segments=segments+1, bytes=bytes+?, seconds=seconds+?, last_at=? WHERE id=?', bytes, SEGMENT_SECONDS, nowIso(), s.id);
     tally(s.team_id, { seconds: SEGMENT_SECONDS, bytes });
     // The first piece is the moment there is something to watch: everyone who may watch is told, on their devices too.
-    if (s.segments === 0) {
+    // A video being brought in is nobody's news until it is all here.
+    if (s.segments === 0 && s.status === 'live') {
       const team = get('SELECT * FROM teams WHERE id=?', s.team_id);
       tellTeam(team, req.user.id);
       // The groups the broadcaster chose get a message, and a notification on their devices. Only people who may watch are told.
@@ -429,7 +451,7 @@ export function mountStreams(app) {
       return res.status(413).json({ error: 'That piece of video is too large.' });
     }
     // The stream may have ended, or moved on, while R2 was being asked.
-    const now = get("SELECT * FROM streams WHERE id=? AND status='live'", s.id);
+    const now = get("SELECT * FROM streams WHERE id=? AND status!='ended'", s.id);
     if (!now) return res.status(404).json({ error: 'This broadcast has ended.' });
     if (now.segments !== n) return res.json({ segments: now.segments });
     arrived(now, bytes, req);
@@ -452,16 +474,24 @@ export function mountStreams(app) {
     tellTeam(get('SELECT * FROM teams WHERE id=?', s.team_id), req.user.id);
     res.json({ ok: true, saved: !!get('SELECT saved FROM streams WHERE id=?', s.id)?.saved });
   });
-  /** A stream this person may watch: live for anyone allowed to watch, saved for the coaches. */
+  /**
+   * A stream this person may watch: live for anyone allowed to watch, saved for the coaches, and
+   * a saved one, or the parts of it in a clip, for someone it was shared with in the Filmroom.
+   * `req.pieces` is then the pieces they may have, when it is not all of them.
+   */
   const watchable = (req, res) => {
     const s = get('SELECT * FROM streams WHERE id=?', Number(req.params.id));
     const role = s && videoRole(req.user, s.team_id);
-    if (!s || !role || !(s.status === 'live' ? role.watch : role.coach)) {
+    const whole = !!role && (s.status === 'live' ? role.watch : role.coach);
+    const shared = s && !whole && s.status === 'ended' && s.saved ? sharedPieces(req.user.id, s) : null;
+    if (!s || (!whole && !shared)) {
       res.status(404).json({ error: 'This video is not available.' });
       return null;
     }
+    req.pieces = whole || shared === 'all' ? null : shared;
     return s;
   };
+  const mayHave = (req, n) => !req.pieces || req.pieces.some(([from, to]) => n >= from && n <= to);
   app.get('/api/streams/:id', (req, res) => {
     const s = watchable(req, res);
     if (s) res.json(streamOut(s));
@@ -483,7 +513,7 @@ export function mountStreams(app) {
     if (!cfg) return res.status(503).json({ error: 'The video store is not set up right now. Tell the administrator.' });
     const from = Math.max(0, Math.floor(Number(req.query.from)) || 0);
     const links = [];
-    for (let n = from; n < Math.min(s.segments, from + WATCH_LINKS); n++) links.push({ n, url: linkTo(cfg, 'GET', keyOf(objects, n), WATCH_LINK_SECONDS) });
+    for (let n = from; n < Math.min(s.segments, from + WATCH_LINKS); n++) if (mayHave(req, n)) links.push({ n, url: linkTo(cfg, 'GET', keyOf(objects, n), WATCH_LINK_SECONDS) });
     watched(s, links.length);
     const inits = initsOf(s).map((from, k) => ({ k, from, url: linkTo(cfg, 'GET', keyOf(objects, initName(k)), WATCH_LINK_SECONDS) }));
     res.set('Cache-Control', 'no-store').json({ links, inits, type: s.mime.split(';')[0], good_for: WATCH_LINK_SECONDS });
@@ -494,7 +524,7 @@ export function mountStreams(app) {
     // A joined video's opening parts are asked for by name: init, init1, init2.
     const part = /^init(\d*)$/.exec(req.params.n);
     const n = part && Number(part[1] || 0) < initsOf(s).length ? initName(Number(part[1] || 0)) : Number(req.params.n);
-    if (s.transport !== 'segments' || (typeof n === 'number' && (!Number.isInteger(n) || n < 0 || n >= s.segments))) return res.status(404).end();
+    if (s.transport !== 'segments' || (typeof n === 'number' && (!Number.isInteger(n) || n < 0 || n >= s.segments || !mayHave(req, n)))) return res.status(404).end();
     if (typeof n === 'number') watched(s, 1);
     // Kept by the browser, but asked about every time, so someone who may no longer watch is refused even on a shared device.
     res.set({ 'Cache-Control': 'private, no-cache', 'X-Content-Type-Options': 'nosniff' }).type(s.mime.split(';')[0]).sendFile(fileOf(s, n), (err) => err && !res.headersSent && res.status(404).end());
@@ -512,7 +542,7 @@ export function mountStreams(app) {
 
   // --- Who around a team may watch and broadcast: its coaches decide, person by person ---
   const peopleOf = (team) =>
-    all('SELECT id, name, email, kind, user_id, can_watch, can_broadcast FROM team_contacts WHERE team_id=? ORDER BY name COLLATE NOCASE, id', team.id).map((c) => ({
+    all("SELECT id, name, email, kind, user_id, can_watch, can_broadcast FROM team_contacts WHERE team_id=? AND kind<>'guest' ORDER BY name COLLATE NOCASE, id", team.id).map((c) => ({
       id: c.id, name: c.name || 'No name yet', kind: c.kind, joined: !!c.user_id, watch: !!c.can_watch, broadcast: !!c.can_broadcast,
     }));
   const coachTeam = (req, res) => {

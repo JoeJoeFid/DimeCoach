@@ -6,7 +6,7 @@
 // server/streams.js.
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
-import { QUALITIES, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
+import { QUALITIES, Stopped, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
 import { Modal } from './bits';
 import { confirmDialog } from './dialogs';
 
@@ -820,6 +820,132 @@ export function StreamPeople({ teamId }: { teamId: number }) {
   );
 }
 
+/** A small picture from early in a video file, to show the video by. Null when this browser cannot show the file. */
+function pictureOf(file: File): Promise<Blob | null> {
+  return new Promise((done) => {
+    const el = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    const end = (b: Blob | null) => {
+      window.clearTimeout(timer);
+      el.removeAttribute('src');
+      el.load();
+      URL.revokeObjectURL(url);
+      done(b);
+    };
+    const timer = window.setTimeout(() => end(null), 8000);
+    el.muted = true;
+    el.playsInline = true;
+    el.preload = 'auto';
+    el.onerror = () => end(null);
+    el.onloadeddata = () => (el.currentTime = Math.min(2, (el.duration || 0) / 2));
+    el.onseeked = () => {
+      if (!el.videoWidth) return end(null);
+      const c = document.createElement('canvas');
+      c.width = 480;
+      c.height = Math.round((480 * el.videoHeight) / el.videoWidth);
+      c.getContext('2d')?.drawImage(el, 0, 0, c.width, c.height);
+      c.toBlob((b) => end(b), 'image/jpeg', 0.72);
+    };
+    el.src = url;
+  });
+}
+
+/**
+ * Brings a video file from this device in as a saved video of a game. The file is cut into
+ * pieces here and sent a piece at a time, so the page has to stay open until it is done.
+ */
+function BringIn({ teamId, planId, title, onDone }: { teamId: number; planId?: number; title: string; onDone: (note: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [going, setGoing] = useState<(Bringing & { name: string }) | null>(null);
+  const [error, setError] = useState('');
+  // What is under way: stopped, and the stream thrown away, when it is cancelled or the page is left.
+  const job = useRef<{ stop: boolean; id: number } | null>(null);
+  const giveUp = () => {
+    const j = job.current;
+    job.current = null;
+    if (!j) return;
+    j.stop = true;
+    if (j.id) api.endStream(j.id, false).catch(() => {});
+  };
+  useEffect(() => giveUp, []);
+  useEffect(() => {
+    if (!going) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [!!going]);
+  const bring = async (file: File) => {
+    const j = { stop: false, id: 0 };
+    job.current = j;
+    setError('');
+    setGoing({ sent: 0, of: 0, name: file.name });
+    const picture = pictureOf(file);
+    try {
+      const today = new Date();
+      const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const stream = await bringInVideo(
+        file,
+        async (mime) => {
+          const r = await api.startStream({ team_id: teamId, plan_id: planId, title: title || (planId ? '' : file.name.replace(/\.[^.]+$/, '')), mime, date, layout: 'joined', upload: true });
+          j.id = r.stream.id;
+          // Cancelled while the server was being asked.
+          if (j.stop) api.endStream(j.id, false).catch(() => {});
+          return r;
+        },
+        (b) => !j.stop && setGoing({ ...b, name: file.name }),
+        () => j.stop,
+      );
+      const shot = await picture;
+      if (shot) await api.sendPoster(stream.id, shot);
+      const r = await api.endStream(stream.id, true);
+      j.id = 0;
+      job.current = null;
+      setGoing(null);
+      const game = stream.game ? `${stream.game.title || 'this game'}${stream.game.date ? ` (${stream.game.date})` : ''}` : '';
+      onDone(r.saved ? `The video was added${game ? ` to ${game}` : ', not tied to a game'}. It is in the Filmroom too, where it can be cut into clips.` : 'The video could not be kept: saving video is not turned on for this team.');
+    } catch (e) {
+      if (job.current === j) giveUp();
+      setGoing(null);
+      if (!(e instanceof Stopped)) setError((e as Error).message);
+    }
+  };
+  const share = going && going.of > 0 ? going.sent / going.of : 0;
+  return (
+    <div className="gv-bring">
+      <input
+        ref={input}
+        type="file"
+        accept="video/mp4,video/quicktime,.mp4,.m4v,.mov"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) bring(f);
+        }}
+      />
+      {going ? (
+        <div className="gv-bring-going" role="status">
+          <span>
+            <strong>{going.name}</strong> <span className="muted small">{going.of === 0 ? 'Reading the video…' : `${Math.floor(share * 100)}% sent. Keep this page open until it is done.`}</span>
+          </span>
+          <progress max={1} value={going.of === 0 ? undefined : share} />
+          <button type="button" className="btn small" onClick={giveUp}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="gv-actions">
+          <button type="button" className="btn" onClick={() => input.current?.click()}>
+            Add a video from this device
+          </button>
+          <span className="muted small">An MP4 or MOV file, as phones and cameras make. It is added as it is, and can be cut into clips like one recorded here.</span>
+        </div>
+      )}
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 /**
  * One saved video as a card, the way Resources shows its things: a picture from the game to
  * press and play, what it is, and what can be done with it (`children`).
@@ -956,6 +1082,17 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
                 </GameVideoCard>
               ))}
             </div>
+          )}
+          {can.save && (
+            <BringIn
+              teamId={teamId}
+              planId={planId}
+              title={title}
+              onDone={(note) => {
+                setNotice(note);
+                load();
+              }}
+            />
           )}
         </div>
       )}

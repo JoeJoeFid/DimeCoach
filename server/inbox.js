@@ -45,7 +45,7 @@ export const coachesOfTeam = (team) => [
 ];
 /** A team's parents, family and friends who have made an account, with the kind each one is. */
 export const followersOfTeam = (team) =>
-  all("SELECT u.id, u.name, u.prefs_json, c.kind FROM team_contacts c JOIN users u ON u.id=c.user_id WHERE c.team_id=? AND u.status='active' GROUP BY u.id ORDER BY u.name COLLATE NOCASE", team.id).map((p) => ({ ...p, role: FAMILY_ROLE[p.kind] || 'Family' }));
+  all("SELECT u.id, u.name, u.prefs_json, c.kind FROM team_contacts c JOIN users u ON u.id=c.user_id WHERE c.team_id=? AND c.kind<>'guest' AND u.status='active' GROUP BY u.id ORDER BY u.name COLLATE NOCASE", team.id).map((p) => ({ ...p, role: FAMILY_ROLE[p.kind] || 'Family' }));
 
 /**
  * Who a person can write to, in groups, nearest first: a group for each team they coach or follow,

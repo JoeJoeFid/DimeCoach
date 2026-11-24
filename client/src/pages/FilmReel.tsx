@@ -18,6 +18,9 @@ export default function FilmReel() {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [strip, setStrip] = useState<StripItem[]>([]);
+  // The pause between one part and the next: none at 0 seconds.
+  const [pauseSeconds, setPauseSeconds] = useState(0);
+  const [pauseNotes, setPauseNotes] = useState(false);
   const [at, setAt] = useState(0);
   const [from, setFrom] = useState<'clips' | 'games'>('clips');
   const [dirty, setDirty] = useState(false);
@@ -30,6 +33,8 @@ export default function FilmReel() {
       setTitle(r.title);
       setNotes(r.notes);
       setStrip(r.items.map(stripItem));
+      setPauseSeconds(r.pause_seconds);
+      setPauseNotes(r.pause_notes);
     }
     setDirty(false);
   };
@@ -55,7 +60,7 @@ export default function FilmReel() {
   };
   const add = (item: { clip_id: number | null; stream_id: number | null }) => change([...strip, stripItem({ ...item, show_notes: false })]);
   const save = async () => {
-    const body = { title, notes, items: list.map((s) => ({ clip_id: s.clip?.id ?? null, stream_id: s.clip ? null : s.stream.id, show_notes: s.show })) };
+    const body = { title, notes, pause_seconds: pauseSeconds, pause_notes: pauseSeconds > 0 && pauseNotes, items: list.map((s) => ({ clip_id: s.clip?.id ?? null, stream_id: s.clip ? null : s.stream.id, show_notes: s.show })) };
     try {
       const r = id ? await api.saveReel(id, body) : await api.addReel({ team_id: team.id, ...body });
       setError('');
@@ -99,7 +104,7 @@ export default function FilmReel() {
       <div className="film-layout">
         <div className="film-main">
           {list.length > 0 ? (
-            <ReelPlayer scenes={list} at={Math.min(at, list.length - 1)} onAt={setAt} />
+            <ReelPlayer scenes={list} at={Math.min(at, list.length - 1)} onAt={setAt} pause={{ seconds: pauseSeconds, notes: pauseNotes }} />
           ) : (
             <div className="card film-blank">
               <p className="muted">The video plays here once it has something in it.</p>
@@ -113,6 +118,25 @@ export default function FilmReel() {
           <Field label="Notes">
             <textarea className="input" rows={3} value={notes} maxLength={2000} placeholder="What this video is for." onChange={(e) => (setNotes(e.target.value), setDirty(true), setNotice(''))} />
           </Field>
+          <Field label="Pause between parts">
+            <span className="film-pause-set">
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={60}
+                step={1}
+                aria-label="Seconds of pause between parts"
+                value={pauseSeconds || ''}
+                placeholder="0"
+                onChange={(e) => (setPauseSeconds(Math.max(0, Math.min(60, Math.round(Number(e.target.value)) || 0))), setDirty(true), setNotice(''))}
+              />
+              <span className="muted small">{pauseSeconds > 0 ? 'seconds, on a screen that counts down' : 'seconds. 0 plays straight through.'}</span>
+            </span>
+          </Field>
+          <label className={`film-pause-show ${pauseSeconds > 0 ? '' : 'off'}`}>
+            <input type="checkbox" checked={pauseSeconds > 0 && pauseNotes} disabled={pauseSeconds === 0} onChange={(e) => (setPauseNotes(e.target.checked), setDirty(true), setNotice(''))} /> Show the next part's title and notes on that screen
+          </label>
         </div>
       </div>
       <div className="card film-new">

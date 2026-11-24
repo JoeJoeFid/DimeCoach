@@ -8,7 +8,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type Reac
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Film, FilmClip, FilmItem, FilmMark, GameStream } from '../api';
+import { api, type Film, type FilmClip, type FilmItem, type FilmMark, type GameStream, type SharedFilm } from '../api';
+import { Modal } from './bits';
 import { joinedPlayer, type JoinedPlayer } from '../video';
 import { FullButton, SeekInput, StreamPlayer, useFullScreen } from './GameVideo';
 
@@ -196,12 +197,63 @@ export const FilmPlayer = forwardRef<FilmHandle, FilmPlayerProps>(function FilmP
   );
 });
 
-/** Plays a run of clips one after another, as one video, with each one's notes over the picture when it asks for them. */
-export function ReelPlayer({ scenes: list, at, onAt }: { scenes: Scene[]; at: number; onAt: (index: number) => void }) {
+/** A pause between one part of a video and the next: how long, and whether the screen says what is coming. */
+export interface ReelPause {
+  seconds: number;
+  notes: boolean;
+}
+/**
+ * Plays a run of clips one after another, as one video, with each one's notes over the picture
+ * when it asks for them. With a `pause`, a screen is held between one and the next for that long,
+ * counting down, and can say what the next one is.
+ */
+export function ReelPlayer({ scenes: list, at, onAt, pause }: { scenes: Scene[]; at: number; onAt: (index: number) => void; pause?: ReelPause }) {
   // Once it has been started it keeps going from clip to clip.
   const [running, setRunning] = useState(false);
+  // The pause that is up: the part it is ahead of, and the seconds left of it.
+  const [held, setHeld] = useState<{ next: number; left: number } | null>(null);
+  const move = useRef(onAt);
+  move.current = onAt;
+  useEffect(() => {
+    if (!held) return;
+    if (held.left <= 0) {
+      setHeld(null);
+      move.current(held.next);
+      return;
+    }
+    const t = window.setTimeout(() => setHeld((h) => h && { ...h, left: h.left - 1 }), 1000);
+    return () => window.clearTimeout(t);
+  }, [held]);
+  // Moved to another part by hand: the pause is over.
+  useEffect(() => setHeld(null), [at]);
   const scene = list[Math.min(at, list.length - 1)];
   if (!scene) return null;
+  const coming = held ? list[held.next] : undefined;
+  if (held && coming)
+    return (
+      <div className="film-reel">
+        <div className="gv-player film-player">
+          <div className="gv-screen film-pause" role="status">
+            {pause?.notes && (
+              <div className="film-pause-text">
+                <span className="film-pause-next">Next</span>
+                <strong>{coming.title}</strong>
+                {coming.notes && <p>{coming.notes}</p>}
+              </div>
+            )}
+            <span className="film-pause-left" aria-label={`The next part starts in ${held.left} second${held.left === 1 ? '' : 's'}`}>
+              {held.left}
+            </span>
+            <button type="button" className="btn small film-pause-skip" onClick={() => (setHeld(null), onAt(held.next))}>
+              Skip
+            </button>
+          </div>
+        </div>
+        <p className="muted small film-count">
+          Next, {held.next + 1} of {list.length}: {coming.title}
+        </p>
+      </div>
+    );
   return (
     <div className="film-reel">
       <FilmPlayer
@@ -211,7 +263,7 @@ export function ReelPlayer({ scenes: list, at, onAt }: { scenes: Scene[]; at: nu
         end={scene.end ?? { n: scene.stream.segments - 1, off: 3600 }}
         autoPlay={running}
         onPlay={() => setRunning(true)}
-        onEnded={() => (at + 1 < list.length ? onAt(at + 1) : (setRunning(false), onAt(0)))}
+        onEnded={() => (at + 1 >= list.length ? (setRunning(false), onAt(0)) : pause && pause.seconds > 0 ? setHeld({ next: at + 1, left: Math.round(pause.seconds) }) : onAt(at + 1))}
         overlay={
           scene.show && (
             <div className="film-over">
@@ -286,3 +338,89 @@ export function Strip({ film, items, at, onChange, onPlay }: { film: Film; items
 }
 /** How long a strip's video runs. */
 export const stripSeconds = (film: Film, items: StripItem[]) => scenes(film, items).reduce((n, s) => n + s.seconds, 0);
+
+/**
+ * The videos from a team's Filmroom that were shared with the person looking: whole game videos,
+ * clips, and videos put together. `openId` is one to open at once, as a link to it asks.
+ */
+export function SharedFilms({ teamId, openId }: { teamId: number; openId?: number }) {
+  const [list, setList] = useState<SharedFilm[] | null>(null);
+  const [error, setError] = useState('');
+  const [playing, setPlaying] = useState<{ share: SharedFilm; at: number } | null>(null);
+  const opened = useRef(false);
+  useEffect(() => {
+    setList(null);
+    api.sharedFilm(teamId).then(setList, (e) => setError((e as Error).message));
+  }, [teamId]);
+  const play = (share: SharedFilm) => {
+    setPlaying({ share, at: 0 });
+    if (share.watched) return;
+    // The coach who shared it can see that it was opened.
+    api.watchedShare(share.id).catch(() => {});
+    setList((l) => l && l.map((x) => (x.id === share.id ? { ...x, watched: true } : x)));
+  };
+  // The one a link asked for opens by itself, as does the only one there is while it is still new.
+  useEffect(() => {
+    if (!list || opened.current) return;
+    opened.current = true;
+    const first = list.find((x) => x.id === openId) ?? (list.length === 1 && !list[0].watched ? list[0] : undefined);
+    if (first) play(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list]);
+  if (error) return <p className="error">{error}</p>;
+  if (!list) return <p className="muted">Loading…</p>;
+  if (list.length === 0)
+    return (
+      <div className="empty">
+        <h2>No video has been shared with you</h2>
+        <p>When one of the team's coaches shares a video with you, it shows here to watch.</p>
+      </div>
+    );
+  const WORD = { video: 'Game video', clip: 'Clip', reel: 'Video' };
+  const on = playing?.share;
+  return (
+    <>
+      <div className="res-grid">
+        {list.map((f) => {
+          const poster = f.parts.find((p) => p.stream.has_poster)?.stream.id;
+          return (
+            <div key={f.id} className="res-card kind-video film-card">
+              <button type="button" className="res-preview" onClick={() => play(f)} title="Play">
+                {poster ? <img className="res-thumb gv-poster" src={`/api/streams/${poster}/poster`} alt="" loading="lazy" /> : <span className="res-thumb site">Video</span>}
+                <span className="res-play" aria-hidden="true">
+                  ▶
+                </span>
+                <span className="gv-length">{clock(f.parts.reduce((n, p) => n + p.seconds, 0))}</span>
+              </button>
+              <div className="res-info">
+                <strong className="res-title">
+                  {f.title} {!f.watched && <span className="kind new">New</span>}
+                </strong>
+                <span className="muted small">
+                  {WORD[f.kind]} · from {f.by} · {new Date(f.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+                {f.notes && <p className="film-notes">{f.notes}</p>}
+                <div className="res-actions">
+                  <button type="button" className="btn small" onClick={() => play(f)}>
+                    Play
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {playing && on && (
+        <Modal title={on.title} onClose={() => setPlaying(null)} wide>
+          {on.parts.length === 1 ? (
+            <FilmPlayer stream={on.parts[0].stream} start={on.parts[0].start} end={on.parts[0].end} />
+          ) : (
+            <ReelPlayer scenes={on.parts.map((p, k) => ({ ...p, key: `p${k}` }))} at={Math.min(playing.at, on.parts.length - 1)} onAt={(at) => setPlaying({ share: on, at })} pause={{ seconds: on.pause_seconds, notes: on.pause_notes }} />
+          )}
+          {on.notes && <p className="film-notes">{on.notes}</p>}
+          <p className="muted small">Shared with you by {on.by}. It is for you to watch here, and cannot be passed on.</p>
+        </Modal>
+      )}
+    </>
+  );
+}

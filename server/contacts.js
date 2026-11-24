@@ -38,7 +38,7 @@ db.exec('CREATE INDEX IF NOT EXISTS team_contacts_user ON team_contacts(user_id)
 
 export const FAMILY_INVITE_DAYS = 30;
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
-const AS = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
+const AS = { parent: 'a parent', family: 'family', friend: 'a friend of the team', guest: 'a guest' };
 /** The account that goes with an address, when there is a finished one. */
 const accountFor = (email) => (email ? get("SELECT id FROM users WHERE lower(email)=? AND status='active'", String(email).toLowerCase()) : null);
 /** The invitation a link belongs to, in the shape the join page shows, or null when the link is wrong or too old. */
@@ -58,7 +58,8 @@ export function claimFamily(userId, email) {
 }
 
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
-const KINDS = ['parent', 'family', 'friend'];
+// A guest is someone a video was shared with (film.js): on the list so they can have an account, and shown nothing else of the team.
+const KINDS = ['parent', 'family', 'friend', 'guest'];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const parse = (s) => {
   try {

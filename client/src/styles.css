@@ -11098,6 +11098,47 @@ a.tl-card.tl-small {
 .gp-card.wide {
   grid-column: 1 / -1;
 }
+/* The fold over the parts fewer games need: a bar across the grid that opens it further down. */
+.gp-advanced {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.gp-advanced:hover {
+  border-color: var(--line-strong);
+}
+.gp-advanced-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.gp-advanced strong {
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+}
+.gp-advanced .hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.gp-advanced-caret {
+  flex: none;
+  color: var(--ink-2);
+  transition: transform 0.15s ease;
+}
+.gp-advanced.open .gp-advanced-caret {
+  transform: rotate(180deg);
+}
 .gp-card-head {
   display: flex;
   align-items: flex-start;
@@ -20592,6 +20633,161 @@ button.film-clip-play {
 }
 @media (max-width: 900px) {
   .film-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Bringing a video file in: how far it has got, under the saved videos. */
+.gv-bring {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.gv-bring-going {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+}
+.gv-bring-going > span {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+.gv-bring-going progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--ink);
+}
+
+/* The screen held between one part of a video and the next: what is coming, and a count down to it. */
+.gv-screen.film-pause {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 64px;
+  color: #fff;
+  text-align: center;
+}
+.film-pause-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 44rem;
+  min-height: 0;
+  overflow: hidden;
+}
+.film-pause-next {
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.film-pause-text strong {
+  font-size: clamp(1.1rem, 3vw, 1.7rem);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.film-pause-text p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: clamp(0.86rem, 1.8vw, 1.02rem);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.film-pause-left {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.film-pause-skip {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+}
+.film-pause-set {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.film-pause-set .input {
+  width: 76px;
+  flex: none;
+}
+.film-pause-show {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.film-pause-show.off {
+  color: var(--muted);
+}
+
+/* Sharing something from the Filmroom: who has it, and who else can. */
+.film-share-h {
+  margin: 14px 0 6px;
+  font-size: 0.92rem;
+}
+.film-share-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.film-share-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+}
+.film-share-list li + li {
+  border-top: 1px solid var(--line);
+}
+.film-share-list li > span,
+.film-share-list label > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.film-share-pick label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  cursor: pointer;
+}
+.film-share-new {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 12px;
+}
+@media (max-width: 560px) {
+  .film-share-new {
     grid-template-columns: minmax(0, 1fr);
   }
 }

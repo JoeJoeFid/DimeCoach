@@ -155,6 +155,24 @@ export default function GamePlanner({
     set({ batting: next });
   };
   const start = plan.start_time ? fmtClock(parseClock(plan.start_time)) : '';
+  // The parts fewer games need are kept folded away under "Advanced", and stay as the coach last left them.
+  const [advanced, setAdvanced] = useState(() => {
+    try {
+      return localStorage.getItem('gp-advanced') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleAdvanced = () => {
+    setAdvanced(!advanced);
+    try {
+      localStorage.setItem('gp-advanced', advanced ? '0' : '1');
+    } catch {
+      // Not remembered, which is all that is lost.
+    }
+  };
+  // How many of them have something in them, said on the fold so nothing is hidden unnoticed.
+  const filled = [sheet.some((x) => x.play_ids.length > 0), matchups.length > 0, warmup.length > 0, !!(game.scouting || '').trim(), [result.us, result.them, result.went_well, result.work_on].some((x) => String(x ?? '').trim())].filter(Boolean).length;
   const practiceItems = plan.items.filter((i) => i.kind === 'item').length;
 
   return (
@@ -455,6 +473,20 @@ export default function GamePlanner({
           </Card>
         )}
 
+        <button type="button" className={`gp-advanced ${advanced ? 'open' : ''}`} aria-expanded={advanced} onClick={toggleAdvanced}>
+          <span className="gp-advanced-text">
+            <strong>Advanced</strong>
+            <span className="hint">
+              Play sheet, matchups, warm-up, scouting notes and after the game{filled > 0 ? ` · ${filled} filled in` : ''}
+            </span>
+          </span>
+          <span className="gp-advanced-caret" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+
+        {advanced && (
+          <>
         <Card title="Play sheet" hint="Plays from your playbook, by situation. They print with their diagrams.">
           {plays.length === 0 ? (
             <p className="muted small">
@@ -596,6 +628,8 @@ export default function GamePlanner({
             </label>
           </div>
         </Card>
+          </>
+        )}
       </div>
     </div>
   );

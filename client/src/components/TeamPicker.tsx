@@ -8,7 +8,7 @@ import SportIcon from './SportIcon';
 
 /** Set just before the app reloads for someone who has started coaching, so the form for a new team opens. */
 export const NEW_TEAM_KEY = 'practiceplan.newTeam';
-const AS: Record<FamilyKind, string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team' };
+const AS: Record<FamilyKind | 'guest', string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team', guest: 'a guest' };
 /**
  * The teams someone follows as a parent, family or a friend, to choose from. They sit in the same
  * list as the teams a coach runs, since one person can coach one team and have a child on another.

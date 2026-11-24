@@ -73,7 +73,7 @@ const coachedTeams = (userId) =>
     userId, userId,
   );
 /** The teams a person is a parent, family member or friend of. */
-const followedTeams = (userId) => all('SELECT t.* FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id=? GROUP BY t.id', userId);
+const followedTeams = (userId) => all("SELECT t.* FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id=? AND c.kind<>'guest' GROUP BY t.id", userId);
 const coaches = (team, userId) => coachesOfTeam(team).some((p) => p.id === userId);
 
 /** A team's own chat, made the first time it is wanted. */

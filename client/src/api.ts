@@ -768,14 +768,15 @@ export interface TeamContact {
   id: number;
   name: string;
   email: string;
-  kind: 'parent' | 'family' | 'friend';
+  /** A guest is someone a video was shared with: on the list so they can have an account, and shown nothing else of the team. */
+  kind: FamilyKind | 'guest';
   /** The players they belong to. Empty for a friend of the whole team, or someone not linked yet. */
   player_ids: number[];
   invited_at: string | null;
   /** They have an account, and so can open the team's page. */
   joined: boolean;
 }
-export type FamilyKind = TeamContact['kind'];
+export type FamilyKind = 'parent' | 'family' | 'friend';
 export type FamilySection = 'schedule' | 'games' | 'practices' | 'news' | 'board' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
 /** Something written on a team's page: an announcement from a coach, or a message on the board. */
 export interface TeamPost {
@@ -812,7 +813,7 @@ export interface FollowedTeam {
   name: string;
   sport: string;
   season: string;
-  kind: FamilyKind;
+  kind: FamilyKind | 'guest';
   /** The players this person belongs to. */
   players: string[];
 }
@@ -897,12 +898,52 @@ export interface FilmReel {
   updated_at: string;
   by: string;
   items: FilmItem[];
+  /** How long a screen is held between one part and the next, in seconds. None when 0. */
+  pause_seconds: number;
+  /** Whether that screen shows the title and notes of the part coming next. */
+  pause_notes: boolean;
+}
+/** One thing in the Filmroom shown to one person: a whole game video, a clip, or a video put together. */
+export interface FilmShare {
+  id: number;
+  kind: 'video' | 'clip' | 'reel';
+  ref_id: number;
+  contact_id: number;
+  name: string;
+  /** On the team's list only because video was shared with them. */
+  guest: boolean;
+  /** They have an account, and so can watch. */
+  joined: boolean;
+  created_at: string;
+  watched_at: string | null;
 }
 /** Everything in a team's Filmroom. */
 export interface Film {
   videos: GameStream[];
   clips: FilmClip[];
   reels: FilmReel[];
+  shares: FilmShare[];
+}
+/** The people on a team's list a video can be shared with. `hidden` when the person asking is kept from seeing that list. */
+export interface FilmPeople {
+  hidden: boolean;
+  /** Whether this site can send email, and so tell someone with no account. */
+  mail: boolean;
+  people: { id: number; name: string; email: string; kind: TeamContact['kind']; joined: boolean }[];
+}
+/** Something from a team's Filmroom that was shared with the person looking, ready to play. */
+export interface SharedFilm {
+  id: number;
+  kind: FilmShare['kind'];
+  title: string;
+  notes: string;
+  pause_seconds: number;
+  pause_notes: boolean;
+  /** What it plays, in order: a game video, and for a clip where in it to start and stop. */
+  parts: { stream: GameStream; start?: FilmMark; end?: FilmMark; title: string; notes: string; seconds: number; show: boolean }[];
+  by: string;
+  at: string;
+  watched: boolean;
 }
 /** One of a team's parents, family or friends, and what they may do with its live video. */
 export interface StreamPerson {
@@ -964,7 +1005,9 @@ export interface FamilyResource {
 /** A team as one of its followers sees it. A part they may not see comes back empty. */
 export interface FamilyTeam {
   team: { id: number; slug: string; name: string; sport: string; season: string; organization: string; coaches: { name: string; title: string }[] };
-  me: { kind: FamilyKind; players: string[] };
+  me: { kind: FamilyKind | 'guest'; players: string[] };
+  /** How many videos from the Filmroom have been shared with this person. */
+  film: number;
   video: { watch: boolean; broadcast: boolean; live: boolean };
   /** A game being scored right now, when games are open to this person. */
   live_game: LiveGame | null;
@@ -1069,17 +1112,25 @@ export const api = {
   /** Each game's field goal attempts by player. Refused unless the chart is turned on for the team. */
   shotEfficiency: (teamId: number) => req<{ games: ({ plan_id: number } & GameShots)[] }>('GET', `/teams/${teamId}/shot-efficiency`),
   film: (teamId: number) => req<Film>('GET', `/film?team_id=${teamId}`),
+  filmPeople: (teamId: number) => req<FilmPeople>('GET', `/film/people?team_id=${teamId}`),
+  /** Shares one thing with people on the team's list (`contact_ids`) and with new people by email, who join it as guests. */
+  shareFilm: (b: { team_id: number; kind: FilmShare['kind']; ref_id: number; contact_ids: number[]; people: { name: string; email: string }[]; note: string }) => req<Film & { warning: string }>('POST', '/film/shares', b),
+  unshareFilm: (id: number) => req<Film>('DELETE', `/film/shares/${id}`),
+  /** What has been shared with the person signed in, from one team. */
+  sharedFilm: (teamId: number) => req<SharedFilm[]>('GET', `/family/film?team_id=${teamId}`),
+  watchedShare: (id: number) => req<{ ok: true }>('POST', `/family/film/${id}/watched`),
   addClip: (b: { stream_id: number; title: string; notes: string; start: FilmMark; end: FilmMark; seconds: number }) => req<Film>('POST', '/film/clips', b),
   saveClip: (id: number, b: { title: string; notes: string }) => req<Film>('PUT', `/film/clips/${id}`, b),
   deleteClip: (id: number) => req<Film>('DELETE', `/film/clips/${id}`),
-  addReel: (b: { team_id: number; title: string; notes: string; items: FilmItem[] }) => req<Film & { id: number }>('POST', '/film/reels', b),
-  saveReel: (id: number, b: { title: string; notes: string; items: FilmItem[] }) => req<Film & { id: number }>('PUT', `/film/reels/${id}`, b),
+  addReel: (b: { team_id: number; title: string; notes: string; items: FilmItem[]; pause_seconds?: number; pause_notes?: boolean }) => req<Film & { id: number }>('POST', '/film/reels', b),
+  saveReel: (id: number, b: { title: string; notes: string; items: FilmItem[]; pause_seconds?: number; pause_notes?: boolean }) => req<Film & { id: number }>('PUT', `/film/reels/${id}`, b),
   deleteReel: (id: number) => req<Film>('DELETE', `/film/reels/${id}`),
   streams: (teamId: number) => req<StreamList>('GET', `/streams?team_id=${teamId}`),
   stream: (id: number) => req<GameStream>('GET', `/streams/${id}`),
   savedStreams: () => req<GameStream[]>('GET', '/streams/saved'),
   /** `send` is how the server wants this broadcast's pieces sent: to itself, or by links it hands out. */
-  startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string; date: string; layout?: 'joined' | 'separate'; /** The groups to tell it has begun: any of coaches, parents, family, friends. Everyone when left out. */ tell?: string[] }) => req<{ stream: GameStream; can_save: boolean; send: 'server' | 'links' }>('POST', '/streams', b),
+  startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string; date: string; layout?: 'joined' | 'separate'; /** The groups to tell it has begun: any of coaches, parents, family, friends. Everyone when left out. */ tell?: string[]; /** A video file being brought in, not a camera: nobody is told, and it is a saved video once it is all there. */ upload?: boolean }) =>
+    req<{ stream: GameStream; can_save: boolean; send: 'server' | 'links'; /** The biggest one piece may be. */ max_piece_bytes?: number }>('POST', '/streams', b),
   /** Links to send the next few pieces straight to where the video is kept. Never throws for an answer the server gave: the caller decides what each means. */
   sendLinks: async (id: number, init = false): Promise<{ status: number; error?: string; links?: { n: number; url: string }[]; init?: string }> => {
     const res = await fetch(`/api/streams/${id}/links`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init }) });

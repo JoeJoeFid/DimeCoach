@@ -116,7 +116,7 @@ const PERM_LABELS: [TeamPerm, string][] = [
   ['schedule', 'Schedule'],
 ];
 
-const KIND_WORDS: Record<TeamContact['kind'], string> = { parent: 'Parent or guardian', family: 'Family', friend: 'Friend of the team' };
+const KIND_WORDS: Record<TeamContact['kind'], string> = { parent: 'Parent or guardian', family: 'Family', friend: 'Friend of the team', guest: 'Guest (sees only video shared with them)' };
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 /**

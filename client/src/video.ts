@@ -18,6 +18,7 @@
 // and hear how it is getting on. Another way of broadcasting later would be another `Broadcaster`.
 import { api, type GameStream } from './api';
 import { cutter } from './mp4boxes';
+import { Unfit, fileSource, prepareVideo } from './mp4file';
 
 /** How a broadcast is getting on: pieces that have gone out, and pieces still waiting to. */
 export interface Signal {
@@ -181,6 +182,71 @@ function outbox(stream: GameStream, how: SendHow, type: string, onSignal: (s: Si
       st.queue = [];
     },
   };
+}
+
+// ---------- Bringing in a video file ----------
+
+/** How long each piece of a video is, which is the server's to say (SEGMENT_SECONDS) but has to be known before it is asked. */
+const PIECE_SECONDS = 4;
+/** Bringing a video in was stopped by the person doing it. */
+export class Stopped extends Error {}
+/** How bringing a video in is getting on. Nothing has been sent while `of` is 0: the file is still being read. */
+export interface Bringing {
+  sent: number;
+  of: number;
+}
+/**
+ * Brings a video file in as a game video. The file is cut here into the pieces a recorded video
+ * is made of (mp4file.ts), with nothing decoded or made again, and they are sent the way a
+ * broadcast's are. `begin` asks the server for the stream once it is known what kind of video it
+ * is. Unlike a broadcast, no piece is ever dropped: one that will not go is tried until it does,
+ * or until it is plain the connection is gone. Throws `Unfit` for a file that cannot be brought
+ * in, with why, and `Stopped` when `stopped` says to give up.
+ */
+export async function bringInVideo(
+  file: Blob,
+  begin: (mime: string) => Promise<{ stream: GameStream; send: SendHow; max_piece_bytes?: number }>,
+  onChange: (b: Bringing) => void,
+  stopped: () => boolean,
+): Promise<GameStream> {
+  onChange({ sent: 0, of: 0 });
+  const video = await prepareVideo(fileSource(file), PIECE_SECONDS);
+  // A video this browser could not play would be no use to the person bringing it in.
+  const w = window as unknown as { ManagedMediaSource?: typeof MediaSource; MediaSource?: typeof MediaSource };
+  const Source = w.ManagedMediaSource ?? w.MediaSource;
+  if (Source && !Source.isTypeSupported(sourceType(video.mime)))
+    throw new Unfit(`This browser cannot play this kind of video${/hvc1|hev1/.test(video.mime) ? ' (HEVC, which newer phones record in to save room)' : ''}. Export or convert it to an ordinary MP4 (H.264) and try that. On an iPhone, Settings, Camera, Formats, "Most Compatible" records that way from then on.`);
+  if (stopped()) throw new Stopped();
+  const { stream, send: how, max_piece_bytes: most = 12 * 1024 * 1024 } = await begin(video.mime);
+  const send = how === 'links' ? byLinks(stream.id, 'video/mp4') : toServer(stream.id);
+  /** Tries until it works. `went` is asked, after a failure, whether it had in fact gone through and only the answer was lost. */
+  const surely = async (what: () => Promise<unknown>, went?: () => Promise<boolean>) => {
+    for (let tries = 0; ; tries++) {
+      if (stopped()) throw new Stopped();
+      try {
+        await what();
+        return;
+      } catch (e) {
+        if (e instanceof Refused) throw e;
+        if (went && (await went().catch(() => false))) return;
+        if (tries >= 40) throw new Error('The connection was lost for too long, so the video was not brought in. Check it and try again.');
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+  };
+  await surely(() => send.init(new Blob([video.init as BlobPart], { type: 'video/mp4' })));
+  for (let n = 0; n < video.pieces; n++) {
+    if (stopped()) throw new Stopped();
+    const bytes = await video.piece(n);
+    if (bytes.length > most) throw new Unfit('This video is too sharp to bring in: a few seconds of it is more than the site takes at once. Export it at 1080p or lower and try that.');
+    const blob = new Blob([bytes as BlobPart], { type: 'video/mp4' });
+    await surely(
+      () => send.piece(n, blob),
+      async () => (await api.stream(stream.id)).segments > n,
+    );
+    onChange({ sent: n + 1, of: video.pieces });
+  }
+  return stream;
 }
 
 // ---------- Broadcasting ----------
