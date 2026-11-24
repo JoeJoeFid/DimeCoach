@@ -6,6 +6,7 @@
 // at a time. A personal one ("My stats") is one person following one player: it is theirs alone,
 // never part of the team's numbers, unless they choose to show it to the team's coaches.
 import { all, db, get, run } from './db.js';
+import { byPart, finalScore, isSportPlay } from './sportPoints.js';
 import { cleanScoring, shotChartAllowed, shotCounts } from './shotStats.js';
 import { poke } from './live.js';
 import { coachesOfTeam, followersOfTeam } from './inbox.js';
@@ -41,7 +42,7 @@ const parse = (json, fallback) => {
   }
 };
 // 'p1' is a point with nothing known about how it was scored: the other team's score when stats are brought in from a file.
-const POINTS = { m1: 1, m2: 2, m3: 3, p1: 1 };
+// Those are basketball's plays. The plays of the other sports, and what each is worth, are in sportPoints.js.
 const TYPES = new Set(['p1', 'm1', 'm2', 'm3', 'x1', 'x2', 'x3', 'reb', 'ast', 'stl', 'blk', 'to', 'pf']);
 const MAX_EVENTS = 3000;
 // Whether a team may bring a game's stats in from a file: the system administrator's call, team by team.
@@ -57,10 +58,12 @@ const mayImport = (user, teamId) => isSystemAdmin(user) || !!get('SELECT stat_im
 function cleanEvents(list) {
   const out = [];
   for (const e of Array.isArray(list) ? list.slice(0, MAX_EVENTS) : []) {
-    if (!e || !TYPES.has(e.type)) continue;
+    if (!e || !(TYPES.has(e.type) || isSportPlay(e.type))) continue;
     out.push({
       id: str(e.id, 40), side: e.side === 'them' ? 'them' : 'us', player: Number.isInteger(e.player) ? e.player : null, type: e.type,
       period: Math.min(20, Math.max(1, Number(e.period) || 1)), clock: Number.isFinite(e.clock) ? Math.max(0, Math.round(e.clock)) : null, at: Number(e.at) || 0,
+      // An amount that goes with the play: yards, in football.
+      ...(Number.isFinite(e.v) ? { v: Math.max(-999, Math.min(999, Math.round(e.v))) } : {}),
       // The shot an assist or a rebound came from, by its id: null when it came from none, left out on plays from before this was kept.
       ...(typeof e.for === 'string' ? { for: str(e.for, 40) } : e.for === null ? { for: null } : {}),
       // A turnover: whether it was forced, and by which player of the other side.
@@ -103,7 +106,6 @@ function cleanState(s) {
     imported: st.imported ? str(st.imported, 120) : '',
   };
 }
-const pointsOf = (events, side) => events.reduce((n, e) => n + (e.side === side ? POINTS[e.type] || 0 : 0), 0);
 const sheetOut = (s) => ({
   id: s.id, scope: s.scope, plan_id: s.plan_id, team_id: s.team_id, player_id: s.player_id, player_name: s.player_name, title: s.title, date: s.date,
   state: cleanState(parse(s.state_json, {})), events: parse(s.events_json, []), us: s.us, them: s.them, status: s.status, rev: s.rev,
@@ -116,33 +118,28 @@ export function scoreOfPlan(planId) {
   if (!s) return null;
   const events = parse(s.events_json, []);
   if (events.length === 0 && s.status !== 'final') return null;
-  const periods = [];
-  for (const e of events) {
-    const p = POINTS[e.type];
-    if (!p) continue;
-    periods[e.period - 1] ||= { us: 0, them: 0 };
-    periods[e.period - 1][e.side] += p;
-  }
-  return { us: s.us, them: s.them, status: s.status, period: cleanState(parse(s.state_json, {})).period, halves: cleanState(parse(s.state_json, {})).halves, periods: [...periods].map((p) => p || { us: 0, them: 0 }) };
+  // Which sport the plays are of, by the letters its plays begin with: empty for basketball's. It says what a part of the game is called.
+  const sport = String(events.find((e) => isSportPlay(e.type))?.type || '').split(':')[0];
+  return { us: s.us, them: s.them, status: s.status, period: cleanState(parse(s.state_json, {})).period, halves: cleanState(parse(s.state_json, {})).halves, periods: byPart(events), sport };
 }
 
 /** The teams a person coaches, and the ones they follow with the players that are theirs. */
 function teamsFor(user) {
   const coached = all(
-    `SELECT DISTINCT t.id, t.name FROM teams t
+    `SELECT DISTINCT t.id, t.name, COALESCE((SELECT name FROM sports WHERE id=t.sport_id), '') AS sport FROM teams t
       WHERE t.id IN (SELECT team_id FROM team_staff WHERE user_id=?) OR t.owner_id IN (SELECT owner_id FROM memberships WHERE user_id=? AND role='owner')
       ORDER BY t.name COLLATE NOCASE`,
     user.id, user.id,
   ).map((t) => ({ ...t, coach: true, players: all('SELECT id, name, number FROM players WHERE team_id=? AND active=1 ORDER BY name COLLATE NOCASE', t.id) }));
   const seen = new Set(coached.map((t) => t.id));
   const followed = [];
-  for (const c of all('SELECT c.player_ids_json, t.id, t.name FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id=? ORDER BY t.name COLLATE NOCASE', user.id)) {
+  for (const c of all("SELECT c.player_ids_json, t.id, t.name, COALESCE((SELECT name FROM sports WHERE id=t.sport_id), '') AS sport FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id=? ORDER BY t.name COLLATE NOCASE", user.id)) {
     if (seen.has(c.id)) continue;
     const ids = parse(c.player_ids_json, []).map(Number);
     const mine = ids.length ? all(`SELECT id, name, number FROM players WHERE team_id=? AND active=1 AND id IN (${ids.map(() => '?').join(',')}) ORDER BY name COLLATE NOCASE`, c.id, ...ids) : [];
     const had = followed.find((t) => t.id === c.id);
     if (had) had.players.push(...mine.filter((p) => !had.players.some((x) => x.id === p.id)));
-    else followed.push({ id: c.id, name: c.name, coach: false, players: mine });
+    else followed.push({ id: c.id, name: c.name, sport: c.sport, coach: false, players: mine });
   }
   return [...coached, ...followed];
 }
@@ -239,8 +236,8 @@ export function mountGames(app) {
     add('them', null, 'p1', Math.min(300, Math.max(0, Math.round(Number(req.body.them) || 0))));
     const old = get("SELECT * FROM scoresheets WHERE plan_id=? AND scope='team'", plan.id);
     const state = cleanState({ ...(old ? parse(old.state_json, {}) : {}), mode: 'full', period: 1, status: 'final', imported: str(req.body.file, 100) || 'a file' });
-    const us = pointsOf(events, 'us');
-    const them = pointsOf(events, 'them');
+    // The points added up, or the sets won in a game that is won by sets.
+    const { us, them } = finalScore(events, state);
     if (old) run("UPDATE scoresheets SET state_json=?, events_json=?, us=?, them=?, status='final', rev=rev+1, scorer_id=?, updated_at=datetime('now') WHERE id=?", JSON.stringify(state), JSON.stringify(events), us, them, req.user.id, old.id);
     else run("INSERT INTO scoresheets (scope, plan_id, team_id, user_id, state_json, events_json, us, them, status, rev, scorer_id) VALUES ('team',?,?,?,?,?,?,?,'final',1,?)", plan.id, plan.team_id, req.user.id, JSON.stringify(state), JSON.stringify(events), us, them, req.user.id);
     const game = parse(plan.game_json, {});
@@ -259,8 +256,8 @@ export function mountGames(app) {
     // Taking over starts from what is saved, never from what the new device happens to hold.
     const events = req.body.take && old ? parse(old.events_json, []) : cleanEvents(req.body.events);
     const state = req.body.take && old ? cleanState(parse(old.state_json, {})) : cleanState(req.body.state);
-    const us = pointsOf(events, 'us');
-    const them = pointsOf(events, 'them');
+    // The points added up, or the sets won in a game that is won by sets.
+    const { us, them } = finalScore(events, state);
     if (old)
       run("UPDATE scoresheets SET state_json=?, events_json=?, us=?, them=?, status=?, rev=rev+1, scorer_id=?, updated_at=datetime('now') WHERE id=?", JSON.stringify(state), JSON.stringify(events), us, them, state.status, req.user.id, old.id);
     else
@@ -369,7 +366,7 @@ export function mountGames(app) {
     const state = 'state' in req.body ? { ...cleanState(req.body.state), mode: 'full' } : cleanState(parse(s.state_json, {}));
     run(
       "UPDATE scoresheets SET state_json=?, events_json=?, us=?, status=?, title=?, date=?, rev=rev+1, updated_at=datetime('now') WHERE id=?",
-      JSON.stringify(state), JSON.stringify(events), pointsOf(events, 'us'), state.status, 'title' in req.body ? str(req.body.title, 120).trim() : s.title, /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.date)) ? req.body.date : s.date, s.id,
+      JSON.stringify(state), JSON.stringify(events), finalScore(events, state).us, state.status, 'title' in req.body ? str(req.body.title, 120).trim() : s.title, /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.date)) ? req.body.date : s.date, s.id,
     );
     res.json({ sheet: sheetOut(get('SELECT * FROM scoresheets WHERE id=?', s.id)) });
   });

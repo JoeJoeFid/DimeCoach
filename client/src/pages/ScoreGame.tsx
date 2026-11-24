@@ -6,10 +6,14 @@ import { api } from '../api';
 import { useApp } from '../App';
 import type { Plan, Player } from '../types';
 import ScorePad, { CourtPicker, StatTable } from '../components/ScorePad';
+import SportPad from '../components/SportPad';
+import { SportBox } from '../components/SportStats';
+import { partName, scoringFor } from '../sportOf';
+import { sportScore, type SportEvent } from '../sportScoring';
 import AssistDuos from '../components/AssistDuos';
 import { Modal } from '../components/bits';
 import type { StatsFile } from '../api';
-import { DEFAULT_SCORING, linesOf, newState, periodName, scoreOf, type GameEvent, type ScoreState, type ScoringConfig, type Scoresheet } from '../scoring';
+import { DEFAULT_SCORING, linesOf, newState, scoreOf, type GameEvent, type ScoreState, type ScoringConfig, type Scoresheet } from '../scoring';
 import { confirmDialog } from '../components/dialogs';
 import { sportKind } from '../sports';
 
@@ -406,7 +410,8 @@ export function ScoreGameView({ planId }: { planId: number }) {
     (state, events, rev, take) => api.saveScore(planId, { state, events, rev, take }),
     // The starters come from the game plan, when it has a lineup.
     // A basketball game starts out in halves; it is changed for the game under the period button.
-    () => ({ ...newState('full', sportKind(app.sport?.name) === 'basketball'), on: (planRef.current?.game?.lineup?.[0] ?? []).slice(0, 5) }),
+    // Another sport has no five on the court to keep.
+    () => (scoringFor(app.sport?.name) ? newState('full') : { ...newState('full', sportKind(app.sport?.name) === 'basketball'), on: (planRef.current?.game?.lineup?.[0] ?? []).slice(0, 5) }),
   );
   // Someone only watching sees the score move as it is kept.
   const { refresh } = sheet;
@@ -426,7 +431,10 @@ export function ScoreGameView({ planId }: { planId: number }) {
   const { state, events } = sheet.doc;
   // Another person has the sheet: they are the scorer until this device takes over.
   const theirs = sheet.sync === 'taken' || (!!sheet.server && sheet.server.status === 'live' && !!sheet.server.scorer_id && sheet.server.scorer_id !== app.user.id && sheet.server.events.length > 0 && !sheet.adopted);
-  const score = scoreOf(events);
+  // Baseball, football and volleyball have a pad and numbers of their own. Basketball, and a sport with none, keep the basketball pad.
+  const def = scoringFor(app.sport?.name);
+  const score = def ? sportScore(def, events as unknown as SportEvent[], state) : scoreOf(events);
+  const box = def ? <SportBox def={def} events={events} players={players} usName={usName} themName={themName} state={state} /> : <BoxScore events={events} players={players} usName={usName} themName={themName} state={state} />;
 
   /** Throws away everything recorded for this game and starts its scoring again from nothing. */
   const redo = async () => {
@@ -449,7 +457,9 @@ export function ScoreGameView({ planId }: { planId: number }) {
           ['box', 'Stats'],
           ['roster', 'Roster'],
         ] as const
-      ).map(([id, label]) => (
+      )
+        .filter(([id]) => id !== 'roster' || !def)
+        .map(([id, label]) => (
         <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
           {label}
         </button>
@@ -459,7 +469,7 @@ export function ScoreGameView({ planId }: { planId: number }) {
   return (
     <div className="score-page">
       <div className="score-head">
-        {canImport && !theirs && (
+        {canImport && !theirs && !def && (
           <button type="button" className="btn small" onClick={() => setImporting(true)}>
             Import stats
           </button>
@@ -489,15 +499,32 @@ export function ScoreGameView({ planId }: { planId: number }) {
         <>
           <div className="card sp-theirs">
             <h2>
-              {usName} {score.us} · {themName} {score.them} <span className="muted small">{state.status === 'final' ? 'Final' : periodName(state.period, !!state.halves)}</span>
+              {usName} {score.us} · {themName} {score.them} <span className="muted small">{state.status === 'final' ? 'Final' : partName(def, state.period, !!state.halves)}</span>
             </h2>
             <p className="muted">{sheet.server?.scorer || 'Someone else'} is keeping score for this game. One person keeps score at a time; this page follows along.</p>
             <button type="button" className="btn primary" onClick={sheet.takeOver}>
               Take over keeping score
             </button>
           </div>
-          <BoxScore events={events} players={players} usName={usName} themName={themName} state={state} />
+          {box}
         </>
+      ) : def ? (
+        <SportPad
+          def={def}
+          state={state}
+          events={events}
+          onChange={sheet.change}
+          usName={usName}
+          themName={themName}
+          players={players}
+          usHome={plan.game?.side !== 'away'}
+          onExit={() => navigate(`/plans/${planId}`)}
+          video={live ? 'live' : 'none'}
+          onVideo={() => navigate(`/plans/${planId}?view=video`)}
+          tabs={seg}
+        >
+          {tab === 'box' ? box : undefined}
+        </SportPad>
       ) : (
         <ScorePad
           state={state}
@@ -514,7 +541,7 @@ export function ScoreGameView({ planId }: { planId: number }) {
           config={config}
         >
           {tab === 'box' ? (
-            <BoxScore events={events} players={players} usName={usName} themName={themName} state={state} />
+            box
           ) : tab === 'roster' ? (
             <div className="card">
               <h2>On the court</h2>

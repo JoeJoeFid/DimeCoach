@@ -42,7 +42,7 @@ type Sheet =
   | { kind: 'options' };
 
 /** A panel that comes up from the bottom of the screen over the scoring pad. */
-function BottomSheet({ title, sub, onClose, onBack, children }: { title: ReactNode; sub?: ReactNode; onClose: () => void; onBack?: () => void; children: ReactNode }) {
+export function BottomSheet({ title, sub, onClose, onBack, children }: { title: ReactNode; sub?: ReactNode; onClose: () => void; onBack?: () => void; children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -73,7 +73,7 @@ function BottomSheet({ title, sub, onClose, onBack, children }: { title: ReactNo
 }
 
 /** The players to pick from, by number. The ones on the court are underlined. */
-function PlayerGrid({ players, on, picked, onPick }: { players: PadPlayer[]; on: number[]; /** Shown as chosen, for picking who is on the court. */ picked?: number[]; onPick: (p: PadPlayer) => void }) {
+export function PlayerGrid({ players, on, picked, onPick }: { players: PadPlayer[]; on: number[]; /** Shown as chosen, for picking who is on the court. */ picked?: number[]; onPick: (p: PadPlayer) => void }) {
   return (
     <>
       <div className="sp-grid">

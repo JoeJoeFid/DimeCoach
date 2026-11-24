@@ -277,6 +277,27 @@ function createUser({ email, name, password, isAdmin = false, canImport = false,
   return userId;
 }
 
+const FOLLOWS_AS = { parent: 'Parent', family: 'Family', friend: 'Friend', guest: 'Guest' };
+/**
+ * Every part a person has, each with where: the teams they coach and as what, what they run, and
+ * the teams they follow and as what. One person can be several: a coach of one team and a parent
+ * on another. Each is listed once, in that order.
+ */
+export function rolesOf(u) {
+  const out = [];
+  const add = (kind, role, where) => {
+    if (!out.some((r) => r.kind === kind && r.role === role && r.where === where)) out.push({ kind, role, where });
+  };
+  if (isSystemAdmin(u)) add('system', 'System administrator', '');
+  // The teams in a workspace of their own, and the teams other people shared with them.
+  for (const t of all("SELECT t.name FROM teams t JOIN memberships m ON m.owner_id=t.owner_id WHERE m.user_id=? AND m.role='owner' ORDER BY t.name COLLATE NOCASE", u.id)) add('coach', 'Coach', t.name);
+  for (const t of all('SELECT t.name, s.title FROM team_staff s JOIN teams t ON t.id=s.team_id WHERE s.user_id=? ORDER BY t.name COLLATE NOCASE', u.id)) add('coach', String(t.title || '').trim() || 'Coach', t.name);
+  for (const c of all("SELECT c.name, c.plan FROM community_members m JOIN communities c ON c.id=m.community_id WHERE m.user_id=? AND m.status='active' AND m.role IN ('creator','admin') ORDER BY c.name COLLATE NOCASE", u.id))
+    add('admin', c.plan === 'organization' ? 'Organization admin' : 'Community admin', c.name);
+  for (const f of all('SELECT t.name, c.kind FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id=? ORDER BY t.name COLLATE NOCASE', u.id)) add('follow', FOLLOWS_AS[f.kind] || 'Friend', f.name);
+  return out;
+}
+
 // A request relayed by a proxy also arrives from a local address, so a forwarded header rules it out.
 const isLoopback = (req) =>
   !req.headers['x-forwarded-for'] && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
@@ -626,6 +647,8 @@ export function mountAuth(app) {
     next();
   });
 
+  // Everything the person signed in is, for their own account page.
+  app.get('/api/auth/roles', (req, res) => res.json(rolesOf(req.user)));
   app.post('/api/auth/password', (req, res) => {
     if (!verifyPassword(str(req.body.current), req.user.password_hash)) return res.status(400).json({ error: 'Your current password is not right.' });
     const problem = passwordProblem(req.body.next);
@@ -802,6 +825,8 @@ export function mountAuth(app) {
       /** The last thing they did. Before this was kept, the last time their page was open stands in. */
       last_active_at: u.last_action_at || seen.last || u.last_login_at || null,
       presence: presenceOf(u.id),
+      // Everything this person is, each with where: a coach of one team can be a parent on another.
+      roles: rolesOf(u),
       // The teams this person is on as a parent, family or a friend.
       follows: all('SELECT t.name AS team, c.kind FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id=? ORDER BY t.name COLLATE NOCASE', u.id),
       used_bytes: used.bytes, files: used.files,

@@ -49,7 +49,7 @@ function lastActive(u: SystemUser) {
   return ago === 'Now' ? 'A few minutes ago' : ago;
 }
 /** One status for each person: what state the account is in, and for a working account whether they are here now. */
-const FAMILY_WORD = { parent: 'Parent', family: 'Family', friend: 'Friend' } as const;
+const FAMILY_WORD: Record<string, string> = { parent: 'Parent', family: 'Family', friend: 'Friend', guest: 'Guest' };
 /** On a team as a parent, family or a friend, whether or not they coach as well. */
 const isFamily = (u: SystemUser) => u.follower || u.follows.length > 0;
 
@@ -469,14 +469,18 @@ export default function SystemAdmin() {
                             {u.paid && <span className="kind paid">Paid</span>}
                             {u.can_import && <span className="kind">Plan import</span>}
                             {u.id === me.id && <span className="kind">You</span>}
-                            {u.follows.map((f, i) => (
-                              <span key={i} className="kind">
-                                {FAMILY_WORD[f.kind]} · {f.team}
-                              </span>
-                            ))}
+                            {/* Everything they are, each with where: a coach of one team can be a parent on another. */}
+                            {u.roles
+                              .filter((r) => r.kind !== 'system')
+                              .map((r, i) => (
+                                <span key={i} className={`kind ${r.kind === 'follow' ? '' : 'practice'}`}>
+                                  {r.role} · {r.where}
+                                </span>
+                              ))}
+                            {!u.follower && !u.roles.some((r) => r.kind === 'coach') && <span className="kind">Coach · no team yet</span>}
                             {extraRoles(u).map((r) => (
                               <span key={`r${r.id}`} className="kind" title="On this team’s list, and not taken up yet">
-                                {FAMILY_WORD[r.kind]} · {r.team}
+                                {FAMILY_WORD[r.kind] ?? 'Friend'} · {r.team}
                               </span>
                             ))}
                           </span>
@@ -542,7 +546,7 @@ export default function SystemAdmin() {
                               .filter((r, i, list) => list.findIndex((o) => o.kind === r.kind && o.team === r.team) === i)
                               .map((r) => (
                                 <span key={r.id} className="kind">
-                                  {FAMILY_WORD[r.kind]} · {r.team}
+                                  {FAMILY_WORD[r.kind] ?? 'Friend'} · {r.team}
                                 </span>
                               ))}
                           </span>

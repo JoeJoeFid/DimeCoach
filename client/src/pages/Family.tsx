@@ -20,7 +20,7 @@ import GameVideo from '../components/GameVideo';
 import LivePlays from '../components/LivePlays';
 import { SharedFilms } from '../components/Film';
 import { useAppBadge } from '../push';
-import { periodName } from '../scoring';
+import { partName, scoringFor, scoringOfCode } from '../sportOf';
 import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -506,7 +506,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
                           <strong>
                             {team.name} {data.live_game.us} · {data.live_game.opponent} {data.live_game.them}
                           </strong>
-                          <span className="muted small">Play by play · {periodName(data.live_game.period, data.live_game.halves)}</span>
+                          <span className="muted small">Play by play · {partName(scoringFor(team.sport), data.live_game.period, data.live_game.halves)}</span>
                         </span>
                         <span className="fam-now-go">Follow</span>
                       </button>
@@ -917,7 +917,7 @@ function DayPeek({ day, at }: { day: FamilyDay; at: { left: number; right: numbe
 
 /** A practice or game opened: everything the coach lets this person see about it. */
 /** "Final 42–38", or "Live · Q2 · 20–18" while a game is being scored. '' for anything without a score. */
-const scoreText = (d: FamilyDay) => (d.score ? `${d.score.status === 'final' ? 'Final' : `Live · ${periodName(d.score.period, d.score.halves)}`} · ${d.score.us}–${d.score.them}` : '');
+const scoreText = (d: FamilyDay) => (d.score ? `${d.score.status === 'final' ? 'Final' : `Live · ${partName(scoringOfCode(d.score.sport), d.score.period, d.score.halves)}`} · ${d.score.us}–${d.score.them}` : '');
 function DayDetails({ day, onClose }: { day: FamilyDay; onClose: () => void }) {
   return (
     <Modal title={day.title} onClose={onClose}>

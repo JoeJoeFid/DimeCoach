@@ -104,17 +104,19 @@ self.addEventListener('push', (event) => {
         tag: note.tag || undefined,
         data: { link: note.link || '/' },
       }),
-      countUnread(),
+      countUnread(note.unread),
     ]),
   );
 });
 /**
  * Puts how much is waiting unread on the app's own icon, where it has one: messages and chats
- * together, asked of the server as the person signed in on this device. An open page keeps the
- * number right by itself (client/src/push.ts); this is for when none is.
+ * together. The notification says how many, counted by the server as it was sent. One that does
+ * not is from a server not yet saying so, and the server is asked. An open page keeps the number
+ * right by itself (client/src/push.ts); this is for when none is.
  */
-function countUnread() {
+function countUnread(told) {
   if (!self.navigator.setAppBadge) return Promise.resolve();
+  if (typeof told === 'number') return (told > 0 ? self.navigator.setAppBadge(told) : self.navigator.clearAppBadge()).catch(() => {});
   const unread = (path) =>
     fetch(path, { credentials: 'same-origin', cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : {}))

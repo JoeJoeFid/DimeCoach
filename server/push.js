@@ -61,6 +61,22 @@ function allowed(endpoint) {
  * Notifies every device a person has turned notifications on for. `link` is where pressing it
  * goes, inside the site. Nothing waits on it, and a device that has gone away is forgotten.
  */
+// How much a person has waiting unread: each part of the site that keeps such a count adds its own
+// here (messages, chats), and a notification carries the total, to go on the app's icon.
+const counters = [];
+export const countsUnread = (fn) => void counters.push(fn);
+function unreadFor(userId) {
+  let n = 0;
+  for (const count of counters) {
+    try {
+      n += Number(count(userId)) || 0;
+    } catch {
+      // One count that cannot be had leaves the others standing.
+    }
+  }
+  return n;
+}
+
 export function pushTo(userId, { title, body = '', link = '/', tag = '' }) {
   const subs = all('SELECT * FROM push_subs WHERE user_id=?', userId);
   if (subs.length === 0 || !title) return;
@@ -71,7 +87,8 @@ export function pushTo(userId, { title, body = '', link = '/', tag = '' }) {
     return console.error('Push keys could not be made:', e.message);
   }
   const text = String(body).replace(/\s+/g, ' ').trim();
-  const payload = JSON.stringify({ title: str(title, 120), body: text.length > 220 ? `${text.slice(0, 220)}…` : text, link: /^\//.test(link) ? link : '/', tag: str(tag, 60) });
+  // The count is taken now, after whatever this is about was set down, so it is counted in.
+  const payload = JSON.stringify({ title: str(title, 120), body: text.length > 220 ? `${text.slice(0, 220)}…` : text, link: /^\//.test(link) ? link : '/', tag: str(tag, 60), unread: unreadFor(userId) });
   for (const s of subs) {
     webpush
       .sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 60 * 60 * 24, urgency: 'normal', vapidDetails: { subject: contact(), publicKey: k.pub, privateKey: k.priv } })

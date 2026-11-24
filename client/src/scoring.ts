@@ -19,6 +19,8 @@ export interface GameEvent {
    * recorded before this was kept: those are matched to the shot recorded just before them.
    */
   for?: string | null;
+  /** An amount that goes with a play in another sport (sportScoring.ts): yards, in football. */
+  v?: number;
   /** A turnover: whether it was forced. Left out when nobody was asked. */
   forced?: boolean;
   /** Who forced the turnover: a player of the other side from the one that lost the ball. */

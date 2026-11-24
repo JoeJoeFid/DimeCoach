@@ -17,9 +17,15 @@ import { MoreMenu } from '../components/bits';
 import { emptyLine, linesOf, sumLines, type Scoresheet, type ScoringConfig, type StatLine } from '../scoring';
 import { fmtDateShort, todayISO } from '../util';
 import { SyncNote, useSheet } from './ScoreGame';
+import SportPad from '../components/SportPad';
+import { SportSeason, SportStatTable } from '../components/SportStats';
+import { scoringFor } from '../sportOf';
+import { lineText, sumTallies, tallyOf, type SportDef, type SportEvent, type Tally } from '../sportScoring';
+
+const playsOf = (s: Scoresheet) => s.events as unknown as SportEvent[];
 
 /** One sheet being kept: the buttons, the line so far, and sharing it with the coaches. */
-function Tracker({ sheet, onBack, onList }: { sheet: Scoresheet; onBack: () => void; onList: (list: { teams: TrackTeam[]; sheets: Scoresheet[] }) => void }) {
+function Tracker({ sheet, def, onBack, onList }: { sheet: Scoresheet; /** The sport's own pad, for a player of a team that is not a basketball team. */ def: SportDef | null; onBack: () => void; onList: (list: { teams: TrackTeam[]; sheets: Scoresheet[] }) => void }) {
   const [shared, setShared] = useState(sheet.shared);
   const [error, setError] = useState('');
   const kept = useSheet(
@@ -51,7 +57,11 @@ function Tracker({ sheet, onBack, onList }: { sheet: Scoresheet; onBack: () => v
         <h2>{sheet.player_name}</h2>
         <span className="muted">{[sheet.title, fmtDateShort(sheet.date), sheet.team].filter(Boolean).join(' · ')}</span>
       </div>
-      <ScorePad state={kept.doc.state} events={kept.doc.events} onChange={kept.change} usName={sheet.player_name} themName="" players={[]} solo={sheet.player_name} />
+      {def ? (
+        <SportPad def={def} state={kept.doc.state} events={kept.doc.events} onChange={kept.change} usName={sheet.player_name} themName="" players={[]} solo={sheet.player_name} />
+      ) : (
+        <ScorePad state={kept.doc.state} events={kept.doc.events} onChange={kept.change} usName={sheet.player_name} themName="" players={[]} solo={sheet.player_name} />
+      )}
       {sheet.team_id && (
         <div className="card track-share">
           <label className="check setting">
@@ -85,8 +95,10 @@ export function MyStats() {
     load();
   }, []);
   if (!data) return error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>;
+  // A sheet is kept in the sport of the team its player is on. One for nobody's team is basketball's.
+  const defOf = (s: Scoresheet) => scoringFor(data.teams.find((t) => t.id === s.team_id)?.sport);
   const current = data.sheets.find((s) => s.id === open);
-  if (current) return <Tracker key={current.id} sheet={current} onBack={() => (setOpen(null), load())} onList={setData} />;
+  if (current) return <Tracker key={current.id} sheet={current} def={defOf(current)} onBack={() => (setOpen(null), load())} onList={setData} />;
 
   const team = data.teams.find((t) => t.id === teamId);
   const start = async (e: FormEvent) => {
@@ -109,8 +121,18 @@ export function MyStats() {
   };
   // Everything kept for the same player, added up.
   const byPlayer = new Map<string, { name: string; lines: StatLine[] }>();
+  // The same for each other sport, kept apart: its numbers are not basketball's.
+  const bySport = new Map<SportDef, Map<string, { name: string; tallies: Tally[] }>>();
   for (const s of data.sheets) {
     const key = s.player_id ? `p${s.player_id}` : `n${s.player_name.toLowerCase()}`;
+    const def = defOf(s);
+    if (def) {
+      if (!bySport.has(def)) bySport.set(def, new Map());
+      const of = bySport.get(def)!;
+      if (!of.has(key)) of.set(key, { name: s.player_name, tallies: [] });
+      of.get(key)!.tallies.push(tallyOf(playsOf(s), 'us').total);
+      continue;
+    }
     if (!byPlayer.has(key)) byPlayer.set(key, { name: s.player_name, lines: [] });
     byPlayer.get(key)!.lines.push(linesOf(s.events, 'us').total);
   }
@@ -175,14 +197,22 @@ export function MyStats() {
       {data.sheets.length === 0 ? (
         <div className="empty">
           <h2>No sheets yet</h2>
-          <p>Press "Track a player" at a game to keep one player's points, rebounds, assists and the rest.</p>
+          <p>Press "Track a player" at a game to keep one player's numbers, play by play, in their team's sport.</p>
         </div>
       ) : (
         <>
-          <div className="card">
-            <h2>Totals</h2>
-            <StatTable oneReb rows={[...byPlayer.entries()].map(([key, p]) => ({ key, name: p.name, line: sumLines(p.lines), extra: p.lines.length }))} extra="Games" />
-          </div>
+          {byPlayer.size > 0 && (
+            <div className="card">
+              <h2>Totals</h2>
+              <StatTable oneReb rows={[...byPlayer.entries()].map(([key, p]) => ({ key, name: p.name, line: sumLines(p.lines), extra: p.lines.length }))} extra="Games" />
+            </div>
+          )}
+          {[...bySport.entries()].map(([def, of]) => (
+            <div className="card" key={def.kind}>
+              <h2>Totals{byPlayer.size > 0 || bySport.size > 1 ? ` · ${def.kind}` : ''}</h2>
+              <SportStatTable def={def} rows={[...of.entries()].map(([key, p]) => ({ key, name: p.name, tally: sumTallies(p.tallies), extra: p.tallies.length }))} extra="Games" />
+            </div>
+          ))}
           <div className="card">
             <h2>Sheets</h2>
             <ul className="track-list">
@@ -194,7 +224,7 @@ export function MyStats() {
                       {[s.title, fmtDateShort(s.date), s.team].filter(Boolean).join(' · ')}
                       {s.shared && ' · shared with the coaches'}
                     </span>
-                    <LineText line={linesOf(s.events, 'us').total} />
+                    {defOf(s) ? <span className="sp-line">{lineText(defOf(s)!, tallyOf(playsOf(s), 'us').total)}</span> : <LineText line={linesOf(s.events, 'us').total} />}
                   </button>
                   <button type="button" className="link small" onClick={() => remove(s)}>
                     Delete
@@ -309,6 +339,8 @@ export default function Stats() {
   const [out, setOut] = useState<Set<number>>(new Set());
   const [show, setShow] = useState<'table' | 'charts' | 'duos' | 'shooting' | 'wins'>('table');
   const [average, setAverage] = useState(false);
+  // Baseball, football and volleyball have numbers of their own. Basketball, and a sport with none, keep basketball's.
+  const def = scoringFor(app.sport?.name);
   // A sheet that was opened and never used counts as a game not scored.
   const unused = (g: Scoresheet) => g.status !== 'final' && g.events.length === 0 && g.us === 0 && g.them === 0;
   const scored = (data?.games ?? []).filter((g) => !unused(g));
@@ -404,6 +436,13 @@ export default function Stats() {
         <MyStats />
       ) : !data ? (
         <p className="muted">Loading…</p>
+      ) : view === 'setup' && def ? (
+        <div className="card st-setup">
+          <h2>Stats to track</h2>
+          <p className="muted">
+            The scoring pad for {def.kind === 'baseball' ? 'baseball and softball' : def.kind} has a button for every stat it keeps, and nothing has to be turned on. Tap only the ones you want: a stat nobody taps is left out of the tables.
+          </p>
+        </div>
       ) : view === 'setup' ? (
         <ScoringSetup teamId={team?.id ?? 0} config={data.scoring} canEdit={app.can('manage')} onSaved={(scoring) => setData((d) => (d ? { ...d, scoring } : d))} />
       ) : view === 'season' ? (
@@ -414,6 +453,12 @@ export default function Stats() {
               <p>Open a game on the Schedule and go to its Score tab. Its stats add up here.</p>
             </div>
             <NotScored games={missing} />
+          </>
+        ) : def ? (
+          <>
+            {picker}
+            <NotScored games={missing} />
+            <SportSeason def={def} games={picked} nameOf={nameOf} />
           </>
         ) : (
           <>
@@ -486,7 +531,11 @@ export default function Stats() {
         <div className="card">
           <h2>Shared by parents and coaches</h2>
           <p className="muted small">Kept by one person for one player. These stand beside the team's stats and are not added into them.</p>
-          <StatTable oneReb first="Player and game" rows={data.shared.map((s) => ({ key: s.id, name: `${s.player_name} · ${[s.title, fmtDateShort(s.date)].filter(Boolean).join(', ')} · by ${s.by}`, line: linesOf(s.events, 'us').total }))} />
+          {def ? (
+            <SportStatTable def={def} first="Player and game" rows={data.shared.map((s) => ({ key: s.id, name: `${s.player_name} · ${[s.title, fmtDateShort(s.date)].filter(Boolean).join(', ')} · by ${s.by}`, tally: tallyOf(playsOf(s), 'us').total }))} />
+          ) : (
+            <StatTable oneReb first="Player and game" rows={data.shared.map((s) => ({ key: s.id, name: `${s.player_name} · ${[s.title, fmtDateShort(s.date)].filter(Boolean).join(', ')} · by ${s.by}`, line: linesOf(s.events, 'us').total }))} />
+          )}
         </div>
       )}
     </div>

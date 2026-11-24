@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { SIGNED_OUT_EVENT, api, listenLive, type AuthStatus, type Bootstrap, type User } from './api';
+import { SIGNED_OUT_EVENT, api, listenLive, type AccountRole, type AuthStatus, type Bootstrap, type User } from './api';
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { sportKind } from './sports';
 import { DialogHost } from './components/dialogs';
@@ -850,6 +850,11 @@ function Account({ onChanged }: { onChanged: () => void }) {
   const [name, setName] = useState(user.name);
   const [parts, setParts] = useState<NameParts | undefined>(undefined);
   const [state, setState] = useState<{ busy?: boolean; error?: string; saved?: boolean }>({});
+  // Everything this person is: a coach of one team can be a parent on another.
+  const [roles, setRoles] = useState<AccountRole[] | null>(null);
+  useEffect(() => {
+    api.myRoles().then(setRoles, () => setRoles([]));
+  }, [user.id]);
   useEffect(() => setName(user.name), [user.name]);
   const saveName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -874,6 +879,24 @@ function Account({ onChanged }: { onChanged: () => void }) {
       </div>
       <div className="account-grid">
         <div className="account-col">
+          <div className="card account-card">
+            <h2>What this account is</h2>
+            {!roles ? (
+              <p className="muted small">Loading…</p>
+            ) : roles.length === 0 ? (
+              <p className="muted small">A coach's account, with no team yet.</p>
+            ) : (
+              <ul className="account-roles">
+                {roles.map((r, i) => (
+                  <li key={i}>
+                    <strong>{r.role}</strong>
+                    {r.where && <span>{r.where}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="muted small">Each team you coach, and each team you are on as a parent, family, a friend or a guest.</p>
+          </div>
           <div className="card account-card">
             <h2>Your name</h2>
             <form className="fields stack" onSubmit={saveName}>

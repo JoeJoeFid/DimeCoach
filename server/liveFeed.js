@@ -2,7 +2,7 @@
 // out, with the score as it stood after it. Nothing here touches the database, so it can be tested
 // on its own.
 
-const POINTS = { p1: 1, m1: 1, m2: 2, m3: 3 };
+import { credit } from './sportPoints.js';
 
 /**
  * The plays in the order they were put in. `nameOf` gives what a follower may be told about one
@@ -20,10 +20,18 @@ export function livePlays(events, { nameOf, oppName, oppPlayers = [] }) {
   };
   let us = 0;
   let them = 0;
+  // Volleyball is scored a set at a time: the score read out starts again with each one.
+  const bySets = list.some((e) => typeof e.type === 'string' && e.type.startsWith('vb:'));
+  let part = 0;
   return list.map((e, i) => {
-    const pts = POINTS[e.type] || 0;
-    if (e.side === 'us') us += pts;
-    else them += pts;
+    if (bySets && (Number(e.period) || 1) !== part) {
+      part = Number(e.period) || 1;
+      us = 0;
+      them = 0;
+    }
+    const scored = credit(e);
+    if (scored?.side === 'us') us += scored.pts;
+    else if (scored) them += scored.pts;
     const prev = list[i - 1];
     // A rebound by the team is offensive when it came off the team's own miss: said outright on newer plays, read from the play before on older ones.
     const off = e.type === 'reb' && e.side === 'us' && (e.for !== undefined ? e.for !== null : !!prev && prev.side === 'us' && (prev.type === 'x2' || prev.type === 'x3'));
@@ -32,6 +40,9 @@ export function livePlays(events, { nameOf, oppName, oppPlayers = [] }) {
       side: e.side === 'them' ? 'them' : 'us',
       type: e.type,
       who: who(e.side, e.player),
+      // Whether it put points on the board, and for which side: an error can score for the other one.
+      ...(scored ? { scored: scored.side } : {}),
+      ...(Number.isFinite(e.v) ? { v: e.v } : {}),
       period: Number(e.period) || 1,
       us,
       them,

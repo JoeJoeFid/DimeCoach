@@ -354,7 +354,7 @@ export function mountFilm(app) {
   const reelFrom = (req, res, teamId) => {
     const title = str(req.body.title, 120).trim();
     const items = itemsFrom(teamId, req.body.items);
-    if (!title) return void res.status(400).json({ error: 'Give the video a title.' });
+    if (!title) return void res.status(400).json({ error: 'Give the cut a title.' });
     if (items.length === 0) return void res.status(400).json({ error: 'Add at least one clip or game video.' });
     const pause = Math.max(0, Math.min(MAX_PAUSE_SECONDS, Math.round(Number(req.body.pause_seconds)) || 0));
     return { title, notes: str(req.body.notes, 2000).trim(), items, pause, pauseNotes: pause > 0 && req.body.pause_notes === true ? 1 : 0 };

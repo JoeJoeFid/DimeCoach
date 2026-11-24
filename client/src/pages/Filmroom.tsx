@@ -1,4 +1,4 @@
-// The Filmroom: a team's saved game video, the clips cut from it, and the videos put together
+// The Filmroom: a team's saved game video, the clips cut from it, and the cuts put together
 // out of clips. One list at a time; a game video opens in the editor, where clips are made.
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -84,7 +84,7 @@ export default function Filmroom() {
 
   const removeClip = async (c: FilmClip) => {
     const used = film?.reels.filter((r) => r.items.some((i) => i.clip_id === c.id)).length ?? 0;
-    if (!(await confirmDialog({ title: `Delete the clip "${c.title}"?`, body: `${gameOf(videoOf(c.stream_id))} The clip is deleted${used ? `, and taken out of the ${used === 1 ? 'video' : `${used} videos`} it is in` : ''}. The game video it was cut from is not touched.`, confirmLabel: 'Delete clip', danger: true }))) return;
+    if (!(await confirmDialog({ title: `Delete the clip "${c.title}"?`, body: `${gameOf(videoOf(c.stream_id))} The clip is deleted${used ? `, and taken out of the ${used === 1 ? 'cut' : `${used} cuts`} it is in` : ''}. The game video it was cut from is not touched.`, confirmLabel: 'Delete clip', danger: true }))) return;
     api.deleteClip(c.id).then((f) => (setFilm(f), setNotice(`The clip "${c.title}" was deleted.`)), failed);
   };
   /** Deletes a whole game video, with every clip cut from it. */
@@ -94,15 +94,15 @@ export default function Filmroom() {
     const body = [
       gameOf(v),
       `The whole video (${clock(v.seconds)}, recorded ${day(v.started_at)}, from ${v.by || 'a coach'}) is deleted for good.`,
-      clips.length ? `Its ${clips.length === 1 ? 'clip is' : `${clips.length} clips are`} deleted with it${used ? `, and taken out of the ${used === 1 ? 'video' : `${used} videos`} that use ${clips.length === 1 && used === 1 ? 'it' : 'them'}` : ''}.` : used ? `It is taken out of the ${used === 1 ? 'video' : `${used} videos`} that use it.` : '',
+      clips.length ? `Its ${clips.length === 1 ? 'clip is' : `${clips.length} clips are`} deleted with it${used ? `, and taken out of the ${used === 1 ? 'cut' : `${used} cuts`} that use ${clips.length === 1 && used === 1 ? 'it' : 'them'}` : ''}.` : used ? `It is taken out of the ${used === 1 ? 'cut' : `${used} cuts`} that use it.` : '',
       'The game itself, its plan and its score are not touched.',
     ];
     if (!(await confirmDialog({ title: `Delete the video "${v.title || 'Game video'}"?`, body: body.filter(Boolean).join(' '), confirmLabel: 'Delete video', danger: true }))) return;
     api.deleteStream(v.id).then(() => (setNotice(`The video "${v.title || 'Game video'}" was deleted.`), load()), failed);
   };
   const removeReel = async (r: FilmReel) => {
-    if (!(await confirmDialog({ title: `Delete the video "${r.title}"?`, body: 'This is a video you put together. Its clips and the game videos they came from are not touched.', confirmLabel: 'Delete video', danger: true }))) return;
-    api.deleteReel(r.id).then((f) => (setFilm(f), setNotice(`The video "${r.title}" was deleted.`)), failed);
+    if (!(await confirmDialog({ title: `Delete the cut "${r.title}"?`, body: 'This is a cut you put together. Its clips and the game videos they came from are not touched.', confirmLabel: 'Delete cut', danger: true }))) return;
+    api.deleteReel(r.id).then((f) => (setFilm(f), setNotice(`The cut "${r.title}" was deleted.`)), failed);
   };
   const videoOf = (id: number) => film?.videos.find((v) => v.id === id);
   return (
@@ -110,10 +110,10 @@ export default function Filmroom() {
       <div className="page-head">
         <div>
           <PageTitle>Filmroom</PageTitle>
-          <p className="muted">Saved game video, the clips you cut from it, and the videos you put together: film review, highlights, scouting.</p>
+          <p className="muted">Saved game video, the clips you cut from it, and the cuts you put together from them: film review, highlights, scouting.</p>
         </div>
         <Link className="btn primary" to="/filmroom/new">
-          Create a new video
+          Create a new cut
         </Link>
       </div>
       <SubTabs<Tab>
@@ -124,7 +124,7 @@ export default function Filmroom() {
         tabs={[
           ['games', 'Game videos', film?.videos.length],
           ['clips', 'Clips', film?.clips.length],
-          ['videos', 'Videos', film?.reels.length],
+          ['videos', 'Cuts', film?.reels.length],
         ]}
       />
       {error && <p className="error">{error}</p>}
@@ -179,10 +179,10 @@ export default function Filmroom() {
         )
       ) : film.reels.length === 0 ? (
         <div className="empty">
-          <h2>No videos yet</h2>
-          <p>Put clips and game videos together, in the order you want, into a video of your own.</p>
+          <h2>No cuts yet</h2>
+          <p>Put clips and game videos together, in the order you want, into a cut of your own.</p>
           <Link className="btn primary" to="/filmroom/new">
-            Create a new video
+            Create a new cut
           </Link>
         </div>
       ) : (
@@ -234,7 +234,7 @@ interface Shared {
   id: number;
   title: string;
 }
-const SHARED_WORD: Record<FilmShare['kind'], string> = { video: 'game video', clip: 'clip', reel: 'video' };
+const SHARED_WORD: Record<FilmShare['kind'], string> = { video: 'game video', clip: 'clip', reel: 'cut' };
 /**
  * Who one thing in the Filmroom is shared with, and sharing it with more people: ones on the
  * team's list, or new ones by email, who are added to the team as guests and see nothing else.

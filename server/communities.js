@@ -2,6 +2,7 @@
 // drills, plays and practice plans. A person belongs to a community as themselves (a user), while
 // the things they share live in their own workspace (an owner). Sharing never moves anything:
 // a share points at the original, and "add to mine" makes a separate copy for the taker.
+import { countsUnread } from './push.js';
 import crypto from 'node:crypto';
 import { all, get, run, tx } from './db.js';
 import { poke } from './live.js';
@@ -304,6 +305,8 @@ export function mountCommunities(app) {
     items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     return { unread: items.filter((i) => i.unread).length, items: items.slice(0, 120) };
   };
+  // Unread messages count towards the number on the app's icon.
+  countsUnread((userId) => newsFor(userId).unread);
   app.get('/api/communities/news', (req, res) => res.json(newsFor(req.user.id)));
   // The Messages page: the same list, and reading one message from the app or everything at once.
   app.get('/api/messages', (req, res) => res.json(newsFor(req.user.id)));

@@ -4,7 +4,7 @@
 // A clip is two marks on a saved game video, and a video put together here is a list of clips.
 // Nothing is copied or made: playing either plays the game video's own pieces, from one mark to
 // another. See server/film.js.
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
+import { Fragment, forwardRef, useEffect, useImperativeHandle, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -447,34 +447,100 @@ function SteppedReel({ scenes: list, at, onAt, pause }: ReelProps) {
   );
 }
 
-function StripCard({ scene, index, playing, onPlay, onShow, onRemove }: { scene: Scene; index: number; playing: boolean; onPlay: () => void; onShow: (show: boolean) => void; onRemove: () => void }) {
+/** What is carried when a clip or a game video is dragged from a list onto the timeline. */
+const DRAG_TYPE = 'application/x-dime-film';
+type Dragged = { clip_id: number | null; stream_id: number | null };
+
+/**
+ * Whether the bigger player is on: the video takes the whole width of the page, and the lists
+ * that sit beside it move underneath. Kept on this device, since it is about its screen.
+ */
+export function useTheater(): [boolean, () => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem('dime.film.theater') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () => {
+    setOn(!on);
+    try {
+      localStorage.setItem('dime.film.theater', on ? '0' : '1');
+    } catch {
+      // Not remembered, which is all that is lost.
+    }
+  };
+  return [on, toggle];
+}
+export function TheaterButton({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button type="button" className="btn film-theater-btn" aria-pressed={on} onClick={onClick} title={on ? 'Back to the video with the lists beside it' : 'A bigger video, with the lists underneath'}>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {on ? <path d="M3 6h18v12H3zM15 6v12" /> : <path d="M3 6h18v12H3z" />}
+      </svg>
+      {on ? 'Leave theater mode' : 'Theater mode'}
+    </button>
+  );
+}
+
+/**
+ * A game video or a clip as a row in a list: its picture with how long it runs, what it is
+ * called and about, and what can be done with it (`children`). The one being watched is marked.
+ * With `drag`, it can be dragged onto the timeline.
+ */
+export function FilmRow({ poster, length, title, meta, notes, now, onPlay, drag, children }: { poster: number | null; length: string; title: string; meta: string; notes?: string; /** It is what the player is showing. */ now?: boolean; onPlay?: () => void; drag?: Dragged; children?: ReactNode }) {
+  const carry = (e: DragEvent) => {
+    if (!drag) return;
+    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(drag));
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+  return (
+    <div className={`fr ${now ? 'now' : ''}`} draggable={!!drag} onDragStart={carry} aria-current={now ? 'true' : undefined}>
+      <button type="button" className="fr-thumb" onClick={onPlay} disabled={!onPlay} aria-label={`Play ${title}`}>
+        {poster ? <img src={`/api/streams/${poster}/poster`} alt="" loading="lazy" draggable={false} /> : <span className="fr-blank" aria-hidden="true" />}
+        <span className="fr-len">{length}</span>
+        {now && <span className="fr-now">Watching</span>}
+      </button>
+      <button type="button" className="fr-text" onClick={onPlay} disabled={!onPlay}>
+        <strong>{title}</strong>
+        <span className="fr-meta">{meta}</span>
+        {notes && <span className="fr-notes">{notes}</span>}
+      </button>
+      {children && <span className="fr-acts">{children}</span>}
+    </div>
+  );
+}
+
+function StripCard({ scene, playing, onPlay, onShow, onRemove }: { scene: Scene; playing: boolean; onPlay: () => void; onShow: (show: boolean) => void; onRemove: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: scene.key });
   return (
-    <li ref={setNodeRef} className={`film-strip-card ${playing ? 'on' : ''} ${isDragging ? 'dragging' : ''}`} style={{ transform: CSS.Translate.toString(transform), transition }}>
-      <button type="button" className="film-grip" aria-label={`Move ${scene.title}`} title="Drag to move" {...attributes} {...listeners}>
-        <span aria-hidden="true">{index + 1}</span>
+    <li ref={setNodeRef} className={`tl2-card ${playing ? 'on' : ''} ${isDragging ? 'dragging' : ''}`} style={{ transform: CSS.Translate.toString(transform), transition }} title="Drag to move" {...attributes} {...listeners}>
+      <span className="tl2-kind">
+        {scene.clip ? 'Clip' : 'Game video'} · {clock(scene.seconds)}
+      </span>
+      <button type="button" className="tl2-title" onClick={onPlay} title="Play from here">
+        {scene.title}
       </button>
-      <button type="button" className="film-strip-title" onClick={onPlay} title="Play from here">
-        <strong>{scene.title}</strong>
-        <span className="muted small">
-          {clock(scene.seconds)} · {scene.clip ? scene.stream.title || 'Game video' : 'Whole game video'}
-        </span>
-      </button>
-      <label className="film-strip-show">
-        <input type="checkbox" checked={scene.show} onChange={(e) => onShow(e.target.checked)} /> Show {scene.clip ? 'notes' : 'title'}
-      </label>
-      <button type="button" className="link small" onClick={onRemove} aria-label={`Take ${scene.title} out`}>
-        Take out
-      </button>
+      <span className="tl2-foot">
+        <label title={`Put the ${scene.clip ? "clip's title and notes" : 'title'} over the picture while it plays`}>
+          <input type="checkbox" checked={scene.show} onChange={(e) => onShow(e.target.checked)} /> {scene.clip ? 'Notes' : 'Title'}
+        </label>
+        <button type="button" className="tl2-out" onClick={onRemove} aria-label={`Take ${scene.title} out`} title="Take out">
+          ✕
+        </button>
+      </span>
     </li>
   );
 }
 /**
- * The strip a video is put together on: its clips in order, left to right. They are dragged to
- * move them, and each says whether its notes show over the picture.
+ * The timeline a cut is put together on: its parts in order, left to right, each a card saying
+ * what it is and how long. They are dragged to move them. A pause between parts, when the cut has
+ * one, shows as a card of its own, and the place at the end takes a clip dragged from a list.
  */
-export function Strip({ film, items, at, onChange, onPlay }: { film: Film; items: StripItem[]; at: number; onChange: (items: StripItem[]) => void; onPlay: (index: number) => void }) {
+export function Strip({ film, items, at, onChange, onPlay, pause = 0, onAdd }: { film: Film; items: StripItem[]; at: number; onChange: (items: StripItem[]) => void; onPlay: (index: number) => void; /** Seconds held between one part and the next. */ pause?: number; /** Something was dragged in from a list. */ onAdd?: (item: Dragged) => void }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const [over, setOver] = useState(false);
   const list = scenes(film, items);
   const dropped = (e: DragEndEvent) => {
     if (!e.over || e.active.id === e.over.id) return;
@@ -482,22 +548,50 @@ export function Strip({ film, items, at, onChange, onPlay }: { film: Film; items
     const to = items.findIndex((i) => i.key === e.over!.id);
     if (from >= 0 && to >= 0) onChange(arrayMove(items, from, to));
   };
-  if (list.length === 0) return <p className="muted film-strip-none">Nothing in it yet.</p>;
+  const carried = (e: DragEvent) => !!onAdd && e.dataTransfer.types.includes(DRAG_TYPE);
+  const taken = (e: DragEvent) => {
+    setOver(false);
+    if (!carried(e)) return;
+    e.preventDefault();
+    try {
+      const d = JSON.parse(e.dataTransfer.getData(DRAG_TYPE));
+      onAdd!({ clip_id: Number(d.clip_id) || null, stream_id: Number(d.stream_id) || null });
+    } catch {
+      // Not something of ours after all.
+    }
+  };
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={dropped}>
       <SortableContext items={list.map((s) => s.key)} strategy={horizontalListSortingStrategy}>
-        <ol className="film-strip">
+        <ol
+          className={`tl2 ${over ? 'over' : ''}`}
+          onDragOver={(e) => {
+            if (!carried(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={taken}
+        >
           {list.map((s, i) => (
-            <StripCard
-              key={s.key}
-              scene={s}
-              index={i}
-              playing={i === at}
-              onPlay={() => onPlay(i)}
-              onShow={(show) => onChange(items.map((x) => (x.key === s.key ? { ...x, show_notes: show } : x)))}
-              onRemove={() => onChange(items.filter((x) => x.key !== s.key))}
-            />
+            <Fragment key={s.key}>
+              {i > 0 && pause > 0 && (
+                <li className="tl2-card gap" aria-label={`A pause of ${pause} seconds`}>
+                  <span className="tl2-kind">Pause</span>
+                  <strong>{pause}s</strong>
+                </li>
+              )}
+              <StripCard
+                scene={s}
+                playing={i === at}
+                onPlay={() => onPlay(i)}
+                onShow={(show) => onChange(items.map((x) => (x.key === s.key ? { ...x, show_notes: show } : x)))}
+                onRemove={() => onChange(items.filter((x) => x.key !== s.key))}
+              />
+            </Fragment>
           ))}
+          <li className="tl2-drop">{onAdd ? 'Drop a clip here' : list.length === 0 ? 'Clips you add show here' : 'Add another clip'}</li>
         </ol>
       </SortableContext>
     </DndContext>
@@ -543,7 +637,7 @@ export function SharedFilms({ teamId, openId }: { teamId: number; openId?: numbe
         <p>When one of the team's coaches shares a video with you, it shows here to watch.</p>
       </div>
     );
-  const WORD = { video: 'Game video', clip: 'Clip', reel: 'Video' };
+  const WORD = { video: 'Game video', clip: 'Clip', reel: 'Cut' };
   const on = playing?.share;
   return (
     <>

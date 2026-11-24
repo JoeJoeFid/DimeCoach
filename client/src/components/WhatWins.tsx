@@ -2,7 +2,7 @@
 // how the stat averages in wins against losses. A marker at the top says how far the number of
 // games behind it can be trusted.
 import { linesOf, type Scoresheet } from '../scoring';
-import { CONFIDENCE_STEPS, confidence, strength, winLinks, type GameNumbers } from '../wins';
+import { CONFIDENCE_STEPS, confidence, strength, winLinks, type GameNumbers, type WinRow } from '../wins';
 
 /** How much to trust what is shown: four steps, filled up to the one the number of games has reached. */
 function ConfidenceMark({ games, wins, losses, ties }: { games: number; wins: number; losses: number; ties: number }) {
@@ -34,12 +34,16 @@ export default function WhatWins({ games }: { games: Scoresheet[] }) {
   // A game with a score and nothing else has no stats to weigh.
   const tracked = games.filter((g) => g.events.some((e) => e.side === 'us' && e.type !== 'p1'));
   const numbers: GameNumbers[] = tracked.map((g) => ({ us: linesOf(g.events, 'us').total, them: linesOf(g.events, 'them').total, scoreUs: g.us, scoreThem: g.them }));
-  const { rows, wins, losses, ties } = winLinks(numbers);
-  const show = (v: number | null, rate: boolean) => (v === null ? '–' : rate ? `${Math.round(v)}%` : v.toFixed(1));
   if (tracked.length === 0) return <p className="muted">None of these games has stats recorded, only a score.</p>;
+  return <WinTable games={tracked.length} {...winLinks(numbers)} note="Fouls, for one, pile up late in games a team is already losing. Points are left out because the margin is made of them." />;
+}
+
+/** The table itself, for any sport: each stat's link with the margin, the strongest first. `games` is how many it is drawn from, and `note` what to add at the foot. */
+export function WinTable({ rows, wins, losses, ties, games, note }: { rows: WinRow[]; wins: number; losses: number; ties: number; games: number; note?: string }) {
+  const show = (v: number | null, rate: boolean) => (v === null ? '–' : rate ? `${Math.round(v)}%` : v.toFixed(1));
   return (
     <div className="ww">
-      <ConfidenceMark games={tracked.length} wins={wins} losses={losses} ties={ties} />
+      <ConfidenceMark games={games} wins={wins} losses={losses} ties={ties} />
       {(wins === 0 || losses === 0) && <p className="muted small">These games are all {wins === 0 ? (losses === 0 ? 'ties' : 'losses') : 'wins'}, so there is no win and loss to set side by side. The link below still uses how much each game was won or lost by.</p>}
       <div className="table-scroll">
         <table className="table ww-table">
@@ -57,7 +61,7 @@ export default function WhatWins({ games }: { games: Scoresheet[] }) {
               <tr key={r.key}>
                 <th scope="row">
                   {r.name}
-                  {r.games !== tracked.length && <span className="muted small"> · {r.games} {r.games === 1 ? 'game' : 'games'}</span>}
+                  {r.games !== games && <span className="muted small"> · {r.games} {r.games === 1 ? 'game' : 'games'}</span>}
                 </th>
                 <td>{show(r.inWins, r.rate)}</td>
                 <td>{show(r.inLosses, r.rate)}</td>
@@ -80,7 +84,7 @@ export default function WhatWins({ games }: { games: Scoresheet[] }) {
         </table>
       </div>
       <p className="muted small">
-        The link runs from -1 to +1. A bar to the right means the stat is higher in the games won by more; to the left, lower. It is each stat on its own against the final margin, and it shows what moves together, not what causes what: fouls, for one, pile up late in games a team is already losing. Points are left out because the margin is made of them.
+        The link runs from -1 to +1. A bar to the right means the stat is higher in the games won by more; to the left, lower. It is each stat on its own against the final margin, and it shows what moves together, not what causes what. {note}
       </p>
     </div>
   );

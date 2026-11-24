@@ -11,13 +11,18 @@ export interface GameNumbers {
   scoreUs: number;
   scoreThem: number;
 }
-export interface WinStat {
+/** The least a game has to say for this: the score. Its numbers are whatever its sport keeps. */
+export interface GameMargin {
+  scoreUs: number;
+  scoreThem: number;
+}
+export interface WinStat<G = GameNumbers> {
   key: string;
   name: string;
   /** Shown as a percentage. */
   rate?: boolean;
   /** The stat's value in a game, or null when the game has nothing to go on (no shots taken, for a percentage). */
-  value: (g: GameNumbers) => number | null;
+  value: (g: G) => number | null;
 }
 const pct = (made: number, tried: number) => (tried > 0 ? (made / tried) * 100 : null);
 /** Points are left out: the margin is made of them. */
@@ -94,7 +99,7 @@ const mean = (list: number[]) => (list.length ? list.reduce((a, b) => a + b, 0) 
  * every game was not tracked and is left out. Tied games count towards the link and towards
  * neither average.
  */
-export function winLinks(games: GameNumbers[], stats: WinStat[] = WIN_STATS): { rows: WinRow[]; wins: number; losses: number; ties: number } {
+export function winLinks<G extends GameMargin = GameNumbers>(games: G[], stats: WinStat<G>[] = WIN_STATS as unknown as WinStat<G>[]): { rows: WinRow[]; wins: number; losses: number; ties: number } {
   const rows: WinRow[] = [];
   for (const s of stats) {
     const have = games.map((g) => ({ v: s.value(g), margin: g.scoreUs - g.scoreThem })).filter((x): x is { v: number; margin: number } => x.v !== null);

@@ -8,7 +8,7 @@ import { all, db, get, run } from './db.js';
 import { tell } from './live.js';
 import { coachesOfTeam, followersOfTeam, peopleFor } from './inbox.js';
 import { slugOf } from './family.js';
-import { pushTo } from './push.js';
+import { countsUnread, pushTo } from './push.js';
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS chats (
@@ -150,6 +150,11 @@ function chatOut(chat, user) {
     unread: get("SELECT COUNT(*) AS n FROM chat_messages WHERE chat_id=? AND id>? AND kind='text' AND COALESCE(user_id,0)<>?", chat.id, state.last_read, user.id).n,
   };
 }
+// Unread chats count towards the number on the app's icon.
+countsUnread((userId) => {
+  const user = get('SELECT * FROM users WHERE id=?', userId);
+  return user ? listOut(user).unread : 0;
+});
 function listOut(user) {
   const chats = chatsOf(user).map((c) => chatOut(c, user));
   // The one talked in most recently first; a chat nobody has spoken in yet goes after those, teams before the rest.

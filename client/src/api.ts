@@ -149,6 +149,12 @@ export interface AdminUser extends User {
   invited_at: string | null;
   teams: number;
 }
+/** One part a person has, and where: a coach or a parent of a team, an admin of an organization. `where` is empty for the system administrator. */
+export interface AccountRole {
+  kind: 'system' | 'coach' | 'admin' | 'follow';
+  role: string;
+  where: string;
+}
 /** A person as the system administrator sees them, with their upload space. */
 export interface SystemUser extends AdminUser {
   used_bytes: number;
@@ -161,6 +167,8 @@ export interface SystemUser extends AdminUser {
   /** Signed in and did something in the last five minutes, signed in but idle, or not signed in. */
   presence: 'active' | 'inactive' | 'out';
   /** The teams they are on as a parent, family or a friend. */
+  /** Everything this person is, each with where: "Coach" of one team, "Parent" on another. */
+  roles: AccountRole[];
   follows: { team: string; kind: FamilyKind }[];
   sign_ins: number;
   active_seconds: number;
@@ -828,7 +836,7 @@ export interface FamilyDay {
   /** What a practice covers, when the coach shares that: its parts and how long each runs. */
   summary: { minutes: number; items: { title: string; minutes: number; rest: boolean }[] } | null;
   /** A game that is being scored, or was: the score, how far along it is, and each period's points. */
-  score?: { us: number; them: number; status: 'live' | 'final'; period: number; halves?: boolean; periods: { us: number; them: number }[] } | null;
+  score?: { us: number; them: number; status: 'live' | 'final'; period: number; halves?: boolean; /** The letters its plays begin with, for a sport that is not basketball: it says what a part of the game is called. */ sport?: string; periods: { us: number; them: number }[] } | null;
 }
 /** Live video of a game, or one that was saved. It is made of `segments` pieces, each `segment_seconds` long. */
 export interface GameStream {
@@ -998,6 +1006,8 @@ export interface StatsFile {
 export interface TrackTeam {
   id: number;
   name: string;
+  /** The team's sport, by name: it decides which scoring pad a sheet kept for one of its players gets. */
+  sport?: string;
   coach: boolean;
   players: { id: number; name: string; number: string }[];
 }
@@ -1053,6 +1063,8 @@ export interface AdminSettings {
 export const api = {
   authStatus: () => req<AuthStatus>('GET', '/auth/status'),
   setup: (b: { name: string; first_name?: string; last_name?: string; email: string; password: string; setup_token?: string }) => req<{ user: User }>('POST', '/auth/setup', b),
+  /** Everything the person signed in is, each with where. */
+  myRoles: () => req<AccountRole[]>('GET', '/auth/roles'),
   login: (email: string, password: string) => req<{ user: User }>('POST', '/auth/login', { email, password }),
   /** Signs out. First this device is taken off the list for the person's notifications, so the next person to use it does not get them. */
   logout: async () => {
@@ -1567,6 +1579,10 @@ export interface LivePlay {
   period: number;
   us: number;
   them: number;
+  /** The side it put points on the board for, when it did: an error in some sports scores for the other one. */
+  scored?: 'us' | 'them';
+  /** An amount that goes with the play: yards, in football. */
+  v?: number;
   /** A rebound: whether it was offensive. */
   off?: boolean;
   /** An assist: the id of the shot it set up. */
