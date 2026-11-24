@@ -2,7 +2,7 @@ import PageTitle from '../components/PageTitle';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type GameStream, type StorageSpace } from '../api';
-import { StreamPlayer } from '../components/GameVideo';
+import { GameVideoCard, StreamPlayer } from '../components/GameVideo';
 import { SpaceMeter } from '../components/SpaceMeter';
 import type { Resource, Tag } from '../types';
 import { useApp } from '../App';
@@ -247,36 +247,13 @@ export default function Resources() {
             <ResourceCard key={r.key} resource={r} tags={sportTags} sharedWith={sharedWith[r.key] || []} onShare={() => setSharing(r)} onTag={() => setTagging(r.key)} onView={() => setViewing(r)} onRename={(title) => run(() => api.renameResource(r.resource_id!, title))} onRemove={() => remove(r)} />
           ))}
           {shownGames.map((g) => (
-            <div key={`game-${g.id}`} className="res-card kind-video game-video">
-              <button type="button" className="res-preview" onClick={() => setWatching(g)} title="Play">
-                {/* No picture is fetched for it: a video left half loaded holds a connection the rest of the page needs. */}
-                <span className="res-thumb site">
-                  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M3.5 7h11v10h-11zM14.5 10.500l6-3v9l-6-3" />
-                  </svg>
-                  Game video
-                </span>
-                <span className="res-play" aria-hidden="true">
-                  ▶
-                </span>
-              </button>
-              <div className="res-info">
-                <strong className="res-title">{g.title || 'Game video'}</strong>
-                <span className="muted small">
-                  Game video · {new Date(g.started_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · {Math.max(1, Math.round(g.seconds / 60))} min
-                </span>
-                <div className="res-actions">
-                  <button className="btn small" onClick={() => setWatching(g)}>
-                    Play
-                  </button>
-                  {g.game && (
-                    <Link className="btn small" to={`/plans/${g.game.id}?view=video`}>
-                      Open the game
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </div>
+            <GameVideoCard key={`game-${g.id}`} stream={g} onPlay={() => setWatching(g)}>
+              {g.game && (
+                <Link className="btn small" to={`/plans/${g.game.id}?view=video`}>
+                  Open the game
+                </Link>
+              )}
+            </GameVideoCard>
           ))}
         </div>
       )}

@@ -839,6 +839,10 @@ export interface GameStream {
   transport: string;
   /** How its pieces are fetched to be played: from the site, or by links the site hands out. */
   watch: 'server' | 'links';
+  /** Whether its pieces carry on from one another and play as one video, or are each a video of their own. */
+  layout: 'joined' | 'separate';
+  /** Whether there is a picture to show it by, at /api/streams/:id/poster. */
+  has_poster: boolean;
   mime: string;
   status: 'live' | 'ended';
   saved: boolean;
@@ -1026,24 +1030,26 @@ export const api = {
   stream: (id: number) => req<GameStream>('GET', `/streams/${id}`),
   savedStreams: () => req<GameStream[]>('GET', '/streams/saved'),
   /** `send` is how the server wants this broadcast's pieces sent: to itself, or by links it hands out. */
-  startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string; date: string }) => req<{ stream: GameStream; can_save: boolean; send: 'server' | 'links' }>('POST', '/streams', b),
+  startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string; date: string; layout?: 'joined' | 'separate'; /** The groups to tell it has begun: any of coaches, parents, family, friends. Everyone when left out. */ tell?: string[] }) => req<{ stream: GameStream; can_save: boolean; send: 'server' | 'links' }>('POST', '/streams', b),
   /** Links to send the next few pieces straight to where the video is kept. Never throws for an answer the server gave: the caller decides what each means. */
-  sendLinks: async (id: number): Promise<{ status: number; error?: string; links?: { n: number; url: string }[] }> => {
+  sendLinks: async (id: number): Promise<{ status: number; error?: string; links?: { n: number; url: string }[]; init?: string }> => {
     const res = await fetch(`/api/streams/${id}/links`, { method: 'POST' });
     return { ...(await res.json().catch(() => ({}))), status: res.status };
   },
   /** Tells the server piece `n` is where the video is kept. */
-  sentPiece: async (id: number, n: number): Promise<{ status: number; error?: string; segments?: number }> => {
+  sentPiece: async (id: number, n: number | 'init'): Promise<{ status: number; error?: string; segments?: number }> => {
     const res = await fetch(`/api/streams/${id}/pieces`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n }) });
     return { ...(await res.json().catch(() => ({}))), status: res.status };
   },
   /** Links to fetch the pieces from `from` on, for as long as `good_for` seconds. */
-  watchLinks: (id: number, from: number) => req<{ links: { n: number; url: string }[]; type: string; good_for: number }>('GET', `/streams/${id}/links?from=${from}`),
-  /** Sends one piece of video as it is, not as JSON. */
-  sendSegment: async (id: number, piece: Blob) => {
-    const res = await fetch(`/api/streams/${id}/segments`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: piece });
+  watchLinks: (id: number, from: number) => req<{ links: { n: number; url: string }[]; init?: string; type: string; good_for: number }>('GET', `/streams/${id}/links?from=${from}`),
+  /** Sends one piece of video as it is, not as JSON. `init` marks the opening part of a joined video. */
+  sendSegment: async (id: number, piece: Blob, init = false) => {
+    const res = await fetch(`/api/streams/${id}/segments${init ? '?init=1' : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: piece });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Request failed (${res.status})`);
   },
+  /** A small picture from the camera, to show the video by afterwards. */
+  sendPoster: (id: number, picture: Blob) => fetch(`/api/streams/${id}/poster`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: picture }).then(() => {}, () => {}),
   endStream: (id: number, keep: boolean) => req<{ ok: true; saved: boolean }>('POST', `/streams/${id}/end`, { keep }),
   deleteStream: (id: number) => req<{ ok: true }>('DELETE', `/streams/${id}`),
   streamPeople: (teamId: number) => req<{ save: boolean; people: StreamPerson[] }>('GET', `/streams/teams/${teamId}/people`),

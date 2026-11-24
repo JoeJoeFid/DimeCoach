@@ -20252,3 +20252,77 @@ select.input.shot-game {
     animation: none;
   }
 }
+
+/* ---------- Game video: setting up a broadcast, and saved video as cards ---------- */
+.gv-setup {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.gv-opt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.gv-opt > span:first-child {
+  flex: none;
+  width: 110px;
+  font-weight: 600;
+}
+.gv-opt .seg button {
+  min-height: 40px;
+}
+.gv-muted {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+.gv-done h2 {
+  margin-top: 0;
+}
+.gv-saved.res-grid {
+  margin-top: 12px;
+}
+img.res-thumb.gv-poster {
+  background: #000;
+  object-fit: cover;
+}
+.gv-length {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+}
+.res-grid.compact .gv-length {
+  display: none;
+}
+@media (max-width: 560px) {
+  .gv-opt > span:first-child {
+    width: 100%;
+  }
+}
+
+.gv-tell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  padding-left: 122px;
+}
+@media (max-width: 560px) {
+  .gv-tell {
+    padding-left: 0;
+  }
+}

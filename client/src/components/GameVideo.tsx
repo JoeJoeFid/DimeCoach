@@ -4,9 +4,10 @@
 // own, and sent out. A viewer plays the pieces one after another, some seconds behind what is
 // happening. How the pieces travel is in ../video.ts, and why it is built this way is in
 // server/streams.js.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
-import { pieceBroadcaster, pieceFetcher, type Broadcaster } from '../video';
+import { joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Broadcaster, type JoinedPlayer } from '../video';
+import { Modal } from './bits';
 import { confirmDialog } from './dialogs';
 
 const mb = (bytes: number) => (bytes >= 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1024 / 1024))} MB`);
@@ -24,7 +25,37 @@ function recordingType(): string {
   return wanted.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
 }
 
-/** Sends this device's camera out to the team. */
+/** Where a broadcast's video goes when it is over: nowhere, this device, Dime Coach, or both. */
+type Keep = 'none' | 'device' | 'site' | 'both';
+/** The groups of people who can be told a broadcast has begun. */
+const TELL = [
+  { key: 'coaches', label: 'Coaches' },
+  { key: 'parents', label: 'Parents' },
+  { key: 'family', label: 'Family' },
+  { key: 'friends', label: 'Friends' },
+];
+/** What the broadcaster chose last time, on this device, so they are not asked from scratch every game. */
+function lastSetup(): { keep: Keep; sound: boolean; tell: string[] } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem('dime.broadcast') || 'null');
+    if (!v || !['none', 'device', 'site', 'both'].includes(v.keep)) return null;
+    return { keep: v.keep, sound: v.sound !== false, tell: Array.isArray(v.tell) ? TELL.map((g) => g.key).filter((k) => v.tell.includes(k)) : TELL.map((g) => g.key) };
+  } catch {
+    return null;
+  }
+}
+/** A name for the file a broadcast is saved to on this device. */
+function fileName(title: string, type: string) {
+  const d = new Date();
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const safe = (title || 'Game video').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Game video';
+  return `${safe} ${day}.${type.includes('mp4') ? 'mp4' : 'webm'}`;
+}
+
+/**
+ * Sends this device's camera out to the team. It opens on the camera's picture with what to
+ * decide before going live: whether the video is kept, where, and whether sound goes out.
+ */
 function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number; planId?: number; title: string; canSave: boolean; onDone: (note: string) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const [media, setMedia] = useState<MediaStream | null>(null);
@@ -34,10 +65,28 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
   const [sent, setSent] = useState(0);
   const [behind, setBehind] = useState(0);
   const [started, setStarted] = useState(0);
+  const [opening, setOpening] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [, setTick] = useState(0);
+  // The setup. Dime Coach can only be chosen for a team that may keep video.
+  const [keep, setKeep] = useState<Keep>(() => {
+    const was = lastSetup()?.keep ?? (canSave ? 'site' : 'none');
+    return canSave ? was : was === 'none' ? 'none' : 'device';
+  });
+  const [sound, setSound] = useState(() => lastSetup()?.sound ?? true);
+  // Who is told it has begun: everyone, unless the broadcaster opens the list and picks groups. None is nobody.
+  const [tell, setTell] = useState<string[]>(() => lastSetup()?.tell ?? TELL.map((g) => g.key));
+  const [choosing, setChoosing] = useState(false);
+  // The video kept on this device, once the broadcast is over, waiting to be saved out of the page.
+  const [file, setFile] = useState<{ blob: Blob; seconds: number; note: string } | null>(null);
+  const [fileSaved, setFileSaved] = useState(false);
   const state = useRef<{ id: number; cast: Broadcaster | null }>({ id: 0, cast: null });
   const mediaRef = useRef<MediaStream | null>(null);
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
+  const toSite = keep === 'site' || keep === 'both';
+  const toDevice = keep === 'device' || keep === 'both';
 
   // The camera, asked for when this opens and again when it is turned around.
   useEffect(() => {
@@ -51,6 +100,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       .then((m) => {
         if (gone) return m.getTracks().forEach((t) => t.stop());
         mediaRef.current?.getTracks().forEach((t) => t.stop());
+        m.getAudioTracks().forEach((t) => (t.enabled = soundRef.current));
         mediaRef.current = m;
         setMedia(m);
         if (video.current) video.current.srcObject = m;
@@ -60,13 +110,27 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       gone = true;
     };
   }, [facing]);
+  // Sound off is silence from the microphone: the picture carries on, and so does the recording.
+  useEffect(() => {
+    mediaRef.current?.getAudioTracks().forEach((t) => (t.enabled = sound));
+  }, [sound, media]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('dime.broadcast', JSON.stringify({ keep, sound, tell }));
+    } catch {
+      /* not kept for next time */
+    }
+  }, [keep, sound, tell]);
+  const letGo = () => {
+    mediaRef.current?.getTracks().forEach((t) => t.stop());
+    lock.current?.release().catch(() => {});
+  };
   useEffect(
     () => () => {
       // Leaving the page stops the camera and the broadcast.
       const st = state.current;
       st.cast?.stop(false);
-      mediaRef.current?.getTracks().forEach((t) => t.stop());
-      lock.current?.release().catch(() => {});
+      letGo();
       if (st.id) api.endStream(st.id, false).catch(() => {});
     },
     [],
@@ -77,19 +141,36 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
     return () => window.clearInterval(t);
   }, [live]);
 
+  /** A small picture of what the camera sees, to show the video by afterwards. */
+  const sendPicture = (id: number) => {
+    const el = video.current;
+    if (!el || !el.videoWidth || state.current.id !== id) return;
+    const c = document.createElement('canvas');
+    c.width = 480;
+    c.height = Math.round((480 * el.videoHeight) / el.videoWidth);
+    c.getContext('2d')?.drawImage(el, 0, 0, c.width, c.height);
+    c.toBlob((b) => b && state.current.id === id && api.sendPoster(id, b), 'image/jpeg', 0.72);
+  };
   const start = async () => {
     const type = recordingType();
     if (!type) return setError('This browser cannot record video, so it cannot broadcast.');
+    setOpening(true);
+    // The camera starts recording now, which also shows whether this browser can make one unbroken video. It takes a couple of seconds.
+    const open = await openBroadcast(() => mediaRef.current, type);
     try {
       const today = new Date();
       const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      const r = await api.startStream({ team_id: teamId, plan_id: planId, title, mime: type, date });
+      const r = await api.startStream({ team_id: teamId, plan_id: planId, title, mime: type, date, layout: open.layout, tell });
       // The server says how the pieces are to be sent. How the broadcast is getting on comes back as it goes.
-      const cast = pieceBroadcaster(() => mediaRef.current, r.stream, r.send, type, (s) => {
+      const heard = (s: { sent: number; behind: number; error?: string }) => {
         setSent(s.sent);
         setBehind(s.behind);
         if (s.error) setError(s.error);
-      });
+      };
+      // The server has the last word on the layout.
+      const agreed = r.stream.layout === open.layout;
+      if (!agreed) open.cancel();
+      const cast = agreed ? open.begin(r.stream, r.send, heard, toDevice) : pieceBroadcaster(() => mediaRef.current, r.stream, r.send, type, heard, toDevice);
       state.current = { id: r.stream.id, cast };
       setLive(r.stream);
       setStarted(Date.now());
@@ -98,25 +179,86 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       // Keeps the screen on, where the browser can: a phone that sleeps stops its camera.
       (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock?.request('screen').then((l) => (lock.current = l), () => {});
       cast.start();
+      window.setTimeout(() => sendPicture(r.stream.id), 3000);
     } catch (e) {
+      open.cancel();
       setError((e as Error).message);
+    } finally {
+      setOpening(false);
     }
   };
-  const stop = async (keep: boolean) => {
+  const stop = async () => {
     const st = state.current;
+    setEnding(true);
     // What is still waiting is given a moment to go out before the stream is closed.
     await st.cast?.stop();
+    const blob = toDevice ? (st.cast?.recording() ?? null) : null;
+    const seconds = (Date.now() - started) / 1000;
     const id = st.id;
     st.id = 0;
-    lock.current?.release().catch(() => {});
+    letGo();
+    let note = '';
     try {
-      const r = await api.endStream(id, keep);
-      onDone(r.saved ? 'The broadcast has ended and the video was saved.' : 'The broadcast has ended.');
+      const r = await api.endStream(id, toSite && canSave);
+      note = r.saved ? 'The broadcast has ended and the video was saved to Dime Coach.' : 'The broadcast has ended.';
     } catch (e) {
-      onDone((e as Error).message);
+      note = (e as Error).message;
     }
+    // A copy for this device stays on the screen until it has been saved out of the page.
+    if (blob && blob.size > 0) {
+      setLive(null);
+      setEnding(false);
+      setFile({ blob, seconds, note });
+    } else onDone(toDevice ? `${note} The video could not be kept on this device.` : note);
+  };
+  /** Hands the kept video to the device: its share sheet on a phone or tablet, a download anywhere else. */
+  const saveFile = async () => {
+    if (!file) return;
+    const f = new File([file.blob], fileName(title, file.blob.type), { type: file.blob.type });
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    if (touch && navigator.canShare?.({ files: [f] })) {
+      try {
+        await navigator.share({ files: [f], title: title || 'Game video' });
+        return setFileSaved(true);
+      } catch (e) {
+        // Closing the sheet is not a failure. Anything else falls through to a download.
+        if ((e as Error).name === 'AbortError') return;
+      }
+    }
+    const url = URL.createObjectURL(f);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = f.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    setFileSaved(true);
+  };
+  const leave = async () => {
+    if (file && !fileSaved && !(await confirmDialog({ title: 'Leave without saving the video?', body: 'The video is only on this page. Once you leave, it cannot be saved to this device.', confirmLabel: 'Leave', danger: true }))) return;
+    onDone(file?.note ?? '');
   };
 
+  if (file)
+    return (
+      <div className="gv-cast gv-done card">
+        <h2>Save the video to this device</h2>
+        <p className="muted">
+          {file.note} The video is {span(file.seconds)} long and {mb(file.blob.size)}. It is only on this page until you save it.
+        </p>
+        {fileSaved && <p className="notice">Sent to this device. Check that it is there before you leave this page.</p>}
+        <div className="gv-actions">
+          <button type="button" className="btn primary" onClick={saveFile}>
+            {fileSaved ? 'Save it again' : 'Save to this device'}
+          </button>
+          <button type="button" className="btn" onClick={leave}>
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  const kept = keep === 'both' ? 'saved to this device and to Dime Coach' : keep === 'site' ? 'saved to Dime Coach' : keep === 'device' ? 'saved to this device' : '';
   return (
     <div className="gv-cast card">
       <div className={`gv-screen ${live ? 'live' : ''}`}>
@@ -126,46 +268,219 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
             LIVE <b>{span((Date.now() - started) / 1000)}</b>
           </span>
         )}
+        {!sound && <span className="gv-muted">Sound off</span>}
       </div>
       {error && <p className="error">{error}</p>}
       {live ? (
         <>
           <p className="muted small gv-note">
-            {sent === 0 ? 'Starting…' : `Going out to the team, a few seconds behind.`} {behind > 2 && 'The connection is slow, so viewers are further behind.'} Keep this page open and the screen on.
+            {sent === 0 ? 'Starting…' : `Going out to the team, a few seconds behind.`} {behind > 2 && 'The connection is slow, so viewers are further behind.'} Keep this page open and the screen on.{' '}
+            {kept ? `When you end, the video is ${kept}.` : 'The video is not kept when you end.'}
           </p>
           <div className="gv-actions">
-            {canSave && (
-              <button type="button" className="btn primary" onClick={() => stop(true)}>
-                End and save the video
-              </button>
-            )}
-            <button type="button" className="btn danger-solid" onClick={() => stop(false)}>
-              {canSave ? 'End without saving' : 'End the broadcast'}
+            <button type="button" className="btn" aria-pressed={!sound} disabled={ending} onClick={() => setSound(!sound)}>
+              {sound ? 'Mute sound' : 'Turn sound on'}
+            </button>
+            <button type="button" className="btn danger-solid" disabled={ending} onClick={stop}>
+              {ending ? 'Ending…' : 'End the broadcast'}
             </button>
           </div>
         </>
       ) : (
-        <div className="gv-actions">
-          <button type="button" className="btn primary" disabled={!media} onClick={start}>
-            Go live
-          </button>
-          <button type="button" className="btn" disabled={!media} onClick={() => setFacing(facing === 'user' ? 'environment' : 'user')}>
-            Turn the camera around
-          </button>
-          <button type="button" className="btn" onClick={() => onDone('')}>
-            Cancel
-          </button>
-        </div>
+        <>
+          <div className="gv-setup">
+            <div className="gv-opt">
+              <span>When it ends</span>
+              <div className="seg" role="group" aria-label="When the broadcast ends">
+                <button type="button" className={keep === 'none' ? 'on' : ''} aria-pressed={keep === 'none'} onClick={() => setKeep('none')}>
+                  Just stream
+                </button>
+                <button type="button" className={keep !== 'none' ? 'on' : ''} aria-pressed={keep !== 'none'} onClick={() => keep === 'none' && setKeep(canSave ? 'site' : 'device')}>
+                  Save the video
+                </button>
+              </div>
+            </div>
+            {keep !== 'none' && (
+              <div className="gv-opt">
+                <span>Save it to</span>
+                <div className="seg" role="group" aria-label="Where the video is saved">
+                  <button type="button" className={keep === 'device' ? 'on' : ''} aria-pressed={keep === 'device'} onClick={() => setKeep('device')}>
+                    This device
+                  </button>
+                  {canSave && (
+                    <>
+                      <button type="button" className={keep === 'site' ? 'on' : ''} aria-pressed={keep === 'site'} onClick={() => setKeep('site')}>
+                        Dime Coach
+                      </button>
+                      <button type="button" className={keep === 'both' ? 'on' : ''} aria-pressed={keep === 'both'} onClick={() => setKeep('both')}>
+                        Both
+                      </button>
+                    </>
+                  )}
+                </div>
+                {!canSave && <span className="muted small">Saving to Dime Coach is not turned on for this team.</span>}
+              </div>
+            )}
+            <div className="gv-opt">
+              <span>Tell people</span>
+              <div className="seg" role="group" aria-label="Tell people the broadcast has begun">
+                <button type="button" className={tell.length > 0 ? 'on' : ''} aria-pressed={tell.length > 0} onClick={() => tell.length === 0 && setTell(TELL.map((g) => g.key))}>
+                  On
+                </button>
+                <button type="button" className={tell.length === 0 ? 'on' : ''} aria-pressed={tell.length === 0} onClick={() => setTell([])}>
+                  Off
+                </button>
+              </div>
+              <span className="muted small">
+                {tell.length === TELL.length
+                  ? 'Everyone who may watch gets a message and a notification.'
+                  : tell.length === 0
+                    ? 'Nobody is told. It still shows as live in the app.'
+                    : `Only ${TELL.filter((g) => tell.includes(g.key)).map((g) => g.label.toLowerCase()).join(', ')}.`}{' '}
+                <button type="button" className="link small" aria-expanded={choosing} onClick={() => setChoosing(!choosing)}>
+                  {choosing ? 'Hide' : 'Choose who'}
+                </button>
+              </span>
+              {choosing && (
+                <div className="gv-tell">
+                  {TELL.map((g) => {
+                    const on = tell.includes(g.key);
+                    return (
+                      <button key={g.key} type="button" className={`chip toggle ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => setTell(on ? tell.filter((k) => k !== g.key) : TELL.map((x) => x.key).filter((k) => k === g.key || tell.includes(k)))}>
+                        {g.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="gv-opt">
+              <span>Sound</span>
+              <div className="seg" role="group" aria-label="Sound">
+                <button type="button" className={sound ? 'on' : ''} aria-pressed={sound} onClick={() => setSound(true)}>
+                  On
+                </button>
+                <button type="button" className={!sound ? 'on' : ''} aria-pressed={!sound} onClick={() => setSound(false)}>
+                  Off
+                </button>
+              </div>
+              <span className="muted small">You can change this while you are live.</span>
+            </div>
+          </div>
+          <div className="gv-actions">
+            <button type="button" className="btn primary" disabled={!media || opening} onClick={start}>
+              {opening ? 'Starting…' : 'Go live'}
+            </button>
+            <button type="button" className="btn" disabled={!media || opening} onClick={() => setFacing(facing === 'user' ? 'environment' : 'user')}>
+              Turn the camera around
+            </button>
+            <button type="button" className="btn" onClick={() => onDone('')}>
+              Cancel
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
 /**
- * Plays a stream: its pieces one after another. For one that is live it starts near the newest
- * piece and waits for each next one; for a saved one it starts at the beginning and can be moved.
+ * Plays a stream. For one that is live it starts near the newest piece and waits for each next
+ * one; for a saved one it starts at the beginning and can be moved. A video whose pieces join up
+ * is played as one unbroken video where the browser can, and piece by piece where it cannot.
  */
 export function StreamPlayer({ stream, onGone }: { stream: GameStream; onGone?: () => void }) {
+  const [plain, setPlain] = useState(false);
+  return stream.layout === 'joined' && !plain ? <JoinedVideo stream={stream} onGone={onGone} onFail={() => setPlain(true)} /> : <PieceVideo stream={stream} onGone={onGone} />;
+}
+
+/** A video whose pieces join up, played as one. */
+function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: () => void; onFail: () => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [meta, setMeta] = useState(stream);
+  // Where playing starts from. Moving through a saved video starts it again from there.
+  const [from, setFrom] = useState(stream.status === 'live' ? Math.max(0, stream.segments - 2) : 0);
+  const [at, setAt] = useState(from);
+  const [waiting, setWaiting] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [over, setOver] = useState(false);
+  const live = meta.status === 'live';
+  const metaRef = useRef(meta);
+  metaRef.current = meta;
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
+  const player = useRef<JoinedPlayer | null>(null);
+  // How far the stream has got, asked again while it is live.
+  useEffect(() => {
+    if (meta.status !== 'live') return;
+    const t = window.setInterval(() => api.stream(stream.id).then(setMeta, () => (setOver(true), onGone?.())), 2000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream.id, meta.status]);
+  useEffect(() => {
+    const el = video.current;
+    if (!el) return;
+    const made = joinedPlayer(el, metaRef.current, from, (p) => {
+      if (p.failed) return onFail();
+      if (p.piece !== undefined) setAt(Math.min(p.piece, Math.max(0, metaRef.current.segments - 1)));
+      if (p.waiting !== undefined) setWaiting(p.waiting);
+      if (p.ended) {
+        setPlaying(false);
+        // A broadcast that was not saved is gone once it has played out.
+        setOver(!metaRef.current.saved);
+      }
+    });
+    if (!made) return onFail();
+    player.current = made;
+    if (playingRef.current) el.play().catch(() => setPlaying(false));
+    return () => {
+      player.current = null;
+      made.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from]);
+  useEffect(() => player.current?.more(meta), [meta]);
+  const play = () => {
+    setPlaying(true);
+    video.current?.play().catch(() => setPlaying(false));
+  };
+  return (
+    <div className="gv-player">
+      <div className={`gv-screen ${live ? 'live' : ''}`}>
+        <video ref={video} playsInline data-n={at} data-joined="" onPlay={() => setPlaying(true)} onPause={() => video.current && !video.current.ended && setPlaying(false)} />
+        {live && !over && <span className="gv-badge">LIVE</span>}
+        {!playing && !over && (
+          <button type="button" className="gv-play" onClick={play} aria-label="Play">
+            ▶
+          </button>
+        )}
+        {waiting && playing && !over && <span className="gv-wait">Waiting for the next few seconds…</span>}
+        {over && <span className="gv-wait">This broadcast has ended.</span>}
+      </div>
+      {!live && meta.segments > 1 && (
+        <div className="gv-seek">
+          <span className="muted small">{span(Math.min(at, meta.segments) * meta.segment_seconds)}</span>
+          <input
+            type="range"
+            min={0}
+            max={meta.segments - 1}
+            value={Math.min(at, meta.segments - 1)}
+            aria-label="Move through the video"
+            onChange={(e) => {
+              setOver(false);
+              setAt(Number(e.target.value));
+              setFrom(Number(e.target.value));
+            }}
+          />
+          <span className="muted small">{span(meta.segments * meta.segment_seconds)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A video played piece by piece, each a small video of its own. */
+function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const [meta, setMeta] = useState(stream);
   const [at, setAt] = useState(stream.status === 'live' ? Math.max(0, stream.segments - 2) : 0);
@@ -187,7 +502,7 @@ export function StreamPlayer({ stream, onGone }: { stream: GameStream; onGone?: 
   const loaded = useRef(-1);
   const blobUrl = useRef('');
   // Where the pieces come from is the server's to say.
-  const fetchPiece = useRef(pieceFetcher(stream)).current;
+  const fetchPiece = useRef(pieceFetcher(stream)).current.whole;
   const here = useRef(true);
   const playingRef = useRef(playing);
   playingRef.current = playing;
@@ -324,28 +639,42 @@ export function StreamPeople({ teamId }: { teamId: number }) {
   );
 }
 
-/** One saved video as a row: play it, or delete it. */
-export function SavedVideo({ stream: s, onGone }: { stream: GameStream; onGone: () => void }) {
-  const [open, setOpen] = useState(false);
-  const remove = async () => {
-    if (!(await confirmDialog({ title: 'Delete this video?', body: `${s.title || 'Game video'}, ${day(s.started_at)}. It is gone for good, and its ${mb(s.bytes)} is freed.`, confirmLabel: 'Delete', danger: true }))) return;
-    api.deleteStream(s.id).then(onGone, () => {});
-  };
+/**
+ * One saved video as a card, the way Resources shows its things: a picture from the game to
+ * press and play, what it is, and what can be done with it (`children`).
+ */
+export function GameVideoCard({ stream: s, onPlay, children }: { stream: GameStream; onPlay: () => void; children?: ReactNode }) {
   return (
-    <li className={open ? 'open' : ''}>
-      <div className="gv-saved-row">
-        <button type="button" className="track-row" aria-expanded={open} onClick={() => setOpen(!open)}>
-          <strong>{s.title || 'Game video'}</strong>
-          <span className="muted small">
-            {day(s.started_at)} · {span(s.seconds)} · {mb(s.bytes)} · from {s.by}
+    <div className="res-card kind-video game-video">
+      <button type="button" className="res-preview" onClick={onPlay} title="Play">
+        {s.has_poster ? (
+          <img className="res-thumb gv-poster" src={`/api/streams/${s.id}/poster`} alt="" loading="lazy" />
+        ) : (
+          <span className="res-thumb site">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3.5 7h11v10h-11zM14.5 10.500l6-3v9l-6-3" />
+            </svg>
+            Game video
           </span>
-        </button>
-        <button type="button" className="link small" onClick={remove}>
-          Delete
-        </button>
+        )}
+        <span className="res-play" aria-hidden="true">
+          ▶
+        </span>
+        <span className="gv-length">{span(s.seconds)}</span>
+      </button>
+      <div className="res-info">
+        <strong className="res-title">{s.title || 'Game video'}</strong>
+        <span className="muted small">
+          {day(s.started_at)} · {mb(s.bytes)} · from {s.by}
+        </span>
+        <div className="res-actions">
+          <button type="button" className="btn small" onClick={onPlay}>
+            Play
+          </button>
+          {children}
+        </div>
       </div>
-      {open && <StreamPlayer stream={s} />}
-    </li>
+    </div>
   );
 }
 
@@ -359,6 +688,11 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [casting, setCasting] = useState(false);
+  const [watching, setWatching] = useState<GameStream | null>(null);
+  const remove = async (v: GameStream) => {
+    if (!(await confirmDialog({ title: 'Delete this video?', body: `${v.title || 'Game video'}, ${day(v.started_at)}. It is gone for good, and its ${mb(v.bytes)} is freed.`, confirmLabel: 'Delete', danger: true }))) return;
+    api.deleteStream(v.id).then(load, () => {});
+  };
   const load = useCallback(() => api.streams(teamId).then(setList, (e) => setError((e as Error).message)), [teamId]);
   useEffect(() => {
     load();
@@ -416,7 +750,7 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
                 Broadcast from this device
               </button>
               <span className="muted small">
-                Uses this device's camera and microphone. {can.save ? 'You can save the video when you finish.' : 'The video is not kept afterwards.'}
+                Uses this device's camera and microphone. You choose whether the video is kept before you go live.
               </span>
             </div>
           )}
@@ -432,13 +766,25 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
           {saved.length === 0 ? (
             <p className="muted">No saved video yet.</p>
           ) : (
-            <ul className="track-list gv-saved">
+            <div className="res-grid gv-saved">
               {saved.map((s) => (
-                <SavedVideo key={s.id} stream={s} onGone={load} />
+                <GameVideoCard key={s.id} stream={s} onPlay={() => setWatching(s)}>
+                  <button type="button" className="btn small res-remove" onClick={() => remove(s)}>
+                    Delete
+                  </button>
+                </GameVideoCard>
               ))}
-            </ul>
+            </div>
           )}
         </div>
+      )}
+      {watching && (
+        <Modal title={watching.title || 'Game video'} onClose={() => setWatching(null)} wide>
+          <StreamPlayer stream={watching} />
+          <p className="muted small">
+            {day(watching.started_at)} · {span(watching.seconds)} · from {watching.by}
+          </p>
+        </Modal>
       )}
     </div>
   );
