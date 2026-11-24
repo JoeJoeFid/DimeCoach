@@ -79,7 +79,7 @@ export function SavedVideoCard({ run }: { run: (fn: () => Promise<unknown>, done
   return (
     <div className="card">
       <h2>Saved game video and stat import</h2>
-      <p className="muted small">Both are turned on team by team. Anyone allowed to can broadcast a game live; keeping the video afterwards takes room on the disk, and saved video is for the team's coaches. Stat import adds "Import stats" to each of the team's games, to bring in the stats another scorekeeping app exports. The shot efficiency chart adds "Volume and efficiency" under Stats, Shooting.</p>
+      <p className="muted small">Both are turned on team by team. Anyone allowed to can broadcast a game live; keeping the video afterwards takes storage, and saved video is for the team's coaches. Stat import adds "Import stats" to each of the team's games, to bring in the stats another scorekeeping app exports. The shot efficiency chart adds "Volume and efficiency" under Stats, Shooting.</p>
       {teams === null ? (
         <p className="muted small">Loading…</p>
       ) : teams.length === 0 ? (

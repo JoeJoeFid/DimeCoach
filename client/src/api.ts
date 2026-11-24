@@ -835,7 +835,10 @@ export interface GameStream {
   team_id: number;
   plan_id: number | null;
   title: string;
-  transport: 'segments';
+  /** Where it is kept. The app goes by `watch`, and by `send` when broadcasting, never by this. */
+  transport: string;
+  /** How its pieces are fetched to be played: from the site, or by links the site hands out. */
+  watch: 'server' | 'links';
   mime: string;
   status: 'live' | 'ended';
   saved: boolean;
@@ -1022,7 +1025,20 @@ export const api = {
   streams: (teamId: number) => req<StreamList>('GET', `/streams?team_id=${teamId}`),
   stream: (id: number) => req<GameStream>('GET', `/streams/${id}`),
   savedStreams: () => req<GameStream[]>('GET', '/streams/saved'),
-  startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string; date: string }) => req<{ stream: GameStream; can_save: boolean }>('POST', '/streams', b),
+  /** `send` is how the server wants this broadcast's pieces sent: to itself, or by links it hands out. */
+  startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string; date: string }) => req<{ stream: GameStream; can_save: boolean; send: 'server' | 'links' }>('POST', '/streams', b),
+  /** Links to send the next few pieces straight to where the video is kept. Never throws for an answer the server gave: the caller decides what each means. */
+  sendLinks: async (id: number): Promise<{ status: number; error?: string; links?: { n: number; url: string }[] }> => {
+    const res = await fetch(`/api/streams/${id}/links`, { method: 'POST' });
+    return { ...(await res.json().catch(() => ({}))), status: res.status };
+  },
+  /** Tells the server piece `n` is where the video is kept. */
+  sentPiece: async (id: number, n: number): Promise<{ status: number; error?: string; segments?: number }> => {
+    const res = await fetch(`/api/streams/${id}/pieces`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n }) });
+    return { ...(await res.json().catch(() => ({}))), status: res.status };
+  },
+  /** Links to fetch the pieces from `from` on, for as long as `good_for` seconds. */
+  watchLinks: (id: number, from: number) => req<{ links: { n: number; url: string }[]; type: string; good_for: number }>('GET', `/streams/${id}/links?from=${from}`),
   /** Sends one piece of video as it is, not as JSON. */
   sendSegment: async (id: number, piece: Blob) => {
     const res = await fetch(`/api/streams/${id}/segments`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: piece });

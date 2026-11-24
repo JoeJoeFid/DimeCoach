@@ -1,10 +1,12 @@
 // Live video of a game: sending it from this device's camera, and watching it.
 //
 // The camera's picture is recorded a few seconds at a time, each piece a small video file of its
-// own, and sent to the server. A viewer plays the pieces one after another, some seconds behind
-// what is happening. See server/streams.js for why it is built this way and how it could change.
+// own, and sent out. A viewer plays the pieces one after another, some seconds behind what is
+// happening. How the pieces travel is in ../video.ts, and why it is built this way is in
+// server/streams.js.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
+import { pieceBroadcaster, pieceFetcher, type Broadcaster } from '../video';
 import { confirmDialog } from './dialogs';
 
 const mb = (bytes: number) => (bytes >= 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1024 / 1024))} MB`);
@@ -33,7 +35,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
   const [behind, setBehind] = useState(0);
   const [started, setStarted] = useState(0);
   const [, setTick] = useState(0);
-  const state = useRef<{ id: number; on: boolean; queue: Blob[]; sending: boolean; timer: number; recorder: MediaRecorder | null }>({ id: 0, on: false, queue: [], sending: false, timer: 0, recorder: null });
+  const state = useRef<{ id: number; cast: Broadcaster | null }>({ id: 0, cast: null });
   const mediaRef = useRef<MediaStream | null>(null);
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
 
@@ -62,9 +64,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
     () => () => {
       // Leaving the page stops the camera and the broadcast.
       const st = state.current;
-      st.on = false;
-      window.clearTimeout(st.timer);
-      if (st.recorder && st.recorder.state !== 'inactive') st.recorder.stop();
+      st.cast?.stop(false);
       mediaRef.current?.getTracks().forEach((t) => t.stop());
       lock.current?.release().catch(() => {});
       if (st.id) api.endStream(st.id, false).catch(() => {});
@@ -77,52 +77,6 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
     return () => window.clearInterval(t);
   }, [live]);
 
-  /** Sends what is waiting, oldest first, one at a time. */
-  const pump = async () => {
-    const st = state.current;
-    if (st.sending) return;
-    st.sending = true;
-    while (st.queue.length > 0 && st.id) {
-      try {
-        await api.sendSegment(st.id, st.queue[0]);
-        st.queue.shift();
-        setSent((n) => n + 1);
-      } catch (e) {
-        // A stream the server has ended will not take more. Anything else is the connection: try again shortly.
-        if (/ended|longest|room/.test((e as Error).message)) {
-          setError((e as Error).message);
-          st.on = false;
-          break;
-        }
-        await new Promise((r) => setTimeout(r, 1500));
-      }
-      // Too far behind means the connection cannot keep up: the oldest pieces are dropped so the viewers stay near live.
-      while (st.queue.length > 8) st.queue.shift();
-      setBehind(st.queue.length);
-    }
-    st.sending = false;
-  };
-  /** Records one piece, and starts the next as this one ends, for as long as the broadcast is on. */
-  const record = (type: string, seconds: number) => {
-    const st = state.current;
-    const m = mediaRef.current;
-    if (!st.on || !m) return;
-    const rec = new MediaRecorder(m, { mimeType: type, videoBitsPerSecond: 700_000, audioBitsPerSecond: 48_000 });
-    st.recorder = rec;
-    rec.ondataavailable = (e) => {
-      if (e.data.size > 0 && st.id) {
-        st.queue.push(e.data);
-        setBehind(st.queue.length);
-        pump();
-      }
-    };
-    rec.start();
-    st.timer = window.setTimeout(() => {
-      // The next piece starts before this one stops, so nothing falls between them.
-      record(type, seconds);
-      if (rec.state !== 'inactive') rec.stop();
-    }, seconds * 1000);
-  };
   const start = async () => {
     const type = recordingType();
     if (!type) return setError('This browser cannot record video, so it cannot broadcast.');
@@ -130,26 +84,28 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       const today = new Date();
       const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       const r = await api.startStream({ team_id: teamId, plan_id: planId, title, mime: type, date });
-      state.current = { ...state.current, id: r.stream.id, on: true, queue: [] };
+      // The server says how the pieces are to be sent. How the broadcast is getting on comes back as it goes.
+      const cast = pieceBroadcaster(() => mediaRef.current, r.stream, r.send, type, (s) => {
+        setSent(s.sent);
+        setBehind(s.behind);
+        if (s.error) setError(s.error);
+      });
+      state.current = { id: r.stream.id, cast };
       setLive(r.stream);
       setStarted(Date.now());
       setSent(0);
       setError('');
       // Keeps the screen on, where the browser can: a phone that sleeps stops its camera.
       (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock?.request('screen').then((l) => (lock.current = l), () => {});
-      record(type, r.stream.segment_seconds);
+      cast.start();
     } catch (e) {
       setError((e as Error).message);
     }
   };
   const stop = async (keep: boolean) => {
     const st = state.current;
-    st.on = false;
-    window.clearTimeout(st.timer);
-    if (st.recorder && st.recorder.state !== 'inactive') st.recorder.stop();
-    // The last piece is given a moment to arrive before the stream is closed.
-    await new Promise((r) => setTimeout(r, 400));
-    for (let i = 0; i < 20 && (st.queue.length > 0 || st.sending); i++) await new Promise((r) => setTimeout(r, 300));
+    // What is still waiting is given a moment to go out before the stream is closed.
+    await st.cast?.stop();
     const id = st.id;
     st.id = 0;
     lock.current?.release().catch(() => {});
@@ -230,6 +186,8 @@ export function StreamPlayer({ stream, onGone }: { stream: GameStream; onGone?: 
   // open, which a video element pointed straight at the server can do long after it is gone.
   const loaded = useRef(-1);
   const blobUrl = useRef('');
+  // Where the pieces come from is the server's to say.
+  const fetchPiece = useRef(pieceFetcher(stream)).current;
   const here = useRef(true);
   const playingRef = useRef(playing);
   playingRef.current = playing;
@@ -247,8 +205,8 @@ export function StreamPlayer({ stream, onGone }: { stream: GameStream; onGone?: 
     if (loaded.current === at) return;
     loaded.current = at;
     setWaiting(false);
-    fetch(`/api/streams/${stream.id}/segments/${at}`)
-      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('gone'))))
+    fetchPiece(at)
+      .then((piece) => piece ?? Promise.reject(new Error('gone')))
       .then(
         (piece) => {
           // Moved on, or left, while it was on its way.
