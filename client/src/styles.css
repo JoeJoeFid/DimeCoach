@@ -1854,6 +1854,7 @@ a.heat-cell:hover {
   --primary-ink: #d2f24b;
   --primary-hover: #2a3505;
   --bg: #d2f24b;
+  --warn-soft: #fff4d6;
   background: var(--accent);
   border-color: var(--accent-edge);
   color: var(--ink);
@@ -2890,6 +2891,7 @@ text.play-mark.selected,
   --primary-ink: #d2f24b;
   --primary-hover: #2a3505;
   --bg: #d2f24b;
+  --warn-soft: #fff4d6;
   background: var(--accent);
   color: var(--ink);
   padding-top: 20px;
