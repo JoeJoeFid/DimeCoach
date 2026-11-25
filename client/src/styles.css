@@ -21647,36 +21647,77 @@ button.film-clip-play {
   }
 }
 
-/* The play builder: the play's details on the left and, a quarter as wide beside them, the court or field in a box of its own:
-   which one, its color, and which way round it is seen. */
-.play-top {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(230px, 1fr);
+/* ---------- The play builder ----------
+   Across the top: where this is and what can be done with the play. Under that, one box with what the play is on the left
+   and the court or field it is drawn on, on the right. Then three columns: the steps, narrow; the tools with the court under
+   them; and the settings of the step being worked on. */
+.play-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.play-topline .crumbs {
+  display: flex;
+  align-items: center;
   gap: 14px;
-  align-items: stretch;
+  margin: 0;
+}
+.play-setup {
   margin-bottom: 14px;
 }
-.play-top > .card {
-  margin-bottom: 0;
+.play-head.play-info {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 0;
 }
-.court-box {
+.play-info-part {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  min-width: 0;
 }
-.court-box h2 {
+.play-info-part h2 {
   margin: 0;
+}
+/* A fine line stands between what the play is and the court it is on. */
+.play-info-part + .play-info-part {
+  margin-left: 24px;
+  padding-left: 24px;
+  border-left: 1px solid var(--line);
+}
+.play-info-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+.play-info-row > .field.grow {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+/* One line to begin with, like the boxes beside it. It can be pulled taller. */
+.play-setup .play-info-row textarea.input {
+  width: 100%;
+  height: 36px;
+  min-height: 36px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  line-height: 1.4;
+  overflow: hidden;
+  resize: vertical;
+}
+/* Being written in, it opens up to show all of it. */
+.play-setup .play-info-row textarea.input:focus {
+  min-height: 96px;
+  overflow: auto;
 }
 .court-box-part {
   display: flex;
   flex-direction: column;
   gap: 5px;
-}
-.court-box-part .input {
-  width: 100%;
-}
-.court-box .court-looks {
-  flex-wrap: wrap;
 }
 .court-box-turns {
   display: flex;
@@ -21684,18 +21725,113 @@ button.film-clip-play {
   align-items: center;
   gap: 8px;
 }
-/* On a narrow screen the court's box goes under the details, across the page. */
-@media (max-width: 900px) {
-  .play-top {
+@media (max-width: 1100px) {
+  .play-head.play-info {
     grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
-  .court-box {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    gap: 14px 24px;
+  .play-info-part + .play-info-part {
+    margin-left: 0;
+    padding-left: 0;
+    padding-top: 16px;
+    border-left: none;
+    border-top: 1px solid var(--line);
   }
-  .court-box h2 {
-    width: 100%;
+}
+/* The steps are a narrow column of small pictures, so the court gets the room. */
+@media (min-width: 1101px) {
+  .builder {
+    grid-template-columns: 196px minmax(0, 1fr) clamp(250px, 21%, 320px);
+  }
+}
+.builder-left .step-list.has-notes .step-thumb {
+  display: block;
+}
+.builder-left .step-list.has-notes .step-note {
+  display: block;
+  padding: 5px 2px 2px;
+  font-size: 0.74rem;
+}
+/* The middle column: the tools in a bar of their own, and the court under it. */
+.builder-mid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.builder-mid > .card {
+  margin: 0;
+}
+.builder-mid .builder-bar {
+  display: block;
+  min-height: 0;
+  padding: 8px 12px;
+}
+/* The tools run along in the order they come, onto a second line only where the column is too narrow for one. */
+.builder-mid .builder-bar .toolbar {
+  gap: 6px 4px;
+}
+.builder-mid .builder-bar .toolbar::before {
+  content: none;
+}
+.builder-mid .builder-bar .tool-group,
+.builder-mid .builder-bar .tool-group:nth-child(n) {
+  order: 0;
+}
+.builder-mid .builder-bar .tool-group + .tool-group,
+.builder-mid .builder-bar .tool-group:nth-child(3) {
+  margin-left: 2px;
+  padding-left: 6px;
+  border-left: 1px solid var(--line);
+}
+/* Undo and redo sit at the end of the line under the tools, out of the way of the tools themselves. */
+.builder-mid .builder-bar {
+  position: relative;
+}
+.builder-mid .builder-bar .tool-group:last-child {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.builder-mid .bar-selection {
+  padding-right: 120px;
+}
+.builder-mid .builder-bar .tool,
+.builder-mid .builder-bar .tool-group:has(.tool:nth-child(3):last-child) .tool {
+  gap: 3px;
+  padding: 0 4px;
+  font-size: 0.78rem;
+}
+.builder-mid .builder-bar .tool-icon {
+  width: 18px;
+}
+.builder-mid .builder-bar .tool-icon.plain,
+.builder-mid .builder-bar svg.tool-icon.mark {
+  width: 14px;
+  margin: 0 1px;
+}
+.builder-mid .builder-bar .tool-group {
+  gap: 2px;
+}
+/* What can be changed about the thing selected, on a line under the tools. The line is always there, so the court does not move when something is picked. */
+.builder-mid .bar-selection {
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 6px 0 0;
+  border-left: none;
+  border-top: 1px solid var(--line);
+}
+.builder-mid .bar-selection:has(.selection:empty)::before {
+  content: 'Select something on the court to change it.';
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+/* The court fits on the screen under its tools. */
+@media (min-width: 1101px) {
+  .builder-mid .play-svg.editing {
+    max-height: calc(100vh - 215px);
   }
 }
