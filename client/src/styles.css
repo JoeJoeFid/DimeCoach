@@ -23012,3 +23012,98 @@ button.hw-title {
   font-size: 0.82rem;
   font-weight: 400;
 }
+
+/* Access & permissions: beside each line, what it gives someone who does not coach. */
+.tf-access td:first-child strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.tf-tag {
+  padding: 2px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.tf-tag.write {
+  border-color: var(--good);
+  background: var(--ok-soft);
+  color: var(--ink);
+}
+.tf-tag.act {
+  border-color: var(--accent-edge);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.tf-access .tf-col {
+  width: 110px;
+}
+
+/* Access & permissions: the people chosen by name to broadcast, on a line of their own under the groups. */
+.tf-box .tf-access tr.tf-has-people td {
+  border-bottom: none;
+}
+.tf-box .tf-access tr.tf-people-row td {
+  padding-top: 0;
+  padding-bottom: 12px;
+}
+.tf-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+}
+.tf-people .field-label {
+  margin-right: 4px;
+}
+.tf-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tf-person button {
+  margin-left: 2px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.tf-person button:hover {
+  color: var(--danger);
+}
+.tf-people-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.tf-people .tf-person {
+  flex: none;
+  flex-direction: row;
+  white-space: nowrap;
+}
+.tf-people .tf-person span {
+  display: inline;
+}
+/* The table makes the words in its first column stand on lines of their own; the people on this line stay side by side. */
+.tf-access td:first-child .tf-people span {
+  display: inline;
+}
+.tf-access td:first-child .tf-people .tf-person {
+  display: inline-flex;
+}

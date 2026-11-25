@@ -1,12 +1,12 @@
 // What a team's parents, family and friends see on the team's page, as its coaches set it:
 // which parts each kind of follower gets, the plays and resources picked out for them, and what
 // the coaches write to them.
-import { useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../App';
 import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 import { StreamPeople } from '../components/GameVideo';
-import { api, type Audience, type FamilyKind, type FamilySection, type FamilySettings, type TeamPost } from '../api';
+import { api, type Audience, type FamilyKind, type FamilySection, type FamilySettings, type TeamPost, type StreamPerson } from '../api';
 import type { Team } from '../types';
 import { SubTabs } from '../components/cx';
 
@@ -15,6 +15,72 @@ const KINDS: [FamilyKind, string][] = [
   ['family', 'Family'],
   ['friend', 'Friends'],
 ];
+/**
+ * The people who may broadcast on their own account, beside whichever whole groups may: each one a
+ * chip, and a list to choose more from. Someone whose whole group may broadcast is marked as having
+ * it that way already.
+ */
+function BroadcastPeople({ teamId, open, canEdit }: { teamId: number; open: FamilySettings['access']; canEdit: boolean }) {
+  const [people, setPeople] = useState<StreamPerson[] | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    setPeople(null);
+    api.streamPeople(teamId).then((r) => setPeople(r.people), (e) => setError((e as Error).message));
+  }, [teamId]);
+  const set = (p: StreamPerson, on: boolean) => api.setStreamPerson(teamId, p.id, { broadcast: on }).then((r) => (setPeople(r.people), setError('')), (e) => setError((e as Error).message));
+  const byGroup = (p: StreamPerson) => !!open[p.kind as FamilyKind]?.broadcast;
+  const picked = (people ?? []).filter((p) => p.broadcast);
+  return (
+    <div className="tf-people">
+      <span className="field-label">Specific people</span>
+      {people === null ? (
+        <span className="muted small">{error || 'Loading…'}</span>
+      ) : (
+        <>
+          {picked.length === 0 && people.length > 0 && <span className="muted small">Nobody chosen by name.</span>}
+          {picked.map((p) => (
+            <span key={p.id} className="chip tf-person">
+              {p.name}
+              {!p.joined && <span className="muted"> · no account yet</span>}
+              {canEdit && (
+                <button type="button" aria-label={`Stop ${p.name} broadcasting`} title="Remove" onClick={() => set(p, false)}>
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+          {canEdit && people.length > 0 && (
+            <button type="button" className="btn small" aria-expanded={choosing} onClick={() => setChoosing(!choosing)}>
+              {choosing ? 'Done' : '+ Choose people'}
+            </button>
+          )}
+          {people.length === 0 && <span className="muted small">Nobody is on the team’s list of parents, family and friends yet.</span>}
+          {error && <span className="error small">{error}</span>}
+          {choosing && (
+            <div className="tf-people-pick" role="group" aria-label="People who may broadcast">
+              {people.map((p) => (
+                <button key={p.id} type="button" className={`chip toggle ${p.broadcast ? 'on' : ''}`} aria-pressed={p.broadcast} onClick={() => set(p, !p.broadcast)} title={byGroup(p) ? 'Their whole group may broadcast already' : undefined}>
+                  {p.name}
+                  <span className="muted"> · {p.kind}</span>
+                  {byGroup(p) && !p.broadcast && <span className="muted"> · by group</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** What a part gives someone who does not coach, where it is more than looking: the words on its tag, and how the tag is colored. */
+const GIVES: Partial<Record<FamilySection, [string, 'view' | 'write' | 'act']>> = {
+  board: ['Read & write', 'write'],
+  broadcast: ['Can broadcast', 'act'],
+  live: ['Watch only', 'view'],
+  pbp: ['Watch only', 'view'],
+};
 /** What can be opened to each kind of person, in groups: the part, what it is called, and what opening it gives. */
 const ACCESS: { group: string; /** The line drawing beside its name. */ icon: string; about: string; rows: [FamilySection, string, string][] }[] = [
   {
@@ -34,7 +100,7 @@ const ACCESS: { group: string; /** The line drawing beside its name. */ icon: st
     about: 'Live games and saved film.',
     rows: [
       ['live', 'Watch live video', 'Watching a game while it is broadcast. One person can be turned off under "Live video".'],
-      ['broadcast', 'Broadcast live video', 'Sending a game’s live video from their own phone or tablet. One person can be allowed alone under "Live video".'],
+      ['broadcast', 'Broadcast live video', 'Sending a game’s live video from their own phone or tablet. Tick a whole group, choose people by name below, or both.'],
       ['film', 'Filmroom', 'Only the game videos, clips and cuts you share with the team from the Filmroom. Video shared with one person by name always shows to them.'],
     ],
   },
@@ -157,7 +223,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
         <h2>Access &amp; permissions</h2>
       </div>
       <p className="muted small">
-        What each kind of person on {team.name} can see and do. Coaches can do everything here, always. Parents, family and friends each have their own page for the team, and you choose what it opens to them. They can never change the team.
+        What each kind of person on {team.name} can see and do. Coaches and helpers can do everything here, always. The tag beside each line says what turning it on gives a parent, a relative or a friend: most are to look at only. Parents, family and friends each have their own page for the team, and you choose what it opens to them. They can never change the team.
       </p>
       {error && <p className="error">{error}</p>}
       <SubTabs<View>
@@ -197,7 +263,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
                       </th>
                       {/* Coaches come first, and are not for changing: it is there to make plain that they have all of it. */}
                       <th scope="col" className="tf-col">
-                        Coaches
+                        Coaches &amp; helpers
                         <small className="muted">Always</small>
                       </th>
                       {KINDS.map(([k, label]) => (
@@ -210,13 +276,18 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
                   </thead>
                   <tbody>
                     {g.rows.map(([s, label, about]) => (
-                      <tr key={s}>
+                      <Fragment key={s}>
+                      <tr className={s === 'broadcast' ? 'tf-has-people' : ''}>
                         <td>
-                          <strong>{label}</strong>
+                          <strong>
+                            {label}
+                            {/* What having it lets someone who does not coach do: look, or more. */}
+                            <span className={`tf-tag ${GIVES[s]?.[1] ?? 'view'}`}>{GIVES[s]?.[0] ?? 'View only'}</span>
+                          </strong>
                           <span className="muted small">{about}</span>
                         </td>
                         <td className="tf-col">
-                          <input type="checkbox" aria-label={`Coaches: ${label}. Always on.`} title="Coaches always have this" checked disabled readOnly />
+                          <input type="checkbox" aria-label={`Coaches and helpers: ${label}. Always on.`} title="Coaches and helpers always have this" checked disabled readOnly />
                         </td>
                         {KINDS.map(([k, kindLabel]) => (
                           <td key={k} className="tf-col">
@@ -224,6 +295,15 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
                           </td>
                         ))}
                       </tr>
+                      {/* Broadcasting can also be given to people one at a time, with or without a whole group. */}
+                      {s === 'broadcast' && (
+                        <tr className="tf-people-row">
+                          <td colSpan={KINDS.length + 2}>
+                            <BroadcastPeople teamId={team.id} open={data.access} canEdit={canEdit} />
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
