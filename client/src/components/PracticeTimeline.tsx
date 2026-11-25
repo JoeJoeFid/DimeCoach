@@ -181,7 +181,7 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
           <div data-key={focus.key} className={`tl-card tl-focus ${focus.kind} ${focus.key === nextKey ? 'tl-next' : ''} ${focusDone ? 'done' : ''}`}>
             {/* The ball of the team's sport, faint, in the corner. */}
             <span className="tl-ball" aria-hidden="true">
-              <SportIcon sport={app.sport?.name} size={190} />
+              <SportIcon sport={app.sport?.name} size={300} />
             </span>
             <div className="tl-eyebrow">
               <span className="tl-upnext">
@@ -207,7 +207,6 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
                 </span>
               )}
             </div>
-            <div className="tl-state">{result(focus) ?? planState(focus)}</div>
             {focus.plan && mins && (
               <>
                 <div className="muted small">
@@ -221,6 +220,9 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
                 </div>
               </>
             )}
+            {/* Along the bottom: how far along its plan is, and to its right what can be done about that. */}
+            <div className="tl-bottom">
+            <div className="tl-state">{result(focus) ?? planState(focus)}</div>
             <div className="tl-actions">
               {focus.plan ? (
                 <>
@@ -237,6 +239,7 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
                   {focus.kind === 'game' ? 'Plan this game' : focus.kind === 'practice' ? 'Plan this practice' : 'Plan this event'}
                 </button>
               )}
+            </div>
             </div>
           </div>
 

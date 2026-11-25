@@ -23465,3 +23465,28 @@ button.hw-title {
     display: none;
   }
 }
+
+/* The big card's last row: its plan's state on the left, its buttons on the right. */
+.tl-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+.tl-bottom .tl-state,
+.tl-focus .tl-bottom .tl-actions {
+  margin-top: 0;
+}
+.tl-bottom .tl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* The ball in the corner is large enough to be made out, and still faint. */
+.tl-focus > .tl-ball {
+  right: -70px;
+  bottom: -90px;
+}
