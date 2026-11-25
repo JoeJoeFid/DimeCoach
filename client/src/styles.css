@@ -21767,22 +21767,9 @@ button.film-clip-play {
   min-height: 0;
   padding: 8px 12px;
 }
-/* The tools run along in the order they come, onto a second line only where the column is too narrow for one. */
+/* Two rows of large tools: select, players and markers, with undo and redo at the far end; then lines and shapes. */
 .builder-mid .builder-bar .toolbar {
-  gap: 6px 2px;
-}
-.builder-mid .builder-bar .toolbar::before {
-  content: none;
-}
-.builder-mid .builder-bar .tool-group,
-.builder-mid .builder-bar .tool-group:nth-child(n) {
-  order: 0;
-}
-.builder-mid .builder-bar .tool-group + .tool-group,
-.builder-mid .builder-bar .tool-group:nth-child(3) {
-  margin-left: 0;
-  padding-left: 4px;
-  border-left: 1px solid var(--line);
+  gap: 6px 8px;
 }
 /* Undo and redo are the last of the tools, at the far end of their row. */
 .builder-mid .builder-bar .tool-group:last-child {
@@ -21790,20 +21777,25 @@ button.film-clip-play {
 }
 .builder-mid .builder-bar .tool,
 .builder-mid .builder-bar .tool-group:has(.tool:nth-child(3):last-child) .tool {
-  gap: 2px;
-  padding: 0 2px;
-  font-size: 0.75rem;
+  /* Big enough to hit with a finger, and to read at a glance. */
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 11px;
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 .builder-mid .builder-bar .tool-icon {
-  width: 18px;
+  width: 30px;
+  height: 18px;
 }
 .builder-mid .builder-bar .tool-icon.plain,
 .builder-mid .builder-bar svg.tool-icon.mark {
-  width: 14px;
-  margin: 0 1px;
+  width: 19px;
+  height: 19px;
+  margin: 0;
 }
 .builder-mid .builder-bar .tool-group {
-  gap: 1px;
+  gap: 4px;
 }
 /* What can be changed about the thing selected, on a line under the tools. The room for it is always there, so the court
    does not move when something is picked; the line above it only shows when there is something on it. */
@@ -21821,5 +21813,30 @@ button.film-clip-play {
 @media (min-width: 1101px) {
   .builder-mid .play-svg.editing {
     max-height: calc(100vh - 215px);
+  }
+}
+
+/* On a narrower window the play builder's tools are a little smaller, so they still make two rows and not four. */
+@media (max-width: 1400px) {
+  .builder-mid .builder-bar .toolbar {
+    gap: 6px 4px;
+  }
+  .builder-mid .builder-bar .tool,
+  .builder-mid .builder-bar .tool-group:has(.tool:nth-child(3):last-child) .tool {
+    gap: 4px;
+    min-height: 40px;
+    padding: 0 6px;
+    font-size: 0.88rem;
+  }
+  .builder-mid .builder-bar .tool-icon {
+    width: 24px;
+  }
+  .builder-mid .builder-bar .tool-icon.plain,
+  .builder-mid .builder-bar svg.tool-icon.mark {
+    width: 17px;
+    height: 17px;
+  }
+  .builder-mid .builder-bar .tool-group {
+    gap: 2px;
   }
 }
