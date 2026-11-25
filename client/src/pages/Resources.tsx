@@ -8,7 +8,7 @@ import { useApp } from '../App';
 import { prepareImage } from '../components/ItemImages';
 import { normalizeUrl } from '../components/ItemMedia';
 import { ResourceThumb, fileUrl, searchText } from '../components/ResourcePicker';
-import { Modal, ShareIcon } from '../components/bits';
+import { Modal, MoreMenu, PlayIcon, ShareIcon } from '../components/bits';
 import { CategoryChips, LayoutToggle } from '../components/cx';
 import { ShareItemDialog, SharedWithBox, SharedWithLine, useShareSummary } from '../components/ShareItem';
 import { confirmDialog } from '../components/dialogs';
@@ -347,27 +347,23 @@ function ResourceCard({ resource: r, tags, sharedWith, onShare, onTag, onView, o
         <SharedWithLine names={sharedWith} onClick={onShare} />
         <div className="res-actions">
           {r.kind === 'link' ? (
-            <a className="btn small" href={r.url} target="_blank" rel="noopener noreferrer" title={r.url}>
+            <a className="btn small res-open" href={r.url} target="_blank" rel="noopener noreferrer" title={r.url}>
+              <PlayIcon size={14} />
               Open
             </a>
           ) : (
-            <button className="btn small" onClick={onView}>
+            <button className="btn small res-open" onClick={onView}>
+              <PlayIcon size={14} />
               {r.kind === 'video' ? 'Play' : 'View'}
             </button>
           )}
           <button className="btn small res-share" onClick={onShare} aria-label={`Share ${r.title}`} title="Share">
             <ShareIcon size={16} />
           </button>
-          <button className="btn small" onClick={onTag} aria-label={`Categories for ${r.title}`}>
-            Categories
-          </button>
-          {saved && (
-            <button className="btn small danger res-remove" onClick={onRemove} aria-label={`Remove ${r.title}`} title="Remove">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 7h16M9.500 7V4.500h5V7M6.500 7l.800 12.500h9.400L17.500 7M10 11v5M14 11v5" />
-              </svg>
-            </button>
-          )}
+          {/* The less-used things, behind "...": its categories, and taking it out of the library. */}
+          <span className="res-more">
+            <MoreMenu label={`More for ${r.title}`} items={[{ label: 'Edit categories', onSelect: onTag }, ...(saved ? [{ label: 'Delete', danger: true, onSelect: onRemove }] : [])]} />
+          </span>
         </div>
       </div>
     </div>

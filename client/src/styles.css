@@ -21974,3 +21974,79 @@ button.film-clip-play {
   letter-spacing: 0;
   line-height: 1;
 }
+
+/* Stats: the games to count, with the games still to score beside them at a quarter of the width. */
+.st-top {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+.st-top > .card {
+  margin: 0;
+}
+.st-top .st-missing {
+  align-content: start;
+}
+.st-top .st-missing .st-games {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.st-top .st-missing .st-game {
+  display: flex;
+}
+.st-top .st-missing a.chip.st-miss {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  white-space: normal;
+}
+.st-miss-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  border: 1px dashed var(--line-strong);
+  font-size: 0.78rem;
+}
+/* Every game scored: a trophy on the lime, and a word of well done. */
+.st-missing.st-alldone {
+  justify-items: center;
+  align-content: center;
+  gap: 6px;
+  border-style: solid;
+  text-align: center;
+}
+.st-cheer {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+@media (max-width: 900px) {
+  .st-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A resource's buttons: open it, share it, and "..." at the far end for the rest. */
+.res-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.res-actions .res-more {
+  margin-left: auto;
+}
+.res-grid.compact .res-actions .res-more {
+  margin-left: 0;
+}

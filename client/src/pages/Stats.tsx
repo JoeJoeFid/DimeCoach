@@ -259,13 +259,28 @@ function GameMenu({ planId, name }: { planId: number; name: string }) {
 }
 
 /** The games that are over with no score, each one a way straight into scoring it. */
-function NotScored({ games }: { games: Missing[] }) {
-  if (games.length === 0) return null;
+function NotScored({ games, cheer }: { games: Missing[]; cheer?: boolean }) {
+  // With every game scored there is nothing to list. Beside the games, that is said out loud; on its own, nothing is shown.
+  if (games.length === 0)
+    return cheer ? (
+      <div className="card st-missing st-alldone" role="status">
+        <span className="st-cheer" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 4h10v5a5 5 0 0 1-10 0V4z" />
+            <path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" />
+            <path d="M12 14v4M8.5 20h7" />
+          </svg>
+        </span>
+        <strong>All games scored</strong>
+        <span className="muted small">Every game played so far has its score.</span>
+      </div>
+    ) : null;
   return (
     <div className="card st-missing">
       <strong>
-        Not scored yet <span className="muted small">{games.length === 1 ? '1 game is over with no score.' : `${games.length} games are over with no score.`} Press one to score it.</span>
+        Not scored yet <span className="st-miss-count">{games.length}</span>
       </strong>
+      <span className="muted small">Press one to score it.</span>
       <div className="st-games">
         {games.map((g) => (
           <span key={g.plan_id} className="st-game">
@@ -462,14 +477,18 @@ export default function Stats() {
           </>
         ) : def ? (
           <>
-            {picker}
-            <NotScored games={missing} />
+            <div className="st-top">
+              {picker}
+              <NotScored games={missing} cheer />
+            </div>
             <SportSeason def={def} games={picked} nameOf={nameOf} />
           </>
         ) : (
           <>
-            {picker}
-            <NotScored games={missing} />
+            <div className="st-top">
+              {picker}
+              <NotScored games={missing} cheer />
+            </div>
             <div className="st-show">
               <div className="seg" role="group" aria-label="What to look at">
                 {(
