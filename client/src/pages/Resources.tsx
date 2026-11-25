@@ -46,7 +46,8 @@ export default function Resources() {
   const [tagging, setTagging] = useState('');
   const sportTagIds = useMemo(() => new Set(sportTags.map((t) => t.id)), [sportTags]);
   const inTag = (r: Resource) => tagId === 0 || (tagId === -1 ? !r.tag_ids.some((id) => sportTagIds.has(id)) : r.tag_ids.includes(tagId));
-  const [adding, setAdding] = useState(false);
+  // The box for adding one: first asking which kind, then, for a link, its name and address.
+  const [adding, setAdding] = useState<false | 'pick' | 'link'>(false);
   const [draft, setDraft] = useState({ title: '', url: '' });
   const [progress, setProgress] = useState<number | null>(null);
   const [viewing, setViewing] = useState<Resource | null>(null);
@@ -178,30 +179,63 @@ export default function Resources() {
         <div className="head-actions">
           <input ref={imageInput} type="file" accept="image/*" multiple hidden onChange={(e) => addImages(e.target.files)} />
           <input ref={videoInput} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" hidden onChange={(e) => addVideo(e.target.files?.[0])} />
-          <button className="btn" onClick={() => imageInput.current?.click()}>
-            + Picture
-          </button>
-          <button className="btn" disabled={progress !== null} onClick={() => videoInput.current?.click()}>
-            {progress !== null ? `Uploading ${Math.round(progress * 100)}%` : '+ Video'}
-          </button>
-          <button className="btn primary" onClick={() => setAdding(true)}>
-            + Link
+          <button className="btn primary" disabled={progress !== null} onClick={() => setAdding('pick')}>
+            {progress !== null ? `Uploading ${Math.round(progress * 100)}%` : '+ Resource'}
           </button>
         </div>
       </div>
       {error && <p className="error">{error}</p>}
 
-      {adding && (
-        <form className="card add-link" onSubmit={addLink}>
-          <input className="input" aria-label="Link name" placeholder="Name, such as Shell drill explained" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-          <input className="input grow" aria-label="Web address" autoFocus placeholder="Paste a web address" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
-          <button className="btn primary" type="submit" disabled={!normalizeUrl(draft.url)}>
-            Save link
-          </button>
-          <button className="btn" type="button" onClick={() => setAdding(false)}>
-            Cancel
-          </button>
-        </form>
+      {adding === 'pick' && (
+        <Modal title="Add a resource" onClose={() => setAdding(false)}>
+          <p className="muted small res-add-lead">What kind is it?</p>
+          <div className="res-add-kinds">
+            <button type="button" className="res-add-kind" autoFocus onClick={() => setAdding('link')}>
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M10 14a4 4 0 0 0 5.700 0l3-3a4 4 0 0 0-5.700-5.700l-1 1M14 10a4 4 0 0 0-5.700 0l-3 3a4 4 0 0 0 5.700 5.700l1-1" />
+              </svg>
+              <strong>Link</strong>
+              <span className="muted small">A web address, such as a video on YouTube</span>
+            </button>
+            <button type="button" className="res-add-kind" onClick={() => (setAdding(false), imageInput.current?.click())}>
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 5.500h16v13H4ZM4 15.500l4.500-4.500 4 4 2.500-2.500 5 5M15.500 9.500h.010" />
+              </svg>
+              <strong>Picture</strong>
+              <span className="muted small">One or more from this device</span>
+            </button>
+            <button type="button" className="res-add-kind" onClick={() => (setAdding(false), videoInput.current?.click())}>
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3.500 6.500h12v11h-12ZM15.500 10.500l5-3v9l-5-3" />
+              </svg>
+              <strong>Video</strong>
+              <span className="muted small">A clip from this device: MP4, MOV or WebM</span>
+            </button>
+          </div>
+        </Modal>
+      )}
+      {adding === 'link' && (
+        <Modal title="Add a link" onClose={() => setAdding(false)}>
+          <form className="fields stack" onSubmit={addLink}>
+            <label className="field">
+              <span className="field-label">Web address</span>
+              <input className="input" aria-label="Web address" autoFocus placeholder="Paste a web address" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} />
+            </label>
+            <label className="field">
+              <span className="field-label">Name</span>
+              <input className="input" aria-label="Link name" placeholder="Such as Shell drill explained" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+            </label>
+            {error && <p className="error small">{error}</p>}
+            <div className="modal-actions">
+              <button className="btn" type="button" onClick={() => setAdding('pick')}>
+                Back
+              </button>
+              <button className="btn primary" type="submit" disabled={!normalizeUrl(draft.url)}>
+                Save link
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       <div className="ps-layout">
@@ -235,8 +269,8 @@ export default function Resources() {
         <div className="empty">
           <h2>No resources yet</h2>
           <p>Save a link to a video, or upload a picture or clip. Links, pictures and videos you add to drills, plays and practices appear here too.</p>
-          <button className="btn primary" onClick={() => setAdding(true)}>
-            + Link
+          <button className="btn primary" onClick={() => setAdding('pick')}>
+            + Resource
           </button>
         </div>
       ) : shown.length === 0 ? (

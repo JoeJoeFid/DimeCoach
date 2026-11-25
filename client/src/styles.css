@@ -22527,3 +22527,40 @@ button.film-clip-play {
     padding-right: 40px;
   }
 }
+
+/* ---------- Adding a resource: three big choices of what kind it is ---------- */
+.res-add-lead {
+  margin: 0 0 10px;
+}
+.res-add-kinds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.res-add-kind {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.res-add-kind:hover,
+.res-add-kind:focus-visible {
+  border-color: var(--accent-edge);
+  background: var(--surface-2);
+}
+.res-add-kind svg {
+  color: var(--ink-2);
+}
+@media (max-width: 560px) {
+  .res-add-kinds {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

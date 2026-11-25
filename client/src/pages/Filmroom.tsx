@@ -6,7 +6,7 @@ import { api, type Film, type FilmClip, type FilmLink, type FilmPeople, type Fil
 import { useApp } from '../App';
 import PageTitle from '../components/PageTitle';
 import { BinIcon, Field, Modal, ShareIcon } from '../components/bits';
-import { SubTabs } from '../components/cx';
+import { SideChoices } from '../components/cx';
 import { confirmDialog } from '../components/dialogs';
 import { GameVideoCard } from '../components/GameVideo';
 import { CutIcon, FilmPlayer, ReelPlayer, canClip, clock, scenes, stripItem } from '../components/Film';
@@ -56,6 +56,9 @@ export default function Filmroom() {
   const [showing, setShowing] = useState<{ reel: FilmReel; at: number } | null>(null);
   const [editing, setEditing] = useState<FilmClip | null>(null);
   const [sharing, setSharing] = useState<Shared | null>(null);
+  // What is typed to find something by its title or notes, and the game video the clips are narrowed to (0 for all).
+  const [q, setQ] = useState('');
+  const [fromVideo, setFromVideo] = useState(0);
   /** The button that opens sharing for one thing, saying how many people have it already. */
   const shareButton = (what: Shared) => {
     const n = film?.shares.filter((s) => s.kind === what.kind && s.ref_id === what.id).length ?? 0;
@@ -99,6 +102,13 @@ export default function Filmroom() {
     api.deleteReel(r.id).then((f) => (setFilm(f), setNotice(`The cut "${r.title}" was deleted.`)), failed);
   };
   const videoOf = (id: number) => film?.videos.find((v) => v.id === id);
+  const words = q.trim().toLowerCase();
+  const has = (...texts: (string | undefined)[]) => !words || texts.some((t) => (t || '').toLowerCase().includes(words));
+  const videos = (film?.videos ?? []).filter((v) => has(v.title, v.by));
+  const clips = (film?.clips ?? []).filter((c) => (!fromVideo || c.stream_id === fromVideo) && has(c.title, c.notes, videoOf(c.stream_id)?.title));
+  const reels = (film?.reels ?? []).filter((r) => has(r.title, r.notes));
+  const choose = (t: Tab) => (setNotice(''), setParams(t === 'games' ? {} : { tab: t }, { replace: true }));
+  const none = <p className="muted">Nothing matches.</p>;
   return (
     <div className="page">
       <div className="page-head">
@@ -116,23 +126,45 @@ export default function Filmroom() {
           <CutIcon /> Create a new cut
         </Link>
       </div>
-      <SubTabs<Tab>
-        boxed
-        label="Parts of the Filmroom"
-        value={tab}
-        onChange={(t) => (setNotice(''), setParams(t === 'games' ? {} : { tab: t }, { replace: true }))}
-        tabs={[
-          ['games', 'Game videos', film?.videos.length],
-          ['clips', 'Clips', film?.clips.length],
-          [
-            'videos',
-            'Cuts',
-            film?.reels.length,
-          ],
-        ]}
-      />
       {error && <p className="error">{error}</p>}
       {notice && <p className="notice">{notice}</p>}
+      <div className="ps-layout">
+        {/* Down the left: the search, which part of the Filmroom is showing, and for clips the game video they came from. */}
+        <aside className="card ps-side tall" aria-label="Search and filters">
+          <section>
+            <h2>Search</h2>
+            <input className="input" type="search" placeholder="Search film" aria-label="Search by title or notes" value={q} onChange={(e) => setQ(e.target.value)} />
+          </section>
+          <section>
+            <h2>Show</h2>
+            <div className="ps-side-filter" role="group" aria-label="Parts of the Filmroom">
+              {(
+                [
+                  ['games', 'Game videos', film?.videos.length],
+                  ['clips', 'Clips', film?.clips.length],
+                  ['videos', 'Cuts', film?.reels.length],
+                ] as [Tab, string, number | undefined][]
+              ).map(([id, label, n]) => (
+                <button key={id} type="button" className={tab === id ? 'on' : ''} aria-pressed={tab === id} onClick={() => choose(id)}>
+                  <span>{label}</span>
+                  <span className="ps-side-count">{n ?? ''}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+          {tab === 'clips' && film && (
+            <SideChoices
+              title="From game video"
+              all={0}
+              allLabel="All videos"
+              total={film.clips.length}
+              value={fromVideo}
+              onChange={setFromVideo}
+              items={film.videos.map((v) => ({ id: v.id, label: v.title || 'Game video', count: film.clips.filter((c) => c.stream_id === v.id).length })).filter((v) => v.count > 0)}
+            />
+          )}
+        </aside>
+        <div className="ps-main">
       {!film ? (
         <p className="muted">Loading…</p>
       ) : tab === 'games' ? (
@@ -141,9 +173,11 @@ export default function Filmroom() {
             <h2>No game video yet</h2>
             <p>Broadcast a game from its Video tab and choose to save it to Dime Coach. It shows here afterwards, ready to watch and cut into clips.</p>
           </div>
+        ) : videos.length === 0 ? (
+          none
         ) : (
           <div className="res-grid">
-            {film.videos.map((v) => (
+            {videos.map((v) => (
               <GameVideoCard key={v.id} stream={v} playLabel="Open" onPlay={() => navigate(`/filmroom/video/${v.id}`)}>
                 <span className="muted small film-card-count">
                   {film.clips.filter((c) => c.stream_id === v.id).length || 'No'} clip{film.clips.filter((c) => c.stream_id === v.id).length === 1 ? '' : 's'}
@@ -163,9 +197,11 @@ export default function Filmroom() {
             <h2>No clips yet</h2>
             <p>Open a game video, press Start clip where something begins and End clip where it ends, and give it a title.</p>
           </div>
+        ) : clips.length === 0 ? (
+          none
         ) : (
           <div className="res-grid">
-            {film.clips.map((c) => (
+            {clips.map((c) => (
               <FilmCard key={c.id} poster={videoOf(c.stream_id)?.has_poster ? c.stream_id : null} length={clock(c.seconds)} title={c.title} meta={`From ${videoOf(c.stream_id)?.title || 'a game video'} · ${day(c.created_at)}`} notes={c.notes} onPlay={() => setWatching(c)}>
                 <button type="button" className="btn small" onClick={() => setWatching(c)}>
                   Play
@@ -189,9 +225,11 @@ export default function Filmroom() {
             <CutIcon /> Create a new cut
           </Link>
         </div>
+      ) : reels.length === 0 ? (
+        none
       ) : (
         <div className="res-grid">
-          {film.reels.map((r) => {
+          {reels.map((r) => {
             const list = scenes(film, r.items.map(stripItem));
             return (
               <FilmCard key={r.id} poster={list.find((s) => s.stream.has_poster)?.stream.id ?? null} length={clock(list.reduce((n, s) => n + s.seconds, 0))} title={r.title} meta={`${list.length} part${list.length === 1 ? '' : 's'} · ${day(r.updated_at)}`} notes={r.notes} onPlay={() => setShowing({ reel: r, at: 0 })}>
@@ -210,6 +248,8 @@ export default function Filmroom() {
           })}
         </div>
       )}
+        </div>
+      </div>
 
       {watching && videoOf(watching.stream_id) && (
         <Modal title={watching.title} onClose={() => setWatching(null)} wide>
