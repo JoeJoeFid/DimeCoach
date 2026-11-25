@@ -1,16 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, type RecordGame } from '../api';
 import { useApp } from '../App';
 import type { Plan, ScheduleEvent, Tag } from '../types';
 import { daysBetween, fmtClock, fmtDateShort, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
-import { Field, Modal } from './bits';
 import SchedulePreview from './SchedulePreview';
 import SportIcon from './SportIcon';
 import { KIND_LABEL, buildSchedule, isStrayBlank, planFilled, withoutDuplicateBlanks, type ScheduleEntry } from '../schedule';
 
-/** Smaller cards shown to the right of the big one. The arrows move through these; the big one stays. */
-const AFTER = 4;
+/** How many lines the list beside the big card shows at once. The arrows under it turn the page. */
+const PER_PAGE = 5;
 type Entry = ScheduleEntry;
 
 const relative = (date: string, today: string) => {
@@ -22,20 +21,17 @@ const relative = (date: string, today: string) => {
 };
 
 /**
- * A strip of the team's practices and calendar events in date order. The next one coming up
- * stays large on the left. Beside it are smaller cards for everything else, starting with what
- * follows it: the arrows move those back and forward in time.
+ * The top of the dashboard: the next thing coming up, large on the left, and beside it the team's
+ * practices, games and events as a list in date order, a page at a time, starting with what is next.
  */
-export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Plan[]; tags: Tag[]; /** Called after a plan was changed here, so the page reads its plans again. */ onChanged: () => void }) {
+export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags: Tag[]; /** Kept for the pages that pass it: nothing here changes a plan any more. */ onChanged?: () => void }) {
   const app = useApp();
   const team = app.team!;
   const navigate = useNavigate();
   const today = todayISO();
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
-  /** The card being edited: its type, and for a plan its title, date, time and place. */
-  const [editing, setEditing] = useState<Entry | null>(null);
-  // Where the row of smaller cards starts, counted in everything except the big one. Null is "just after the big one".
-  const [startAt, setStartAt] = useState<number | null>(null);
+  // Which page of the list is showing, counted from the one that starts with what is next: 0 is that one, and earlier pages are below zero.
+  const [page, setPage] = useState(0);
   const [error, setError] = useState('');
   // The games that have been scored to the end, by their plan: the result goes on their cards.
   const [results, setResults] = useState<Map<number, RecordGame>>(new Map());
@@ -80,61 +76,19 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
   // Blank plans left behind for today or earlier get no card, so "next up" is the next real event.
   const entries = useMemo(() => withoutDuplicateBlanks(buildSchedule(plans, events).filter((e) => !isStrayBlank(e, today))), [plans, events, today]);
 
-  // When a different card takes the middle, every card glides from where it was to where it now
-  // sits (and the one that was clicked grows into the big card), so the strip reads as sliding over.
-  const track = useRef<HTMLDivElement>(null);
-  const places = useRef(new Map<string, { x: number; y: number; w: number; h: number }>());
-  const shownFor = useRef<number | null | undefined>(undefined);
-  useLayoutEffect(() => {
-    const el = track.current;
-    if (!el) return;
-    const origin = el.getBoundingClientRect();
-    const moved = shownFor.current !== undefined && shownFor.current !== startAt;
-    const animate = moved && typeof el.animate === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const timing = { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' };
-    const now = new Map<string, { x: number; y: number; w: number; h: number }>();
-    el.querySelectorAll<HTMLElement>('[data-key]').forEach((node) => {
-      // Measured without any glide still running, so a quick second click starts from the right place.
-      node.getAnimations().forEach((a) => a.cancel());
-      const r = node.getBoundingClientRect();
-      // A card left out on a narrower screen has no place. When it comes into view it fades in,
-      // like a new one, and does not glide from the corner it would otherwise be measured at.
-      if (r.width === 0 && r.height === 0) return;
-      const at = { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height };
-      now.set(node.dataset.key!, at);
-      if (!animate) return;
-      const was = places.current.get(node.dataset.key!);
-      if (!was) node.animate([{ opacity: 0 }, { opacity: 1 }], timing);
-      else if (was.x !== at.x || was.w !== at.w)
-        node.animate(
-          [
-            { transformOrigin: 'top left', transform: `translate(${was.x - at.x}px, ${was.y - at.y}px) scale(${was.w / at.w}, ${was.h / at.h})` },
-            { transformOrigin: 'top left', transform: 'none' },
-          ],
-          timing,
-        );
-    });
-    places.current = now;
-    shownFor.current = startAt;
-  });
-
   if (entries.length === 0) return null;
 
   // "Next up" is the first thing today or later. With nothing ahead, it is the most recent one.
   const nextIndex = entries.findIndex((e) => e.date >= today);
   const homeIndex = nextIndex >= 0 ? nextIndex : entries.length - 1;
-  // The big card never changes. The smaller ones are everything else, and the arrows slide along them.
+  // The big card never changes. The list beside it is everything, in pages that begin at what is next.
   const focus = entries[homeIndex];
-  const others = entries.filter((_, i) => i !== homeIndex);
-  // What comes after the big card is where the row starts, unless there is nothing after it.
-  const homeStart = Math.min(homeIndex, Math.max(0, others.length - 1));
-  // How many smaller cards fit: four, two on a tablet, one on a phone. The row stops once the last one is showing.
-  const fits = window.innerWidth <= 640 ? 1 : window.innerWidth <= 1000 ? 2 : AFTER;
-  const lastStart = Math.max(homeStart, others.length - fits, 0);
-  const start = Math.max(0, Math.min(startAt ?? homeStart, lastStart));
-  // The slot the next-up card would take if it were in the row. Past the last card only when nothing follows it.
-  const nowAt = homeIndex - start;
-  const nowSlot = nextIndex >= 0 && others.length > 0 && nowAt >= 0 && (nowAt < fits || (nowAt === fits && homeIndex === others.length)) ? nowAt : null;
+  const firstPage = Math.floor((0 - homeIndex) / PER_PAGE);
+  const lastPage = Math.floor((entries.length - 1 - homeIndex) / PER_PAGE);
+  const at = Math.max(firstPage, Math.min(page, lastPage));
+  const from = homeIndex + at * PER_PAGE;
+  const listed = entries.slice(Math.max(0, from), Math.max(0, from + PER_PAGE));
+  const pages = lastPage - firstPage + 1;
   // Today's or the next upcoming entry keeps its own color wherever it sits in the strip.
   const nextKey = nextIndex >= 0 ? entries[nextIndex].key : null;
 
@@ -172,38 +126,39 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
       ✓
     </span>
   );
-  const small = (e: Entry | undefined, slot: number) => {
-    if (!e) return <div key={`blank${slot}`} className="tl-slot tl-blank" aria-hidden="true" />;
+  /** One line of the list: when it is, what it is, how far along its plan is, and the way in. */
+  const line = (e: Entry) => {
+    const isNext = e.key === nextKey;
+    const past = e.date < today;
     const body = (
       <>
-        <span className="tl-when">{fmtDateShort(e.date)}</span>
-        <span className="tl-tags">
-          {e.date < today && doneMark}
-          {e.key === nextKey && <span className="tl-flag">{e.date === today ? 'Today' : 'Next up'}</span>}
-          <span className={`kind ${e.kind}`}>{KIND_LABEL[e.kind]}</span>
+        <span className="tlr-when">
+          <strong>{fmtDateShort(e.date)}</strong>
+          <small>{timeRange(e)}</small>
         </span>
-        <span className="tl-title">{e.title}</span>
-        <span className="muted small">{timeRange(e)}</span>
+        <span className={`kind ${e.kind}`}>{KIND_LABEL[e.kind]}</span>
+        <span className="tlr-title">{e.title}</span>
         {/* A game scored to the end shows how it went, in place of whether it was planned. */}
         {result(e) ?? planState(e)}
+        <svg className="tlr-go" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.200" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 5.500l6.500 6.500L9 18.500" />
+        </svg>
       </>
     );
-    const past = e.date < today ? 'past done' : '';
-    const next = e.key === nextKey ? 'tl-next' : '';
-    // The card itself is a link or a button, so the preview button sits beside it in the same slot, not inside it.
+    const cls = `tlr-card ${isNext ? 'next' : ''} ${past ? 'past' : ''}`;
     return (
-      <div key={e.key} className="tl-slot" data-key={e.key}>
+      <li key={e.key} className={`tlr ${isNext ? 'next' : ''} ${past ? 'past' : ''}`} aria-current={isNext ? 'true' : undefined}>
+        <span className="tlr-dot" aria-hidden="true" />
         {e.plan ? (
-          <Link className={`tl-card tl-small ${e.kind} ${past} ${next}`} to={`/plans/${e.plan.id}`} title={e.kind === 'game' ? 'Open this game' : e.kind === 'practice' ? 'Open this practice' : 'Open this plan'}>
+          <Link className={cls} to={`/plans/${e.plan.id}`} title={e.kind === 'game' ? 'Open this game' : e.kind === 'practice' ? 'Open this practice' : 'Open this plan'}>
             {body}
           </Link>
         ) : (
-          <button type="button" className={`tl-card tl-small ${e.kind} ${past} ${next}`} title={`Plan this ${e.kind === 'game' ? 'game' : e.kind === 'practice' ? 'practice' : 'event'}`} onClick={() => planEvent(e)}>
+          <button type="button" className={cls} title={`Plan this ${e.kind === 'game' ? 'game' : e.kind === 'practice' ? 'practice' : 'event'}`} onClick={() => planEvent(e)}>
             {body}
           </button>
         )}
-        {e.plan && <SchedulePreview plan={e.plan} label="" />}
-      </div>
+      </li>
     );
   };
 
@@ -222,32 +177,37 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
       </span>
       {error && <p className="error">{error}</p>}
       <div className="tl-row">
-        <div className="tl-track" ref={track}>
+        <div className="tl-track">
           <div data-key={focus.key} className={`tl-card tl-focus ${focus.kind} ${focus.key === nextKey ? 'tl-next' : ''} ${focusDone ? 'done' : ''}`}>
             {/* The ball of the team's sport, faint, in the corner. */}
             <span className="tl-ball" aria-hidden="true">
               <SportIcon sport={app.sport?.name} size={190} />
             </span>
             <div className="tl-eyebrow">
-              <span>
+              <span className="tl-upnext">
                 {focusDone && doneMark} {focusDone ? 'Completed' : heading} · {relative(focus.date, today)}
               </span>
               <span className={`kind ${focus.kind}`}>{KIND_LABEL[focus.kind]}</span>
             </div>
             <div className="tl-date">{fmtDateShort(focus.date)}</div>
             <div className="tl-title">{focus.title}</div>
-            <div className="tl-where">
-              <span className="tl-time">{timeRange(focus)}</span>
+            <div className="tl-facts">
+              <span className="tl-fact">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7.500V12l3 2" />
+                </svg>
+                <span className="tl-time">{timeRange(focus)}</span>
+              </span>
               {focus.location && (
-                <span className="tl-place">
-                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <span className="tl-fact tl-place">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M12 21s-6.500-6-6.500-11a6.500 6.500 0 0 1 13 0c0 5-6.500 11-6.500 11ZM12 12.500a2.500 2.500 0 1 0 0-5 2.500 2.500 0 0 0 0 5Z" />
                   </svg>
-                  {focus.location}
+                  <span>{focus.location}</span>
                 </span>
               )}
-              {result(focus) ?? planState(focus)}
             </div>
+            <div className="tl-state">{result(focus) ?? planState(focus)}</div>
             {focus.plan && mins && (
               <>
                 <div className="muted small">
@@ -277,28 +237,33 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
                   {focus.kind === 'game' ? 'Plan this game' : focus.kind === 'practice' ? 'Plan this practice' : 'Plan this event'}
                 </button>
               )}
-              {/* A practice or game with a plan is edited on its own page. Only an event still on the calendar alone needs this: it is the one place to say what the event is. */}
-              {!focus.plan && focus.event && (
-                <button className="btn" onClick={() => setEditing(focus)} title="Say what this is: a practice, a game or something else">
-                  Change type
-                </button>
-              )}
             </div>
           </div>
 
-          {/* The arrows sit either side of the smaller cards, since those are what they move. */}
-          <div className="tl-rest">
-            <button className="tl-arrow" aria-label="Earlier" disabled={start === 0} onClick={() => setStartAt(start - 1)}>
-              ‹
-            </button>
-            <div className="tl-smalls">
-              {Array.from({ length: AFTER }, (_, i) => small(others[start + i], i))}
-              {/* Where the big card belongs in date order: a line between the cards on either side of it. */}
-              {nowSlot !== null && <span className="tl-nowline" style={{ '--i': nowSlot } as React.CSSProperties} role="img" aria-label="Next up falls here" title="Next up falls here" />}
-            </div>
-            <button className="tl-arrow" aria-label="Later" disabled={start >= lastStart} onClick={() => setStartAt(start + 1)}>
-              ›
-            </button>
+          {/* Beside it: the schedule as a list down a line of dots, a page at a time. */}
+          <div className="tl-list">
+            <ol className="tlr-rows">{listed.map(line)}</ol>
+            {pages > 1 && (
+              <div className="tlr-pager">
+                <button type="button" className="tl-arrow" aria-label="Earlier" disabled={at <= firstPage} onClick={() => setPage(at - 1)}>
+                  ‹
+                </button>
+                {pages <= 9 ? (
+                  <span className="tlr-dots" role="img" aria-label={`Page ${at - firstPage + 1} of ${pages}`}>
+                    {Array.from({ length: pages }, (_, i) => (
+                      <i key={i} className={i === at - firstPage ? 'on' : ''} />
+                    ))}
+                  </span>
+                ) : (
+                  <span className="muted small">
+                    {at - firstPage + 1} of {pages}
+                  </span>
+                )}
+                <button type="button" className="tl-arrow" aria-label="Later" disabled={at >= lastPage} onClick={() => setPage(at + 1)}>
+                  ›
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -309,105 +274,6 @@ export default function PracticeTimeline({ plans, tags, onChanged }: { plans: Pl
           </span>
         </div>
       )}
-      {editing && (
-        <EditEntry
-          entry={editing}
-          teamId={team.id}
-          onClose={() => setEditing(null)}
-          onSaved={(event) => {
-            setEditing(null);
-            // A calendar event changes here. A plan belongs to the page, which reads its plans again.
-            if (event) setEvents((all) => all.map((ev) => (ev.id === event.id ? event : ev)));
-            else onChanged();
-          }}
-        />
-      )}
     </section>
-  );
-}
-
-const KINDS: ScheduleEvent['kind'][] = ['practice', 'game', 'other'];
-/**
- * Edits one card. A practice or game that has a plan can change its type, title, date, start time
- * and place. Something that is only on the team calendar can change its type: the rest still
- * comes from the calendar.
- */
-function EditEntry({ entry, teamId, onClose, onSaved }: { entry: Entry; teamId: number; onClose: () => void; onSaved: (event?: ScheduleEvent) => void }) {
-  const plan = entry.plan;
-  const [kind, setKind] = useState<ScheduleEvent['kind']>(entry.kind);
-  const [title, setTitle] = useState(plan?.title ?? '');
-  const [date, setDate] = useState(plan?.date ?? '');
-  const [start, setStart] = useState(plan?.start_time ?? '');
-  const [place, setPlace] = useState(plan?.location ?? '');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  // A plan is a practice or a game. Only something left on the calendar can be "another event".
-  const kinds = plan ? KINDS.filter((k) => k !== 'other') : KINDS;
-  const save = async () => {
-    setBusy(true);
-    try {
-      if (plan) {
-        await api.savePlan({ ...plan, is_game: kind === 'game', title, date, start_time: start || plan.start_time, location: place });
-        onSaved();
-      } else if (entry.event) onSaved(await api.setEventKind(teamId, entry.event.id, kind));
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal title={plan ? 'Edit this practice or game' : 'Edit this event'} onClose={onClose}>
-      <form
-        className="fields stack"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save();
-        }}
-      >
-        {error && <p className="error">{error}</p>}
-        <div className="field">
-          <span className="field-label">This is a</span>
-          <div className="seg" role="group" aria-label="Type of event">
-            {kinds.map((k) => (
-              <button key={k} type="button" className={kind === k ? 'on' : ''} aria-pressed={kind === k} onClick={() => setKind(k)}>
-                {k === 'other' ? 'Other event' : KIND_LABEL[k]}
-              </button>
-            ))}
-          </div>
-        </div>
-        {plan ? (
-          <>
-            <Field label="Title">
-              <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
-            </Field>
-            <div className="fields">
-              <Field label="Date">
-                <input className="input" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
-              </Field>
-              <Field label="Start time">
-                <input className="input" type="time" value={start} onChange={(e) => setStart(e.target.value)} />
-              </Field>
-            </div>
-            <Field label="Location">
-              <input className="input" value={place} onChange={(e) => setPlace(e.target.value)} />
-            </Field>
-            <p className="muted small">A game is left out of the dashboard's practice totals and category targets.</p>
-          </>
-        ) : (
-          <p className="muted small">
-            "{entry.title}" on {fmtDateShort(entry.date)} comes from the team calendar, so its date, time and place are changed there. Your choice of type is kept
-            each time the calendar is read again.
-          </p>
-        )}
-        <div className="modal-foot">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn primary" disabled={busy}>
-            Save
-          </button>
-        </div>
-      </form>
-    </Modal>
   );
 }

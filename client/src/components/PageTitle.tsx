@@ -8,6 +8,8 @@ import SportIcon from './SportIcon';
 export interface About {
   lead: string;
   points?: string[];
+  /** Something to press at the foot of it, such as a longer explanation to open. */
+  action?: { label: string; onClick: () => void };
 }
 
 /** The games last read for each team, so the record is there at once when the next page opens. */
@@ -113,6 +115,12 @@ export default function PageTitle({ children, about, beside }: { children: React
                     <span key={p}>{p}</span>
                   ))}
                 </span>
+              )}
+              {about.action && (
+                // Pressing it must not first take the focus from the "i", which would close this before the press landed.
+                <button type="button" className="btn small about-action" onMouseDown={(e) => e.preventDefault()} onClick={() => (setTelling(false), about.action!.onClick())}>
+                  {about.action.label} <span aria-hidden="true">→</span>
+                </button>
               )}
             </span>
           </span>

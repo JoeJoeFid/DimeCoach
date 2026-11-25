@@ -112,15 +112,13 @@ export default function Playbook() {
             about={{
               lead: `Diagram your ${sport!.name.toLowerCase()} plays step by step.`,
               points: ['Draw a play one step at a time and watch it run.', 'Attach plays to practice items, so the team works on them.', 'Print them on their own, or share them with the team.'],
+              action: { label: 'How it works', onClick: () => setShowIntro(true) },
             }}
           >
             Playbook
           </PageTitle>
         </div>
         <div className="head-actions">
-          <button className="btn ghost" onClick={() => setShowIntro(true)}>
-            How it works
-          </button>
           {app.play_import && sportKind(sport?.name) === 'basketball' && <input ref={pdfInput} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => importPdf(e.target.files?.[0])} />}
           {/* The button draws a new play. The arrow beside it holds the other ways to get one. */}
           <div className="split-btn">
