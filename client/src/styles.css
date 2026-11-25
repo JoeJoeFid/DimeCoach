@@ -22953,3 +22953,62 @@ button.hw-title {
   letter-spacing: 0;
   text-transform: none;
 }
+
+/* ---------- Access & permissions: a box for each group, with its name and a picture at its head ---------- */
+.tf-boxes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+}
+.tf-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.tf-box .tf-access {
+  margin: 0;
+}
+.tf-box .tf-access thead th {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-strong);
+  background: none;
+  vertical-align: middle;
+}
+.tf-box .tf-access tbody td {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.tf-box .tf-access tbody tr:last-child td {
+  border-bottom: none;
+}
+.tf-box-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.tf-box-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.tf-box-title strong {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tf-box-title small {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 400;
+}

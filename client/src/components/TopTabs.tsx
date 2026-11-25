@@ -43,14 +43,14 @@ const SIGN_OF: Record<string, Sign> = {
   // Stats.
   season: 'calendar', mine: 'user', shared: 'users', setup: 'sliders', stats: 'bars', box: 'grid',
   // A team, and its page for parents.
-  team: 'shield', people: 'users', family: 'heart', schedule: 'calendar', roster: 'users',
+  team: 'shield', people: 'users', family: 'heart', access: 'key', schedule: 'calendar', roster: 'users',
   home: 'home', chat: 'chat', messages: 'megaphone', inbox: 'mail', homework: 'pencil', playbook: 'clipboard', drills: 'target', resources: 'folder',
   // A community, and running an organization.
   library: 'book', discussions: 'chat', members: 'users', overview: 'grid', seasons: 'layers', players: 'user', coaches: 'shield', more: 'dots',
   // System administration.
   // Messages.
   sent: 'send',
-  access: 'key', email: 'mail', organizations: 'building', content: 'folder', system: 'gear',
+  email: 'mail', organizations: 'building', content: 'folder', system: 'gear',
 };
 
 export const TabSign = ({ sign, size = 20 }: { sign: Sign; size?: number }) => (

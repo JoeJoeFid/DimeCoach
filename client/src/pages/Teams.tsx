@@ -709,11 +709,12 @@ export function NewTeam({ onClose, onCreated }: { onClose: () => void; onCreated
   );
 }
 
-type TeamTab = 'team' | 'people' | 'family' | 'schedule';
+type TeamTab = 'team' | 'people' | 'family' | 'access' | 'schedule';
 const TABS: [TeamTab, string][] = [
   ['team', 'Team info & roster'],
   ['people', 'Coaches & helpers'],
   ['family', 'Parents & family'],
+  ['access', 'Access & permissions'],
   ['schedule', 'Schedule integration'],
 ];
 
@@ -722,7 +723,8 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
   // The tab is in the address, so a link (or the welcome tour) can open a particular one.
   const [params, setParams] = useSearchParams();
   const asked = params.get('tab') as TeamTab | null;
-  const tab: TeamTab = TABS.some(([id]) => id === asked) ? asked! : 'team';
+  // An older link to the announcements or the board, from when they were under Parents & family, still lands on them.
+  const tab: TeamTab = asked === 'family' && params.get('view') ? 'access' : TABS.some(([id]) => id === asked) ? asked! : 'team';
   const setTab = (id: TeamTab) => setParams(id === 'team' ? {} : { tab: id }, { replace: true });
   const [name, setName] = useState(team.name);
   const [season, setSeason] = useState(team.season);
@@ -927,9 +929,10 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
       {tab === 'family' && (
         <>
           <FamilyCard team={team} players={players} canSee={app.can('contacts')} canEdit={app.can('roster')} />
-          <FamilyPageCard team={team} canEdit={app.can('roster')} />
         </>
       )}
+      {/* What coaches, parents, family and friends can each see and do, with the announcements and the live video settings beside it. */}
+      {tab === 'access' && <FamilyPageCard team={team} canEdit={app.can('roster')} />}
 
       {tab === 'schedule' && (
         <fieldset className="plain" disabled={!app.can('schedule')}>

@@ -689,7 +689,7 @@ function GoToPlan() {
 function GoToBoard() {
   const { teamId } = useParams();
   const post = new URLSearchParams(window.location.search).get('post');
-  return <GoToTeam team={Number(teamId)} to={`/teams?tab=family&view=messages&show=board${post ? `&post=${encodeURIComponent(post)}` : ''}`} />;
+  return <GoToTeam team={Number(teamId)} to={`/teams?tab=access&view=messages&show=board${post ? `&post=${encodeURIComponent(post)}` : ''}`} />;
 }
 function GoToTeam({ team, to }: { team: number; to: string }) {
   const app = useApp();

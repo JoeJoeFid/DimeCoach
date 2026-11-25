@@ -297,7 +297,7 @@ function ShareForm({ teamId, what, film, links, onFilm, onClose }: { teamId: num
               : sees.length
                 ? `In the Filmroom on the team\u2019s page, for ${sees.join(', ').replace(/, ([^,]*)$/, ' and $1')}. `
                 : 'The Filmroom on the team\u2019s page is not open to anyone yet. '}
-            {sees !== null && <Link to="/teams?tab=family">Change who sees the Filmroom</Link>}
+            {sees !== null && <Link to="/teams?tab=access">Change who sees the Filmroom</Link>}
           </span>
         </span>
       </label>

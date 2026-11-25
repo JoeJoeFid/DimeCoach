@@ -16,9 +16,10 @@ const KINDS: [FamilyKind, string][] = [
   ['friend', 'Friends'],
 ];
 /** What can be opened to each kind of person, in groups: the part, what it is called, and what opening it gives. */
-const ACCESS: { group: string; about: string; rows: [FamilySection, string, string][] }[] = [
+const ACCESS: { group: string; /** The line drawing beside its name. */ icon: string; about: string; rows: [FamilySection, string, string][] }[] = [
   {
     group: 'Schedule & games',
+    icon: 'M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7',
     about: 'What they know about when and where the team plays and practices.',
     rows: [
       ['schedule', 'Schedule', 'Practices, games and events on their days.'],
@@ -29,6 +30,7 @@ const ACCESS: { group: string; about: string; rows: [FamilySection, string, stri
   },
   {
     group: 'Video',
+    icon: 'M3.500 6.500h12v11h-12ZM15.500 10.500l5-3v9l-5-3',
     about: 'Live games and saved film.',
     rows: [
       ['live', 'Watch live video', 'Watching a game while it is broadcast. One person can be turned off under "Live video".'],
@@ -38,6 +40,7 @@ const ACCESS: { group: string; about: string; rows: [FamilySection, string, stri
   },
   {
     group: 'Communication',
+    icon: 'M4 5.500h16v11H9l-5 4Z',
     about: 'Hearing from the coaches, and talking with the team.',
     rows: [
       ['news', 'Announcements', 'What the coaches post for the people around the team.'],
@@ -46,6 +49,7 @@ const ACCESS: { group: string; about: string; rows: [FamilySection, string, stri
   },
   {
     group: 'Library',
+    icon: 'M5 5.500A1.500 1.500 0 0 1 6.500 4H19v13H6.500A1.500 1.500 0 0 0 5 18.500v-13ZM5 18.500A1.500 1.500 0 0 0 6.500 20H19',
     about: 'What you share with the team to read, watch and work on.',
     rows: [
       ['homework', 'Homework', 'Sheets set for the whole team, and for their own players.'],
@@ -56,6 +60,7 @@ const ACCESS: { group: string; about: string; rows: [FamilySection, string, stri
   },
   {
     group: 'Team',
+    icon: 'M9 11.500a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM2.500 20c.600-3.300 3.200-5 6.500-5s5.900 1.700 6.500 5M16 4.800a3.500 3.500 0 0 1 0 6.400M18.500 15.500c1.700.700 2.700 2.200 3 4.500',
     about: 'Who is on the team.',
     rows: [['roster', 'Roster', 'Players’ names and numbers. Never their positions, parents’ details or your notes.']],
   },
@@ -126,7 +131,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
   if (!data)
     return (
       <div className="card">
-        <h2>The team's page for parents, family &amp; friends</h2>
+        <h2>Access &amp; permissions</h2>
         {error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}
       </div>
     );
@@ -149,10 +154,10 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
   return (
     <div className="card tf">
       <div className="card-head">
-        <h2>The team's page for parents, family &amp; friends</h2>
+        <h2>Access &amp; permissions</h2>
       </div>
       <p className="muted small">
-        Someone you invite above makes an account from the link in their invitation, and then has a page for {team.name}. Here you choose what that page shows to each kind of person. They can never change the team.
+        What each kind of person on {team.name} can see and do. Coaches can do everything here, always. Parents, family and friends each have their own page for the team, and you choose what it opens to them. They can never change the team.
       </p>
       {error && <p className="error">{error}</p>}
       <SubTabs<View>
@@ -160,7 +165,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
         value={view}
         onChange={setView}
         tabs={[
-          ['access', 'Access & permissions'],
+          ['access', 'What each group can do'],
           ['messages', 'Announcements & board', data.news.length + data.board.length],
           ['video', 'Live video'],
         ]}
@@ -169,43 +174,62 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
       {view === 'video' && <StreamPeople teamId={team.id} />}
 
       {view === 'access' && (
-        <div className="table-scroll">
-          <table className="table tf-access">
-            <thead>
-              <tr>
-                <th>What they can see and do</th>
-                {KINDS.map(([k, label]) => (
-                  <th key={k} className="tf-col">
-                    {label}
-                    <small className="muted">{data.joined[k] ? `${data.joined[k]} with an account` : 'None with an account yet'}</small>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            {ACCESS.map((g) => (
-              <tbody key={g.group}>
-                <tr className="tf-group">
-                  <th colSpan={KINDS.length + 1} scope="colgroup">
-                    {g.group}
-                    <small className="muted">{g.about}</small>
-                  </th>
-                </tr>
-                {g.rows.map(([s, label, about]) => (
-                  <tr key={s}>
-                    <td>
-                      <strong>{label}</strong>
-                      <span className="muted small">{about}</span>
-                    </td>
-                    {KINDS.map(([k, kindLabel]) => (
-                      <td key={k} className="tf-col">
-                        <input type="checkbox" aria-label={`${kindLabel}: ${label}`} checked={data.access[k][s]} disabled={!canEdit} onChange={() => toggle(k, s)} />
-                      </td>
+        <div className="tf-boxes">
+          {/* A box for each kind of thing. Its heading names it, and stands over the three kinds of person it is opened to. */}
+          {ACCESS.map((g) => (
+            <section key={g.group} className="tf-box">
+              <div className="table-scroll">
+                <table className="table tf-access">
+                  <thead>
+                    <tr>
+                      <th scope="col">
+                        <span className="tf-box-title">
+                          <span className="tf-box-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round">
+                              <path d={g.icon} />
+                            </svg>
+                          </span>
+                          <span>
+                            <strong>{g.group}</strong>
+                            <small className="muted">{g.about}</small>
+                          </span>
+                        </span>
+                      </th>
+                      {/* Coaches come first, and are not for changing: it is there to make plain that they have all of it. */}
+                      <th scope="col" className="tf-col">
+                        Coaches
+                        <small className="muted">Always</small>
+                      </th>
+                      {KINDS.map(([k, label]) => (
+                        <th key={k} scope="col" className="tf-col">
+                          {label}
+                          <small className="muted">{data.joined[k] ? `${data.joined[k]} joined` : 'None yet'}</small>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.rows.map(([s, label, about]) => (
+                      <tr key={s}>
+                        <td>
+                          <strong>{label}</strong>
+                          <span className="muted small">{about}</span>
+                        </td>
+                        <td className="tf-col">
+                          <input type="checkbox" aria-label={`Coaches: ${label}. Always on.`} title="Coaches always have this" checked disabled readOnly />
+                        </td>
+                        {KINDS.map(([k, kindLabel]) => (
+                          <td key={k} className="tf-col">
+                            <input type="checkbox" aria-label={`${kindLabel}: ${label}`} checked={data.access[k][s]} disabled={!canEdit} onChange={() => toggle(k, s)} />
+                          </td>
+                        ))}
+                      </tr>
                     ))}
-                  </tr>
-                ))}
-              </tbody>
-            ))}
-          </table>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
           {!canEdit && <p className="muted small">You can see these settings, but changing them needs permission to change the roster.</p>}
         </div>
       )}
@@ -224,10 +248,10 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
             {show === 'news'
               ? anyone('news')
                 ? 'Only coaches write announcements. They show first on the team’s page for everyone who may see them.'
-                : 'Announcements are not open to anyone yet. Turn them on under "Access & permissions".'
+                : 'Announcements are not open to anyone yet. Turn them on under "What each group can do".'
               : anyone('board')
                 ? 'Everyone the board is open to can read it and write on it, and so can the team’s coaches.'
-                : 'The message board is not open to anyone yet. Turn it on under "Access & permissions".'}
+                : 'The message board is not open to anyone yet. Turn it on under "What each group can do".'}
           </p>
           <form className="fields stack tf-write" onSubmit={post}>
             {show === 'news' && <input className="input" maxLength={120} aria-label="Headline" placeholder="Headline (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />}

@@ -478,7 +478,7 @@ function Announcements({ teamId }: { teamId: number }) {
     <section className="card dash-news" aria-label="Announcements">
       <div className="card-head">
         <h2>Announcements</h2>
-        <Link className="link small" to="/teams?tab=family&view=messages">
+        <Link className="link small" to="/teams?tab=access&view=messages">
           All announcements →
         </Link>
       </div>
