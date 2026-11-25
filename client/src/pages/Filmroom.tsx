@@ -120,7 +120,8 @@ export default function Filmroom() {
         compactKey="practiceplan.filmCompact"
         sharedWith={(f) => {
           const ref = f.video?.id ?? f.clip?.id ?? f.reel?.id;
-          return film!.team_shares.some((s) => s.kind === f.kind && s.ref_id === ref) ? [team.name] : [];
+          // The team first, when it is on the team's page, then each person it was shared with by name.
+          return [...(film!.team_shares.some((s) => s.kind === f.kind && s.ref_id === ref) ? [team.name] : []), ...film!.shares.filter((s) => s.kind === f.kind && s.ref_id === ref).map((s) => s.name)];
         }}
         kind={KIND_OF[tab]}
         onKind={(k) => k && choose(TAB_OF[k])}

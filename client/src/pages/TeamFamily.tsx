@@ -96,11 +96,10 @@ const ACCESS: { group: string; /** The line drawing beside its name. */ icon: st
   {
     group: 'Video',
     icon: 'M3.500 6.500h12v11h-12ZM15.500 10.500l5-3v9l-5-3',
-    about: 'Live games and saved film.',
+    about: 'Watching and broadcasting games live.',
     rows: [
       ['live', 'Watch live video', 'Watching a game while it is broadcast.'],
       ['broadcast', 'Broadcast live video', 'Sending a game’s live video from their own phone or tablet. Tick a whole group, choose people by name below, or both.'],
-      ['film', 'Filmroom', 'Only the game videos, clips and cuts you share with the team from the Filmroom. Video shared with one person by name always shows to them.'],
     ],
   },
   {
@@ -115,12 +114,13 @@ const ACCESS: { group: string; /** The line drawing beside its name. */ icon: st
   {
     group: 'Library',
     icon: 'M5 5.500A1.500 1.500 0 0 1 6.500 4H19v13H6.500A1.500 1.500 0 0 0 5 18.500v-13ZM5 18.500A1.500 1.500 0 0 0 6.500 20H19',
-    about: 'What you share with the team to read, watch and work on.',
+    about: 'What you share with the team to read, watch and work on, saved film included.',
     rows: [
       ['homework', 'Homework', 'Sheets set for the whole team, and for their own players.'],
       ['playbook', 'Playbook', 'Only the plays you share with the team from the Playbook.'],
       ['drills', 'Drills', 'Only the drills you share with the team from Drills, without your coach notes.'],
       ['resources', 'Resources', 'Only the links, pictures and videos you share with the team from Resources.'],
+      ['film', 'Filmroom', 'Only the game videos, clips and cuts you share with the team from the Filmroom. Video shared with one person by name always shows to them.'],
     ],
   },
   {

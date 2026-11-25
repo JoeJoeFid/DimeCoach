@@ -184,6 +184,27 @@ setSharedPieces((userId, stream) => {
   return ranges.length ? ranges : null;
 });
 
+/**
+ * What one person is shown from a team's Filmroom, ready to play: what was shared with them by
+ * name, and what is on the team's page when the Filmroom is open to their kind of follower.
+ */
+export function filmFor(userId, teamId) {
+  const out = [];
+  for (const f of sharesFor(userId, teamId)) {
+    const thing = sharedThing(f);
+    if (thing) out.push({ id: f.id, kind: f.kind, ref_id: f.ref_id, ...thing, by: get('SELECT name FROM users WHERE id=?', f.shared_by)?.name || 'A coach', at: f.created_at, watched: !!f.watched_at });
+  }
+  // What is on the team's page, left out where it was also shared with them by name.
+  // These are numbered below zero, so they are never taken for a share made to one person.
+  if (seesTeamFilm(userId, teamId))
+    for (const f of teamSharesOf(Number(teamId))) {
+      if (out.some((o) => o.kind === f.kind && o.ref_id === f.ref_id)) continue;
+      const thing = sharedThing(f);
+      if (thing) out.push({ id: -f.id, kind: f.kind, ...thing, by: get('SELECT name FROM users WHERE id=?', f.shared_by)?.name || 'A coach', at: f.created_at, watched: true, team: true });
+    }
+  return out.map(({ ref_id, ...rest }) => rest);
+}
+
 /** Everything in a team's Filmroom. */
 const filmOf = (teamId) => ({
   videos: videosOf(teamId).map(streamOut),
@@ -329,22 +350,7 @@ export function mountFilm(app) {
   });
 
   // What has been shared with the person asking, from one team, ready to play. Under /family so an account that only follows teams can ask.
-  app.get('/api/family/film', (req, res) => {
-    const out = [];
-    for (const f of sharesFor(req.user.id, Number(req.query.team_id))) {
-      const thing = sharedThing(f);
-      if (thing) out.push({ id: f.id, kind: f.kind, ref_id: f.ref_id, ...thing, by: get('SELECT name FROM users WHERE id=?', f.shared_by)?.name || 'A coach', at: f.created_at, watched: !!f.watched_at });
-    }
-    // What is on the team's page, when the Filmroom is open to them, left out where it was also shared with them by name.
-    // These are numbered below zero, so they are never taken for a share made to one person.
-    if (seesTeamFilm(req.user.id, req.query.team_id))
-      for (const f of teamSharesOf(Number(req.query.team_id))) {
-        if (out.some((o) => o.kind === f.kind && o.ref_id === f.ref_id)) continue;
-        const thing = sharedThing(f);
-        if (thing) out.push({ id: -f.id, kind: f.kind, ...thing, by: get('SELECT name FROM users WHERE id=?', f.shared_by)?.name || 'A coach', at: f.created_at, watched: true, team: true });
-      }
-    res.json(out.map(({ ref_id, ...rest }) => rest));
-  });
+  app.get('/api/family/film', (req, res) => res.json(filmFor(req.user.id, Number(req.query.team_id))));
   app.post('/api/family/film/:id/watched', (req, res) => {
     run('UPDATE film_shares SET watched_at=? WHERE id=? AND watched_at IS NULL AND contact_id IN (SELECT id FROM team_contacts WHERE user_id=?)', nowIso(), Number(req.params.id), req.user.id);
     res.json({ ok: true });

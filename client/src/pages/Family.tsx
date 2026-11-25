@@ -414,7 +414,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
   if (!data) return framed(<p className="page muted">Loading…</p>);
   const { team, can } = data;
   const hasVideo = data.video.watch || data.video.broadcast;
-  const hasPlays = can.schedule && can.games;
+  const hasPlays = can.schedule && can.games && can.pbp;
   const tabs: [Tab, string, number?][] = [
     ['home', 'Dashboard'],
     ...(can.schedule ? [['schedule', 'Schedule'] as [Tab, string]] : []),
@@ -423,14 +423,15 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
     ...(can.news || can.board ? [['messages', 'Team news'] as [Tab, string]] : []),
     // Their own inbox, which is not about this team alone. A coach who also follows the team has theirs in the coach's menu.
     ...(frame ? [['inbox', 'Messages'] as [Tab, string], ['stats', 'Stats'] as [Tab, string]] : []),
-    ...(can.homework ? [['homework', 'Homework', data.homework.length] as [Tab, string, number]] : []),
+    // A part shut to their kind is not in the menu at all, unless something in it was given to them by name.
+    ...(can.homework || data.homework.length > 0 ? [['homework', 'Homework', data.homework.length] as [Tab, string, number]] : []),
     // Live game: its video for those allowed to watch or broadcast, and its play by play for those told about games.
     ...(hasVideo || hasPlays ? [['video', 'Live game'] as [Tab, string]] : []),
     ...(can.playbook ? [['playbook', 'Playbook', data.plays.length] as [Tab, string, number]] : []),
     ...(can.drills ? [['drills', 'Drills', data.drills.length] as [Tab, string, number]] : []),
     ...(can.resources ? [['resources', 'Resources', data.resources.length] as [Tab, string, number]] : []),
     // Video from the Filmroom that a coach shared with this person. All a guest is here for.
-    ...(data.film > 0 || data.me.kind === 'guest' ? [['film', 'Filmroom', data.film] as [Tab, string, number]] : []),
+    ...(can.film || data.film > 0 || data.me.kind === 'guest' ? [['film', 'Filmroom', data.film] as [Tab, string, number]] : []),
     ...(can.roster ? [['roster', 'Team'] as [Tab, string]] : []),
   ];
   const asked = params.get('tab') as Tab | null;
@@ -521,7 +522,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
               {data.news.length === 0 ? <p className="muted">No announcements yet.</p> : <Post post={data.news[0]} />}
             </section>
           )}
-          {can.homework && data.homework.length > 0 && (
+          {data.homework.length > 0 && (
             <section className="card cx-card">
               <div className="cx-card-head">
                 <h2 className="fam-h">

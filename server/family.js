@@ -11,6 +11,7 @@ import { all, db, dbPath, get, run } from './db.js';
 import { sharedOpening, withoutOpening } from './calendar.js';
 import { drillView, planView, playView } from './communities.js';
 import { resourceList } from './resources.js';
+import { filmFor } from './film.js';
 import { coachesOfTeam, deliver, followersOfTeam } from './inbox.js';
 import { mention, mentionedIn } from './notices.js';
 import { publicBase } from './invites.js';
@@ -239,13 +240,15 @@ function scheduleOf(team, can) {
     });
 }
 /** Homework for the whole team, and for this person's own players. */
-function homeworkOf(team, players) {
+/** A team's homework for one follower. With `namedOnly`, only the sheets set for their own players by name: what they are shown when homework as a whole is shut to their kind. */
+function homeworkOf(team, players, namedOnly = false) {
   const mine = new Map(players.map((p) => [p.id, p.name]));
   return all("SELECT * FROM plans WHERE team_id=? AND kind='homework' AND is_template=0 ORDER BY date DESC, id DESC LIMIT 60", team.id)
     .map((p) => {
       const to = parse(p.assigned_json, []).map(Number);
       const names = to.filter((id) => mine.has(id)).map((id) => mine.get(id));
       if (to.length && !names.length) return null;
+      if (namedOnly && !to.length) return null;
       return { id: p.id, title: p.title || 'Homework', date: p.date || '', due: p.due_date || '', for: to.length ? names : [], content: planView(p) };
     })
     .filter(Boolean);
@@ -311,7 +314,7 @@ export function mountFamily(app) {
       team: { id: team.id, slug: slugOf(team), name: team.name, sport: sportOf(team), season: team.season || '', organization: team.community_id ? get('SELECT name FROM communities WHERE id=?', team.community_id)?.name || '' : '', coaches: coachesOf(team) },
       me: { kind: f.kind, players: f.players.map((p) => p.name) },
       // How many videos from the Filmroom have been shared with this person.
-      film: get('SELECT COUNT(*) AS n FROM film_shares f JOIN team_contacts c ON c.id=f.contact_id WHERE c.user_id=? AND f.team_id=?', req.user.id, team.id).n + (can.film ? get('SELECT COUNT(*) AS n FROM film_team_shares WHERE team_id=?', team.id).n : 0),
+      film: filmFor(req.user.id, team.id).length,
       // Live video: whether this person may watch or broadcast, and whether something is going out now.
       video: (() => {
         const mine = all('SELECT can_watch, can_broadcast FROM team_contacts WHERE team_id=? AND user_id=?', team.id, req.user.id);
@@ -328,7 +331,8 @@ export function mountFamily(app) {
       board: can.board ? postsOf(team.id, 'board', req.user.id) : [],
       // The names that can be written with "@" on the board.
       board_people: can.board ? boardNames(team) : [],
-      homework: can.homework ? homeworkOf(team, f.players) : [],
+      // Shut to their kind, homework set for their own players by name still reaches them.
+      homework: homeworkOf(team, f.players, !can.homework),
       plays: can.playbook ? sharedPlays(team, settings) : [],
       drills: can.drills ? sharedDrills(team, settings) : [],
       resources: can.resources ? sharedResources(team, settings) : [],
