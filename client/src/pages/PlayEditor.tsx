@@ -1403,7 +1403,7 @@ export default function PlayEditor() {
         </div>
 
         <div className="card builder-settings">
-          {/* What this box is for: how the step that is open moves, what is said about it, and watching the play run. */}
+          {/* What this box is for: how the play moves when it is watched. Every step is listed; the open one shows its order of movement and its note. */}
           <div className="box-title">
             <span className="box-title-sign" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -1411,88 +1411,122 @@ export default function PlayEditor() {
               </svg>
             </span>
             <h3>
-              How step {index + 1} moves <span className="box-title-count">of {play.frames.length}</span>
+              Animate <span className="box-title-count">{play.frames.length} {play.frames.length === 1 ? 'step' : 'steps'}</span>
             </h3>
           </div>
-          <p className="muted small box-sub">Choose who moves first in this step, add a note for it, and watch the play run.</p>
+          <p className="muted small box-sub">How the play moves when it is watched. Open a step to set who goes first in it, and what is said about it.</p>
           <button className="btn primary" onClick={() => setWatching(true)} title="Watch the whole play move, step by step">
             ▶ Watch the play
           </button>
-          <div className="order">
-            <h4>
-              Order of movement <span className="hint">Step {index + 1}</span>
-            </h4>
-            {lineCount === 0 ? (
-              <p className="muted small">
-                Draw a {LINE_KINDS.map((k) => LINE_WORDS[sport][k].label.toLowerCase()).join(', ')} line and it appears here. This is where you set what happens first.
-              </p>
-            ) : (
-              <>
-                {lineCount > 1 && (
-                  <div className="order-quick">
-                    <button className="btn small" disabled={beats.length === 1} onClick={allTogether}>
-                      All together
-                    </button>
-                    <button className="btn small" disabled={beats.length === lineCount} onClick={oneAtATime}>
-                      One at a time
-                    </button>
-                  </div>
-                )}
-                {lineCount > 1 && (
-                  <p className="muted small order-help">Lines run from top to bottom. Set a line to "With previous" to start it at the same time as the one above.</p>
-                )}
-                <ol className="order-list">
-                  {beats.map((lines, b) => (
-                    <li key={b} className={`order-beat ${lines.length > 1 ? 'group' : ''}`}>
-                      <span className="order-place">
-                        {ordinal(b + 1)}
-                        {lines.length > 1 && <span className="muted"> · {lines.length} together</span>}
+          {/* Every step of the play, in order. The one being worked on is open, with its settings. */}
+          <ol className="anim-steps">
+            {play.frames.map((f, i) => {
+              const moves = beatsOf(f).reduce((n, b) => n + b.length, 0);
+              const open = i === index;
+              return (
+                <li key={i} className={`anim-step ${open ? 'on' : ''}`}>
+                  <button
+                    type="button"
+                    className="anim-step-head"
+                    aria-expanded={open}
+                    onClick={() => {
+                      if (open) return;
+                      setStep(i);
+                      setSelected(null);
+                    }}
+                  >
+                    <b>{i + 1}</b>
+                    <span className="anim-step-text">
+                      <strong>Step {i + 1}</strong>
+                      <span className="muted small">
+                        {moves === 0 ? 'Nothing moves yet' : `${moves} ${moves === 1 ? 'move' : 'moves'}`}
+                        {!open && f.note.trim() ? ` · ${f.note.trim()}` : ''}
                       </span>
-                      {lines.map((l) => {
-                        const i = sequence.findIndex((s) => s.line.id === l.id);
-                        const name = describeLine(l, frame, sport);
-                        return (
-                          <div key={l.id} className={`order-row ${isSelected(l.id) ? 'on' : ''}`}>
-                            <button type="button" className="order-name" onClick={() => setSelected(l.id)} title="Show this line in the drawing">
-                              <span className={`order-dot ${l.kind}`} aria-hidden="true" />
-                              {name}
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="anim-step-body">
+                  <div className="order">
+                    <h4>
+                      Order of movement
+                    </h4>
+                    {lineCount === 0 ? (
+                      <p className="muted small">
+                        Draw a {LINE_KINDS.map((k) => LINE_WORDS[sport][k].label.toLowerCase()).join(', ')} line and it appears here. This is where you set what happens first.
+                      </p>
+                    ) : (
+                      <>
+                        {lineCount > 1 && (
+                          <div className="order-quick">
+                            <button className="btn small" disabled={beats.length === 1} onClick={allTogether}>
+                              All together
                             </button>
-                            <span className="order-controls">
-                              {i === 0 ? (
-                                <span className="order-first">Starts the step</span>
-                              ) : (
-                                <select className="order-when" aria-label={`When "${name}" starts`} value={sequence[i].withPrevious ? 'with' : 'after'} onChange={(e) => setWithPrevious(i, e.target.value === 'with')}>
-                                  <option value="after">After previous</option>
-                                  <option value="with">With previous</option>
-                                </select>
-                              )}
-                              <span className="order-move">
-                                <button type="button" className="btn small" aria-label={`Move "${name}" earlier`} title="Earlier" disabled={i === 0} onClick={() => moveInOrder(i, -1)}>
-                                  ↑
-                                </button>
-                                <button type="button" className="btn small" aria-label={`Move "${name}" later`} title="Later" disabled={i === sequence.length - 1} onClick={() => moveInOrder(i, 1)}>
-                                  ↓
-                                </button>
-                              </span>
-                            </span>
+                            <button className="btn small" disabled={beats.length === lineCount} onClick={oneAtATime}>
+                              One at a time
+                            </button>
                           </div>
-                        );
-                      })}
-                    </li>
-                  ))}
-                </ol>
-              </>
-            )}
-          </div>
-          <Field label={`Note for step ${index + 1}`}>
-            <textarea
-              className="input"
-              rows={3}
-              placeholder={NOTE_EXAMPLES[sport]}
-              value={frame.note}
-              onChange={(e) => update({ frames: play.frames.map((f, i) => (i === index ? { ...f, note: e.target.value } : f)) })}
-            />
-          </Field>
+                        )}
+                        {lineCount > 1 && (
+                          <p className="muted small order-help">Lines run from top to bottom. Set a line to "With previous" to start it at the same time as the one above.</p>
+                        )}
+                        <ol className="order-list">
+                          {beats.map((lines, b) => (
+                            <li key={b} className={`order-beat ${lines.length > 1 ? 'group' : ''}`}>
+                              <span className="order-place">
+                                {ordinal(b + 1)}
+                                {lines.length > 1 && <span className="muted"> · {lines.length} together</span>}
+                              </span>
+                              {lines.map((l) => {
+                                const i = sequence.findIndex((s) => s.line.id === l.id);
+                                const name = describeLine(l, frame, sport);
+                                return (
+                                  <div key={l.id} className={`order-row ${isSelected(l.id) ? 'on' : ''}`}>
+                                    <button type="button" className="order-name" onClick={() => setSelected(l.id)} title="Show this line in the drawing">
+                                      <span className={`order-dot ${l.kind}`} aria-hidden="true" />
+                                      {name}
+                                    </button>
+                                    <span className="order-controls">
+                                      {i === 0 ? (
+                                        <span className="order-first">Starts the step</span>
+                                      ) : (
+                                        <select className="order-when" aria-label={`When "${name}" starts`} value={sequence[i].withPrevious ? 'with' : 'after'} onChange={(e) => setWithPrevious(i, e.target.value === 'with')}>
+                                          <option value="after">After previous</option>
+                                          <option value="with">With previous</option>
+                                        </select>
+                                      )}
+                                      <span className="order-move">
+                                        <button type="button" className="btn small" aria-label={`Move "${name}" earlier`} title="Earlier" disabled={i === 0} onClick={() => moveInOrder(i, -1)}>
+                                          ↑
+                                        </button>
+                                        <button type="button" className="btn small" aria-label={`Move "${name}" later`} title="Later" disabled={i === sequence.length - 1} onClick={() => moveInOrder(i, 1)}>
+                                          ↓
+                                        </button>
+                                      </span>
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </li>
+                          ))}
+                        </ol>
+                      </>
+                    )}
+                  </div>
+                  <Field label={`Note for step ${index + 1}`}>
+                    <textarea
+                      className="input"
+                      rows={3}
+                      placeholder={NOTE_EXAMPLES[sport]}
+                      value={frame.note}
+                      onChange={(e) => update({ frames: play.frames.map((f, i) => (i === index ? { ...f, note: e.target.value } : f)) })}
+                    />
+                  </Field>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
           <SharedWithBox what={{ kind: 'play', id: play.id, title: play.name || 'Play' }} version={shareVersion} onShare={() => setSharing(true)} />
         </div>
       </div>
