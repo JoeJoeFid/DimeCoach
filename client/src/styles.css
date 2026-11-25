@@ -2673,7 +2673,8 @@ text.play-mark.selected,
 }
 .play-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  /* The same width as the cards on Resources. */
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 16px;
 }
 .play-card {
@@ -16399,10 +16400,10 @@ button.fam-day.next {
   margin: 4px 0 0;
 }
 
-/* The playbook: smaller cards, and a green tick under a play that has been shared. */
+/* The playbook: cards the same width as the ones on Resources, and a green tick under a play that has been shared. */
 .play-grid {
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
 }
 .play-card .paper {
   padding: 6px;
