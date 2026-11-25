@@ -23519,3 +23519,22 @@ button.hw-title {
 .fam-home {
   margin-top: 16px;
 }
+
+/* The "i" beside a page's name, a little smaller. */
+.about-btn {
+  width: 23px;
+  height: 23px;
+  font-size: 0.95rem;
+}
+
+/* A smaller line under an entry of a "..." list, saying more about it. */
+.more-list button .more-hint {
+  display: block;
+  max-width: 250px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: normal;
+}

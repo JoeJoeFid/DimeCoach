@@ -66,6 +66,8 @@ export function Field({ label, children, grow }: { label: ReactNode; children: R
 
 export interface MenuItem {
   label: string;
+  /** A smaller line under the label, saying more about what it does. */
+  hint?: string;
   onSelect: () => void;
   /** Styles the entry as destructive and sets it apart at the bottom. */
   danger?: boolean;
@@ -125,6 +127,7 @@ export function MoreMenu({ items, label = 'More options', caret = false }: { ite
               }}
             >
               {it.label}
+              {it.hint && <span className="more-hint">{it.hint}</span>}
             </button>
           ))}
         </div>
