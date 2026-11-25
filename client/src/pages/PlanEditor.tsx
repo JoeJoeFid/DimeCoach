@@ -467,7 +467,7 @@ export default function PlanEditor() {
           ← {isHomework ? 'Homework' : 'Schedule'}
         </Link>
         <h1 className="plan-name">
-          <SportIcon sport={app.sport?.name} size={26} />
+          <SportIcon sport={app.sport?.name} size={26} colored />
           <span>{plan.title.trim() || (plan.is_template ? 'Template' : isHomework ? 'Homework' : gameMode ? 'Game' : 'Practice')}</span>
         </h1>
         <span className={`save-state plan-saved ${saveState}`} role="status">

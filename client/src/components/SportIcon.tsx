@@ -12,8 +12,41 @@ const PATHS = {
 /** A baseball's two rows of stitches. */
 const STITCHES = 'M6.300 5.100c2.700 4 2.700 9.800 0 13.800M17.700 5.100c-2.700 4-2.700 9.800 0 13.800';
 
-export default function SportIcon({ sport, size = 28 }: { sport: string | undefined; size?: number }) {
+/** Each ball in its own colors: what it is filled with, the line round it, and its seams, laces or panels. */
+const COLORS: Record<keyof typeof PATHS | 'softball', { fill: string; edge: string; lines: string }> = {
+  basketball: { fill: '#e8792b', edge: '#7a3a10', lines: '#2a1608' },
+  baseball: { fill: '#f6f3ea', edge: '#b9b4a6', lines: '#d0312d' },
+  softball: { fill: '#dfe94a', edge: '#a3ac2a', lines: '#d0312d' },
+  football: { fill: '#8a4b2a', edge: '#4f2912', lines: '#f6f3ea' },
+  volleyball: { fill: '#f6f3ea', edge: '#b9b4a6', lines: '#2f5fbf' },
+  other: { fill: '#d2f24b', edge: '#8fa82a', lines: '#8fa82a' },
+};
+
+export default function SportIcon({ sport, size = 28, colored = false }: { sport: string | undefined; size?: number; /** Drawn in the ball's own colors, not as plain lines in the color of the words around it. */ colored?: boolean }) {
   const kind = sportKind(sport) ?? 'other';
+  if (colored) {
+    const col = COLORS[kind === 'baseball' && /softball/i.test(sport || '') ? 'softball' : kind];
+    const [shape, ...marks] = PATHS[kind];
+    return (
+      <svg className="sport-icon colored" viewBox="0 0 24 24" width={size} height={size} fill="none" strokeWidth="1.500" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {/* A pennant is a pole and a flag: the flag is what is filled. */}
+        {kind === 'other' ? (
+          <>
+            <path d={PATHS.other[0]} stroke={col.edge} />
+            <path d={PATHS.other[1]} fill={col.fill} stroke={col.edge} />
+          </>
+        ) : (
+          <>
+            <path d={shape} fill={col.fill} stroke={col.edge} />
+            {marks.map((d) => (
+              <path key={d} d={d} stroke={col.lines} />
+            ))}
+            {kind === 'baseball' && <path d={STITCHES} stroke={col.lines} strokeDasharray="0.900 1.900" />}
+          </>
+        )}
+      </svg>
+    );
+  }
   return (
     <svg className="sport-icon" viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.500" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {PATHS[kind].map((d) => (

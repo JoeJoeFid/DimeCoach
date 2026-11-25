@@ -106,16 +106,14 @@ export default function PracticeTimeline({ plans, tags }: { plans: Plan[]; tags:
         note={(e) => {
           const plan = e.src.plan;
           if (!plan) return null;
+          // An empty plan says nothing here: the pill under it already says so.
+          if (!planFilled(plan) && (plan.is_game || plan.items.length === 0)) return null;
           const mins = planMinutes(plan, new Set(tags.map((t) => t.id)));
           return (
             <div className="muted small">
               {plan.is_game
-                ? planFilled(plan)
-                  ? [plan.game?.opponent && `${plan.game.side === 'away' ? 'at' : 'vs.'} ${plan.game.opponent}`, 'Game plan started'].filter(Boolean).join(' · ')
-                  : 'Nothing in this game plan yet.'
-                : plan.items.length === 0
-                  ? 'Nothing scheduled in this plan yet.'
-                  : `${plan.items.filter((it) => it.kind === 'item').length} items · ${fmtDuration(mins.work + mins.breaks)}`}
+                ? [plan.game?.opponent && `${plan.game.side === 'away' ? 'at' : 'vs.'} ${plan.game.opponent}`, 'Game plan started'].filter(Boolean).join(' · ')
+                : `${plan.items.filter((it) => it.kind === 'item').length} items · ${fmtDuration(mins.work + mins.breaks)}`}
             </div>
           );
         }}

@@ -93,7 +93,7 @@ export default function PageTitle({ children, about, beside }: { children: React
       {team && (
         <p className="team-title">
           {team.logo && <img className="team-logo" src={team.logo} alt="" />}
-          <SportIcon sport={sport?.name} size={42} />
+          <SportIcon sport={sport?.name} size={42} colored />
           <span>{team.name}</span>
           {team.season && <span className="team-title-season">{team.season}</span>}
           <TeamRecord teamId={team.id} />
