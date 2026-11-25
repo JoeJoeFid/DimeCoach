@@ -191,3 +191,17 @@ export function NameFields({ name, parts, onChange, autoFocus, whose = 'your' }:
     </div>
   );
 }
+
+/** A small "i" that says more when it is pointed at or reached with the keyboard: for words that explain, and need not be read every time. */
+export function InfoTip({ about, children }: { /** What it is about, for a screen reader. */ about: string; children: ReactNode }) {
+  return (
+    <span className="info-tip" tabIndex={0} role="note" aria-label={about}>
+      <span className="info-tip-i" aria-hidden="true">
+        i
+      </span>
+      <span className="info-tip-pop" role="tooltip">
+        {children}
+      </span>
+    </span>
+  );
+}

@@ -23538,3 +23538,57 @@ button.hw-title {
   line-height: 1.35;
   white-space: normal;
 }
+
+/* ---------- A small "i" with more to say, shown above it when pointed at ---------- */
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.info-tip-i {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--muted);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.74rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+.info-tip:hover .info-tip-i,
+.info-tip:focus .info-tip-i {
+  border-color: var(--accent-edge);
+  color: var(--ink);
+}
+.info-tip-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: -8px;
+  z-index: 60;
+  display: none;
+  width: 300px;
+  max-width: 70vw;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.45;
+  text-align: left;
+  text-transform: none;
+  white-space: normal;
+}
+.info-tip:hover .info-tip-pop,
+.info-tip:focus .info-tip-pop {
+  display: block;
+}

@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, type Film, type FilmClip, type FilmLink, type FilmPeople, type FilmReel, type FilmShare, type GameStream } from '../api';
 import { useApp } from '../App';
 import PageTitle from '../components/PageTitle';
-import { BinIcon, Field, Modal, ShareIcon } from '../components/bits';
+import { BinIcon, Field, InfoTip, Modal, ShareIcon } from '../components/bits';
 import { FilmBrowser, type FilmKind } from '../components/Browsers';
 import { confirmDialog } from '../components/dialogs';
 import { CutIcon, FilmPlayer, ReelPlayer, canClip, clock, scenes, stripItem } from '../components/Film';
@@ -302,10 +302,6 @@ function ShareForm({ teamId, what, film, links, onFilm, onClose }: { teamId: num
           </span>
         </span>
       </label>
-      <h3 className="film-share-h">With one person</h3>
-      <p className="muted small">
-        Whoever you share it with needs a Dime Coach account to watch. Someone new is sent a link to make one, joins this team as a guest, and sees only what you share with them: not the schedule, the roster or anything else. It cannot be passed on.
-      </p>
       {has.length > 0 && (
         <>
           <h3 className="film-share-h">Shared with</h3>
@@ -426,8 +422,8 @@ function ShareLinks({ teamId, what, onCameIn }: { teamId: number; what: Shared; 
     <div className="film-share-links">
       <h3 className="film-share-h">
         A link you can send <span className="kind system">System administrator</span>
+        <InfoTip about="About a link you can send">For a text message or anywhere else. Whoever opens it signs in, or makes an account, and joins this team as a guest with this shared with them. They show under "Shared with" once they have, and you can stop any of them there.</InfoTip>
       </h3>
-      <p className="muted small">For a text message or anywhere else. Whoever opens it signs in, or makes an account, and joins this team as a guest with this shared with them. They show under "Shared with" once they have, and you can stop any of them there.</p>
       {error && <p className="error">{error}</p>}
       {fresh && (
         <div className="film-share-url">
