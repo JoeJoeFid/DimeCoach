@@ -787,7 +787,7 @@ export interface TeamContact {
   joined: boolean;
 }
 export type FamilyKind = 'parent' | 'family' | 'friend';
-export type FamilySection = 'schedule' | 'games' | 'practices' | 'news' | 'board' | 'homework' | 'playbook' | 'drills' | 'resources' | 'roster';
+export type FamilySection = 'schedule' | 'games' | 'practices' | 'live' | 'pbp' | 'news' | 'board' | 'homework' | 'playbook' | 'drills' | 'resources' | 'film' | 'roster';
 /** Something written on a team's page: an announcement from a coach, or a message on the board. */
 export interface TeamPost {
   id: number;
@@ -947,6 +947,8 @@ export interface Film {
   clips: FilmClip[];
   reels: FilmReel[];
   shares: FilmShare[];
+  /** What is on the team's page, for every kind of follower the Filmroom is open to. */
+  team_shares: { kind: FilmShare['kind']; ref_id: number }[];
 }
 /** The people on a team's list a video can be shared with. `hidden` when the person asking is kept from seeing that list. */
 export interface FilmPeople {
@@ -1144,6 +1146,8 @@ export const api = {
   /** Shares one thing with people on the team's list (`contact_ids`) and with new people by email, who join it as guests. */
   shareFilm: (b: { team_id: number; kind: FilmShare['kind']; ref_id: number; contact_ids: number[]; people: { name: string; email: string }[]; note: string }) => req<Film & { warning: string }>('POST', '/film/shares', b),
   unshareFilm: (id: number) => req<Film>('DELETE', `/film/shares/${id}`),
+  /** Puts one thing from the Filmroom on the team's page, or takes it off. */
+  shareFilmWithTeam: (b: { team_id: number; kind: FilmShare['kind']; ref_id: number; shared: boolean }) => req<Film>('PUT', '/film/team-share', b),
   /** Links to video that can be passed around. The system administrator's alone. */
   filmLinks: (teamId: number) => req<FilmLink[]>('GET', `/film/links?team_id=${teamId}`),
   /** Makes a link. Its address comes back this once. */

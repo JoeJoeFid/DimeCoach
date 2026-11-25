@@ -19,17 +19,20 @@ const SECTIONS: [FamilySection, string, string][] = [
   ['schedule', 'Schedule', 'Practices, games and events on their days.'],
   ['games', 'Game details', 'The time, place and opponent of each game. Without this a game shows only as a game on its day. Needs the schedule.'],
   ['practices', 'Practice summaries', 'What each practice covers: its parts and how long each runs. Never your coach notes. Needs the schedule.'],
+  ['live', 'Live video', 'Watching a game while it is broadcast. One person can be turned off, or allowed to broadcast, under "Live video".'],
+  ['pbp', 'Live play-by-play', 'Following a game as it is scored: the score and each play as it happens. Needs the schedule and game details.'],
   ['news', 'Announcements', 'What the coaches post for the people around the team.'],
   ['board', 'Message board', 'Reading it and writing on it.'],
   ['homework', 'Homework', 'Sheets set for the whole team, and for their own players.'],
-  ['playbook', 'Playbook', 'Only the plays picked under "Shared plays".'],
-  ['drills', 'Drills', 'Only the drills picked under "Shared drills", without your coach notes.'],
-  ['resources', 'Resources', 'Only the links, pictures and videos picked under "Shared resources".'],
+  ['playbook', 'Playbook', 'Only the plays you share with the team from the Playbook.'],
+  ['drills', 'Drills', 'Only the drills you share with the team from Drills, without your coach notes.'],
+  ['resources', 'Resources', 'Only the links, pictures and videos you share with the team from Resources.'],
+  ['film', 'Filmroom', 'Only the game videos, clips and cuts you share with the team from the Filmroom. Video shared with one person by name always shows to them.'],
   ['roster', 'Roster', 'Players’ names and numbers. Never their positions, parents’ details or your notes.'],
 ];
 const ROLE: Record<TeamPost['role'], string> = { coach: 'Coach', parent: 'Parent', family: 'Family', friend: 'Friend' };
 const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-type View = 'access' | 'messages' | 'plays' | 'drills' | 'resources' | 'video';
+type View = 'access' | 'messages' | 'video';
 
 /** Who an announcement goes out to unless the coach says otherwise. */
 export const DEFAULT_AUDIENCE: Audience[] = ['coach', 'parent'];
@@ -129,9 +132,6 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
         tabs={[
           ['access', 'Who sees what'],
           ['messages', 'Announcements & board', data.news.length + data.board.length],
-          ['plays', 'Shared plays', data.plays.length],
-          ['drills', 'Shared drills', data.drills.length],
-          ['resources', 'Shared resources', data.resources.length],
           ['video', 'Live video'],
         ]}
       />
@@ -224,79 +224,6 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
         </>
       )}
 
-      {view === 'plays' && (
-        <Picker
-          about={anyone('playbook') ? `Tick the plays the team's followers may see. They get the diagram, its steps and its notes, and cannot change it.` : 'The playbook is not open to anyone yet. Turn it on under "Who sees what", then pick the plays here.'}
-          empty="This team's sport has no plays yet. Draw some in the Playbook first."
-          rows={data.all_plays.map((p) => ({ id: String(p.id), title: p.name, sub: p.category }))}
-          picked={data.plays.map(String)}
-          disabled={!canEdit || busy}
-          save={(ids) => act(() => api.saveTeamFamily(team.id, { plays: ids.map(Number) }))}
-        />
-      )}
-      {view === 'drills' && (
-        <Picker
-          about={anyone('drills') ? `Tick the drills the team's followers may see: something to work on at home, say. They get the drill's notes and diagrams, and never your coach notes.` : 'Drills are not open to anyone yet. Turn them on under "Who sees what", then pick the drills here.'}
-          empty="This team's sport has no drills yet. Add some on the Drills page first."
-          rows={data.all_drills.map((d) => ({ id: String(d.id), title: d.name, sub: '' }))}
-          picked={data.drills.map(String)}
-          disabled={!canEdit || busy}
-          save={(ids) => act(() => api.saveTeamFamily(team.id, { drills: ids.map(Number) }))}
-        />
-      )}
-      {view === 'resources' && (
-        <Picker
-          about={anyone('resources') ? `Tick the links, pictures and videos the team's followers may open.` : 'Resources are not open to anyone yet. Turn them on under "Who sees what", then pick them here.'}
-          empty="There are no resources yet. Add links, pictures or videos on the Resources page first."
-          rows={data.all_resources.map((r) => ({ id: r.key, title: r.title, sub: r.kind === 'link' ? r.url : r.kind === 'image' ? 'Picture' : 'Video' }))}
-          picked={data.resources}
-          disabled={!canEdit || busy}
-          save={(keys) => act(() => api.saveTeamFamily(team.id, { resources: keys }))}
-        />
-      )}
     </div>
-  );
-}
-
-/** A list to tick things on. Each tick is saved as it is made. */
-function Picker({ about, empty, rows, picked, disabled, save }: { about: string; empty: string; rows: { id: string; title: string; sub: string }[]; picked: string[]; disabled: boolean; save: (ids: string[]) => void }) {
-  const [q, setQ] = useState('');
-  const term = q.trim().toLowerCase();
-  const shown = rows.filter((r) => !term || `${r.title} ${r.sub}`.toLowerCase().includes(term));
-  return (
-    <>
-      <p className="muted small">{about}</p>
-      {rows.length === 0 ? (
-        <p className="muted">{empty}</p>
-      ) : (
-        <>
-          <div className="tf-pick-bar">
-            {rows.length > 8 && <input className="input" type="search" aria-label="Find" placeholder="Find…" value={q} onChange={(e) => setQ(e.target.value)} />}
-            <span className="muted small">
-              {picked.length} of {rows.length} shared
-            </span>
-            <button type="button" className="link small" disabled={disabled || picked.length === rows.length} onClick={() => save(rows.map((r) => r.id))}>
-              Share all
-            </button>
-            <button type="button" className="link small" disabled={disabled || picked.length === 0} onClick={() => save([])}>
-              Share none
-            </button>
-          </div>
-          <ul className="tf-pick">
-            {shown.map((r) => (
-              <li key={r.id}>
-                <label>
-                  <input type="checkbox" checked={picked.includes(r.id)} disabled={disabled} onChange={() => save(picked.includes(r.id) ? picked.filter((id) => id !== r.id) : [...picked, r.id])} />
-                  <span>
-                    <strong>{r.title}</strong>
-                    {r.sub && <span className="muted small">{r.sub}</span>}
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </>
   );
 }

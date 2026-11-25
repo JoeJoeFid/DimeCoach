@@ -30,6 +30,7 @@
 // A stream is thrown away when it ends, unless its team is allowed to keep video (set by the
 // system administrator, team by team) and the broadcaster asked to save it. A saved one is for
 // the team's coaches.
+import { settingsOf } from './family.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -226,9 +227,11 @@ export function videoRole(user, teamId) {
   const team = get('SELECT * FROM teams WHERE id=?', Number(teamId));
   if (!team) return null;
   const coach = coachesOfTeam(team).some((p) => p.id === user.id) || isSystemAdmin(user);
-  const mine = all('SELECT can_watch, can_broadcast FROM team_contacts WHERE team_id=? AND user_id=?', team.id, user.id);
+  const mine = all('SELECT kind, can_watch, can_broadcast FROM team_contacts WHERE team_id=? AND user_id=?', team.id, user.id);
   if (!coach && mine.length === 0) return null;
-  return { team, coach, watch: coach || mine.some((c) => c.can_watch), broadcast: coach || mine.some((c) => c.can_broadcast), save: !!team.save_streams };
+  // Someone on the team's list watches when live video is open to their kind ("Who sees what") and has not been turned off for them alone.
+  const open = settingsOf(team).access;
+  return { team, coach, watch: coach || mine.some((c) => c.can_watch && open[c.kind]?.live), broadcast: coach || mine.some((c) => c.can_broadcast), save: !!team.save_streams };
 }
 /** Ends a stream. Its pieces are kept only when asked, and only for a team that may keep video. */
 function end(s, keep) {
@@ -352,7 +355,8 @@ export function mountStreams(app) {
       // The groups the broadcaster chose get a message, and a notification on their devices. Only people who may watch are told.
       const groups = new Set(String(s.tell ?? TELL.join(',')).split(',').filter(Boolean));
       const coaches = coachesOfTeam(team).map((p) => p.id);
-      const watchers = all('SELECT user_id, kind FROM team_contacts WHERE team_id=? AND user_id IS NOT NULL AND can_watch=1', team.id).filter((c) => groups.has(GROUP_OF[c.kind] || 'friends') && !coaches.includes(c.user_id));
+      const open = settingsOf(team).access;
+      const watchers = all('SELECT user_id, kind FROM team_contacts WHERE team_id=? AND user_id IS NOT NULL AND can_watch=1', team.id).filter((c) => open[c.kind]?.live && groups.has(GROUP_OF[c.kind] || 'friends') && !coaches.includes(c.user_id));
       const what = { kind: 'live', ref: String(s.id), title: `${team.name} is live`, body: `${s.title || 'A game'} is being broadcast now. Tap to watch.` };
       if (groups.has('coaches')) for (const id of coaches) if (id !== req.user.id) notify(id, { ...what, link: s.plan_id ? `/go/plan/${team.id}/${s.plan_id}?view=video` : '/' });
       for (const id of new Set(watchers.map((c) => c.user_id))) if (id !== req.user.id) notify(id, { ...what, link: `/family/${slugOf(team)}?tab=video` });

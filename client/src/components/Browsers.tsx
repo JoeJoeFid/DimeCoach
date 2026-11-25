@@ -404,7 +404,7 @@ const FILM_KINDS: [FilmKind, string][] = [
  * kind shows. `buttons` are what stands under each one: for a coach, play, edit, share and delete;
  * for anyone else, play. With `allKinds`, all three can be seen at once.
  */
-export function FilmBrowser<F extends BrowseFilm>({ films, compactKey, kind, onKind, allKinds, onPlay, buttons, empty }: { films: F[] | null; compactKey: string; /** '' for every kind at once. */ kind: FilmKind | ''; onKind: (k: FilmKind | '') => void; allKinds?: boolean; onPlay: (f: F) => void; buttons: (f: F) => ReactNode; /** What shows when there is none of the kind chosen, or none at all. */ empty: (kind: FilmKind | '') => ReactNode }) {
+export function FilmBrowser<F extends BrowseFilm>({ films, compactKey, kind, onKind, allKinds, onPlay, buttons, sharedWith, empty }: { films: F[] | null; compactKey: string; /** The names of where it is shared for all to see, such as the team. A coach's only. */ sharedWith?: (f: F) => string[]; /** '' for every kind at once. */ kind: FilmKind | ''; onKind: (k: FilmKind | '') => void; allKinds?: boolean; onPlay: (f: F) => void; buttons: (f: F) => ReactNode; /** What shows when there is none of the kind chosen, or none at all. */ empty: (kind: FilmKind | '') => ReactNode }) {
   const [q, setQ] = useState('');
   const [from, setFrom] = useState(0);
   const [compact, setCompact] = useCompact(compactKey);
@@ -469,6 +469,7 @@ export function FilmBrowser<F extends BrowseFilm>({ films, compactKey, kind, onK
                   </strong>
                   <span className="muted small">{f.meta}</span>
                   {f.notes && <p className="film-notes">{f.notes}</p>}
+                  <SharedWithLine names={sharedWith?.(f) ?? []} />
                   <div className="res-actions">{buttons(f)}</div>
                 </div>
               </div>

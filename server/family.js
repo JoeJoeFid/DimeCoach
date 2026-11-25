@@ -42,12 +42,14 @@ addColumn('team_posts', 'audience', "TEXT NOT NULL DEFAULT ''");
 
 export const FAMILY_KINDS = ['parent', 'family', 'friend'];
 // 'games' and 'practices' say how much of the schedule is told: when and where games are, and what a practice covers.
-export const FAMILY_SECTIONS = ['schedule', 'games', 'practices', 'news', 'board', 'homework', 'playbook', 'drills', 'resources', 'roster'];
+// 'film' is the Filmroom: the game videos, clips and cuts a coach has put on the team's page.
+// 'live' is watching a game's live video; 'pbp' is following a game play by play while it is scored.
+export const FAMILY_SECTIONS = ['schedule', 'games', 'practices', 'live', 'pbp', 'news', 'board', 'homework', 'playbook', 'drills', 'resources', 'film', 'roster'];
 // A parent sees most things, family a little, and a friend the schedule, until a coach says otherwise.
 const DEFAULTS = {
-  parent: { schedule: true, games: true, practices: false, news: true, board: true, homework: true, playbook: true, drills: true, resources: true, roster: true },
-  family: { schedule: true, games: true, practices: false, news: true, board: false, homework: false, playbook: false, drills: false, resources: true, roster: false },
-  friend: { schedule: true, games: true, practices: false, news: false, board: false, homework: false, playbook: false, drills: false, resources: false, roster: false },
+  parent: { schedule: true, games: true, practices: false, live: true, pbp: true, news: true, board: true, homework: true, playbook: true, drills: true, resources: true, film: true, roster: true },
+  family: { schedule: true, games: true, practices: false, live: true, pbp: true, news: true, board: false, homework: false, playbook: false, drills: false, resources: true, film: false, roster: false },
+  friend: { schedule: true, games: true, practices: false, live: true, pbp: true, news: false, board: false, homework: false, playbook: false, drills: false, resources: false, film: false, roster: false },
 };
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 const parse = (s, fallback) => {
@@ -309,15 +311,16 @@ export function mountFamily(app) {
       team: { id: team.id, slug: slugOf(team), name: team.name, sport: sportOf(team), season: team.season || '', organization: team.community_id ? get('SELECT name FROM communities WHERE id=?', team.community_id)?.name || '' : '', coaches: coachesOf(team) },
       me: { kind: f.kind, players: f.players.map((p) => p.name) },
       // How many videos from the Filmroom have been shared with this person.
-      film: get('SELECT COUNT(*) AS n FROM film_shares f JOIN team_contacts c ON c.id=f.contact_id WHERE c.user_id=? AND f.team_id=?', req.user.id, team.id).n,
+      film: get('SELECT COUNT(*) AS n FROM film_shares f JOIN team_contacts c ON c.id=f.contact_id WHERE c.user_id=? AND f.team_id=?', req.user.id, team.id).n + (can.film ? get('SELECT COUNT(*) AS n FROM film_team_shares WHERE team_id=?', team.id).n : 0),
       // Live video: whether this person may watch or broadcast, and whether something is going out now.
       video: (() => {
         const mine = all('SELECT can_watch, can_broadcast FROM team_contacts WHERE team_id=? AND user_id=?', team.id, req.user.id);
-        const watch = mine.some((c) => c.can_watch);
+        // Live video is open to their kind of follower, and has not been turned off for them alone.
+        const watch = !!can.live && mine.some((c) => c.can_watch);
         return { watch, broadcast: mine.some((c) => c.can_broadcast), live: watch && liveNow(team.id) };
       })(),
       // A game being scored right now, for those who are told about games: the score and how far along it is.
-      live_game: can.schedule && can.games ? liveBrief(liveGame(team)) : null,
+      live_game: can.schedule && can.games && can.pbp ? liveBrief(liveGame(team)) : null,
       can,
       schedule: can.schedule ? scheduleOf(team, can) : [],
       news: can.news ? postsOf(team.id, 'news', req.user.id, f.kind) : [],
@@ -337,7 +340,7 @@ export function mountFamily(app) {
   app.get('/api/family/teams/:id/live', (req, res) => {
     const f = enter(req, res);
     if (!f) return;
-    if (!f.can.schedule || !f.can.games) return res.status(403).json({ error: 'Games are not open to you on this team.' });
+    if (!f.can.schedule || !f.can.games || !f.can.pbp) return res.status(403).json({ error: 'Games are not open to you on this team.' });
     const sheet = liveGame(f.team);
     if (!sheet) return res.json({ game: null, plays: [] });
     const players = new Map(all('SELECT id, name, number FROM players WHERE team_id=?', f.team.id).map((p) => [p.id, p]));

@@ -42,10 +42,11 @@ export default function Filmroom() {
   /** The button that opens sharing for one thing, saying how many people have it already. */
   const shareButton = (what: Shared) => {
     const n = film?.shares.filter((s) => s.kind === what.kind && s.ref_id === what.id).length ?? 0;
+    const team = !!film?.team_shares.some((s) => s.kind === what.kind && s.ref_id === what.id);
     return (
-      <button type="button" className="btn small icon-btn film-share-btn" onClick={() => setSharing(what)} aria-label={`Share ${what.title}${n ? `. Shared with ${n} ${n === 1 ? 'person' : 'people'}` : ''}`} title={n ? `Share. Shared with ${n} ${n === 1 ? 'person' : 'people'} so far` : 'Share'}>
+      <button type="button" className="btn small icon-btn film-share-btn" onClick={() => setSharing(what)} aria-label={`Share ${what.title}${team ? '. On the team\u2019s page' : ''}${n ? `. Shared with ${n} ${n === 1 ? 'person' : 'people'}` : ''}`} title={team || n ? `Share. ${[team && 'On the team\u2019s page', n && `shared with ${n} ${n === 1 ? 'person' : 'people'}`].filter(Boolean).join(', and ')}` : 'Share'}>
         <ShareIcon size={17} />
-        {n > 0 && <span className="cm-count">{n}</span>}
+        {(n > 0 || team) && <span className="cm-count">{team ? (n > 0 ? `Team +${n}` : 'Team') : n}</span>}
       </button>
     );
   };
@@ -117,6 +118,10 @@ export default function Filmroom() {
       <FilmBrowser
         films={items}
         compactKey="practiceplan.filmCompact"
+        sharedWith={(f) => {
+          const ref = f.video?.id ?? f.clip?.id ?? f.reel?.id;
+          return film!.team_shares.some((s) => s.kind === f.kind && s.ref_id === ref) ? [team.name] : [];
+        }}
         kind={KIND_OF[tab]}
         onKind={(k) => k && choose(TAB_OF[k])}
         onPlay={(f) => (f.video ? navigate(`/filmroom/video/${f.video.id}`) : f.clip ? setWatching(f.clip) : f.reel && setShowing({ reel: f.reel, at: 0 }))}
@@ -235,6 +240,13 @@ function ShareForm({ teamId, what, film, links, onFilm, onClose }: { teamId: num
     api.filmPeople(teamId).then(setPeople, failed);
   }, [teamId]);
   const has = film.shares.filter((s) => s.kind === what.kind && s.ref_id === what.id);
+  const onTeam = film.team_shares.some((s) => s.kind === what.kind && s.ref_id === what.id);
+  // Who the team's page shows the Filmroom to, as it is set under "Who sees what".
+  const [sees, setSees] = useState<string[] | null>(null);
+  useEffect(() => {
+    api.teamFamily(teamId).then((f) => setSees((['parent', 'family', 'friend'] as const).filter((k) => f.access[k].film).map((k) => ({ parent: 'parents', family: 'family', friend: 'friends' })[k])), () => {});
+  }, [teamId]);
+  const setTeam = (shared: boolean) => api.shareFilmWithTeam({ team_id: teamId, kind: what.kind, ref_id: what.id, shared }).then(onFilm, failed);
   const open = people?.people.filter((p) => !has.some((s) => s.contact_id === p.id)) ?? [];
   // Someone typed in but not yet added to the list below goes too.
   const typed = email.trim() ? [{ name: name.trim(), email: email.trim() }] : [];
@@ -273,6 +285,23 @@ function ShareForm({ teamId, what, film, links, onFilm, onClose }: { teamId: num
   };
   return (
     <Modal title={`Share the ${SHARED_WORD[what.kind]} "${what.title}"`} onClose={onClose}>
+      {/* On the team's page, as a resource or a play is: everyone the Filmroom is open to sees it there. */}
+      <h3 className="film-share-h">With the team</h3>
+      <label className="check setting film-team-share">
+        <input type="checkbox" checked={onTeam} onChange={(e) => setTeam(e.target.checked)} />
+        <span>
+          <strong>Show on the team's page</strong>
+          <span className="muted small">
+            {sees === null
+              ? 'In the Filmroom on the team\u2019s page.'
+              : sees.length
+                ? `In the Filmroom on the team\u2019s page, for ${sees.join(', ').replace(/, ([^,]*)$/, ' and $1')}. `
+                : 'The Filmroom on the team\u2019s page is not open to anyone yet. '}
+            {sees !== null && <Link to="/teams?tab=family">Change who sees the Filmroom</Link>}
+          </span>
+        </span>
+      </label>
+      <h3 className="film-share-h">With one person</h3>
       <p className="muted small">
         Whoever you share it with needs a Dime Coach account to watch. Someone new is sent a link to make one, joins this team as a guest, and sees only what you share with them: not the schedule, the roster or anything else. It cannot be passed on.
       </p>

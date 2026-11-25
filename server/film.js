@@ -16,7 +16,7 @@ import { FAMILY_INVITE_DAYS } from './contacts.js';
 import { publicBase } from './invites.js';
 import { mailerStatus, sendMail } from './mailer.js';
 import { notify } from './notices.js';
-import { slugOf } from './family.js';
+import { FAMILY_KINDS, settingsOf, slugOf } from './family.js';
 import { isSystemAdmin } from './auth.js';
 import { FILM_LINK_DAYS, dropFilmLink, filmLinksOf, makeFilmLink } from './filmLinks.js';
 
@@ -72,6 +72,16 @@ CREATE TABLE IF NOT EXISTS film_shares (
 );
 CREATE INDEX IF NOT EXISTS idx_film_shares_team ON film_shares(team_id);
 CREATE INDEX IF NOT EXISTS idx_film_shares_contact ON film_shares(contact_id);
+-- Put on the team's page: shown to every kind of follower the Filmroom is open to ("Who sees what").
+CREATE TABLE IF NOT EXISTS film_team_shares (
+  id INTEGER PRIMARY KEY,
+  team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  ref_id INTEGER NOT NULL,
+  shared_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE (team_id, kind, ref_id)
+);
 `);
 const SHARE_KINDS = ['video', 'clip', 'reel'];
 const MAX_SHARE_PEOPLE = 25;
@@ -140,12 +150,31 @@ function sharesOf(teamId) {
   }
   return out;
 }
+/** Whether something is still in the Filmroom. */
+const stillThere = (teamId, kind, refId) => !!(kind === 'video' ? savedVideo(refId, teamId) : get(`SELECT id FROM ${kind === 'clip' ? 'film_clips' : 'film_reels'} WHERE id=? AND team_id=?`, refId, teamId));
+/** What a team has put on its page for its followers, newest first. What has since been deleted is cleared away. */
+function teamSharesOf(teamId) {
+  const out = [];
+  for (const f of all('SELECT * FROM film_team_shares WHERE team_id=? ORDER BY id DESC', teamId)) {
+    if (stillThere(teamId, f.kind, f.ref_id)) out.push(f);
+    else run('DELETE FROM film_team_shares WHERE id=?', f.id);
+  }
+  return out;
+}
+/** Whether the Filmroom on a team's page is open to this person: they follow the team, as a kind the coaches opened it to. */
+function seesTeamFilm(userId, teamId) {
+  const team = get('SELECT * FROM teams WHERE id=?', Number(teamId));
+  if (!team) return false;
+  const access = settingsOf(team).access;
+  return all('SELECT kind FROM team_contacts WHERE user_id=? AND team_id=?', userId, team.id).some((c) => FAMILY_KINDS.includes(c.kind) && access[c.kind]?.film);
+}
 /** The shares one person has from a team, newest first. */
 const sharesFor = (userId, teamId) => all('SELECT f.* FROM film_shares f JOIN team_contacts c ON c.id=f.contact_id WHERE c.user_id=? AND f.team_id=? ORDER BY f.id DESC', userId, teamId);
 // Someone a video was shared with may fetch it: all of a game video shared whole, or put whole into a reel, and otherwise only the pieces their clips run over.
 setSharedPieces((userId, stream) => {
   const ranges = [];
-  for (const f of sharesFor(userId, stream.team_id)) {
+  // What was shared with them by name, and what is on the team's page when that is open to them.
+  for (const f of [...sharesFor(userId, stream.team_id), ...(seesTeamFilm(userId, stream.team_id) ? teamSharesOf(stream.team_id) : [])]) {
     for (const p of sharedThing(f)?.parts ?? []) {
       if (p.stream.id !== stream.id) continue;
       if (!p.end) return 'all';
@@ -161,6 +190,8 @@ const filmOf = (teamId) => ({
   clips: all('SELECT * FROM film_clips WHERE team_id=? ORDER BY id DESC', teamId).map(clipOut),
   reels: all('SELECT * FROM film_reels WHERE team_id=? ORDER BY updated_at DESC, id DESC', teamId).map(reelOut),
   shares: sharesOf(teamId),
+  // What is on the team's page, for every follower the Filmroom is open to.
+  team_shares: teamSharesOf(teamId).map((f) => ({ kind: f.kind, ref_id: f.ref_id })),
 });
 
 export function mountFilm(app) {
@@ -216,6 +247,17 @@ export function mountFilm(app) {
       ...(token ? { secret: token } : {}),
     });
   }
+  // Puts one thing on the team's page, or takes it off. Who sees it there is set under "Who sees what".
+  app.put('/api/film/team-share', (req, res) => {
+    const team = coached(req, res, req.body.team_id);
+    if (!team) return;
+    const kind = SHARE_KINDS.includes(req.body.kind) ? req.body.kind : '';
+    const ref = Number(req.body.ref_id);
+    if (!kind || !stillThere(team.id, kind, ref)) return res.status(404).json({ error: 'That video is no longer in the Filmroom.' });
+    if (req.body.shared) run('INSERT OR IGNORE INTO film_team_shares (team_id, kind, ref_id, shared_by, created_at) VALUES (?,?,?,?,?)', team.id, kind, ref, req.user.id, nowIso());
+    else run('DELETE FROM film_team_shares WHERE team_id=? AND kind=? AND ref_id=?', team.id, kind, ref);
+    res.json(filmOf(team.id));
+  });
   // Shares one thing with people: ones already on the team's list, and new ones by email, who join it as guests.
   app.post('/api/film/shares', async (req, res) => {
     const team = coached(req, res, req.body.team_id);
@@ -291,9 +333,17 @@ export function mountFilm(app) {
     const out = [];
     for (const f of sharesFor(req.user.id, Number(req.query.team_id))) {
       const thing = sharedThing(f);
-      if (thing) out.push({ id: f.id, kind: f.kind, ...thing, by: get('SELECT name FROM users WHERE id=?', f.shared_by)?.name || 'A coach', at: f.created_at, watched: !!f.watched_at });
+      if (thing) out.push({ id: f.id, kind: f.kind, ref_id: f.ref_id, ...thing, by: get('SELECT name FROM users WHERE id=?', f.shared_by)?.name || 'A coach', at: f.created_at, watched: !!f.watched_at });
     }
-    res.json(out);
+    // What is on the team's page, when the Filmroom is open to them, left out where it was also shared with them by name.
+    // These are numbered below zero, so they are never taken for a share made to one person.
+    if (seesTeamFilm(req.user.id, req.query.team_id))
+      for (const f of teamSharesOf(Number(req.query.team_id))) {
+        if (out.some((o) => o.kind === f.kind && o.ref_id === f.ref_id)) continue;
+        const thing = sharedThing(f);
+        if (thing) out.push({ id: -f.id, kind: f.kind, ...thing, by: get('SELECT name FROM users WHERE id=?', f.shared_by)?.name || 'A coach', at: f.created_at, watched: true, team: true });
+      }
+    res.json(out.map(({ ref_id, ...rest }) => rest));
   });
   app.post('/api/family/film/:id/watched', (req, res) => {
     run('UPDATE film_shares SET watched_at=? WHERE id=? AND watched_at IS NULL AND contact_id IN (SELECT id FROM team_contacts WHERE user_id=?)', nowIso(), Number(req.params.id), req.user.id);

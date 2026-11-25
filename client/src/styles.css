@@ -22908,3 +22908,24 @@ button.hw-title {
   text-align: left;
   cursor: pointer;
 }
+
+/* Sharing film with the team: the one switch, above the list of people. */
+.film-team-share {
+  margin: 4px 0 12px;
+}
+.film-share-btn .cm-count {
+  white-space: nowrap;
+}
+.film-team-share strong {
+  display: block;
+}
+.film-share-btn {
+  flex: none;
+  width: auto;
+  min-width: 34px;
+  gap: 5px;
+  padding: 0 8px;
+}
+.film-share-btn svg {
+  flex: none;
+}

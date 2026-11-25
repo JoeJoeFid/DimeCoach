@@ -106,7 +106,7 @@ const TOPICS: Topic[] = [
       'Add each person with their email address, say whether they are a parent, family or a friend, and link parents to their players. Leave "invite" ticked.',
       'They get an email with a link for making an account. With it they open a page for the team, and nothing else.',
       'Under "Who sees what", tick the parts of the page each kind of person gets: the schedule, announcements, the message board, homework, the playbook, resources and the roster.',
-      'Under "Shared plays" and "Shared resources", tick the ones they may see. Under "Announcements & board", write to them.',
+      'Share a play, a drill, a resource or a video with the team from its own page, with its share button. Under "Announcements & board", write to them.',
     ],
     tip: 'To begin with a parent sees everything, family sees the schedule, announcements and resources, and a friend sees only the schedule. They never see parents’ contact details or your notes, and cannot change anything about the team.',
     words: 'parents family friends guardian page view access permissions announcements message board schedule playbook homework resources invite account followers',
