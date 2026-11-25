@@ -21646,3 +21646,28 @@ button.film-clip-play {
     justify-content: flex-end;
   }
 }
+
+/* The play builder: the court or field in a box of its own at the top. Which one, its color, and which way round it is seen. */
+.court-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px 28px;
+  margin-bottom: 14px;
+}
+.court-box h2 {
+  align-self: center;
+  margin: 0;
+  min-width: 64px;
+}
+.court-box-part {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.court-box-turns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
