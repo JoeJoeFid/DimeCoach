@@ -189,6 +189,9 @@ export default function PlayEditor() {
   const [shareVersion, setShareVersion] = useState(0);
   /** Whether the animated playback is open. */
   const [watching, setWatching] = useState(false);
+  // Whether the box for this step's note has been asked for. Another step starts shut again.
+  const [noting, setNoting] = useState(false);
+  useEffect(() => setNoting(false), [step]);
   // On a phone the details are one line until asked for, so the court comes first.
   const [headOpen, setHeadOpen] = useState(false);
   /** A tool being dragged from the palette: which one, and where the pointer is on the page. */
@@ -1414,7 +1417,6 @@ export default function PlayEditor() {
               Animate <span className="box-title-count">{play.frames.length} {play.frames.length === 1 ? 'step' : 'steps'}</span>
             </h3>
           </div>
-          <p className="muted small box-sub">How the play moves when it is watched. Open a step to set who goes first in it, and what is said about it.</p>
           <button className="btn primary" onClick={() => setWatching(true)} title="Watch the whole play move, step by step">
             ▶ Watch the play
           </button>
@@ -1472,9 +1474,12 @@ export default function PlayEditor() {
                         <ol className="order-list">
                           {beats.map((lines, b) => (
                             <li key={b} className={`order-beat ${lines.length > 1 ? 'group' : ''}`}>
+                              {/* Where this comes in the step, as a number in a bubble: the order is what this list is for. */}
                               <span className="order-place">
-                                {ordinal(b + 1)}
-                                {lines.length > 1 && <span className="muted"> · {lines.length} together</span>}
+                                <b className="order-bubble" aria-label={ordinal(b + 1)}>
+                                  {b + 1}
+                                </b>
+                                {lines.length > 1 && <span className="muted">{lines.length} together</span>}
                               </span>
                               {lines.map((l) => {
                                 const i = sequence.findIndex((s) => s.line.id === l.id);
@@ -1512,15 +1517,23 @@ export default function PlayEditor() {
                       </>
                     )}
                   </div>
-                  <Field label={`Note for step ${index + 1}`}>
-                    <textarea
-                      className="input"
-                      rows={3}
-                      placeholder={NOTE_EXAMPLES[sport]}
-                      value={frame.note}
-                      onChange={(e) => update({ frames: play.frames.map((f, i) => (i === index ? { ...f, note: e.target.value } : f)) })}
-                    />
-                  </Field>
+                  {/* A note takes no room until one is wanted: a button first, and the box to write in once it is pressed or there is a note already. */}
+                  {frame.note.trim() || noting ? (
+                    <Field label={`Note for step ${index + 1}`}>
+                      <textarea
+                        autoFocus={noting}
+                        className="input"
+                        rows={3}
+                        placeholder={NOTE_EXAMPLES[sport]}
+                        value={frame.note}
+                        onChange={(e) => update({ frames: play.frames.map((f, i) => (i === index ? { ...f, note: e.target.value } : f)) })}
+                      />
+                    </Field>
+                  ) : (
+                    <button type="button" className="btn small anim-note-add" onClick={() => setNoting(true)}>
+                      + Add note
+                    </button>
+                  )}
                     </div>
                   )}
                 </li>

@@ -21949,3 +21949,28 @@ button.film-clip-play {
   padding: 0;
   border: none;
 }
+.anim-note-add {
+  align-self: flex-start;
+}
+
+/* Order of movement: where each move comes in the step, as a number in a bubble. */
+.order-place {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.order-bubble {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+}
