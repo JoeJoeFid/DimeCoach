@@ -22410,3 +22410,18 @@ button.film-clip-play {
 .hw-card.is-past {
   opacity: 0.75;
 }
+
+/* Schedule: the view and filter column stands on the right of the list. */
+@media (min-width: 901px) {
+  .ps-layout {
+    grid-template-columns: minmax(0, 1fr) 210px;
+  }
+  .ps-layout > .ps-side {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .ps-layout > .ps-main {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
