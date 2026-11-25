@@ -17,6 +17,7 @@
 // A broadcast is always the same few things to the page: start it, stop it, change its quality,
 // and hear how it is getting on. Another way of broadcasting later would be another `Broadcaster`.
 import { api, type GameStream } from './api';
+import { QUALITIES, type Quality } from './castQuality';
 import { cutter } from './mp4boxes';
 import { Unfit, fileSource, prepareVideo } from './mp4file';
 
@@ -24,20 +25,14 @@ import { Unfit, fileSource, prepareVideo } from './mp4file';
 export interface Signal {
   sent: number;
   behind: number;
+  /** Bits a second the last piece went out at. Only said when a piece has just gone. */
+  rate?: number;
+  /** A piece did not go in the time it was given, and was let go. */
+  stalled?: boolean;
   /** Set when the broadcast cannot go on: it was ended elsewhere, or has run as long as it may. */
   error?: string;
 }
-/**
- * How sharp the picture is. Sharper needs a better connection, and makes a bigger video. The
- * sizes are ones cameras take pictures at: a recording comes out at the camera's own size, so a
- * size in between (540p, say) would be recorded at the next one up whatever was asked for.
- */
-export type Quality = 'low' | 'medium' | 'high';
-export const QUALITIES: Record<Quality, { label: string; says: string; width: number; height: number; video: number; audio: number }> = {
-  low: { label: 'Low', says: '360p. For a weak connection.', width: 640, height: 360, video: 700_000, audio: 48_000 },
-  medium: { label: 'Medium', says: '720p. A good balance.', width: 1280, height: 720, video: 1_800_000, audio: 64_000 },
-  high: { label: 'High', says: '1080p. Needs a strong connection.', width: 1920, height: 1080, video: 4_000_000, audio: 64_000 },
-};
+export { QUALITIES, RUNGS, autoStart, autoStep, type Auto, type Quality } from './castQuality';
 /** What to ask a camera for at a quality. A camera that cannot do it gives the nearest it can. */
 export const cameraSize = (q: Quality) => ({ width: { ideal: QUALITIES[q].width }, height: { ideal: QUALITIES[q].height } });
 const resize = (m: MediaStream | null, q: Quality) => m?.getVideoTracks()[0]?.applyConstraints(cameraSize(q)).catch(() => {}) ?? Promise.resolve();
@@ -65,35 +60,35 @@ export type Layout = 'joined' | 'separate';
 class Refused extends Error {}
 interface Sender {
   /** Sends an opening part of a joined video: the one the pieces after it carry on from. */
-  init: (part: Blob) => Promise<void>;
-  /** Sends piece `n`. Returns how many pieces the server now has. */
-  piece: (n: number, piece: Blob) => Promise<number>;
+  init: (part: Blob, stop?: AbortSignal) => Promise<void>;
+  /** Sends piece `n`. Returns how many pieces the server now has. `stop` gives up on it part-way. */
+  piece: (n: number, piece: Blob, stop?: AbortSignal) => Promise<number>;
 }
 // Either throws `Refused` when the broadcast cannot go on, and anything else when it is worth trying again.
 
 const refusals = /ended|longest|room/;
 const toServer = (id: number): Sender => {
-  const post = async (piece: Blob, init: boolean) => {
+  const post = async (piece: Blob, init: boolean, stop?: AbortSignal) => {
     try {
-      await api.sendSegment(id, piece, init);
+      await api.sendSegment(id, piece, init, stop);
     } catch (e) {
       throw refusals.test((e as Error).message) ? new Refused((e as Error).message) : e;
     }
   };
-  return { init: (part) => post(part, true), piece: (n, piece) => post(piece, false).then(() => n + 1) };
+  return { init: (part, stop) => post(part, true, stop), piece: (n, piece, stop) => post(piece, false, stop).then(() => n + 1) };
 };
 const byLinks = (id: number, type: string): Sender => {
   // Links are asked for a few at a time, ahead of the pieces they are for.
   let links = new Map<number, string>();
-  const ask = async (init = false) => {
-    const r = await api.sendLinks(id, init);
+  const ask = async (init = false, stop?: AbortSignal) => {
+    const r = await api.sendLinks(id, init, stop);
     if (r.status === 400 || r.status === 404) throw new Refused(r.error || 'This broadcast has ended.');
     if (!r.links?.length) throw new Error(r.error || 'No links');
     links = new Map(r.links.map((l) => [l.n, l.url]));
     return r;
   };
-  const put = async (url: string, body: Blob) => {
-    const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': type }, body });
+  const put = async (url: string, body: Blob, stop?: AbortSignal) => {
+    const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': type }, body, signal: stop });
     if (res.ok) return;
     // A link that has run out, or been refused: the next try asks for fresh ones.
     links.clear();
@@ -101,22 +96,22 @@ const byLinks = (id: number, type: string): Sender => {
   };
   const ended = (said: { status: number; error?: string }) => said.status === 404 || (said.status === 400 && refusals.test(said.error || ''));
   return {
-    init: async (part) => {
-      const r = await ask(true);
+    init: async (part, stop) => {
+      const r = await ask(true, stop);
       if (!r.init) throw new Error('No link for the opening part');
-      await put(r.init, part);
-      const said = await api.sentPiece(id, 'init');
+      await put(r.init, part, stop);
+      const said = await api.sentPiece(id, 'init', stop);
       if (ended(said)) throw new Refused(said.error || 'This broadcast has ended.');
       if (said.status !== 200) throw new Error(said.error || 'Not counted');
     },
-    piece: async (n, piece) => {
+    piece: async (n, piece, stop) => {
       if (!links.has(n)) {
-        const r = await ask();
+        const r = await ask(false, stop);
         // The server counts the pieces. Where this device has lost count, it carries on from the server's.
         if (!links.has(n)) n = r.links![0].n;
       }
-      await put(links.get(n)!, piece);
-      const said = await api.sentPiece(id, n);
+      await put(links.get(n)!, piece, stop);
+      const said = await api.sentPiece(id, n, stop);
       if (ended(said)) throw new Refused(said.error || 'This broadcast has ended.');
       // Too large to keep: this piece is let go and the broadcast carries on.
       if (said.status === 413) return n;
@@ -129,39 +124,60 @@ const byLinks = (id: number, type: string): Sender => {
   };
 };
 
+/**
+ * How long a piece of a broadcast is given to go out before it is given up on: as long as it would
+ * take on a connection far too slow to broadcast over, and never less than a quarter of a minute.
+ * Without it, one piece stuck on a connection that has gone quiet holds up every piece behind it.
+ */
+const patience = (bytes: number) => Math.max(15_000, Math.min(45_000, (bytes * 8) / 250));
+
 /** What is waiting to go out, sent in the order it was made and one at a time, whatever made it. */
 function outbox(stream: GameStream, how: SendHow, type: string, onSignal: (s: Signal) => void, onRefused: () => void) {
   const send = how === 'links' ? byLinks(stream.id, type.split(';')[0]) : toServer(stream.id);
   const st = { queue: [] as { init: boolean; blob: Blob }[], sending: false, sent: 0, next: 0, dead: false };
   const waiting = () => st.queue.filter((q) => !q.init).length;
-  const tell = (error?: string) => onSignal({ sent: st.sent, behind: waiting(), error });
+  const tell = (error?: string, more: { rate?: number; stalled?: boolean } = {}) => onSignal({ sent: st.sent, behind: waiting(), error, ...more });
   const pump = async () => {
     if (st.sending) return;
     st.sending = true;
     while (st.queue.length > 0 && !st.dead) {
       const item = st.queue[0];
+      const more: { rate?: number; stalled?: boolean } = {};
+      const stop = new AbortController();
+      const timer = setTimeout(() => stop.abort(), patience(item.blob.size));
+      const began = Date.now();
       try {
-        if (item.init) await send.init(item.blob);
+        if (item.init) await send.init(item.blob, stop.signal);
         else {
-          st.next = await send.piece(st.next, item.blob);
+          st.next = await send.piece(st.next, item.blob, stop.signal);
           st.sent += 1;
+          more.rate = (item.blob.size * 8000) / Math.max(1, Date.now() - began);
         }
-        st.queue.shift();
+        if (st.queue[0] === item) st.queue.shift();
       } catch (e) {
         if (e instanceof Refused) {
+          clearTimeout(timer);
           st.dead = true;
           st.queue = [];
           tell(e.message);
           onRefused();
           break;
         }
+        if (stop.signal.aborted) {
+          // It ran out of time. A piece that old is no use to someone watching live, so it is let go and the next one tried.
+          // An opening part is tried again: the pieces after it cannot be played without it.
+          more.stalled = true;
+          if (!item.init && st.queue[0] === item) st.queue.shift();
+        }
         // Anything else is the connection: try again shortly.
-        await new Promise((r) => setTimeout(r, 1500));
+        else await new Promise((r) => setTimeout(r, 1500));
+      } finally {
+        clearTimeout(timer);
       }
       // Too far behind means the connection cannot keep up: the oldest pieces are dropped so the viewers stay near live.
       // An opening part is never dropped: the pieces after it cannot be played without it.
       while (waiting() > 8) st.queue.splice(st.queue.findIndex((q) => !q.init), 1);
-      tell();
+      tell(undefined, more);
     }
     st.sending = false;
   };
@@ -761,6 +777,13 @@ export interface ReelPlaying {
   part?: number;
   /** Exactly where it is, in the game video that part is from. */
   at?: Mark;
+  /**
+   * How many seconds into the part it is, by the player's own clock, which is the only true
+   * measure: the pieces of a video are not all one length, so a mark cannot be turned into seconds.
+   */
+  into?: number;
+  /** How long the part runs by that clock, once it is known. Not known for a part that was entered part-way. */
+  len?: number;
   /** A part has ended and the next, this one, is being held back: the page shows its pause and then calls `resume`. */
   hold?: number;
   /** Waiting for video to arrive. */
@@ -772,7 +795,8 @@ export interface ReelPlaying {
 }
 export interface ReelHandle {
   /** Moves to a part: its start, or `mark` in it. With `play`, it is set playing once it is there. */
-  go: (part: number, mark?: Mark, play?: boolean) => void;
+  /** `into` is how many seconds into the part `mark` is, as near as the caller knows: progress is counted on from it. */
+  go: (part: number, mark?: Mark, play?: boolean, into?: number) => void;
   /** Carries on to the part that was being held back. */
   resume: () => void;
   close: () => void;
@@ -803,7 +827,9 @@ export function reelPlayer(el: HTMLVideoElement, parts: ReelPart[], from: number
     feedN: first(from),
     fresh: true,
     // Somewhere to move to as soon as it has been fed.
-    want: { part: from, n: first(from), off: parts[from].start?.off ?? 0 } as { part: number; n: number; off: number } | null,
+    want: { part: from, n: first(from), off: parts[from].start?.off ?? 0, into: 0, whole: true } as { part: number; n: number; off: number; into: number; whole: boolean } | null,
+    // Where the part now playing was come into: the player's time then, how far into the part that was, and whether it was the part's start.
+    origin: null as { t: number; into: number; whole: boolean } | null,
     // Everything in the player is to be thrown out first: it was moved to somewhere not loaded.
     clear: false,
     // Counts the times it was moved that way, so feeding that was under way knows to stop.
@@ -916,11 +942,12 @@ export function reelPlayer(el: HTMLVideoElement, parts: ReelPart[], from: number
           // Where it was waiting to go. A piece that could not be had leaves it at the start of the next.
           if (piece) {
             el.currentTime = fed[fed.length - 1].t0 + want.off;
+            st.origin = { t: fed[fed.length - 1].t0 + want.off, into: want.into, whole: want.whole };
             st.want = null;
             onChange({ waiting: false });
             play();
-          } else if (n < last(i)) st.want = { part: i, n: n + 1, off: 0 };
-          else if (i + 1 < parts.length) st.want = { part: i + 1, n: first(i + 1), off: parts[i + 1].start?.off ?? 0 };
+          } else if (n < last(i)) st.want = { part: i, n: n + 1, off: 0, into: want.into, whole: false };
+          else if (i + 1 < parts.length) st.want = { part: i + 1, n: first(i + 1), off: parts[i + 1].start?.off ?? 0, into: 0, whole: true };
           else st.want = null;
         }
         if (n >= last(i)) {
@@ -936,7 +963,7 @@ export function reelPlayer(el: HTMLVideoElement, parts: ReelPart[], from: number
     }
   };
   /** Moves to somewhere in a part: at once when it is loaded, and by loading from there when it is not. */
-  const move = (part: number, mark?: Mark) => {
+  const move = (part: number, mark?: Mark, into = 0) => {
     st.cur = part;
     st.holding = -1;
     st.done = false;
@@ -947,6 +974,7 @@ export function reelPlayer(el: HTMLVideoElement, parts: ReelPart[], from: number
     if (f && loaded(f.t0 + off)) {
       st.want = null;
       el.currentTime = f.t0 + off;
+      st.origin = { t: f.t0 + off, into: mark ? into : 0, whole: !mark };
       play();
     } else {
       st.turn += 1;
@@ -955,7 +983,8 @@ export function reelPlayer(el: HTMLVideoElement, parts: ReelPart[], from: number
       st.feedPart = part;
       st.feedN = n;
       st.fresh = true;
-      st.want = { part, n, off };
+      st.want = { part, n, off, into: mark ? into : 0, whole: !mark };
+      st.origin = null;
       onChange({ waiting: true });
     }
     fill();
@@ -980,8 +1009,9 @@ export function reelPlayer(el: HTMLVideoElement, parts: ReelPart[], from: number
     if (st.closed || st.holding >= 0 || st.done || st.want || !st.sb) return;
     const t = el.currentTime;
     const here = fed.find((x) => t >= x.t0 - 0.001 && t < x.t1);
-    if (here && here.part === st.cur) onChange({ at: { n: here.n, off: Math.max(0, t - here.t0) } });
     const to = endOf(st.cur);
+    const o = st.origin;
+    if (here && here.part === st.cur) onChange({ at: { n: here.n, off: Math.max(0, t - here.t0) }, ...(o ? { into: o.into + Math.max(0, t - o.t), ...(o.whole && to !== undefined ? { len: to - o.t } : {}) } : {}) });
     // Past the end of the part, or already in a later one because its end could not be had.
     if ((to !== undefined && t >= to) || (here && here.part > st.cur)) onward();
   };
@@ -1017,10 +1047,10 @@ export function reelPlayer(el: HTMLVideoElement, parts: ReelPart[], from: number
   el.addEventListener('pause', onPause);
   el.addEventListener('waiting', onWaiting);
   return {
-    go: (part, mark, andPlay) => {
+    go: (part, mark, andPlay, into) => {
       if (part < 0 || part >= parts.length) return;
       if (andPlay) st.playing = true;
-      move(part, mark);
+      move(part, mark, into);
     },
     resume: () => {
       if (st.holding < 0) return;

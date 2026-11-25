@@ -1163,20 +1163,20 @@ export const api = {
   startStream: (b: { team_id: number; plan_id?: number; title: string; mime: string; date: string; layout?: 'joined' | 'separate'; /** The groups to tell it has begun: any of coaches, parents, family, friends. Everyone when left out. */ tell?: string[]; /** A video file being brought in, not a camera: nobody is told, and it is a saved video once it is all there. */ upload?: boolean }) =>
     req<{ stream: GameStream; can_save: boolean; send: 'server' | 'links'; /** The biggest one piece may be. */ max_piece_bytes?: number }>('POST', '/streams', b),
   /** Links to send the next few pieces straight to where the video is kept. Never throws for an answer the server gave: the caller decides what each means. */
-  sendLinks: async (id: number, init = false): Promise<{ status: number; error?: string; links?: { n: number; url: string }[]; init?: string }> => {
-    const res = await fetch(`/api/streams/${id}/links`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init }) });
+  sendLinks: async (id: number, init = false, signal?: AbortSignal): Promise<{ status: number; error?: string; links?: { n: number; url: string }[]; init?: string }> => {
+    const res = await fetch(`/api/streams/${id}/links`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ init }), signal });
     return { ...(await res.json().catch(() => ({}))), status: res.status };
   },
   /** Tells the server piece `n` is where the video is kept. */
-  sentPiece: async (id: number, n: number | 'init'): Promise<{ status: number; error?: string; segments?: number }> => {
-    const res = await fetch(`/api/streams/${id}/pieces`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n }) });
+  sentPiece: async (id: number, n: number | 'init', signal?: AbortSignal): Promise<{ status: number; error?: string; segments?: number }> => {
+    const res = await fetch(`/api/streams/${id}/pieces`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n }), signal });
     return { ...(await res.json().catch(() => ({}))), status: res.status };
   },
   /** Links to fetch the pieces from `from` on, for as long as `good_for` seconds. */
   watchLinks: (id: number, from: number) => req<{ links: { n: number; url: string }[]; inits?: { k: number; from: number; url: string }[]; type: string; good_for: number }>('GET', `/streams/${id}/links?from=${from}`),
   /** Sends one piece of video as it is, not as JSON. `init` marks the opening part of a joined video. */
-  sendSegment: async (id: number, piece: Blob, init = false) => {
-    const res = await fetch(`/api/streams/${id}/segments${init ? '?init=1' : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: piece });
+  sendSegment: async (id: number, piece: Blob, init = false, signal?: AbortSignal) => {
+    const res = await fetch(`/api/streams/${id}/segments${init ? '?init=1' : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: piece, signal });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Request failed (${res.status})`);
   },
   /** A small picture from the camera, to show the video by afterwards. */

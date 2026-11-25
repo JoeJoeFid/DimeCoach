@@ -209,7 +209,7 @@ export default function FilmReel() {
                 {clips.map((c) => {
                   const v = videoOf(c.stream_id);
                   return (
-                    <FilmRow key={c.id} poster={v?.has_poster ? v.id : null} length={clock(c.seconds)} title={c.title} meta={`From ${v?.title || 'a game video'}${v ? ` · ${day(v.started_at)}` : ''}`} notes={c.notes} drag={{ clip_id: c.id, stream_id: null }}>
+                    <FilmRow key={c.id} poster={v?.has_poster ? v.id : null} length={clock(c.seconds)} title={c.title} meta={`From ${v?.title || 'a game video'}${v ? ` · ${day(v.started_at)}` : ''}`} drag={{ clip_id: c.id, stream_id: null }}>
                       {addButton({ clip_id: c.id, stream_id: null })}
                     </FilmRow>
                   );

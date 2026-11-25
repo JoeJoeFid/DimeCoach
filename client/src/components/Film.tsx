@@ -263,10 +263,11 @@ function JoinedReel({ scenes: list, at, onAt, pause, onFail }: ReelProps & { onF
           }
           setPlayed(Math.floor(untilPart(parts, said.part)));
         }
-        if (said.at) {
+        if (said.into !== undefined) {
+          // How far through the part it is, by the player's clock, as a share of what the part is counted as on the bar.
           const s = parts[cur.current];
-          const into = markSeconds(said.at, s.stream) - (s.start ? markSeconds(s.start, s.stream) : 0);
-          setPlayed(Math.floor(untilPart(parts, cur.current) + Math.max(0, Math.min(into, s.seconds))));
+          const share = said.len && said.len > 0 ? said.into / said.len : s.seconds > 0 ? said.into / s.seconds : 0;
+          setPlayed(Math.floor(untilPart(parts, cur.current) + Math.max(0, Math.min(share, 1)) * s.seconds));
         }
         if (said.hold !== undefined) setHeld({ next: said.hold, left: Math.max(1, Math.round(now.current.pause?.seconds ?? 0)) });
         if (said.waiting !== undefined) setWaiting(said.waiting);
@@ -317,9 +318,10 @@ function JoinedReel({ scenes: list, at, onAt, pause, onFail }: ReelProps & { onF
     let i = 0;
     while (i < list.length - 1 && seconds >= untilPart(list, i + 1)) i++;
     const s = list[i];
-    const into = (s.start ? markSeconds(s.start, s.stream) : 0) + Math.max(0, Math.min(seconds - untilPart(list, i), s.seconds - 0.5));
+    const within = Math.max(0, Math.min(seconds - untilPart(list, i), s.seconds - 0.5));
+    const into = (s.start ? markSeconds(s.start, s.stream) : 0) + within;
     setPlayed(Math.floor(seconds));
-    player.current?.go(i, { n: Math.floor(into / s.stream.segment_seconds), off: into % s.stream.segment_seconds });
+    player.current?.go(i, { n: Math.floor(into / s.stream.segment_seconds), off: into % s.stream.segment_seconds }, undefined, within);
   };
   const coming = held ? list[held.next] : undefined;
   return (
@@ -495,7 +497,7 @@ export function TheaterButton({ on, onClick }: { on: boolean; onClick: () => voi
  * called and about, and what can be done with it (`children`). The one being watched is marked.
  * With `drag`, it can be dragged onto the timeline.
  */
-export function FilmRow({ poster, length, title, meta, notes, now, onPlay, drag, children }: { poster: number | null; length: string; title: string; meta: string; notes?: string; /** It is what the player is showing. */ now?: boolean; onPlay?: () => void; drag?: Dragged; children?: ReactNode }) {
+export function FilmRow({ poster, length, title, meta, now, onPlay, drag, children }: { poster: number | null; length: string; title: string; meta: string; /** It is what the player is showing. */ now?: boolean; onPlay?: () => void; drag?: Dragged; children?: ReactNode }) {
   const carry = (e: DragEvent) => {
     if (!drag) return;
     e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(drag));
@@ -510,10 +512,10 @@ export function FilmRow({ poster, length, title, meta, notes, now, onPlay, drag,
       </button>
       <button type="button" className="fr-text" onClick={onPlay} disabled={!onPlay}>
         <strong>{title}</strong>
-        <span className="fr-meta">{meta}</span>
-        {notes && <span className="fr-notes">{notes}</span>}
       </button>
       {children && <span className="fr-acts">{children}</span>}
+      {/* Where it is from, on a line of its own under the picture. */}
+      <span className="fr-meta">{meta}</span>
     </div>
   );
 }

@@ -20434,6 +20434,14 @@ img.res-thumb.gv-poster {
 .gv-actions .gv-quality button {
   min-height: 40px;
 }
+/* Auto and four qualities: on a narrow phone they go onto a second line and do not run off the side. */
+.gv-quality {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.gv-quality button {
+  white-space: nowrap;
+}
 
 /* ---------- Filmroom ---------- */
 .film-back {
@@ -21053,20 +21061,12 @@ button.film-clip-play {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* Where it is from: a line of its own under the picture, the full width of the card. */
 .fr-meta {
+  grid-column: 1 / -1;
   color: var(--muted);
   font-size: 0.8rem;
   overflow-wrap: anywhere;
-}
-.fr-notes {
-  color: var(--ink-2);
-  font-size: 0.84rem;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .fr-acts {
   display: flex;

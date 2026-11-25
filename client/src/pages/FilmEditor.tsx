@@ -271,7 +271,6 @@ export default function FilmEditor() {
                     length={clock(c.seconds)}
                     title={c.title}
                     meta={`Starts at ${clock(markSeconds(c.start, video))}`}
-                    notes={c.notes}
                     now={!onCut && now === c.id}
                     onPlay={() => playClip(c)}
                     drag={{ clip_id: c.id, stream_id: null }}

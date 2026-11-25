@@ -6,7 +6,7 @@
 // server/streams.js.
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
-import { QUALITIES, Stopped, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
+import { QUALITIES, RUNGS, Stopped, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
 import { Modal } from './bits';
 import { confirmDialog } from './dialogs';
 
@@ -35,11 +35,11 @@ const TELL = [
   { key: 'friends', label: 'Friends' },
 ];
 /** What the broadcaster chose last time, on this device, so they are not asked from scratch every game. */
-function lastSetup(): { keep: Keep; sound: boolean; tell: string[]; quality: Quality } | null {
+function lastSetup(): { keep: Keep; sound: boolean; tell: string[]; quality: Quality; auto: boolean } | null {
   try {
     const v = JSON.parse(localStorage.getItem('dime.broadcast') || 'null');
     if (!v || !['none', 'device', 'site', 'both'].includes(v.keep)) return null;
-    return { keep: v.keep, sound: v.sound !== false, tell: Array.isArray(v.tell) ? TELL.map((g) => g.key).filter((k) => v.tell.includes(k)) : TELL.map((g) => g.key), quality: v.quality in QUALITIES ? v.quality : 'medium' };
+    return { keep: v.keep, sound: v.sound !== false, tell: Array.isArray(v.tell) ? TELL.map((g) => g.key).filter((k) => v.tell.includes(k)) : TELL.map((g) => g.key), quality: v.quality in QUALITIES ? v.quality : 'low', auto: v.auto !== false };
   } catch {
     return null;
   }
@@ -78,9 +78,17 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
   const [tell, setTell] = useState<string[]>(() => lastSetup()?.tell ?? TELL.map((g) => g.key));
   const [choosing, setChoosing] = useState(false);
   // How sharp the picture is. It can be changed while live, when the connection turns out better or worse than hoped.
-  const [quality, setQuality] = useState<Quality>(() => lastSetup()?.quality ?? 'medium');
+  // Left on Auto, it starts at Low and moves with the connection: down when pieces pile up, back up when there is room to spare.
+  const [auto, setAuto] = useState(() => lastSetup()?.auto ?? true);
+  const [quality, setQuality] = useState<Quality>(() => {
+    const was = lastSetup();
+    return was && !was.auto ? was.quality : 'low';
+  });
   const qualityRef = useRef(quality);
   qualityRef.current = quality;
+  const autoRef = useRef<Auto | null>(null);
+  if (!auto) autoRef.current = null;
+  else if (!autoRef.current || autoRef.current.at !== quality) autoRef.current = autoStart(quality, Date.now());
   // The video kept on this device, once the broadcast is over, waiting to be saved out of the page.
   // More than one file when the quality was changed along the way.
   const [file, setFile] = useState<{ blobs: Blob[]; seconds: number; note: string } | null>(null);
@@ -122,14 +130,17 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
   }, [sound, media]);
   useEffect(() => {
     try {
-      localStorage.setItem('dime.broadcast', JSON.stringify({ keep, sound, tell, quality }));
+      localStorage.setItem('dime.broadcast', JSON.stringify({ keep, sound, tell, quality, auto }));
     } catch {
       /* not kept for next time */
     }
-  }, [keep, sound, tell, quality]);
+  }, [keep, sound, tell, quality, auto]);
   /** Changes the quality: of the camera's picture before going live, and of the broadcast itself once it is. */
-  const pickQuality = (q: Quality) => {
-    if (q === quality) return;
+  const pickQuality = (q: Quality, byHand = true) => {
+    // Choosing one by hand holds it there.
+    if (byHand) setAuto(false);
+    if (q === qualityRef.current) return;
+    qualityRef.current = q;
     setQuality(q);
     if (state.current.cast) state.current.cast.quality(q).catch(() => {});
     else mediaRef.current?.getVideoTracks()[0]?.applyConstraints(cameraSize(q)).catch(() => {});
@@ -175,16 +186,23 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       const r = await api.startStream({ team_id: teamId, plan_id: planId, title, mime: type, date, layout: open.layout, tell });
       // The server says how the pieces are to be sent. How the broadcast is getting on comes back as it goes.
-      const heard = (s: { sent: number; behind: number; error?: string }) => {
+      const heard = (s: { sent: number; behind: number; rate?: number; stalled?: boolean; error?: string }) => {
         setSent(s.sent);
         setBehind(s.behind);
         if (s.error) setError(s.error);
+        // On Auto, the quality follows how the pieces are getting out.
+        const was = autoRef.current;
+        if (!was || s.error || !state.current.cast) return;
+        const now = autoStep(was, s, Date.now());
+        autoRef.current = now;
+        if (now.at !== was.at) pickQuality(now.at, false);
       };
       // The server has the last word on the layout.
       const agreed = r.stream.layout === open.layout;
       if (!agreed) open.cancel();
       const cast = agreed ? open.begin(r.stream, r.send, heard, toDevice) : pieceBroadcaster(() => mediaRef.current, r.stream, r.send, type, heard, toDevice, quality);
       state.current = { id: r.stream.id, cast };
+      if (autoRef.current) autoRef.current = autoStart(qualityRef.current, Date.now());
       setLive(r.stream);
       setStarted(Date.now());
       setSent(0);
@@ -291,13 +309,16 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
       {live ? (
         <>
           <p className="muted small gv-note">
-            {sent === 0 ? 'Starting…' : `Going out to the team, a few seconds behind.`} {behind > 2 && 'The connection is slow, so viewers are further behind. A lower quality may help.'} Keep this page open and the screen on.{' '}
+            {sent === 0 ? 'Starting…' : `Going out to the team, a few seconds behind.`} {behind > 2 && (auto ? (quality === RUNGS[0] ? 'The connection is slow, so viewers are further behind.' : 'The connection is slow, so the quality is being lowered.') : 'The connection is slow, so viewers are further behind. A lower quality, or Auto, may help.')} Keep this page open and the screen on.{' '}
             {kept ? `When you end, the video is ${kept}.` : 'The video is not kept when you end.'}
           </p>
           <div className="gv-actions">
             <div className="seg gv-quality" role="group" aria-label="Quality">
-              {(Object.keys(QUALITIES) as Quality[]).map((q) => (
-                <button key={q} type="button" className={quality === q ? 'on' : ''} aria-pressed={quality === q} disabled={ending} title={QUALITIES[q].says} onClick={() => pickQuality(q)}>
+              <button type="button" className={auto ? 'on' : ''} aria-pressed={auto} disabled={ending} title="Moves with the connection: down when it is slow, up when there is room to spare" onClick={() => setAuto(true)}>
+                {auto ? `Auto · ${QUALITIES[quality].label}` : 'Auto'}
+              </button>
+              {RUNGS.map((q) => (
+                <button key={q} type="button" className={!auto && quality === q ? 'on' : ''} aria-pressed={!auto && quality === q} disabled={ending} title={QUALITIES[q].says} onClick={() => pickQuality(q)}>
                   {QUALITIES[q].label}
                 </button>
               ))}
@@ -380,14 +401,19 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
             </div>
             <div className="gv-opt">
               <span>Quality</span>
-              <div className="seg" role="group" aria-label="Quality">
-                {(Object.keys(QUALITIES) as Quality[]).map((q) => (
-                  <button key={q} type="button" className={quality === q ? 'on' : ''} aria-pressed={quality === q} onClick={() => pickQuality(q)}>
+              <div className="seg gv-quality" role="group" aria-label="Quality">
+                <button type="button" className={auto ? 'on' : ''} aria-pressed={auto} onClick={() => (pickQuality('low', false), setAuto(true))}>
+                  Auto
+                </button>
+                {RUNGS.map((q) => (
+                  <button key={q} type="button" className={!auto && quality === q ? 'on' : ''} aria-pressed={!auto && quality === q} onClick={() => pickQuality(q)}>
                     {QUALITIES[q].label}
                   </button>
                 ))}
               </div>
-              <span className="muted small">{QUALITIES[quality].says} You can change this while you are live.</span>
+              <span className="muted small">
+                {auto ? `Starts at Low, then moves up or down with the connection.${toDevice ? ' The copy on this device comes out as one file for each change.' : ''}` : `${QUALITIES[quality].says} You can change this while you are live.`}
+              </span>
             </div>
             <div className="gv-opt">
               <span>Sound</span>
