@@ -22297,3 +22297,116 @@ button.film-clip-play {
     flex-wrap: wrap;
   }
 }
+
+/* ---------- Homework: a card for each sheet ---------- */
+.hw-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.hw-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  min-width: 0;
+}
+.hw-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.hw-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.hw-title:hover {
+  text-decoration: underline;
+}
+.hw-pill {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+.hw-pill.is-today {
+  background: var(--accent);
+  border-color: var(--accent-edge);
+  color: var(--accent-ink);
+}
+.hw-pill.is-empty {
+  background: var(--warn-soft);
+}
+.hw-pill.is-past {
+  color: var(--muted);
+}
+.hw-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--ink-2);
+}
+.hw-dates strong {
+  color: var(--ink);
+}
+.hw-about {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+.hw-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.hw-facts dt {
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hw-facts dd {
+  margin: 1px 0 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.hw-card > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.hw-card > footer .btn.primary {
+  min-width: 90px;
+}
+.hw-card.is-past {
+  opacity: 0.75;
+}

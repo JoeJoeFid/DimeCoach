@@ -502,7 +502,7 @@ const itemOut = (it) => ({
 const planOut = (p, withItems = true) => ({
   id: p.id, team_id: p.team_id, kind: p.kind, title: p.title, date: p.date, start_time: p.start_time,
   location: p.location, intro_html: p.intro_html, is_template: !!p.is_template, is_game: !!p.is_game,
-  notes: p.notes ?? '', print_notes: p.print_notes !== 0,
+  notes: p.notes ?? '', print_notes: p.print_notes !== 0, due_date: p.due_date ?? '',
   game: parse(p.game_json, {}) || {},
   assigned: parse(p.assigned_json, []), updated_at: p.updated_at,
   ...(withItems
@@ -610,10 +610,12 @@ app.put('/api/plans/:id', (req, res) => {
   const b = req.body;
   tx(() => {
     run(
-      `UPDATE plans SET title=?, date=?, start_time=?, location=?, intro_html=?, assigned_json=?, is_game=?, notes=?, print_notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      `UPDATE plans SET title=?, date=?, start_time=?, location=?, intro_html=?, assigned_json=?, is_game=?, notes=?, print_notes=?, due_date=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
       str(b.title), str(b.date), str(b.start_time, '17:30'), str(b.location), str(b.intro_html),
       JSON.stringify((Array.isArray(b.assigned) ? b.assigned : []).map(Number)), b.is_game ? 1 : 0,
-      str(b.notes).slice(0, 20000), b.print_notes === false ? 0 : 1, p.id,
+      str(b.notes).slice(0, 20000), b.print_notes === false ? 0 : 1,
+      // Kept as it was when a save does not send it, and only ever a date.
+      b.due_date === undefined ? (p.due_date ?? '') : /^\d{4}-\d{2}-\d{2}$/.test(String(b.due_date)) ? String(b.due_date) : '', p.id,
     );
     // The game side is only touched when it is sent. Anything that saves a plan without it (changing
     // the date from the dashboard, say) leaves it exactly as it was.

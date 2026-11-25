@@ -1042,7 +1042,7 @@ export interface FamilyTeam {
   news: TeamPost[];
   board: TeamPost[];
   board_people: string[];
-  homework: { id: number; title: string; date: string; for: string[]; content: SharedPlan }[];
+  homework: { id: number; title: string; date: string; /** The day it is due, or '' for none. */ due?: string; for: string[]; content: SharedPlan }[];
   plays: SharedPlay[];
   drills: (SharedDrill & { id: number })[];
   resources: FamilyResource[];

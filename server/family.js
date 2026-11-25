@@ -244,7 +244,7 @@ function homeworkOf(team, players) {
       const to = parse(p.assigned_json, []).map(Number);
       const names = to.filter((id) => mine.has(id)).map((id) => mine.get(id));
       if (to.length && !names.length) return null;
-      return { id: p.id, title: p.title || 'Homework', date: p.date || '', for: to.length ? names : [], content: planView(p) };
+      return { id: p.id, title: p.title || 'Homework', date: p.date || '', due: p.due_date || '', for: to.length ? names : [], content: planView(p) };
     })
     .filter(Boolean);
 }

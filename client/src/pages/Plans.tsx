@@ -99,6 +99,12 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   /** Whether any practice or game has been made here yet. */
   const built = (plans || []).some((p) => !p.is_template);
 
+  // Homework says who it is for by name, so the roster is read for it.
+  const [roster, setRoster] = useState<Map<number, string>>(new Map());
+  useEffect(() => {
+    if (kind !== 'homework') return;
+    api.players(teamId).then((list) => setRoster(new Map(list.map((p) => [p.id, p.name]))), () => {});
+  }, [teamId, kind]);
   // The games scored to the end, by their plan: how each went is put on its line.
   const [results, setResults] = useState<Map<number, RecordGame>>(new Map());
   const load = useCallback(async () => {
@@ -236,6 +242,69 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       if (!(await confirmDialog({ title: `Delete this ${what}?`, body: 'This cannot be undone.', confirmLabel: 'Delete', danger: true }))) return;
       deleteLater({ key: `plan:${p.id}`, message: `Deleted the ${what}.`, run: () => api.deletePlan(p.id), done: load, failed: setError });
     });
+
+  /** A homework sheet as a card: what it is called, what it is about, when it was set and when it is due, who it is for and what is on it. */
+  const homeworkCard = (p: Plan) => {
+    const work = p.items.filter((it) => it.kind === 'item');
+    const due = p.due_date || '';
+    // Past its due day it is over; with no due day it never is.
+    const state = work.length === 0 ? 'empty' : due && due < today ? 'past' : due && due === today ? 'today' : 'open';
+    const names = p.assigned.map((id) => roster.get(id)).filter(Boolean) as string[];
+    const who = p.assigned.length === 0 ? 'Whole team' : names.length === 0 ? `${p.assigned.length} ${p.assigned.length === 1 ? 'player' : 'players'}` : names.length <= 3 ? names.join(', ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
+    const more: MenuItem[] = [
+      { label: 'Print', onSelect: () => navigate(`/plans/${p.id}/print`) },
+      { label: 'Share', onSelect: () => setSharing(p) },
+      { label: 'Duplicate', onSelect: () => duplicate(p) },
+      { label: 'Delete', onSelect: () => remove(p, noun), danger: true },
+    ];
+    return (
+      <li key={p.id} className={`card hw-card is-${state}`}>
+        <header>
+          <Link to={`/plans/${p.id}`} className="hw-title">
+            {p.title || 'Untitled homework'}
+          </Link>
+          <span className={`hw-pill is-${state}`}>{state === 'empty' ? 'Empty' : state === 'past' ? 'Past due' : state === 'today' ? 'Due today' : 'Assigned'}</span>
+        </header>
+        <p className="hw-dates">
+          <Icon d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7" />
+          {p.date ? fmtDateShort(p.date) : 'No date'}
+          {due ? (
+            <>
+              <span aria-hidden="true"> → </span>
+              <span className="sr-only"> to </span>
+              <strong>{fmtDateShort(due)}</strong>
+            </>
+          ) : (
+            <span className="muted"> · no due date</span>
+          )}
+        </p>
+        {p.notes.trim() ? <p className="hw-about">{p.notes.trim()}</p> : <p className="hw-about muted">No description.</p>}
+        <dl className="hw-facts">
+          <div>
+            <dt>For</dt>
+            <dd>{who}</dd>
+          </div>
+          <div>
+            <dt>{work.length === 1 ? '1 item' : `${work.length} items`}</dt>
+            <dd>
+              {work.length === 0
+                ? 'Nothing on it yet'
+                : work
+                    .slice(0, 3)
+                    .map((it) => it.title.trim() || 'Untitled')
+                    .join(', ') + (work.length > 3 ? ` and ${work.length - 3} more` : '')}
+            </dd>
+          </div>
+        </dl>
+        <footer>
+          <Link className="btn primary" to={`/plans/${p.id}`}>
+            View
+          </Link>
+          <MoreMenu items={more} label={`More for ${p.title || 'this homework'}`} />
+        </footer>
+      </li>
+    );
+  };
 
   const row = (e: ScheduleEntry, i: number) => {
     const p = e.plan;
@@ -447,11 +516,12 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           </PageTitle>
         </div>
         <div className="head-actions">
-          <div className="split-btn">
+          {/* With no other way to add one, it is a plain button and not half of a split one. */}
+          <div className={addMenu.length ? 'split-btn' : ''}>
             <button className="btn primary" onClick={() => create()}>
               + Add {kind === 'practice' ? 'event' : 'homework'}
             </button>
-            <MoreMenu items={addMenu} label={`More ways to add a ${noun}`} caret />
+            {addMenu.length > 0 && <MoreMenu items={addMenu} label={`More ways to add a ${noun}`} caret />}
           </div>
         </div>
       </div>
@@ -542,6 +612,14 @@ export default function Plans({ kind }: { kind: PlanKind }) {
             + New {noun}
           </button>
         </div>
+      ) : kind === 'homework' ? (
+        // Homework is a set of cards, newest first: each stands on its own, with no week to belong to.
+        <ul className="hw-grid">
+          {[...(plans || [])]
+            .filter((p) => !p.is_template)
+            .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id)
+            .map(homeworkCard)}
+        </ul>
       ) : weeks.length === 0 ? (
         <div className="empty">
           <h2>Nothing of that kind yet</h2>

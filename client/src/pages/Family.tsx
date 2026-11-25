@@ -557,7 +557,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
               </div>
               <ul className="cx-rows">
                 {data.homework.slice(0, 3).map((h) => (
-                  <Row key={h.id} title={h.title} sub={[h.for.length ? `For ${h.for.join(' and ')}` : 'For the whole team', h.date && fmtDateShort(h.date)].filter(Boolean).join(' · ')} onClick={() => go('homework')} />
+                  <Row key={h.id} title={h.title} sub={[h.for.length ? `For ${h.for.join(' and ')}` : 'For the whole team', h.due ? `Due ${fmtDateShort(h.due)}` : h.date && fmtDateShort(h.date)].filter(Boolean).join(' · ')} onClick={() => go('homework')} />
                 ))}
               </ul>
             </section>
@@ -614,7 +614,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
             <section key={h.id} className="card fam-sheet">
               <header>
                 <h2>{h.title}</h2>
-                <span className="muted small">{[h.for.length ? `For ${h.for.join(' and ')}` : 'For the whole team', h.date && fmtDateShort(h.date)].filter(Boolean).join(' · ')}</span>
+                <span className="muted small">{[h.for.length ? `For ${h.for.join(' and ')}` : 'For the whole team', h.date && fmtDateShort(h.date), h.due && `Due ${fmtDateShort(h.due)}`].filter(Boolean).join(' · ')}</span>
               </header>
               <SharedPreview detail={{ kind: 'plan', content: h.content }} />
             </section>

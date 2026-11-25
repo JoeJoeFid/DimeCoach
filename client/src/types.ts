@@ -223,6 +223,8 @@ export interface Plan {
   notes: string;
   /** Whether the notes go on the printed sheet. On unless the coach turns it off. */
   print_notes: boolean;
+  /** Homework: the day it is due, as "2026-12-02". Empty when no day was given. */
+  due_date?: string;
   intro_html: string;
   is_template: boolean;
   /** A game: shown as a game plan, and left out of dashboard category totals. The practice items are kept all the same. */

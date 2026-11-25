@@ -598,6 +598,11 @@ export default function PlanEditor() {
                     <input className="input" type="date" value={plan.date} onChange={(e) => update({ date: e.target.value })} />
                   </Field>
                 )}
+                {isHomework && !plan.is_template && (
+                  <Field label="Due">
+                    <input className="input" type="date" min={plan.date || undefined} value={plan.due_date || ''} onChange={(e) => update({ due_date: e.target.value })} />
+                  </Field>
+                )}
                 {!isHomework && (
                   <Field label="Start time">
                     <input
