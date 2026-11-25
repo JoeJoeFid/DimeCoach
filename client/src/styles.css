@@ -23231,3 +23231,15 @@ button.hw-title {
 .insights .bars .status-cell {
   white-space: nowrap;
 }
+
+/* Dashboard: the schedule's cards stand on the page itself, with no box or label around them. */
+.timeline {
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+.timeline .tl-label {
+  display: none;
+}
