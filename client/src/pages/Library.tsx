@@ -105,7 +105,7 @@ export default function Library() {
               caret
               label="More ways to add a drill"
               items={[
-                { label: 'Import drills', hint: 'From Excel or CSV, or from Word, PDF and other documents with the help of AI', onSelect: () => setImporting(true) },
+                { label: 'Import drills', ai: true, tags: ['Excel', 'CSV', 'Word', 'PDF'], onSelect: () => setImporting(true) },
                 { label: 'From a community', onSelect: () => setFromCommunity(true) },
               ]}
             />

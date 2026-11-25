@@ -768,9 +768,20 @@ export default function PlanEditor() {
             {plan.items.length === 0 ? (
               <div className={`empty ${incoming && dropAt !== null ? 'drop-here' : ''}`}>
                 <h2>Nothing scheduled yet</h2>
-                <button className="btn primary start-from" onClick={() => setStarting(true)}>
-                  Start from a previous {sheet}
-                </button>
+                <div className="empty-starts">
+                  <button className="btn primary start-from" onClick={() => setStarting(true)}>
+                    Start from a previous {sheet}
+                  </button>
+                  {/* The same import the "..." holds, for an account it is turned on for: a plan written somewhere else, read into items by AI. */}
+                  {!isHomework && app.user.can_import && (
+                    <button className="btn start-from" onClick={() => setImporting(true)} title="Upload a plan you already have, as a document or a photo, and AI turns it into items">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.900" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 3l1.800 4.700L18.500 9.500l-4.700 1.800L12 16l-1.800-4.700L5.500 9.500l4.700-1.800ZM18.500 15l.900 2.100 2.100.900-2.100.900-.900 2.100-.900-2.100-2.100-.900 2.100-.900Z" />
+                      </svg>
+                      Import a plan with AI
+                    </button>
+                  )}
+                </div>
                 {inserter(0)}
               </div>
             ) : (

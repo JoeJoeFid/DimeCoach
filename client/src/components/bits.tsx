@@ -68,6 +68,10 @@ export interface MenuItem {
   label: string;
   /** A smaller line under the label, saying more about what it does. */
   hint?: string;
+  /** Short tags under the label, such as the kinds of file it takes. */
+  tags?: string[];
+  /** Marks it as helped along by AI, with a small badge beside the label. */
+  ai?: boolean;
   onSelect: () => void;
   /** Styles the entry as destructive and sets it apart at the bottom. */
   danger?: boolean;
@@ -127,7 +131,22 @@ export function MoreMenu({ items, label = 'More options', caret = false }: { ite
               }}
             >
               {it.label}
+              {it.ai && (
+                <span className="more-ai" title="Uses AI">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true">
+                    <path d="M12 2l2.200 6.300L20.500 10.500l-6.300 2.200L12 19l-2.200-6.300L3.500 10.500l6.300-2.200Z" />
+                  </svg>
+                  AI
+                </span>
+              )}
               {it.hint && <span className="more-hint">{it.hint}</span>}
+              {!!it.tags?.length && (
+                <span className="more-tags">
+                  {it.tags.map((t) => (
+                    <span key={t}>{t}</span>
+                  ))}
+                </span>
+              )}
             </button>
           ))}
         </div>

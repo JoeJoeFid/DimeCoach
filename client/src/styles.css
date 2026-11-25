@@ -23783,3 +23783,48 @@ button.hw-title {
     max-height: 180px;
   }
 }
+
+/* An empty practice: the ways to start one, side by side. */
+.empty-starts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.empty-starts .start-from {
+  margin: 0;
+  gap: 7px;
+}
+.empty .empty-starts {
+  margin-bottom: 10px;
+}
+
+/* An entry of a "..." list that takes files and is helped by AI: a small badge beside its name, and the kinds of file under it. */
+.more-list button .more-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 1px 7px 1px 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+.more-list button .more-tags {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+.more-list button .more-tags span {
+  padding: 1px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink-2);
+  font-size: 0.7rem;
+  font-weight: 550;
+}
