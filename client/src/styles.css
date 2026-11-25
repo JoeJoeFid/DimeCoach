@@ -22432,10 +22432,6 @@ button.film-clip-play {
 .ps-layout {
   grid-template-columns: 220px minmax(0, 1fr);
 }
-.ps-side {
-  max-height: calc(100vh - var(--ps-sticky-h, 0px) - 28px);
-  overflow-y: auto;
-}
 .ps-side .input {
   width: 100%;
 }
@@ -22454,10 +22450,80 @@ button.film-clip-play {
   .ps-layout {
     grid-template-columns: minmax(0, 1fr);
   }
-  .ps-side {
-    max-height: none;
-  }
   .ps-side section {
     flex: 1 1 200px;
+  }
+}
+
+/* ---------- Upload space, as a small pill beside a page's name ---------- */
+.section-beside {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.space-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.space-pill .space {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.space-pill .space-bar {
+  width: 120px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.space-pill .space-bar > span {
+  min-width: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.space-pill .space.near .space-bar > span {
+  background: var(--warn);
+}
+.space-pill .space.full .space-bar > span {
+  background: var(--danger);
+}
+.space-pill .space-text {
+  font-size: 0.78rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .space-pill .space-bar {
+    width: 70px;
+  }
+}
+
+/* A box of search and filters can be taller than the window, so it goes up with the page and never scrolls inside itself. */
+.ps-side.tall {
+  position: static;
+}
+
+/* ---------- A line under every page's heading, edge to edge, as on Schedule and Homework ---------- */
+.page > .page-head:not(.ps-head) {
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+@media (min-width: 761px) {
+  .page > .page-head:not(.ps-head) {
+    margin-left: -40px;
+    margin-right: -40px;
+    padding-left: 40px;
+    padding-right: 40px;
   }
 }

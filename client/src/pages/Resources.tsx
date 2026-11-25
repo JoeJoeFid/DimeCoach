@@ -161,6 +161,16 @@ export default function Resources() {
               lead: 'Every link, picture and video in one place.',
               points: ['The ones you save here, and the ones already on your drills, plays and practices.', 'Anything here can be attached to a drill, a play or a practice item.'],
             }}
+            beside={
+              space && (
+                <span className="space-pill" title="How much of your upload space is used by pictures and videos">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M7 18.500a4.500 4.500 0 0 1-.600-8.960 6 6 0 0 1 11.600 1.500A3.750 3.750 0 0 1 17.500 18.500ZM12 16.500v-5M9.800 13.500 12 11.300l2.200 2.200" />
+                  </svg>
+                  <SpaceMeter used={space.used_bytes} cap={space.cap_bytes} />
+                </span>
+              )
+            }
           >
             Resources
           </PageTitle>
@@ -180,12 +190,6 @@ export default function Resources() {
         </div>
       </div>
       {error && <p className="error">{error}</p>}
-      {space && (
-        <p className="storage-note muted small">
-          <span>Upload space</span>
-          <SpaceMeter used={space.used_bytes} cap={space.cap_bytes} />
-        </p>
-      )}
 
       {adding && (
         <form className="card add-link" onSubmit={addLink}>
@@ -202,7 +206,7 @@ export default function Resources() {
 
       <div className="ps-layout">
         {/* Down the left: the search, how the resources are laid out, and the kinds and categories that narrow them. */}
-        <aside className="card ps-side" aria-label="Search and filters">
+        <aside className="card ps-side tall" aria-label="Search and filters">
           <section>
             <h2>Search</h2>
             <input className="input" type="search" placeholder="Search resources" aria-label="Search by name, address, or the drill, play or practice it is on" value={q} onChange={(e) => setQ(e.target.value)} />

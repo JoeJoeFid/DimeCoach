@@ -81,7 +81,7 @@ function TeamRecord({ teamId }: { teamId: number }) {
  * largest, then the season and the record of wins and losses; under that, the name of the part
  * of the app being looked at.
  */
-export default function PageTitle({ children, about }: { children: ReactNode; /** What this part of the app is for, behind an "i" beside its name. */ about?: About }) {
+export default function PageTitle({ children, about, beside }: { children: ReactNode; /** What this part of the app is for, behind an "i" beside its name. */ about?: About; /** Something small that stands after the name and the "i", such as how much upload space is used. */ beside?: ReactNode }) {
   const { team, sport } = useApp();
   // Pointing at the "i" shows what it has to say. Pressing it keeps that showing, which is how it is read on a phone.
   const [telling, setTelling] = useState(false);
@@ -117,6 +117,7 @@ export default function PageTitle({ children, about }: { children: ReactNode; /*
             </span>
           </span>
         )}
+        {beside && <span className="section-beside">{beside}</span>}
       </h1>
     </>
   );

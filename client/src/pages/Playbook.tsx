@@ -168,7 +168,7 @@ export default function Playbook() {
       ) : (
         <div className="ps-layout">
           {/* Down the left: the search, how the plays are laid out, and the categories and tags that narrow them. */}
-          <aside className="card ps-side" aria-label="Search and filters">
+          <aside className="card ps-side tall" aria-label="Search and filters">
             <section>
               <h2>Search</h2>
               <input className="input" type="search" placeholder="Search plays" aria-label="Search plays" value={q} onChange={(e) => setQ(e.target.value)} />

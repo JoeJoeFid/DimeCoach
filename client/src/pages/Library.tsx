@@ -1,3 +1,4 @@
+import { SideChoices } from '../components/cx';
 import PageTitle from '../components/PageTitle';
 import { CommunityPicker } from '../components/community';
 import { ShareItemDialog, SharedWithBox } from '../components/ShareItem';
@@ -102,18 +103,23 @@ export default function Library() {
       {error && !draft && <p className="error">{error}</p>}
       {notice && <p className="banner ok">{notice}</p>}
 
-      <div className="picker-filters">
-        <input className="input grow search-input" type="search" aria-label="Search drills by name or notes" placeholder="Search drills by name or notes" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="input" aria-label="Filter by category" value={tagId} onChange={(e) => setTagId(Number(e.target.value))}>
-          <option value={0}>All categories</option>
-          {sportTags.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
+      <div className="ps-layout">
+        {/* Down the left: the search, and the categories that narrow the drills. */}
+        <aside className="card ps-side tall" aria-label="Search and filters">
+          <section>
+            <h2>Search</h2>
+            <input className="input" type="search" aria-label="Search drills by name or notes" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
+          </section>
+          <SideChoices
+            title="Category"
+            all={0}
+            total={(drills || []).filter((d) => !gone.has(`drill:${d.id}`)).length}
+            value={tagId}
+            onChange={setTagId}
+            items={sportTags.map((t) => ({ id: t.id, label: t.name, color: t.color, count: (drills || []).filter((d) => !gone.has(`drill:${d.id}`) && d.tag_ids.includes(t.id)).length }))}
+          />
+        </aside>
+        <div className="ps-main">
       {drills === null ? (
         <p className="muted">Loading…</p>
       ) : shown.length === 0 ? (
@@ -170,6 +176,8 @@ export default function Library() {
           })}
         </ul>
       )}
+        </div>
+      </div>
 
       {fromCommunity && (
         <CommunityPicker
