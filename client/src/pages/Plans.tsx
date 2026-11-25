@@ -449,7 +449,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
         <div className="head-actions">
           <div className="split-btn">
             <button className="btn primary" onClick={() => create()}>
-              + Add {kind === 'practice' ? 'event' : noun}
+              + Add {kind === 'practice' ? 'event' : 'homework'}
             </button>
             <MoreMenu items={addMenu} label={`More ways to add a ${noun}`} caret />
           </div>
