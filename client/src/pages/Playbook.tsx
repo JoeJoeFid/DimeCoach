@@ -1,18 +1,17 @@
 import PageTitle from '../components/PageTitle';
 import { CommunityPicker } from '../components/community';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { showUndo, useCompletedDeletes, usePendingDeletes } from '../components/toasts';
 import { useApp } from '../App';
 import type { Play } from '../types';
-import { PlayDiagram } from '../components/PlayDiagram';
+import { PlayBrowser } from '../components/Browsers';
 import { playBuilderSupports } from '../util';
 import { sportKind } from '../sports';
 import PlayIntro from '../components/PlayIntro';
-import { ShareIcon } from '../components/bits';
-import { LayoutToggle, useCompact, SideChoices } from '../components/cx';
-import { ShareItemDialog, SharedWithLine, useShareSummary } from '../components/ShareItem';
+import { MoreMenu } from '../components/bits';
+import { ShareItemDialog, useShareSummary } from '../components/ShareItem';
 
 const resourceLabel = (n: number) => (n > 0 ? `${n} resource${n === 1 ? '' : 's'}` : '');
 
@@ -25,10 +24,6 @@ export default function Playbook() {
   const [error, setError] = useState('');
   const [fromCommunity, setFromCommunity] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
-  const [q, setQ] = useState('');
-  const [category, setCategory] = useState('');
-  const [label, setLabel] = useState('');
-  const [compact, setCompact] = useCompact('practiceplan.playbookCompact');
 
   useEffect(() => {
     setPlays(null);
@@ -49,16 +44,9 @@ export default function Playbook() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deletes]);
 
-  const categories = useMemo(() => [...new Set((plays || []).map((p) => p.category).filter(Boolean))].sort(), [plays]);
-  const labels = useMemo(() => [...new Set((plays || []).flatMap((p) => p.labels))].sort(), [plays]);
   // A play deleted a moment ago is left out, though the delete can still be undone.
   const gone = usePendingDeletes();
-  const shown = (plays || []).filter((p) => !gone.has(`play:${p.id}`)).filter(
-    (p) =>
-      (!category || p.category === category) &&
-      (!label || p.labels.includes(label)) &&
-      (!q.trim() || `${p.name} ${p.category} ${p.labels.join(' ')} ${p.notes}`.toLowerCase().includes(q.trim().toLowerCase())),
-  );
+  const shown = (plays || []).filter((p) => !gone.has(`play:${p.id}`));
 
   // A play printed as a PDF by another play designer, read into a new play. Offered to those it is turned on for.
   const [sharing, setSharing] = useState<Play | null>(null);
@@ -98,7 +86,7 @@ export default function Playbook() {
   const create = async () => {
     if (!sport) return;
     try {
-      const p = await api.createPlay({ sport_id: sport.id, name: 'New play', category: category || '' });
+      const p = await api.createPlay({ sport_id: sport.id, name: 'New play', category: '' });
       navigate(`/plays/${p.id}`);
     } catch (e) {
       setError((e as Error).message);
@@ -133,20 +121,22 @@ export default function Playbook() {
           <button className="btn ghost" onClick={() => setShowIntro(true)}>
             How it works
           </button>
-          <button className="btn" onClick={() => setFromCommunity(true)}>
-            From a community
-          </button>
-          {app.play_import && sportKind(sport?.name) === 'basketball' && (
-            <>
-              <input ref={pdfInput} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => importPdf(e.target.files?.[0])} />
-              <button className="btn" disabled={reading} onClick={() => pdfInput.current?.click()} title="Reads a play printed as a PDF by another play designer: a step for each diagram, with its players, lines and labels">
-                {reading ? 'Reading the PDF…' : 'Import a PDF'}
-              </button>
-            </>
-          )}
-          <button className="btn primary" onClick={create}>
-            + New play
-          </button>
+          {app.play_import && sportKind(sport?.name) === 'basketball' && <input ref={pdfInput} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => importPdf(e.target.files?.[0])} />}
+          {/* The button draws a new play. The arrow beside it holds the other ways to get one. */}
+          <div className="split-btn">
+            <button className="btn primary" disabled={reading} onClick={create}>
+              {reading ? 'Reading the PDF…' : '+ New play'}
+            </button>
+            <MoreMenu
+              caret
+              label="More ways to add a play"
+              items={[
+                { label: 'From a community', onSelect: () => setFromCommunity(true) },
+                // Reads a play printed as a PDF by another play designer: a step for each diagram, with its players, lines and labels.
+                ...(app.play_import && sportKind(sport?.name) === 'basketball' ? [{ label: 'Import a PDF', onSelect: () => pdfInput.current?.click() }] : []),
+              ]}
+            />
+          </div>
         </div>
       </div>
       {/* Shown by itself the first time, and again when asked for. */}
@@ -166,63 +156,16 @@ export default function Playbook() {
           </button>
         </div>
       ) : (
-        <div className="ps-layout">
-          {/* Down the left: the search, how the plays are laid out, and the categories and tags that narrow them. */}
-          <aside className="card ps-side tall" aria-label="Search and filters">
-            <section>
-              <h2>Search</h2>
-              <input className="input" type="search" placeholder="Search plays" aria-label="Search plays" value={q} onChange={(e) => setQ(e.target.value)} />
-            </section>
-            <section>
-              <h2>Layout</h2>
-              <LayoutToggle compact={compact} onChange={setCompact} />
-            </section>
-            <SideChoices title="Category" all="" total={plays.length} value={category} onChange={setCategory} items={categories.map((c) => ({ id: c, label: c, count: plays.filter((p) => p.category === c).length }))} />
-            <SideChoices title="Tags" all="" allLabel="All tags" total={plays.length} value={label} onChange={setLabel} items={labels.map((l) => ({ id: l, label: l, count: plays.filter((p) => p.labels.includes(l)).length }))} />
-          </aside>
-          <div className="ps-main">
-          {shown.length === 0 ? (
-            <p className="muted">No plays match.</p>
-          ) : (
-            <div className={`play-grid ${compact ? 'compact' : ''}`}>
-              {shown.map((p) => (
-                <div key={p.id} className="play-card-wrap">
-                <Link to={`/plays/${p.id}`} className="play-card">
-                  <div className="paper">
-                    <PlayDiagram play={p} frame={p.frames[0]} />
-                  </div>
-                  <div className="play-card-info">
-                    <strong>{p.name}</strong>
-                    <span className="muted small">
-                      {[
-                        p.category || 'No category',
-                        `${p.frames.length} step${p.frames.length === 1 ? '' : 's'}`,
-                        resourceLabel((p.images || []).length + (p.videos || []).length + (p.links || []).length),
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </span>
-                    {p.labels.length > 0 && (
-                      <span className="chips">
-                        {p.labels.map((l) => (
-                          <span key={l} className="chip">
-                            {l}
-                          </span>
-                        ))}
-                      </span>
-                    )}
-                    <SharedWithLine names={sharedWith[p.id] || []} />
-                  </div>
-                </Link>
-                  <button type="button" className="btn small icon-btn play-share" aria-label={`Share ${p.name}`} title="Share" onClick={() => setSharing(p)}>
-                    <ShareIcon size={17} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          </div>
-        </div>
+        // The same list the team's parents, family and friends see the plays shared with them in. Here a play opens to be changed, and can be shared.
+        <PlayBrowser
+          plays={shown}
+          compactKey="practiceplan.playbookCompact"
+          href={(p) => `/plays/${p.id}`}
+          onShare={setSharing}
+          sharedWith={(p) => sharedWith[p.id] || []}
+          extra={(p) => resourceLabel((p.images || []).length + (p.videos || []).length + (p.links || []).length) || ''}
+          empty={<p className="muted">No plays match.</p>}
+        />
       )}
     </div>
   );

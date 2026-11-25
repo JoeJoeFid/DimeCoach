@@ -4,6 +4,7 @@
 // A clip is two marks on a saved game video, and a video put together here is a list of clips.
 // Nothing is copied or made: playing either plays the game video's own pieces, from one mark to
 // another. See server/film.js.
+import { FilmBrowser } from './Browsers';
 import { Fragment, forwardRef, useEffect, useImperativeHandle, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, horizontalListSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
@@ -619,6 +620,7 @@ export function SharedFilms({ teamId, openId }: { teamId: number; openId?: numbe
   const [list, setList] = useState<SharedFilm[] | null>(null);
   const [error, setError] = useState('');
   const [playing, setPlaying] = useState<{ share: SharedFilm; at: number } | null>(null);
+  const [only, setOnly] = useState<'' | SharedFilm['kind']>('');
   const opened = useRef(false);
   useEffect(() => {
     setList(null);
@@ -652,36 +654,30 @@ export function SharedFilms({ teamId, openId }: { teamId: number; openId?: numbe
   const on = playing?.share;
   return (
     <>
-      <div className="res-grid">
-        {list.map((f) => {
-          const poster = f.parts.find((p) => p.stream.has_poster)?.stream.id;
-          return (
-            <div key={f.id} className="res-card kind-video film-card">
-              <button type="button" className="res-preview" onClick={() => play(f)} title="Play">
-                {poster ? <img className="res-thumb gv-poster" src={`/api/streams/${poster}/poster`} alt="" loading="lazy" /> : <span className="res-thumb site">Video</span>}
-                <span className="res-play" aria-hidden="true">
-                  ▶
-                </span>
-                <span className="gv-length">{clock(f.parts.reduce((n, p) => n + p.seconds, 0))}</span>
-              </button>
-              <div className="res-info">
-                <strong className="res-title">
-                  {f.title} {!f.watched && <span className="kind new">New</span>}
-                </strong>
-                <span className="muted small">
-                  {WORD[f.kind]} · from {f.by} · {new Date(f.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                </span>
-                {f.notes && <p className="film-notes">{f.notes}</p>}
-                <div className="res-actions">
-                  <button type="button" className="btn small" onClick={() => play(f)}>
-                    Play
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <FilmBrowser
+        films={list.map((f) => ({
+          src: f,
+          key: `s${f.id}`,
+          kind: f.kind,
+          title: f.title,
+          meta: `${WORD[f.kind]} · from ${f.by} · ${new Date(f.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
+          notes: f.notes,
+          poster: f.parts.find((x) => x.stream.has_poster)?.stream.id ?? null,
+          length: clock(f.parts.reduce((n, x) => n + x.seconds, 0)),
+          fresh: !f.watched,
+        }))}
+        compactKey="practiceplan.familyFilmCompact"
+        kind={only}
+        onKind={setOnly}
+        allKinds
+        onPlay={(f) => play(f.src)}
+        buttons={(f) => (
+          <button type="button" className="btn small" onClick={() => play(f.src)}>
+            Play
+          </button>
+        )}
+        empty={() => <p className="muted">None of that kind has been shared with you.</p>}
+      />
       {playing && on && (
         <Modal title={on.title} onClose={() => setPlaying(null)} wide>
           {on.parts.length === 1 ? (

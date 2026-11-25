@@ -1,4 +1,4 @@
-import { SideChoices, LayoutToggle, useCompact } from '../components/cx';
+import { DrillBrowser } from '../components/Browsers';
 import PageTitle from '../components/PageTitle';
 import { CommunityPicker } from '../components/community';
 import { ShareItemDialog, SharedWithBox } from '../components/ShareItem';
@@ -8,11 +8,10 @@ import { useApp } from '../App';
 import type { Drill, ItemContent, Play } from '../types';
 import ItemBody from '../components/ItemBody';
 import DrillImport from '../components/DrillImport';
-import { Field, Modal, TagChip, ShareIcon } from '../components/bits';
+import { Field, Modal, MoreMenu } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
-import { hasTerms, htmlPreview, htmlText, roomyScreen, searchSnippet, searchTerms } from '../util';
-import Hit from '../components/Hit';
+import { roomyScreen } from '../util';
 import SportIcon from '../components/SportIcon';
 
 type Draft = ItemContent & { id?: number };
@@ -24,9 +23,6 @@ export default function Library() {
   const { sport, sportTags } = useApp();
   const [drills, setDrills] = useState<Drill[] | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [q, setQ] = useState('');
-  const [tagId, setTagId] = useState(0);
-  const [compact, setCompact] = useCompact('practiceplan.drillsCompact');
   const [error, setError] = useState('');
   const [fromCommunity, setFromCommunity] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -70,11 +66,21 @@ export default function Library() {
   };
 
   const gone = usePendingDeletes();
-  // Every word typed has to be in the drill's name or its notes.
-  const terms = searchTerms(q);
-  const shown = (drills || []).filter(
-    (d) => !gone.has(`drill:${d.id}`) && hasTerms(`${d.name} ${htmlText(d.notes_html)}`, terms) && (tagId === 0 || d.tag_ids.includes(tagId)),
-  );
+  // Each drill as the shared list wants it: its categories by name and color, and what it carries in a few words.
+  const items = (drills || [])
+    .filter((d) => !gone.has(`drill:${d.id}`))
+    .map((d) => {
+      const plays = (d.play_ids || []).length;
+      return {
+        src: d,
+        id: d.id,
+        name: d.name,
+        duration_min: d.duration_min,
+        notes_html: d.notes_html,
+        tags: sportTags.filter((t) => d.tag_ids.includes(t.id)).map((t) => ({ name: t.name, color: t.color })),
+        meta: [resourceLabel((d.images || []).length + (d.videos || []).length + (d.links || []).length), plays > 0 && `${plays} play${plays === 1 ? '' : 's'}`].filter(Boolean).join(' · '),
+      };
+    });
 
   return (
     <div className="page">
@@ -90,99 +96,40 @@ export default function Library() {
           </PageTitle>
         </div>
         <div className="head-actions">
-          <button className="btn" onClick={() => setImporting(true)}>
-            Import
-          </button>
-          <button className="btn" onClick={() => setFromCommunity(true)}>
-            From a community
-          </button>
-          <button className="btn primary" onClick={() => setDraft(blank())}>
-            + New drill
-          </button>
+          {/* The button starts a drill from nothing. The arrow beside it holds the other ways to get one. */}
+          <div className="split-btn">
+            <button className="btn primary" onClick={() => setDraft(blank())}>
+              + New drill
+            </button>
+            <MoreMenu
+              caret
+              label="More ways to add a drill"
+              items={[
+                { label: 'Import drills', onSelect: () => setImporting(true) },
+                { label: 'From a community', onSelect: () => setFromCommunity(true) },
+              ]}
+            />
+          </div>
         </div>
       </div>
       {error && !draft && <p className="error">{error}</p>}
       {notice && <p className="banner ok">{notice}</p>}
 
-      <div className="ps-layout">
-        {/* Down the left: the search, and the categories that narrow the drills. */}
-        <aside className="card ps-side tall" aria-label="Search and filters">
-          <section>
-            <h2>Search</h2>
-            <input className="input" type="search" aria-label="Search drills by name or notes" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
-          </section>
-          <section>
-            <h2>Layout</h2>
-            <LayoutToggle compact={compact} onChange={setCompact} />
-          </section>
-          <SideChoices
-            title="Category"
-            all={0}
-            total={(drills || []).filter((d) => !gone.has(`drill:${d.id}`)).length}
-            value={tagId}
-            onChange={setTagId}
-            items={sportTags.map((t) => ({ id: t.id, label: t.name, color: t.color, count: (drills || []).filter((d) => !gone.has(`drill:${d.id}`) && d.tag_ids.includes(t.id)).length }))}
-          />
-        </aside>
-        <div className="ps-main">
-      {drills === null ? (
-        <p className="muted">Loading…</p>
-      ) : shown.length === 0 ? (
-        <div className="empty">
-          <h2>{drills.length === 0 ? 'No drills yet' : 'No drills match'}</h2>
-          <p>Create a drill here, or use "Save to drill library" on any practice item.</p>
-        </div>
-      ) : (
-        <ul className={`drill-cards ${compact ? 'compact' : ''}`}>
-          {shown.map((d) => {
-            // While searching, the notes are shown from where a word was found in them.
-            const preview = (terms.length > 0 && searchSnippet(htmlText(d.notes_html), terms)) || htmlPreview(d.notes_html);
-            const plays = (d.play_ids || []).length;
-            return (
-              <li key={d.id} className="drill-card">
-                <button className="drill-card-main" onClick={() => setDraft(toDraft(d))}>
-                  <span className="drill-card-top">
-                    <span className="drill-card-name">
-                      <Hit text={d.name} terms={terms} />
-                    </span>
-                    <span className="drill-card-time">{d.duration_min} min</span>
-                  </span>
-                  <span className="chips">
-                    {sportTags
-                      .filter((t) => d.tag_ids.includes(t.id))
-                      .map((t) => (
-                        <TagChip key={t.id} tag={t} />
-                      ))}
-                  </span>
-                  {preview && (
-                    <span className="drill-card-notes">
-                      <Hit text={preview} terms={terms} />
-                    </span>
-                  )}
-                  <span className="plan-meta">
-                    {[resourceLabel((d.images || []).length + (d.videos || []).length + (d.links || []).length), plays > 0 && `${plays} play${plays === 1 ? '' : 's'}`]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                </button>
-                {/* Clicking the drill itself opens it to edit. */}
-                <span className="row-actions">
-                  <button type="button" className="btn small icon-btn" aria-label={`Share ${d.name}`} title="Share" onClick={() => setSharing(d)}>
-                    <ShareIcon size={17} />
-                  </button>
-                  <button type="button" className="btn small icon-btn danger" aria-label={`Delete ${d.name}`} title="Delete" onClick={() => remove(d)}>
-                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M4.500 7h15M9.500 7V4.500h5V7M6.500 7l1 12.500h9l1-12.500M10 11v5M14 11v5" />
-                    </svg>
-                  </button>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-        </div>
-      </div>
+      {/* The same list the team's parents, family and friends see the drills shared with them in. Here a drill opens to be changed, and can be shared and deleted. */}
+      <DrillBrowser
+        drills={drills === null ? null : items}
+        compactKey="practiceplan.drillsCompact"
+        categories={sportTags.map((t) => ({ name: t.name, color: t.color }))}
+        onOpen={(x) => setDraft(toDraft(x.src))}
+        onShare={(x) => setSharing(x.src)}
+        onRemove={(x) => remove(x.src)}
+        empty={
+          <div className="empty">
+            <h2>No drills yet</h2>
+            <p>Create a drill here, or use "Save to drill library" on any practice item.</p>
+          </div>
+        }
+      />
 
       {fromCommunity && (
         <CommunityPicker

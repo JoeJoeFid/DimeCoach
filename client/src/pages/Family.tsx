@@ -1,5 +1,7 @@
 // A team's page for its parents, family and friends: what is coming up, what the coaches say,
 // and whatever else the coach lets their kind of follower see. Nothing here changes the team.
+import MonthGrid from '../components/MonthGrid';
+import { SCHEDULE_ICONS, ScheduleIcon, ScheduleShell, type ScheduleViewMode } from '../components/ScheduleShell';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { SharedPlay } from '../api';
@@ -8,8 +10,8 @@ import { api, listenLive, type FamilyDay, type FamilyKind, type FamilyResource, 
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
 import { SharedPreview } from '../components/community';
-import { PlayDiagram } from '../components/PlayDiagram';
-import { CategoryChips, DateBlock, LayoutToggle, PageHead, Row, useCompact } from '../components/cx';
+import { DateBlock, PageHead, Row } from '../components/cx';
+import { DrillBrowser, HomeworkCards, PlayBrowser, ResourceBrowser } from '../components/Browsers';
 import { TopTabs } from '../components/TopTabs';
 import SportIcon from '../components/SportIcon';
 import { PasswordForm } from './Auth';
@@ -28,9 +30,6 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const AS: Record<FamilyKind | 'guest', string> = { parent: 'a parent', family: 'family', friend: 'a friend of the team', guest: 'a guest, to watch video shared with you' };
 const ROLE: Record<TeamPost['role'], string> = { coach: 'Coach', parent: 'Parent', family: 'Family', friend: 'Friend' };
 const KIND_WORD: Record<FamilyDay['kind'], string> = { practice: 'Practice', game: 'Game', other: 'Event' };
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const pad = (n: number) => String(n).padStart(2, '0');
-const isoOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const clock = (t: string) => (t ? fmtClock(parseClock(t)) : '');
 const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 /** "a parent of Ava and Ben", or how else this person is on the team's list. */
@@ -604,43 +603,11 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
         />
       )}
 
-      {tab === 'homework' &&
-        (data.homework.length === 0 ? (
-          <div className="card">
-            <p className="muted">No homework has been set.</p>
-          </div>
-        ) : (
-          data.homework.map((h) => (
-            <section key={h.id} className="card fam-sheet">
-              <header>
-                <h2>{h.title}</h2>
-                <span className="muted small">{[h.for.length ? `For ${h.for.join(' and ')}` : 'For the whole team', h.date && fmtDateShort(h.date), h.due && `Due ${fmtDateShort(h.due)}`].filter(Boolean).join(' · ')}</span>
-              </header>
-              <SharedPreview detail={{ kind: 'plan', content: h.content }} />
-            </section>
-          ))
-        ))}
+      {tab === 'homework' && <FamilyHomework sheets={data.homework} today={today} />}
 
       {tab === 'playbook' && <FamilyPlaybook plays={data.plays} />}
 
-      {tab === 'drills' &&
-        (data.drills.length === 0 ? (
-          <section className="card cx-card">
-            <p className="muted">The coaches have not shared any drills yet.</p>
-          </section>
-        ) : (
-          <div className="fam-plays">
-            {data.drills.map((d) => (
-              <section key={d.id} className="card fam-sheet">
-                <header>
-                  <h2>{d.name}</h2>
-                  {d.duration_min > 0 && <span className="muted small">{d.duration_min} minutes</span>}
-                </header>
-                <SharedPreview detail={{ kind: 'drill', content: d }} />
-              </section>
-            ))}
-          </div>
-        ))}
+      {tab === 'drills' && <FamilyDrills drills={data.drills} />}
 
       {tab === 'resources' && <FamilyResources slug={id} resources={data.resources} />}
 
@@ -678,52 +645,49 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
   );
 }
 
-/**
- * The plays the coaches shared, laid out as a coach's own playbook is: a card for each, a search
- * box, the layout choice, and the categories underneath. A card opens the play to read and watch.
- */
-function FamilyPlaybook({ plays }: { plays: SharedPlay[] }) {
-  const [q, setQ] = useState('');
-  const [category, setCategory] = useState('');
-  const [compact, setCompact] = useCompact('practiceplan.familyPlaybookCompact');
-  const [open, setOpen] = useState<SharedPlay | null>(null);
-  if (plays.length === 0)
+/** Homework as the cards a coach sees it on. A card opens the sheet to read. */
+function FamilyHomework({ sheets, today }: { sheets: FamilyTeam['homework']; today: string }) {
+  const [open, setOpen] = useState<FamilyTeam['homework'][number] | null>(null);
+  if (sheets.length === 0)
     return (
       <div className="empty">
-        <h2>No plays yet</h2>
-        <p>The coaches have not shared any plays yet.</p>
+        <h2>No homework yet</h2>
+        <p>No homework has been set.</p>
       </div>
     );
-  const term = q.trim().toLowerCase();
-  const found = plays.filter((p) => !term || `${p.name} ${p.category} ${p.labels.join(' ')} ${p.notes}`.toLowerCase().includes(term));
-  const shown = found.filter((p) => !category || p.category === category);
-  const categories = [...new Set(plays.map((p) => p.category).filter(Boolean))].sort();
   return (
     <>
-      <div className="playbook-filters">
-        <input className="input grow" type="search" placeholder="Search plays" aria-label="Search plays" value={q} onChange={(e) => setQ(e.target.value)} />
-        <LayoutToggle compact={compact} onChange={setCompact} />
-      </div>
-      <CategoryChips all="" total={found.length} value={category} onChange={setCategory} items={categories.map((c) => ({ id: c, label: c, count: found.filter((p) => p.category === c).length }))} />
-      {shown.length === 0 ? (
-        <p className="muted">No plays match.</p>
-      ) : (
-        <div className={`play-grid ${compact ? 'compact' : ''}`}>
-          {shown.map((p) => (
-            <div key={p.id} className="play-card-wrap">
-              <button type="button" className="play-card" onClick={() => setOpen(p)}>
-                <div className="paper">
-                  <PlayDiagram play={p} frame={p.frames[0]} />
-                </div>
-                <div className="play-card-info">
-                  <strong>{p.name}</strong>
-                  <span className="muted small">{[p.category || 'No category', `${p.frames.length} step${p.frames.length === 1 ? '' : 's'}`].join(' · ')}</span>
-                </div>
-              </button>
-            </div>
-          ))}
-        </div>
+      <HomeworkCards
+        sheets={sheets.map((h) => ({ src: h, id: h.id, title: h.title, date: h.date, due: h.due || '', who: h.for.length ? h.for.join(' and ') : 'Whole team', items: h.content.items.filter((it) => it.kind === 'item').map((it) => it.title.trim() || 'Untitled') }))}
+        today={today}
+        onOpen={(h) => setOpen(h.src)}
+      />
+      {open && (
+        <Modal title={open.title} onClose={() => setOpen(null)} wide>
+          <p className="muted small">{[open.for.length ? `For ${open.for.join(' and ')}` : 'For the whole team', open.date && fmtDateShort(open.date), open.due && `Due ${fmtDateShort(open.due)}`].filter(Boolean).join(' · ')}</p>
+          <SharedPreview detail={{ kind: 'plan', content: open.content }} />
+        </Modal>
       )}
+    </>
+  );
+}
+
+/** The plays the coaches shared, in the list a coach's own playbook is in. A card opens the play to read and watch. */
+function FamilyPlaybook({ plays }: { plays: SharedPlay[] }) {
+  const [open, setOpen] = useState<SharedPlay | null>(null);
+  return (
+    <>
+      <PlayBrowser
+        plays={plays}
+        compactKey="practiceplan.familyPlaybookCompact"
+        onOpen={setOpen}
+        empty={
+          <div className="empty">
+            <h2>No plays yet</h2>
+            <p>The coaches have not shared any plays yet.</p>
+          </div>
+        }
+      />
       {open && (
         <Modal title={open.name} onClose={() => setOpen(null)} wide>
           <SharedPreview detail={{ kind: 'play', content: open }} />
@@ -733,13 +697,32 @@ function FamilyPlaybook({ plays }: { plays: SharedPlay[] }) {
   );
 }
 
-const RES_KINDS: ['all' | FamilyResource['kind'], string][] = [
-  ['all', 'All'],
-  ['link', 'Links'],
-  ['image', 'Pictures'],
-  ['video', 'Videos'],
-];
-const RES_COMPACT_KEY = 'practiceplan.familyResourcesCompact';
+/** The drills the coaches shared, in the list a coach's own drills are in. A card opens the drill to read. */
+function FamilyDrills({ drills }: { drills: FamilyTeam['drills'] }) {
+  const [open, setOpen] = useState<FamilyTeam['drills'][number] | null>(null);
+  return (
+    <>
+      <DrillBrowser
+        drills={drills.map((d) => ({ src: d, id: d.id, name: d.name, duration_min: d.duration_min, notes_html: d.notes_html, tags: d.tags, meta: [d.links.length > 0 && `${d.links.length} link${d.links.length === 1 ? '' : 's'}`, d.plays.length > 0 && `${d.plays.length} play${d.plays.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ') }))}
+        compactKey="practiceplan.familyDrillsCompact"
+        onOpen={(x) => setOpen(x.src)}
+        empty={
+          <div className="empty">
+            <h2>No drills yet</h2>
+            <p>The coaches have not shared any drills yet.</p>
+          </div>
+        }
+      />
+      {open && (
+        <Modal title={open.name} onClose={() => setOpen(null)} wide>
+          {open.duration_min > 0 && <p className="muted small">{open.duration_min} minutes</p>}
+          <SharedPreview detail={{ kind: 'drill', content: open }} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
 const hostOf = (url: string) => {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
@@ -747,24 +730,10 @@ const hostOf = (url: string) => {
     return url;
   }
 };
-/**
- * What the coaches shared, laid out as a coach's own resources are: a tile for each, a search box,
- * a filter by kind, and a choice of large or small tiles. Nothing here can be changed.
- */
+/** What the coaches shared, in the list a coach's own resources are in. Nothing here can be changed. */
 function FamilyResources({ slug, resources }: { slug: string; resources: FamilyResource[] }) {
-  const [q, setQ] = useState('');
-  const [kind, setKind] = useState<'all' | FamilyResource['kind']>('all');
-  const [compact, chooseCompact] = useCompact(RES_COMPACT_KEY);
   const [viewing, setViewing] = useState<FamilyResource | null>(null);
-  const [tag, setTag] = useState('');
   const fileOf = (r: FamilyResource) => `/api/family/teams/${slug}/files/${r.file_id}`;
-  const term = q.trim().toLowerCase();
-  const found = resources.filter((r) => !term || `${r.title} ${r.url}`.toLowerCase().includes(term));
-  const inKind = found.filter((r) => kind === 'all' || r.kind === kind);
-  const shown = inKind.filter((r) => !tag || r.tags.some((t) => t.name === tag));
-  // Every category any shared resource is filed under, in the order they are first met.
-  const tags = [...new Map(resources.flatMap((r) => r.tags).map((t) => [t.name, t])).values()].sort((x, y) => x.name.localeCompare(y.name));
-  const count = (k: 'all' | FamilyResource['kind']) => found.filter((r) => k === 'all' || r.kind === k).length;
   const thumb = (r: FamilyResource) =>
     r.kind === 'image' ? (
       <img className="res-thumb" src={fileOf(r)} alt="" loading="lazy" />
@@ -780,76 +749,20 @@ function FamilyResources({ slug, resources }: { slug: string; resources: FamilyR
         {hostOf(r.url)}
       </span>
     );
-  if (resources.length === 0)
-    return (
-      <div className="empty">
-        <h2>No resources yet</h2>
-        <p>The coaches have not shared any links, pictures or videos yet.</p>
-      </div>
-    );
   return (
     <>
-      <div className="playbook-filters">
-        <input className="input grow" type="search" placeholder="Search by name or address" aria-label="Search resources" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="seg" role="group" aria-label="Kind of resource">
-          {RES_KINDS.map(([id, label]) => (
-            <button key={id} type="button" className={kind === id ? 'on' : ''} aria-pressed={kind === id} onClick={() => setKind(id)}>
-              {label} <span className="chip-num">{count(id)}</span>
-            </button>
-          ))}
-        </div>
-        <LayoutToggle compact={compact} onChange={chooseCompact} />
-      </div>
-      <CategoryChips all="" total={inKind.length} value={tag} onChange={setTag} items={tags.map((t) => ({ id: t.name, label: t.name, color: t.color, count: inKind.filter((r) => r.tags.some((x) => x.name === t.name)).length }))} />
-      {shown.length === 0 ? (
-        <p className="muted">Nothing matches.</p>
-      ) : (
-        <div className={`res-grid ${compact ? 'compact' : ''}`}>
-          {shown.map((r) => (
-            <div key={r.key} className={`res-card kind-${r.kind}`}>
-              {r.kind === 'link' ? (
-                <a className="res-preview" href={r.url} target="_blank" rel="noopener noreferrer" title="Open in a new tab">
-                  {thumb(r)}
-                </a>
-              ) : (
-                <button type="button" className="res-preview" onClick={() => setViewing(r)} title={r.kind === 'video' ? 'Play' : 'View larger'}>
-                  {thumb(r)}
-                  {r.kind === 'video' && (
-                    <span className="res-play" aria-hidden="true">
-                      ▶
-                    </span>
-                  )}
-                </button>
-              )}
-              <div className="res-info">
-                <strong className="res-title">{r.title}</strong>
-                {r.tags.length > 0 && (
-                  <div className="res-tags">
-                    {r.tags.map((t) => (
-                      <span key={t.name} className="chip">
-                        <span className="dot" style={{ background: t.color }} />
-                        {t.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {r.kind === 'link' && <span className="muted small">{hostOf(r.url)}</span>}
-                <div className="res-actions">
-                  {r.kind === 'link' ? (
-                    <a className="btn small" href={r.url} target="_blank" rel="noopener noreferrer" title={r.url}>
-                      Open
-                    </a>
-                  ) : (
-                    <button type="button" className="btn small" onClick={() => setViewing(r)}>
-                      {r.kind === 'video' ? 'Play' : 'View'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ResourceBrowser
+        resources={resources.map((r) => ({ src: r, key: r.key, kind: r.kind, title: r.title, url: r.url, tags: r.tags, text: `${r.title} ${r.url}`.toLowerCase(), sub: r.kind === 'link' ? hostOf(r.url) : undefined }))}
+        compactKey="practiceplan.familyResourcesCompact"
+        thumb={(x) => thumb(x.src)}
+        onView={(x) => setViewing(x.src)}
+        empty={
+          <div className="empty">
+            <h2>No resources yet</h2>
+            <p>The coaches have not shared any links, pictures or videos yet.</p>
+          </div>
+        }
+      />
       {viewing && (
         <Modal title={viewing.title} onClose={() => setViewing(null)} wide>
           {viewing.kind === 'image' ? <img className="res-full" src={fileOf(viewing)} alt={viewing.title} /> : <video className="res-full" src={fileOf(viewing)} controls autoPlay />}
@@ -1054,95 +967,142 @@ function DayList({ days, nextKey }: { days: FamilyDay[]; /** The next thing on t
   );
 }
 
-/** The team's month, in the dress of a coach's calendar, with what is coming listed under it. */
+const SCHEDULE_VIEW_KEY = 'pp.familyScheduleView';
+/**
+ * The team's schedule as its parents, family and friends see it: on the backbone a coach's schedule
+ * is on, with the same box of view and filters down the left and the same lines, month by month.
+ * Nothing here can be changed: a line opens to be read.
+ */
 function Schedule({ days, today }: { days: FamilyDay[]; today: string }) {
-  const next = days.find((d) => d.date >= today)?.date ?? today;
-  const home: [number, number] = [Number(next.slice(0, 4)), Number(next.slice(5, 7)) - 1];
-  const [[year, month], setMonth] = useState<[number, number]>(home);
-  const [picked, setPicked] = useState('');
-  const { on, drawn } = useDayPeek();
-  const nextKey = days.find((d) => d.date >= today)?.key;
-  const shift = (by: number) => {
-    const d = new Date(year, month + by, 1);
-    setMonth([d.getFullYear(), d.getMonth()]);
+  const [view, setView] = useState<ScheduleViewMode>(() => {
+    try {
+      return localStorage.getItem(SCHEDULE_VIEW_KEY) === 'calendar' ? 'calendar' : 'list';
+    } catch {
+      return 'list';
+    }
+  });
+  const chooseView = (v: ScheduleViewMode) => {
+    setView(v);
+    try {
+      localStorage.setItem(SCHEDULE_VIEW_KEY, v);
+    } catch {
+      // Not being able to remember the choice is no reason to refuse it.
+    }
   };
-  const first = new Date(year, month, 1);
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells: { date: string; inMonth: boolean; day: number }[] = [];
-  for (let i = -first.getDay(); cells.length % 7 !== 0 || i < daysInMonth; i++) {
-    const d = new Date(year, month, 1 + i);
-    cells.push({ date: isoOf(d), inMonth: d.getMonth() === month, day: d.getDate() });
-  }
-  const title = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const inMonth = days.filter((d) => d.date.startsWith(`${year}-${pad(month + 1)}`));
-  const atHome = year === home[0] && month === home[1];
-  const listed = picked ? days.filter((d) => d.date === picked) : days.filter((d) => d.date >= today).slice(0, 12);
+  const { on, drawn } = useDayPeek();
+  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || '').localeCompare(b.start_time || ''));
+  const nextKey = sorted.find((d) => d.date >= today)?.key;
+  // The list opens at what is next, as a coach's does.
+  const nextRow = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (view === 'list') nextRow.current?.scrollIntoView({ block: 'center' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+  const row = (d: FamilyDay) => {
+    const day = new Date(`${d.date}T12:00:00`);
+    const isNext = d.key === nextKey;
+    const pill = d.kind === 'game' ? { cls: 'game', icon: SCHEDULE_ICONS.trophy, text: 'Game' } : d.kind === 'other' ? { cls: 'event', icon: SCHEDULE_ICONS.flag, text: 'Event' } : { cls: 'planned', icon: SCHEDULE_ICONS.check, text: 'Practice' };
+    const final = d.score?.status === 'final' ? d.score : null;
+    const { onClick } = on(d);
+    return (
+      <li key={d.key} ref={isNext ? nextRow : undefined} className={`plan-row ps-row ${d.date < today ? 'done' : ''} ${isNext ? 'next' : ''}`} aria-current={isNext ? 'true' : undefined}>
+        <span className="ps-date">
+          <span className="ps-dow">{day.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+          <strong>{day.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</strong>
+          {isNext && <span className="tl-flag">{d.date === today ? 'Today' : 'Next up'}</span>}
+        </span>
+        <span className="ps-main">
+          <button type="button" className="ps-title plan-main fam-row-title" onClick={onClick}>
+            {d.title}
+          </button>
+          <span className="ps-meta">
+            {timesOf(d) && (
+              <span>
+                <ScheduleIcon d={SCHEDULE_ICONS.clock} />
+                {timesOf(d)}
+              </span>
+            )}
+            {d.summary && <span className="ps-dot">{d.summary.minutes} min</span>}
+            {d.location && (
+              <span className="ps-place">
+                <ScheduleIcon d={SCHEDULE_ICONS.pin} />
+                {d.location.split('\n')[0]}
+              </span>
+            )}
+            {d.summary && (
+              <span className="ps-dot">
+                {d.summary.items.length} part{d.summary.items.length === 1 ? '' : 's'}
+              </span>
+            )}
+          </span>
+        </span>
+        <span className="ps-pills">
+          {/* A game scored to the end: won or lost, and the score. One still being scored says so. */}
+          {final && (
+            <span className={`tl-result ${final.us > final.them ? 'w' : final.us < final.them ? 'l' : ''}`} role="img" aria-label={`${final.us > final.them ? 'Won' : final.us < final.them ? 'Lost' : 'Tied'} ${final.us} to ${final.them}`}>
+              <b>{final.us > final.them ? 'W' : final.us < final.them ? 'L' : 'T'}</b> {final.us}–{final.them}
+            </span>
+          )}
+          {d.score?.status === 'live' && <span className="fam-score-pill live">{scoreText(d)}</span>}
+          <span className={`ps-pill ${pill.cls}`}>
+            <ScheduleIcon d={pill.icon} />
+            {pill.text}
+          </span>
+        </span>
+        <span className="ps-actions">
+          <button type="button" className="btn primary ps-view" onClick={onClick}>
+            View
+          </button>
+        </span>
+      </li>
+    );
+  };
   return (
     <>
-      <section className="card cx-card">
-        <div className="cal fam-cal">
-          <div className="cal-head">
-            <div className="cal-nav">
-              <button type="button" className="tl-arrow" aria-label="Previous month" onClick={() => shift(-1)}>
-                ‹
-              </button>
-              <h2 className="cal-title">{title}</h2>
-              <button type="button" className="tl-arrow" aria-label="Next month" onClick={() => shift(1)}>
-                ›
-              </button>
-              {!atHome && (
-                <button type="button" className="link small" onClick={() => setMonth(home)}>
-                  Back to next up
-                </button>
-              )}
-            </div>
-            <span className="muted small">{inMonth.length ? `${plural(inMonth.length, 'day')} on the schedule` : 'Nothing scheduled this month'}</span>
+      <ScheduleShell
+        entries={sorted}
+        view={view}
+        onView={chooseView}
+        row={row}
+        calendar={(list) => <FamilyCalendar days={list} today={today} />}
+        empty={
+          <div className="empty">
+            <h2>Nothing on the schedule yet</h2>
+            <p>Games and practices show here once the coaches add them.</p>
           </div>
-          <div className="cal-grid" role="grid" aria-label={title}>
-            {WEEKDAYS.map((d) => (
-              <div key={d} className="cal-weekday" role="columnheader">
-                {d}
-              </div>
-            ))}
-            {cells.map((c) => (
-              <div key={c.date} role="gridcell" className={`cal-day ${c.inMonth ? '' : 'out'} ${c.date === today ? 'today' : ''} ${c.date < today ? 'past' : ''} ${picked === c.date ? 'picked' : ''}`}>
-                <button type="button" className="cal-day-top fam-pick" aria-label={`${fmtDateShort(c.date)}${c.date === today ? ', today' : ''}. Show this day.`} aria-pressed={picked === c.date} onClick={() => setPicked(picked === c.date ? '' : c.date)}>
-                  <span className="cal-num">{c.day}</span>
-                  {c.date === today && <span className="fam-today">Today</span>}
-                </button>
-                {days
-                  .filter((d) => d.date === c.date)
-                  .slice(0, 3)
-                  .map((d) => (
-                    <button key={d.key} type="button" className={`cal-chip ${d.kind} ${d.key === nextKey ? 'next' : ''}`} aria-label={`${d.key === nextKey ? 'Next up: ' : ''}${d.title}, ${fmtDateShort(d.date)}${d.start_time ? `, ${clock(d.start_time)}` : ''}. Open it.`} {...on(d)}>
-                      {d.start_time && <span className="cal-time">{clock(d.start_time)}</span>}
-                      <span className="cal-name">{d.title}</span>
-                    </button>
-                  ))}
-              </div>
-            ))}
-          </div>
-          <div className="cal-legend muted small">
-            <span className="cal-chip practice">Practice</span>
-            <span className="cal-chip game">Game</span>
-            <span className="cal-chip other">Event</span>
-            <span className="cal-chip practice next">Next up</span>
-          </div>
-        </div>
-      </section>
-      <section className="card cx-card">
-        <div className="cx-card-head">
-          <h2>{picked ? fmtDateShort(picked) : 'Coming up'}</h2>
-          {picked && (
-            <button type="button" className="link cx-card-action" onClick={() => setPicked('')}>
-              Show what is coming up
-            </button>
-          )}
-        </div>
-        {listed.length === 0 ? <p className="muted">{picked ? 'Nothing on this day.' : 'Nothing on the schedule yet.'}</p> : <DayList days={listed} nextKey={nextKey} />}
-      </section>
+        }
+      />
       {drawn}
     </>
+  );
+}
+
+/** The team's month on the grid a coach's calendar is on. A day's chip opens it to be read, and nothing can be added. */
+function FamilyCalendar({ days, today }: { days: FamilyDay[]; today: string }) {
+  const { on, drawn } = useDayPeek();
+  const nextKey = days.find((d) => d.date >= today)?.key ?? null;
+  return (
+    <MonthGrid
+      entries={days}
+      today={today}
+      nextKey={nextKey}
+      chip={(d) => {
+        const done = d.date < today;
+        return (
+          <button key={d.key} type="button" className={`cal-chip ${d.kind} ${done ? 'done' : ''} ${d.key === nextKey ? 'next' : ''}`} aria-label={`${d.key === nextKey ? 'Next up: ' : ''}${d.title}, ${fmtDateShort(d.date)}${d.start_time ? `, ${clock(d.start_time)}` : ''}. Open it.`} {...on(d)}>
+            {done && (
+              <span className="cal-check" aria-hidden="true">
+                ✓
+              </span>
+            )}
+            {d.start_time && <span className="cal-time">{clock(d.start_time)}</span>}
+            <span className="cal-name">{d.title}</span>
+          </button>
+        );
+      }}
+    >
+      {drawn}
+    </MonthGrid>
   );
 }
 

@@ -258,6 +258,29 @@ export function LayoutToggle({ compact, onChange }: { compact: boolean; onChange
   );
 }
 /**
+ * A thing's categories as a row of their colors, for the compact list of resources. Pointing at it,
+ * or reaching it with the keyboard, names them. Nothing is drawn with no categories.
+ */
+export function CategoryDots({ tags }: { tags: { name: string; color: string }[] }) {
+  if (!tags.length) return null;
+  return (
+    <span className="res-dots" tabIndex={0} aria-label={`Categories: ${tags.map((t) => t.name).join(', ')}`}>
+      <span className="res-dots-word">{tags.length === 1 ? 'Category' : 'Categories'}</span>
+      {tags.map((t) => (
+        <span key={t.name} className="dot" style={{ background: t.color }} />
+      ))}
+      <span className="res-dots-pop" role="tooltip">
+        {tags.map((t) => (
+          <span key={t.name}>
+            <span className="dot" style={{ background: t.color }} />
+            {t.name}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+/**
  * A short list of choices for the box down the left of a list page, one above the other: "All", then
  * each choice with how many it holds. Pressing the chosen one again goes back to all. Nothing is
  * drawn when there are no choices.

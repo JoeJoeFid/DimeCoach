@@ -22648,3 +22648,263 @@ button.film-clip-play {
   width: 20px;
   height: 20px;
 }
+
+/* The two arrows beside when the team calendar was last brought in. They turn while it is being brought in again. */
+.sync-icon {
+  flex: none;
+  color: var(--muted);
+}
+.sync-icon.spin {
+  animation: sync-turn 0.9s linear infinite;
+}
+@keyframes sync-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync-icon.spin {
+    animation: none;
+  }
+}
+
+/* ---------- The main action at the top right of a page: one size everywhere ---------- */
+.page-head .btn.primary,
+.page-head .split-btn .more-btn {
+  min-height: 44px;
+  font-size: 0.96rem;
+}
+.page-head .btn.primary {
+  padding: 0 18px;
+  gap: 8px;
+}
+.page-head .split-btn .more-btn {
+  padding: 0 11px;
+}
+
+/* ---------- Compact resources: the categories as a row of their colors, named when pointed at ---------- */
+.res-dots {
+  display: none;
+}
+.res-grid.compact .res-tags {
+  display: none;
+}
+.res-grid.compact .res-dots {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: default;
+}
+.res-dots-word {
+  margin-right: 2px;
+  font-size: 0.74rem;
+  font-weight: 550;
+  color: var(--muted);
+}
+.res-dots .dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.res-dots-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 150px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+.res-dots-pop > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.res-dots:hover .res-dots-pop,
+.res-dots:focus .res-dots-pop {
+  display: flex;
+}
+/* The row pointed at stands above the rows under it, so the names are not covered. */
+.res-grid.compact .res-card:hover,
+.res-grid.compact .res-card:focus-within {
+  position: relative;
+  z-index: 4;
+}
+@media (max-width: 760px) {
+  .res-dots-word {
+    display: none;
+  }
+}
+
+/* ---------- Compact plays: every row has the same columns, so names, details and tags line up down the list ---------- */
+.play-grid.compact .play-card-info {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0 14px;
+  padding: 4px 52px 4px 12px;
+}
+.play-grid.compact .play-card-info > * {
+  grid-row: 1;
+  min-width: 0;
+}
+.play-grid.compact .play-card-info > strong {
+  grid-column: 1;
+}
+.play-grid.compact .play-card-info > .muted {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Tags that do not fit on one line go onto a second, which the row is tall enough for, and are never cut through. */
+.play-grid.compact .play-card-info > .chips {
+  grid-column: 3;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  max-height: 48px;
+  overflow: hidden;
+}
+.play-grid.compact .play-card-info > .shared-with-line {
+  grid-column: 4;
+  justify-self: end;
+  align-items: center;
+  max-width: 100%;
+}
+.play-grid.compact .shared-with-line > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 1100px) {
+  .play-grid.compact .play-card-info {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+  .play-grid.compact .play-card-info > .chips {
+    display: none;
+  }
+  .play-grid.compact .play-card-info > .shared-with-line {
+    grid-column: 3;
+  }
+}
+@media (max-width: 640px) {
+  .play-grid.compact .play-card-info {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .play-grid.compact .play-card-info > .muted,
+  .play-grid.compact .play-card-info > .shared-with-line {
+    display: none;
+  }
+}
+
+/* ---------- Placing a team's logo: the picture is dragged and sized inside a square frame ---------- */
+.logo-place-lead {
+  margin: 0 0 12px;
+}
+.logo-frame {
+  position: relative;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 2px solid var(--accent-edge);
+  border-radius: 14px;
+  /* A checkered ground, so the clear parts of a picture can be told from white ones. */
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #d9d9d9 25%, transparent 25%, transparent 75%, #d9d9d9 75%), linear-gradient(45deg, #d9d9d9 25%, transparent 25%, transparent 75%, #d9d9d9 75%);
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.logo-frame:active {
+  cursor: grabbing;
+}
+.logo-frame img {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+}
+.logo-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+.logo-zoom input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent-edge);
+}
+
+/* A schedule line's title, for someone who can only read it: a button that looks like the coach's link. */
+button.fam-row-title {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.fam-row-title:hover {
+  text-decoration: underline;
+}
+
+/* ---------- The calendar, for everyone: today's square stands out in the lime, with its name on it ---------- */
+.cal .cal-day.today {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 2px var(--accent-edge);
+}
+.cal .cal-day.today .cal-num {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.cal-today {
+  margin-right: auto;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+/* A chip that is a button, as a parent's is, is dressed as a coach's link is. */
+.cal button.cal-chip {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.cal .cal-legend .cal-chip {
+  width: auto;
+  cursor: default;
+}
+
+/* A homework card's title, for someone who can only read the sheet: a button that looks like the coach's link. */
+button.hw-title {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}

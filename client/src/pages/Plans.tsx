@@ -10,16 +10,11 @@ import { MoreMenu, type MenuItem } from '../components/bits';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, useCompletedDeletes, usePendingDeletes } from '../components/toasts';
 import PlanCalendar, { Peek } from '../components/PlanCalendar';
+import { ScheduleShell } from '../components/ScheduleShell';
+import { HomeworkCards } from '../components/Browsers';
 import { CommunityPicker, ShareDialog } from '../components/community';
 
 type View = 'list' | 'calendar';
-type Filter = 'all' | ScheduleEntry['kind'];
-const FILTERS: [Filter, string][] = [
-  ['all', 'All'],
-  ['practice', 'Practices'],
-  ['game', 'Games'],
-  ['other', 'Events'],
-];
 // Small line drawings used in the rows.
 const icons = {
   clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7.500V12l3 2',
@@ -79,8 +74,6 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   }, [summary]);
   // A link can ask for the calendar outright, as "View calendar" on the dashboard does.
   const [view, setView] = useState<View>(() => (new URLSearchParams(window.location.search).get('view') === 'calendar' ? 'calendar' : savedView()));
-  /** Which kind of thing is shown, in the list and on the calendar. */
-  const [only, setOnly] = useState<Filter>('all');
   // Homework sheets are not tied to dates the same way, so only practices get the calendar.
   const calendar = kind === 'practice' && view === 'calendar';
   const chooseView = (v: View) => {
@@ -243,67 +236,10 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       deleteLater({ key: `plan:${p.id}`, message: `Deleted the ${what}.`, run: () => api.deletePlan(p.id), done: load, failed: setError });
     });
 
-  /** A homework sheet as a card: what it is called, what it is about, when it was set and when it is due, who it is for and what is on it. */
-  const homeworkCard = (p: Plan) => {
-    const work = p.items.filter((it) => it.kind === 'item');
-    const due = p.due_date || '';
-    // Past its due day it is over; with no due day it never is.
-    const state = work.length === 0 ? 'empty' : due && due < today ? 'past' : due && due === today ? 'today' : 'open';
+  /** Who a homework sheet is for, in words. */
+  const whoOf = (p: Plan) => {
     const names = p.assigned.map((id) => roster.get(id)).filter(Boolean) as string[];
-    const who = p.assigned.length === 0 ? 'Whole team' : names.length === 0 ? `${p.assigned.length} ${p.assigned.length === 1 ? 'player' : 'players'}` : names.length <= 3 ? names.join(', ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
-    const more: MenuItem[] = [
-      { label: 'Print', onSelect: () => navigate(`/plans/${p.id}/print`) },
-      { label: 'Share', onSelect: () => setSharing(p) },
-      { label: 'Duplicate', onSelect: () => duplicate(p) },
-      { label: 'Delete', onSelect: () => remove(p, noun), danger: true },
-    ];
-    return (
-      <li key={p.id} className={`card hw-card is-${state}`}>
-        <header>
-          <Link to={`/plans/${p.id}`} className="hw-title">
-            {p.title || 'Untitled homework'}
-          </Link>
-          <span className={`hw-pill is-${state}`}>{state === 'empty' ? 'Empty' : state === 'past' ? 'Past due' : state === 'today' ? 'Due today' : 'Assigned'}</span>
-        </header>
-        <p className="hw-dates">
-          <Icon d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7" />
-          {p.date ? fmtDateShort(p.date) : 'No date'}
-          {due ? (
-            <>
-              <span aria-hidden="true"> → </span>
-              <span className="sr-only"> to </span>
-              <strong>{fmtDateShort(due)}</strong>
-            </>
-          ) : (
-            <span className="muted"> · no due date</span>
-          )}
-        </p>
-        {p.notes.trim() ? <p className="hw-about">{p.notes.trim()}</p> : <p className="hw-about muted">No description.</p>}
-        <dl className="hw-facts">
-          <div>
-            <dt>For</dt>
-            <dd>{who}</dd>
-          </div>
-          <div>
-            <dt>{work.length === 1 ? '1 item' : `${work.length} items`}</dt>
-            <dd>
-              {work.length === 0
-                ? 'Nothing on it yet'
-                : work
-                    .slice(0, 3)
-                    .map((it) => it.title.trim() || 'Untitled')
-                    .join(', ') + (work.length > 3 ? ` and ${work.length - 3} more` : '')}
-            </dd>
-          </div>
-        </dl>
-        <footer>
-          <Link className="btn primary" to={`/plans/${p.id}`}>
-            View
-          </Link>
-          <MoreMenu items={more} label={`More for ${p.title || 'this homework'}`} />
-        </footer>
-      </li>
-    );
+    return p.assigned.length === 0 ? 'Whole team' : names.length === 0 ? `${p.assigned.length} ${p.assigned.length === 1 ? 'player' : 'players'}` : names.length <= 3 ? names.join(', ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
   };
 
   const row = (e: ScheduleEntry, i: number) => {
@@ -468,8 +404,6 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   };
 
   // --- Everything in date order, a heading for each month and each week inside it ---
-  const monthName = (ym: string) => new Date(`${ym}-15T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const shown = entries.map((e, i) => ({ e, i })).filter(({ e }) => only === 'all' || e.kind === only);
   // How tall the part that stays at the top is, so a month jumped to lands under it and not behind it.
   const stickyHead = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -481,18 +415,63 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     watch.observe(el);
     return () => watch.disconnect();
   }, []);
-  const weeks: { label: string; rows: typeof shown }[] = [];
-  for (const item of shown) {
-    const day = new Date(`${item.e.date}T12:00:00`);
-    const from = new Date(day);
-    from.setDate(day.getDate() - day.getDay());
-    const to = new Date(from);
-    to.setDate(from.getDate() + 6);
-    const short = (x: Date) => x.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    const label = `Week of ${short(from)} – ${short(to)}`;
-    if (weeks[weeks.length - 1]?.label === label) weeks[weeks.length - 1].rows.push(item);
-    else weeks.push({ label, rows: [item] });
-  }
+  /** The calendar offer, for a team with no calendar linked. It shrinks to one line once a practice has been built. */
+  const calendarOffer = kind === 'practice' && !hasCalendar && plans !== null && (
+    <section className={`start-cal ${built ? 'compact' : ''}`} aria-label="Bring in your schedule">
+      <span className="start-cal-art" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width={built ? 18 : 30} height={built ? 18 : 30} fill="none" stroke="currentColor" strokeWidth="1.700" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M8.500 14.500l2.300 2.300 4.700-4.700" />
+        </svg>
+      </span>
+      {built ? (
+        <p>
+          <strong>Use GameChanger, TeamSnap or another team app?</strong> Link its calendar to see upcoming games and practices in this list.
+        </p>
+      ) : (
+        <div>
+          <h2>Already have your schedule in a team app?</h2>
+          <p>Link your GameChanger, TeamSnap, SportsEngine or Google calendar to see upcoming games and practices in this list, ready to plan.</p>
+        </div>
+      )}
+      <Link className={`btn ${built ? 'small' : 'primary'}`} to="/teams?tab=schedule">
+        Link your team calendar
+      </Link>
+    </section>
+  );
+  const nothingYet = (
+    <div className="empty">
+      <h2>No {kind === 'practice' ? 'practices' : 'homework'} yet</h2>
+      <p>{kind === 'practice' ? 'Build your first practice schedule. Times fill in automatically as you add items.' : 'Build a workout or homework sheet to send home with players.'}</p>
+      <button className="btn primary" onClick={() => create()}>
+        + New {noun}
+      </button>
+    </div>
+  );
+  const templateList = shownTemplates.length > 0 && (
+    <>
+      <h2 className="section-title">Templates</h2>
+      <ul className="plan-list">
+        {shownTemplates.map((t) => (
+          <li key={t.id} className="plan-row">
+            <Link to={`/plans/${t.id}`} className="plan-main">
+              <span className="plan-title">{t.title || 'Untitled template'}</span>
+            </Link>
+            <span className="row-actions">
+              <button className="btn small" onClick={() => create(t.id)}>
+                Use
+              </button>
+              <Link className="btn small" to={`/plans/${t.id}`}>
+                Edit
+              </Link>
+              <button className="btn small danger" onClick={() => remove(t, 'template')}>
+                Delete
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
   const addMenu: MenuItem[] = [
     ...shownTemplates.map((t) => ({ label: `From template: ${t.title || 'Untitled'}`, onSelect: () => create(t.id) })),
     ...(kind === 'practice' ? [{ label: 'From a community', onSelect: () => setFromCommunity(true) }] : []),
@@ -531,151 +510,62 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       {fromCommunity && <CommunityPicker kind="plan" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plans/${id}`)} />}
 
       </div>
-      <div className={kind === 'practice' ? 'ps-layout' : ''}>
-      {/* Down the left: how the schedule is seen, which kinds of thing are in it, and the team calendar it is brought in from. */}
-      {kind === 'practice' && (
-        <aside className="card ps-side" aria-label="View and filters">
-          <section>
-            <h2>View</h2>
-            <div className="seg" role="group" aria-label="View">
-              <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => chooseView('list')}>
-                List
-              </button>
-              <button className={view === 'calendar' ? 'on' : ''} aria-pressed={view === 'calendar'} onClick={() => chooseView('calendar')}>
-                Calendar
-              </button>
-            </div>
-          </section>
-          <section>
-            <h2>Show</h2>
-            <div className="ps-side-filter" role="group" aria-label="Show">
-              {FILTERS.map(([id, label]) => (
-                <button key={id} type="button" className={only === id ? 'on' : ''} aria-pressed={only === id} onClick={() => setOnly(id)}>
-                  {label}
-                  <span className="ps-side-count">{id === 'all' ? entries.length : entries.filter((e) => e.kind === id).length}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-          {/* When the team's calendar was last brought in, and the button that brings it in again. */}
-          {hasCalendar && (
-            <section className="ps-side-sync" role="status" title="Games and practices from GameChanger or your team app. They are not updated on their own: press Re-sync to bring in changes.">
-              <h2>Team calendar</h2>
-              <span className="ps-sync">
-                <span className="sync-dot" aria-hidden="true" />
-                <span className="muted small">Synced {fmtSynced(team!.calendar_synced_at)}</span>
-              </span>
-              <button className="btn small" onClick={sync} disabled={syncing}>
-                {syncing ? 'Updating…' : 'Re-sync'}
-              </button>
-            </section>
-          )}
-        </aside>
-      )}
-      <div className="ps-main">
-      {/* The calendar offer, for a team with no calendar linked. It shrinks to one line once a practice has been built. */}
-      {kind === 'practice' && !hasCalendar && plans !== null && (
-        <section className={`start-cal ${built ? 'compact' : ''}`} aria-label="Bring in your schedule">
-          <span className="start-cal-art" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width={built ? 18 : 30} height={built ? 18 : 30} fill="none" stroke="currentColor" strokeWidth="1.700" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M8.500 14.500l2.300 2.300 4.700-4.700" />
-            </svg>
-          </span>
-          {built ? (
-            <p>
-              <strong>Use GameChanger, TeamSnap or another team app?</strong> Link its calendar to see upcoming games and practices in this list.
-            </p>
-          ) : (
-            <div>
-              <h2>Already have your schedule in a team app?</h2>
-              <p>Link your GameChanger, TeamSnap, SportsEngine or Google calendar to see upcoming games and practices in this list, ready to plan.</p>
-            </div>
-          )}
-          <Link className={`btn ${built ? 'small' : 'primary'}`} to="/teams?tab=schedule">
-            Link your team calendar
-          </Link>
-        </section>
-      )}
-      {plans === null ? (
-        <p className="muted">Loading…</p>
-      ) : calendar ? (
-        <PlanCalendar entries={only === 'all' ? entries : entries.filter((e) => e.kind === only)} today={today} nextKey={next?.key ?? null} onPlan={planFromCalendar} onAdd={createOn} />
-      ) : entries.length === 0 ? (
-        <div className="empty">
-          <h2>No {kind === 'practice' ? 'practices' : 'homework'} yet</h2>
-          <p>
-            {kind === 'practice'
-              ? 'Build your first practice schedule. Times fill in automatically as you add items.'
-              : 'Build a workout or homework sheet to send home with players.'}
-          </p>
-          <button className="btn primary" onClick={() => create()}>
-            + New {noun}
-          </button>
-        </div>
-      ) : kind === 'homework' ? (
-        // Homework is a set of cards, newest first: each stands on its own, with no week to belong to.
-        <ul className="hw-grid">
-          {[...(plans || [])]
-            .filter((p) => !p.is_template)
-            .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id)
-            .map(homeworkCard)}
-        </ul>
-      ) : weeks.length === 0 ? (
-        <div className="empty">
-          <h2>Nothing of that kind yet</h2>
-          <p>Choose "All" on the left to see everything.</p>
-        </div>
-      ) : (
-        weeks.map((w, n) => {
-          // A month's name stands above the first week that has something from it.
-          const ym = w.rows[0].e.date.slice(0, 7);
-          const opens = n === 0 || weeks[n - 1].rows[weeks[n - 1].rows.length - 1].e.date.slice(0, 7) !== ym;
-          // A week that runs across two months also opens the second one, at its first row there.
-          const later = [...new Set(w.rows.map(({ e }) => e.date.slice(0, 7)))].filter((m) => m !== ym);
-          return (
-            <section key={w.label} className="ps-week">
-              {opens && (
-                <h2 className="ps-month-head" id={`month-${ym}`}>
-                  {monthName(ym)}
-                </h2>
-              )}
-              {later.map((m) => (
-                <span key={m} id={`month-${m}`} className="ps-month-anchor" />
-              ))}
-              <h2>{w.label}</h2>
-              <ul className="ps-list">{w.rows.map(({ e, i }) => row(e, i))}</ul>
-            </section>
-          );
-        })
-      )}
-
-      {shownTemplates.length > 0 && (
-        <>
-          <h2 className="section-title">Templates</h2>
-          <ul className="plan-list">
-            {shownTemplates.map((t) => (
-              <li key={t.id} className="plan-row">
-                <Link to={`/plans/${t.id}`} className="plan-main">
-                  <span className="plan-title">{t.title || 'Untitled template'}</span>
-                </Link>
-                <span className="row-actions">
-                  <button className="btn small" onClick={() => create(t.id)}>
-                    Use
-                  </button>
-                  <Link className="btn small" to={`/plans/${t.id}`}>
-                    Edit
-                  </Link>
-                  <button className="btn small danger" onClick={() => remove(t, 'template')}>
-                    Delete
-                  </button>
+      {kind === 'practice' ? (
+        // The same backbone the team's parents, family and friends see their schedule on. Here each line can be planned and changed.
+        <ScheduleShell
+          entries={entries}
+          view={view}
+          onView={chooseView}
+          loading={plans === null}
+          row={row}
+          calendar={(list) => <PlanCalendar entries={list} today={today} nextKey={next?.key ?? null} onPlan={planFromCalendar} onAdd={createOn} />}
+          empty={nothingYet}
+          before={calendarOffer}
+          after={templateList}
+          side={
+            // When the team's calendar was last brought in, and the button that brings it in again.
+            hasCalendar && (
+              <section className="ps-side-sync" role="status" title="Games and practices from GameChanger or your team app. They are not updated on their own: press Re-sync to bring in changes.">
+                <h2>Team calendar</h2>
+                <span className="ps-sync">
+                  <svg className={`sync-icon ${syncing ? 'spin' : ''}`} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M20 11a8 8 0 0 0-14.300-4.500L4 8.500M4 4v4.500h4.500M4 13a8 8 0 0 0 14.300 4.500L20 15.500M20 20v-4.500h-4.500" />
+                  </svg>
+                  <span className="muted small">Synced {fmtSynced(team!.calendar_synced_at)}</span>
                 </span>
-              </li>
-            ))}
-          </ul>
+                <button className="btn small" onClick={sync} disabled={syncing}>
+                  {syncing ? 'Updating…' : 'Re-sync'}
+                </button>
+              </section>
+            )
+          }
+        />
+      ) : (
+        <>
+          {plans === null ? (
+            <p className="muted">Loading…</p>
+          ) : entries.length === 0 ? (
+            nothingYet
+          ) : (
+            // The same cards the team's parents, family and friends see homework on. Here a card leads to the sheet to change it.
+            <HomeworkCards
+              sheets={plans
+                .filter((p) => !p.is_template)
+                .map((p) => ({ src: p, id: p.id, title: p.title, date: p.date, due: p.due_date || '', about: p.notes, who: whoOf(p), items: p.items.filter((it) => it.kind === 'item').map((it) => it.title.trim() || 'Untitled') }))}
+              today={today}
+              href={(h) => `/plans/${h.id}`}
+              emptyAbout="No description."
+              more={(h) => [
+                { label: 'Print', onSelect: () => navigate(`/plans/${h.id}/print`) },
+                { label: 'Share', onSelect: () => setSharing(h.src) },
+                { label: 'Duplicate', onSelect: () => duplicate(h.src) },
+                { label: 'Delete', onSelect: () => remove(h.src, noun), danger: true },
+              ]}
+            />
+          )}
+          {templateList}
         </>
       )}
-      </div>
-      </div>
     </div>
   );
 }

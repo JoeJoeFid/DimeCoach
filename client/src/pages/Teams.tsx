@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { prepareLogo } from '../components/ItemImages';
+import LogoPlacer from '../components/LogoPlacer';
 import { useSearchParams } from 'react-router-dom';
 import Papa from 'papaparse';
 import { api, type TeamContact, type TeamContacts } from '../api';
@@ -776,6 +776,8 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
     }
   };
   const logoInput = useRef<HTMLInputElement>(null);
+  // The picture just chosen for the logo, while it is being placed in its frame.
+  const [placing, setPlacing] = useState<File | null>(null);
   const saveTeam = () => {
     if (!name.trim()) return setName(team.name);
     if (name.trim() !== team.name || season !== team.season)
@@ -858,7 +860,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
             {team.logo ? <img className="team-logo-preview" src={team.logo} alt={`${team.name} logo`} /> : <span className="team-logo-preview none" aria-hidden="true" />}
             <div>
               <strong>Team logo</strong>
-              <p className="muted small">Shown beside the team's name at the top of each page. Any picture works: it is shrunk to a small size when you choose it.</p>
+              <p className="muted small">Shown beside the team's name at the top of each page. Any picture works: you place and size it before it is saved.</p>
               {app.can('manage') && (
                 <span className="team-logo-actions">
                   <input
@@ -869,13 +871,20 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       e.target.value = '';
-                      if (file)
-                        guard(async () => {
-                          await api.setTeamLogo(team.id, await prepareLogo(file));
-                          await app.reload();
-                        });
+                      if (file) setPlacing(file);
                     }}
                   />
+                  {placing && (
+                    <LogoPlacer
+                      file={placing}
+                      onCancel={() => setPlacing(null)}
+                      onSave={async (logo) => {
+                        await api.setTeamLogo(team.id, logo);
+                        await app.reload();
+                        setPlacing(null);
+                      }}
+                    />
+                  )}
                   <button type="button" className="btn small" onClick={() => logoInput.current?.click()}>
                     {team.logo ? 'Change logo' : 'Upload a logo'}
                   </button>
