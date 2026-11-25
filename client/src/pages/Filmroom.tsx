@@ -6,7 +6,7 @@ import { api, type Film, type FilmClip, type FilmLink, type FilmPeople, type Fil
 import { useApp } from '../App';
 import PageTitle from '../components/PageTitle';
 import { BinIcon, Field, Modal, ShareIcon } from '../components/bits';
-import { SideChoices } from '../components/cx';
+import { LayoutToggle, SideChoices, useCompact } from '../components/cx';
 import { confirmDialog } from '../components/dialogs';
 import { GameVideoCard } from '../components/GameVideo';
 import { CutIcon, FilmPlayer, ReelPlayer, canClip, clock, scenes, stripItem } from '../components/Film';
@@ -59,6 +59,7 @@ export default function Filmroom() {
   // What is typed to find something by its title or notes, and the game video the clips are narrowed to (0 for all).
   const [q, setQ] = useState('');
   const [fromVideo, setFromVideo] = useState(0);
+  const [compact, setCompact] = useCompact('practiceplan.filmCompact');
   /** The button that opens sharing for one thing, saying how many people have it already. */
   const shareButton = (what: Shared) => {
     const n = film?.shares.filter((s) => s.kind === what.kind && s.ref_id === what.id).length ?? 0;
@@ -136,6 +137,10 @@ export default function Filmroom() {
             <input className="input" type="search" placeholder="Search film" aria-label="Search by title or notes" value={q} onChange={(e) => setQ(e.target.value)} />
           </section>
           <section>
+            <h2>Layout</h2>
+            <LayoutToggle compact={compact} onChange={setCompact} />
+          </section>
+          <section>
             <h2>Show</h2>
             <div className="ps-side-filter" role="group" aria-label="Parts of the Filmroom">
               {(
@@ -176,7 +181,7 @@ export default function Filmroom() {
         ) : videos.length === 0 ? (
           none
         ) : (
-          <div className="res-grid">
+          <div className={`res-grid ${compact ? 'compact' : ''}`}>
             {videos.map((v) => (
               <GameVideoCard key={v.id} stream={v} playLabel="Open" onPlay={() => navigate(`/filmroom/video/${v.id}`)}>
                 <span className="muted small film-card-count">
@@ -200,7 +205,7 @@ export default function Filmroom() {
         ) : clips.length === 0 ? (
           none
         ) : (
-          <div className="res-grid">
+          <div className={`res-grid ${compact ? 'compact' : ''}`}>
             {clips.map((c) => (
               <FilmCard key={c.id} poster={videoOf(c.stream_id)?.has_poster ? c.stream_id : null} length={clock(c.seconds)} title={c.title} meta={`From ${videoOf(c.stream_id)?.title || 'a game video'} · ${day(c.created_at)}`} notes={c.notes} onPlay={() => setWatching(c)}>
                 <button type="button" className="btn small" onClick={() => setWatching(c)}>
@@ -228,7 +233,7 @@ export default function Filmroom() {
       ) : reels.length === 0 ? (
         none
       ) : (
-        <div className="res-grid">
+        <div className={`res-grid ${compact ? 'compact' : ''}`}>
           {reels.map((r) => {
             const list = scenes(film, r.items.map(stripItem));
             return (

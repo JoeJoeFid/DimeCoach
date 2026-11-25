@@ -1,4 +1,4 @@
-import { SideChoices } from '../components/cx';
+import { SideChoices, LayoutToggle, useCompact } from '../components/cx';
 import PageTitle from '../components/PageTitle';
 import { CommunityPicker } from '../components/community';
 import { ShareItemDialog, SharedWithBox } from '../components/ShareItem';
@@ -26,6 +26,7 @@ export default function Library() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [q, setQ] = useState('');
   const [tagId, setTagId] = useState(0);
+  const [compact, setCompact] = useCompact('practiceplan.drillsCompact');
   const [error, setError] = useState('');
   const [fromCommunity, setFromCommunity] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -110,6 +111,10 @@ export default function Library() {
             <h2>Search</h2>
             <input className="input" type="search" aria-label="Search drills by name or notes" placeholder="Search drills" value={q} onChange={(e) => setQ(e.target.value)} />
           </section>
+          <section>
+            <h2>Layout</h2>
+            <LayoutToggle compact={compact} onChange={setCompact} />
+          </section>
           <SideChoices
             title="Category"
             all={0}
@@ -128,7 +133,7 @@ export default function Library() {
           <p>Create a drill here, or use "Save to drill library" on any practice item.</p>
         </div>
       ) : (
-        <ul className="drill-cards">
+        <ul className={`drill-cards ${compact ? 'compact' : ''}`}>
           {shown.map((d) => {
             // While searching, the notes are shown from where a word was found in them.
             const preview = (terms.length > 0 && searchSnippet(htmlText(d.notes_html), terms)) || htmlPreview(d.notes_html);
