@@ -1362,10 +1362,17 @@ textarea.input {
   min-width: 130px;
   font-weight: 600;
 }
+/* Number, position and grade are a few characters each: they are kept narrow, and the room goes to the people beside them. */
 .roster .cell-number,
-.roster .cell-grade,
+.roster .cell-grade {
+  width: 52px;
+  min-width: 0;
+  padding: 4px 6px;
+}
 .roster .cell-position {
-  min-width: 56px;
+  width: 64px;
+  min-width: 0;
+  padding: 4px 6px;
 }
 .roster .cell-parent_email {
   min-width: 170px;
@@ -18745,8 +18752,10 @@ button.play-card {
 }
 
 /* ---------- Roster: the parents and family of each player, as people ---------- */
+/* The widest column: a player can have several people, each with a name and an address. */
 .roster-family-cell {
-  min-width: 220px;
+  width: 45%;
+  min-width: 320px;
 }
 .roster-family {
   display: flex;
@@ -21596,5 +21605,27 @@ button.film-clip-play {
   }
   .page-head h1.section-name {
     font-size: 1.7rem;
+  }
+}
+
+/* Which game this is, at the top of its video page. */
+.game-title {
+  margin: 0 0 14px;
+}
+.game-title h1 {
+  margin: 0 0 2px;
+  font-size: 2rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.game-title p {
+  margin: 0;
+  font-size: 1.05rem;
+}
+@media (max-width: 640px) {
+  .game-title h1 {
+    font-size: 1.6rem;
   }
 }
