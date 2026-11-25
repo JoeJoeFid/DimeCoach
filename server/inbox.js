@@ -102,6 +102,8 @@ const snippet = (body) => {
   const flat = String(body).replace(/\s+/g, ' ').trim();
   return flat.length > 180 ? `${flat.slice(0, 180)}…` : flat;
 };
+/** Just the id and the name of each, for answering everyone a message went to. */
+const brief = (people) => people.map((p) => ({ id: p.id, name: p.name }));
 const namesTo = (messageId) => all('SELECT u.id, u.name FROM direct_recipients r JOIN users u ON u.id=r.user_id WHERE r.message_id=? ORDER BY u.name COLLATE NOCASE', messageId);
 
 /** What other people wrote to this person, in the shape the Messages page lists. */
@@ -112,13 +114,16 @@ export const directFor = (userId) =>
     userId,
   ).map((d) => ({
     key: `dm-${d.id}`, id: d.id, kind: 'direct', community_id: 0, community: '', at: d.created_at, by: d.by_name, by_id: d.from_id,
-    title: d.subject || '(no subject)', text: snippet(d.body), body: d.body, link: '', unread: !d.read_at, to: namesTo(d.id).map((p) => p.name),
+    title: d.subject || '(no subject)', text: snippet(d.body), body: d.body, link: '', unread: !d.read_at, ...(() => {
+      const to = namesTo(d.id);
+      return { to: to.map((p) => p.name), to_people: brief(to) };
+    })(),
   }));
 /** What this person wrote to others, newest first. */
 const sentBy = (userId) =>
   all('SELECT * FROM direct_messages WHERE from_id=? AND sender_deleted=0 ORDER BY id DESC LIMIT 100', userId).map((d) => ({
     key: `sent-${d.id}`, id: d.id, kind: 'sent', community_id: 0, community: '', at: d.created_at, by: 'You', by_id: userId,
-    title: d.subject || '(no subject)', text: snippet(d.body), body: d.body, link: '', unread: false, to: namesTo(d.id).map((p) => p.name),
+    title: d.subject || '(no subject)', text: snippet(d.body), body: d.body, link: '', unread: false, to: namesTo(d.id).map((p) => p.name), to_people: brief(namesTo(d.id)),
   }));
 /** The lines a person took out of their inbox, by key ("post-12"). */
 export const hiddenFor = (userId) => new Set(all('SELECT key FROM inbox_hidden WHERE user_id=?', userId).map((r) => r.key));
@@ -162,6 +167,23 @@ function emailRecipients(from, to, subject, base) {
   }
 }
 
+/**
+ * Puts a message from one person in other people's Messages, and tells each of them on their phone.
+ * `title` is what the notification says, given who wrote. Used for a message written by hand, and
+ * for a team's announcement, which is a message to the team.
+ */
+export function deliver(from, to, { subject = '', body, replyTo = null, title = (name) => `${name} sent you a message`, tag = 'dm' }) {
+  const id = Number(run('INSERT INTO direct_messages (from_id, reply_to, subject, body) VALUES (?,?,?,?)', from.id, replyTo, subject, body).lastInsertRowid);
+  for (const userId of to) run('INSERT INTO direct_recipients (message_id, user_id) VALUES (?,?)', id, userId);
+  poke(to);
+  // A notification says who wrote and the subject, as the email does, and opens their inbox.
+  for (const userId of to) {
+    const person = get('SELECT * FROM users WHERE id=?', userId);
+    if (person) pushTo(userId, { title: title(from.name), body: subject, link: inboxPath(person), tag: `${tag}-${id}` });
+  }
+  return id;
+}
+
 /** `inbox` gives the whole Messages list back after a change, as the routes beside these do. */
 export function mountInbox(app, inbox) {
   app.get('/api/messages/people', (req, res) => res.json(peopleFor(req.user)));
@@ -172,9 +194,11 @@ export function mountInbox(app, inbox) {
     if (!body) return res.status(400).json({ error: 'Write a message first.' });
     const ids = [...new Set((Array.isArray(req.body.to) ? req.body.to : []).map(Number).filter(Number.isInteger))].filter((id) => id !== req.user.id);
     if (ids.length === 0) return res.status(400).json({ error: 'Choose who the message is for.' });
-    if (ids.length > MAX_TO) return res.status(400).json({ error: `A message can go to ${MAX_TO} people at most.` });
     // An answer can always go back to whoever wrote, and to the others it was sent to.
     const replyTo = req.body.reply_to ? get('SELECT d.* FROM direct_messages d JOIN direct_recipients r ON r.message_id=d.id WHERE d.id=? AND r.user_id=?', Number(req.body.reply_to), req.user.id) : null;
+    // An answer to everyone may be as wide as what it answers: a team's announcement goes to more people than a message written by hand can.
+    const most = Math.max(MAX_TO, replyTo ? namesTo(replyTo.id).length : 0);
+    if (ids.length > most) return res.status(400).json({ error: `A message can go to ${most} people at most.` });
     const allowed = new Set(peopleFor(req.user).flatMap((g) => g.people.map((p) => p.id)));
     if (replyTo) {
       allowed.add(replyTo.from_id);
@@ -183,14 +207,7 @@ export function mountInbox(app, inbox) {
     const to = ids.filter((id) => allowed.has(id) && get("SELECT 1 AS ok FROM users WHERE id=? AND status='active'", id));
     if (to.length !== ids.length) return res.status(403).json({ error: 'One of the people you chose can no longer be written to. Take them off and send again.' });
     if (tooMany(req.user.id)) return res.status(429).json({ error: 'You have sent a lot of messages in the last hour. Try again a little later.' });
-    const id = Number(run('INSERT INTO direct_messages (from_id, reply_to, subject, body) VALUES (?,?,?,?)', req.user.id, replyTo?.id ?? null, subject, body).lastInsertRowid);
-    for (const userId of to) run('INSERT INTO direct_recipients (message_id, user_id) VALUES (?,?)', id, userId);
-    poke(to);
-    // A notification says who wrote and the subject, as the email does, and opens their inbox.
-    for (const userId of to) {
-      const person = get('SELECT * FROM users WHERE id=?', userId);
-      if (person) pushTo(userId, { title: `${req.user.name} sent you a message`, body: subject, link: inboxPath(person), tag: `dm-${id}` });
-    }
+    deliver(req.user, to, { subject, body, replyTo: replyTo?.id ?? null });
     // An email goes as well only when the sender ticked it, and never to someone who has turned those off.
     if (req.body.email === true) emailRecipients(req.user, to, subject, publicBase(req));
     res.json({ ok: true, sent: sentBy(req.user.id) });

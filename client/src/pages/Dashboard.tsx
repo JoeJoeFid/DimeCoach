@@ -1,7 +1,8 @@
 import PageTitle from '../components/PageTitle';
 import { useEffect, useMemo, useRef, useState, type FocusEvent, type HTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api';
+import { api, type Audience, type TeamPost } from '../api';
+import { AudiencePick, DEFAULT_AUDIENCE, audienceWords } from './TeamFamily';
 import { useApp } from '../App';
 import type { Plan, Tag } from '../types';
 import PracticeTimeline from '../components/PracticeTimeline';
@@ -224,22 +225,32 @@ export default function Dashboard() {
             Dashboard
           </PageTitle>
         </div>
-        <div className="head-actions">
+      </div>
+
+      <PracticeTimeline plans={plans || []} tags={sportTags} onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))} />
+
+      {/* Under the schedule: what has been told to the team's families, with a box to tell them something new, and the things done most often beside it. */}
+      <div className="dash-row">
+        <Announcements teamId={teamId} />
+        <section className="card dash-quick" aria-label="Quick actions">
+          <h2>Quick actions</h2>
+          {/* Straight into a new one, not the list of them. */}
+          <Link className="btn primary" to="/practices?new=1">
+            <HeadIcon d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M12 12.500v5M9.500 15h5" />
+            Add practice or game
+          </Link>
           {can('manage') && (
             <Link className="btn" to="/teams?tab=people">
               <HeadIcon d="M9 11.500a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM2.500 20c.600-3.300 3.200-5 6.500-5s5.900 1.700 6.500 5M19 8v6M16 11h6" />
               Invite coaches, parents, etc.
             </Link>
           )}
-          {/* Straight into a new one, not the list of them. */}
-          <Link className="btn primary" to="/practices?new=1">
-            <HeadIcon d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M12 12.500v5M9.500 15h5" />
-            Add practice or game
+          <Link className="btn" to="/messages">
+            <HeadIcon d="M4 6h16v12H4ZM4 7l8 6 8-6" />
+            Message someone
           </Link>
-        </div>
+        </section>
       </div>
-
-      <PracticeTimeline plans={plans || []} tags={sportTags} onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))} />
 
       {/* What the numbers below cover, and the way to the full calendar. */}
       <div className="dash-controls">
@@ -425,6 +436,89 @@ export default function Dashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+const postedWhen = (at: string) => {
+  const d = new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+/** The team's latest announcements to its parents, family and friends, and a box for posting a new one without leaving the page. */
+function Announcements({ teamId }: { teamId: number }) {
+  const [news, setNews] = useState<TeamPost[] | null>(null);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [posted, setPosted] = useState(false);
+  const [sendTo, setSendTo] = useState<Audience[]>(DEFAULT_AUDIENCE);
+  useEffect(() => {
+    setNews(null);
+    setError('');
+    api.teamFamily(teamId).then((d) => setNews(d.news), (e) => setError((e as Error).message));
+  }, [teamId]);
+  const post = async (e: { preventDefault: () => void }) => {
+    e.preventDefault();
+    if (!body.trim() || busy || sendTo.length === 0) return;
+    setBusy(true);
+    try {
+      setNews((await api.teamFamilyPost(teamId, { kind: 'news', title: title.trim(), body: body.trim(), to: sendTo })).news);
+      setTitle('');
+      setBody('');
+      setError('');
+      setPosted(true);
+      window.setTimeout(() => setPosted(false), 4000);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    setBusy(false);
+  };
+  return (
+    <section className="card dash-news" aria-label="Announcements">
+      <div className="card-head">
+        <h2>Announcements</h2>
+        <Link className="link small" to="/teams?tab=family&view=messages">
+          All announcements →
+        </Link>
+      </div>
+      <div className="dash-news-cols">
+        <div className="dash-news-list">
+          {news === null && !error && <p className="muted small">Loading…</p>}
+          {news?.length === 0 && <p className="muted small">Nothing announced yet. An announcement is a message to the team: it lands in each person's Messages and shows on the team's page.</p>}
+          {news?.slice(0, 3).map((p) => (
+            <article key={p.id} className="dash-post">
+              <header>
+                <strong>{p.title || p.author}</strong>
+                <span className="muted small">
+                  {p.title ? `${p.author} · ` : ''}
+                  {postedWhen(p.at)}
+                  {!!p.audience?.length && ` · to ${audienceWords(p.audience)}`}
+                </span>
+              </header>
+              <p>{p.body}</p>
+            </article>
+          ))}
+        </div>
+        <form className="dash-news-write" onSubmit={post}>
+          <input className="input" maxLength={120} aria-label="Headline" placeholder="Headline (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <textarea className="input" rows={3} maxLength={4000} aria-label="Announcement" placeholder="Write a message to the team…" value={body} onChange={(e) => setBody(e.target.value)} />
+          <AudiencePick value={sendTo} onChange={setSendTo} />
+          {error && <p className="error small">{error}</p>}
+          <div className="dash-news-send">
+            {posted && (
+              <span className="muted small" role="status">
+                Sent.
+              </span>
+            )}
+            <button className="btn primary" disabled={busy || !body.trim() || sendTo.length === 0}>
+              <HeadIcon d="M4 12 20 4l-6 16-3-7-7-1Z" />
+              Send announcement
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
   );
 }
 

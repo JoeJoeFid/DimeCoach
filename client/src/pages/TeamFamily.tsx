@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../App';
 import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
 import { StreamPeople } from '../components/GameVideo';
-import { api, type FamilyKind, type FamilySection, type FamilySettings, type TeamPost } from '../api';
+import { api, type Audience, type FamilyKind, type FamilySection, type FamilySettings, type TeamPost } from '../api';
 import type { Team } from '../types';
 import { SubTabs } from '../components/cx';
 
@@ -31,6 +31,35 @@ const ROLE: Record<TeamPost['role'], string> = { coach: 'Coach', parent: 'Parent
 const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 type View = 'access' | 'messages' | 'plays' | 'drills' | 'resources' | 'video';
 
+/** Who an announcement goes out to unless the coach says otherwise. */
+export const DEFAULT_AUDIENCE: Audience[] = ['coach', 'parent'];
+const AUDIENCE_WORDS: [Audience, string][] = [
+  ['coach', 'Coaches'],
+  ['parent', 'Parents'],
+  ['family', 'Family'],
+  ['friend', 'Friends'],
+];
+export const audienceWords = (to: Audience[]) =>
+  AUDIENCE_WORDS.filter(([id]) => to.includes(id))
+    .map(([, word]) => word.toLowerCase())
+    .join(', ');
+/** The groups an announcement goes out to, each one pressed in or out. */
+export function AudiencePick({ value, onChange }: { value: Audience[]; onChange: (to: Audience[]) => void }) {
+  return (
+    <div className="aud-pick" role="group" aria-label="Who it goes out to">
+      <span className="field-label">Send to</span>
+      {AUDIENCE_WORDS.map(([id, word]) => {
+        const on = value.includes(id);
+        return (
+          <button key={id} type="button" className={`chip toggle ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => onChange(on ? value.filter((v) => v !== id) : [...value, id])}>
+            {word}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean }) {
   const [data, setData] = useState<FamilySettings | null>(null);
   const [error, setError] = useState('');
@@ -41,6 +70,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
   const [show, setShow] = useState<'news' | 'board'>(params.get('show') === 'board' ? 'board' : 'news');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [sendTo, setSendTo] = useState<Audience[]>(DEFAULT_AUDIENCE);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     setData(null);
@@ -75,7 +105,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
   };
   const post = async (e: FormEvent) => {
     e.preventDefault();
-    if (await act(() => api.teamFamilyPost(team.id, { kind: show, title: show === 'news' ? title : '', body }))) {
+    if (await act(() => api.teamFamilyPost(team.id, { kind: show, title: show === 'news' ? title : '', body, to: show === 'news' ? sendTo : undefined }))) {
       setTitle('');
       setBody('');
     }
@@ -168,8 +198,9 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
             ) : (
               <MentionArea people={data.board_people.filter((n) => n !== me)} className="input" rows={3} maxLength={4000} aria-label="Message" placeholder="Write on the board… Type @ to name someone." value={body} onChange={setBody} />
             )}
+            {show === 'news' && <AudiencePick value={sendTo} onChange={setSendTo} />}
             <div className="modal-actions">
-              <button className="btn primary" disabled={busy || !body.trim()}>
+              <button className="btn primary" disabled={busy || !body.trim() || (show === 'news' && sendTo.length === 0)}>
                 {show === 'news' ? 'Post announcement' : 'Post'}
               </button>
             </div>
@@ -186,6 +217,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
                 </button>
               </header>
               {p.title && <h3>{p.title}</h3>}
+              {show === 'news' && !!p.audience?.length && <span className="muted small">Sent to {audienceWords(p.audience)}</span>}
               <p>{show === 'board' ? <MentionText text={p.body} people={data.board_people} me={me} /> : p.body}</p>
             </article>
           ))}

@@ -11,7 +11,7 @@ import { all, db, dbPath, get, run } from './db.js';
 import { sharedOpening, withoutOpening } from './calendar.js';
 import { drillView, planView, playView } from './communities.js';
 import { resourceList } from './resources.js';
-import { coachesOfTeam, followersOfTeam } from './inbox.js';
+import { coachesOfTeam, deliver, followersOfTeam } from './inbox.js';
 import { mention, mentionedIn } from './notices.js';
 import { publicBase } from './invites.js';
 import { scoreOfPlan } from './games.js';
@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS team_posts (
 );
 CREATE INDEX IF NOT EXISTS idx_team_posts ON team_posts(team_id, kind, id);
 `);
+// Who an announcement went out to: 'coach', 'parent', 'family', 'friend', with commas between. Empty for one from before this was asked.
+addColumn('team_posts', 'audience', "TEXT NOT NULL DEFAULT ''");
 
 export const FAMILY_KINDS = ['parent', 'family', 'friend'];
 // 'games' and 'practices' say how much of the schedule is told: when and where games are, and what a practice covers.
@@ -77,8 +79,15 @@ export function saveFamilyList(team, key, list) {
   run('UPDATE teams SET family_json=? WHERE id=?', JSON.stringify(s), team.id);
 }
 const sportOf = (team) => get('SELECT name FROM sports WHERE id=?', team.sport_id)?.name || '';
-const postOut = (p, userId) => ({ id: p.id, kind: p.kind, title: p.title, body: p.body, author: p.author, role: p.role, at: p.created_at, mine: p.user_id === userId });
-const postsOf = (teamId, kind, userId) => all('SELECT * FROM team_posts WHERE team_id=? AND kind=? ORDER BY id DESC LIMIT 200', teamId, kind).map((p) => postOut(p, userId));
+const audienceOf = (p) => String(p.audience || '').split(',').filter(Boolean);
+const postOut = (p, userId) => ({ id: p.id, kind: p.kind, title: p.title, body: p.body, author: p.author, role: p.role, at: p.created_at, mine: p.user_id === userId, audience: audienceOf(p) });
+/** A team's posts of one kind, newest first. With `as`, only the announcements that went out to that kind of follower; one from before audiences is for everyone. */
+const postsOf = (teamId, kind, userId, as = '') =>
+  all('SELECT * FROM team_posts WHERE team_id=? AND kind=? ORDER BY id DESC LIMIT 200', teamId, kind)
+    .filter((p) => !as || !p.audience || audienceOf(p).includes(as))
+    .map((p) => postOut(p, userId));
+/** The groups an announcement can go out to. */
+const AUDIENCES = ['coach', 'parent', 'family', 'friend'];
 
 // Each person may post only so often, so the board cannot be flooded.
 const posted = new Map();
@@ -100,7 +109,16 @@ function addPost(team, user, role, kind, b, base = '') {
   const body = str(b.body, 4000).trim();
   if (!body) return 'Write something first.';
   if (tooManyPosts(user.id)) return 'You have posted a lot in the last hour. Try again a little later.';
-  const postId = run('INSERT INTO team_posts (team_id, user_id, author, role, kind, title, body, created_at) VALUES (?,?,?,?,?,?,?,?)', team.id, user.id, user.name, role, kind, kind === 'news' ? str(b.title, 120).trim() : '', body, nowIso()).lastInsertRowid;
+  // An announcement is a message to the team: it goes out to the groups picked for it, the coaches and the parents unless told otherwise.
+  const audience = kind === 'news' ? (Array.isArray(b.to) ? AUDIENCES.filter((a) => b.to.includes(a)) : ['coach', 'parent']) : [];
+  if (kind === 'news' && audience.length === 0) return 'Choose who the announcement goes out to.';
+  const title = kind === 'news' ? str(b.title, 120).trim() : '';
+  const postId = run('INSERT INTO team_posts (team_id, user_id, author, role, kind, title, body, created_at, audience) VALUES (?,?,?,?,?,?,?,?,?)', team.id, user.id, user.name, role, kind, title, body, nowIso(), audience.join(',')).lastInsertRowid;
+  if (kind === 'news') {
+    const to = new Set([...(audience.includes('coach') ? coachesOfTeam(team) : []), ...followersOfTeam(team).filter((p) => audience.includes(p.kind))].map((p) => p.id));
+    to.delete(user.id);
+    if (to.size) deliver(user, [...to], { subject: title || `${team.name} announcement`, body, title: (name) => `${team.name}: announcement from ${name}`, tag: 'news' });
+  }
   // Someone named with "@" on the board is told, with a link to the message that names them.
   if (kind === 'board')
     for (const p of mentionedIn(body, boardPeople(team).filter((x) => x.id !== user.id)))
@@ -302,7 +320,7 @@ export function mountFamily(app) {
       live_game: can.schedule && can.games ? liveBrief(liveGame(team)) : null,
       can,
       schedule: can.schedule ? scheduleOf(team, can) : [],
-      news: can.news ? postsOf(team.id, 'news', req.user.id) : [],
+      news: can.news ? postsOf(team.id, 'news', req.user.id, f.kind) : [],
       board: can.board ? postsOf(team.id, 'board', req.user.id) : [],
       // The names that can be written with "@" on the board.
       board_people: can.board ? boardNames(team) : [],

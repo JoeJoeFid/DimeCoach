@@ -147,9 +147,9 @@ function PersonChip({ p, on, toggle }: { p: ToPerson; on: boolean; toggle: (p: T
  * Writing a message. The people on your teams are laid out to pick from; communities and
  * organizations wait folded underneath, and typing a name finds anyone in any of them.
  */
-function Compose({ reply, onClose, onSent }: { reply?: CommunityNewsItem; onClose: () => void; onSent: (sent: CommunityNewsItem[]) => void }) {
+function Compose({ reply, others, onClose, onSent }: { reply?: CommunityNewsItem; /** Answering everyone: the other people the message went to, added beside whoever wrote it. */ others?: ToPerson[]; onClose: () => void; onSent: (sent: CommunityNewsItem[]) => void }) {
   const [groups, setGroups] = useState<ToGroup[] | null>(null);
-  const [to, setTo] = useState<ToPerson[]>(reply?.by_id ? [{ id: reply.by_id, name: reply.by, role: '' }] : []);
+  const [to, setTo] = useState<ToPerson[]>(reply?.by_id ? [{ id: reply.by_id, name: reply.by, role: '' }, ...(others ?? [])] : []);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [subject, setSubject] = useState(reply ? (/^re:/i.test(reply.title || '') ? reply.title! : `Re: ${reply.title}`) : '');
@@ -197,7 +197,7 @@ function Compose({ reply, onClose, onSent }: { reply?: CommunityNewsItem; onClos
   };
   const addAll = (g: ToGroup) => setTo([...to, ...g.people.filter((p) => !chosen.has(p.id))]);
   return (
-    <Modal title={reply ? 'Reply' : 'New message'} onClose={onClose} wide>
+    <Modal title={reply ? (others?.length ? 'Reply to all' : 'Reply') : 'New message'} onClose={onClose} wide>
       <form className="fields stack compose" onSubmit={send}>
         <div className="compose-to">
           <span className="compose-label">To</span>
@@ -351,7 +351,7 @@ export default function Inbox({ user, onUnread, onUserChanged }: { user: User; o
   const [sent, setSent] = useState<CommunityNewsItem[] | null>(null);
   const [folder, setFolder] = useState<'inbox' | 'sent'>('inbox');
   const [reading, setReading] = useState<CommunityNewsItem | null>(null);
-  const [writing, setWriting] = useState<{ reply?: CommunityNewsItem } | null>(null);
+  const [writing, setWriting] = useState<{ reply?: CommunityNewsItem; others?: ToPerson[] } | null>(null);
   const [settings, setSettings] = useState(false);
   const [shown, setShown] = useState(25);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
@@ -420,6 +420,8 @@ export default function Inbox({ user, onUnread, onUserChanged }: { user: User; o
   };
   const link = reading ? linkOf(reading) : '';
   const line = reading ? lineOf(reading) : null;
+  // Everyone else a message went to, for answering all of them: not the reader, and not whoever wrote, who is answered anyway.
+  const replyAll: ToPerson[] = (reading?.to_people ?? []).filter((p) => p.id !== user.id && p.id !== reading?.by_id).map((p) => ({ ...p, role: '' }));
 
   return (
     <div className="inbox">
@@ -458,7 +460,14 @@ export default function Inbox({ user, onUnread, onUserChanged }: { user: User; o
             <h2>{line.subject}</h2>
             <p className="muted small inbox-meta">
               <strong>{reading.kind === 'sent' ? 'You' : line.from}</strong>
-              {reading.to && <> to {reading.to.map((n) => (reading.kind === 'direct' && n === user.name ? 'you' : n)).join(', ')}</>} · {fullWhen(reading.at)}
+              {reading.to && (
+                <>
+                  {' '}
+                  to {reading.to.slice(0, 6).map((n) => (reading.kind === 'direct' && n === user.name ? 'you' : n)).join(', ')}
+                  {reading.to.length > 6 && ` and ${reading.to.length - 6} more`}
+                </>
+              )}{' '}
+              · {fullWhen(reading.at)}
             </p>
             <div className="inbox-body">
               <MentionText text={wordsOf(reading)} people={[]} />
@@ -475,8 +484,14 @@ export default function Inbox({ user, onUnread, onUserChanged }: { user: User; o
             </div>
             <div className="inbox-actions">
               {reading.kind === 'direct' && (
-                <button type="button" className="btn primary" onClick={() => setWriting({ reply: reading })}>
+                <button type="button" className="btn primary" onClick={() => setWriting({ reply: reading })} title={`Answer ${reading.by} only`}>
                   Reply
+                </button>
+              )}
+              {/* To whoever wrote and everyone else it went to. Only offered when it went to someone besides the reader. */}
+              {reading.kind === 'direct' && replyAll.length > 0 && (
+                <button type="button" className="btn" onClick={() => setWriting({ reply: reading, others: replyAll })} title={`Answer ${reading.by} and the ${replyAll.length === 1 ? 'other person' : `${replyAll.length} others`} it went to`}>
+                  Reply all
                 </button>
               )}
               <button type="button" className="btn" onClick={() => remove([reading.key])}>
@@ -533,6 +548,7 @@ export default function Inbox({ user, onUnread, onUserChanged }: { user: User; o
       {writing && (
         <Compose
           reply={writing.reply}
+          others={writing.others}
           onClose={() => setWriting(null)}
           onSent={(list) => {
             setSent(list);

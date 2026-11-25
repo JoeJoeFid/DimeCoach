@@ -250,6 +250,8 @@ export interface CommunityNewsItem {
   by_id?: number;
   body?: string;
   to?: string[];
+  /** The same people with their ids, for answering all of them. */
+  to_people?: { id: number; name: string }[];
   /** A community's post or share: its number, so a link can open the very thing. */
   ref_id?: number;
   share_kind?: ShareKind;
@@ -796,7 +798,11 @@ export interface TeamPost {
   role: 'coach' | FamilyKind;
   at: string;
   mine: boolean;
+  /** An announcement: the groups it went out to. Empty for one from before that was asked. */
+  audience?: Audience[];
 }
+/** A group an announcement can go out to. */
+export type Audience = 'coach' | FamilyKind;
 /** What a team's page shows its followers, as its coaches set it. */
 export interface FamilySettings {
   access: Record<FamilyKind, Record<FamilySection, boolean>>;
@@ -1396,7 +1402,7 @@ export const api = {
   teamContacts: (teamId: number) => req<TeamContacts>('GET', `/teams/${teamId}/contacts`),
   teamFamily: (teamId: number) => req<FamilySettings>('GET', `/teams/${teamId}/family`),
   saveTeamFamily: (teamId: number, b: { access?: Partial<Record<FamilyKind, Partial<Record<FamilySection, boolean>>>>; plays?: number[]; drills?: number[]; resources?: string[] }) => req<FamilySettings>('PUT', `/teams/${teamId}/family`, b),
-  teamFamilyPost: (teamId: number, b: { kind: 'news' | 'board'; title: string; body: string }) => req<FamilySettings>('POST', `/teams/${teamId}/family/posts`, b),
+  teamFamilyPost: (teamId: number, b: { kind: 'news' | 'board'; title: string; body: string; /** An announcement: the groups it goes out to. */ to?: Audience[] }) => req<FamilySettings>('POST', `/teams/${teamId}/family/posts`, b),
   deleteTeamFamilyPost: (teamId: number, postId: number) => req<FamilySettings>('DELETE', `/teams/${teamId}/family/posts/${postId}`),
   /** Turns an account that only follows teams into one that can coach too. Refused unless it is marked as paid. */
   startCoaching: () => req<{ ok: true }>('POST', '/family/start-coaching', {}),
