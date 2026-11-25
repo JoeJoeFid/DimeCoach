@@ -23490,3 +23490,12 @@ button.hw-title {
   right: -70px;
   bottom: -90px;
 }
+
+/* The big card is as tall as what is in it, and its last row follows straight on from its place: no gap is left to fill the height of the list beside it. */
+.tl-track > .tl-focus {
+  align-self: center;
+}
+.tl-bottom {
+  margin-top: 0;
+  padding-top: 12px;
+}
