@@ -280,8 +280,16 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
                             {label}
                             {/* What having it lets someone who does not coach do: look, or more. */}
                             <span className={`tf-tag ${GIVES[s]?.[1] ?? 'view'}`}>{GIVES[s]?.[0] ?? 'View only'}</span>
+                            {/* What it is, said when the "i" is pointed at or reached with the keyboard. */}
+                            <span className="tf-info" tabIndex={0} role="note" aria-label={`${label}: ${about}`}>
+                              <span className="tf-info-i" aria-hidden="true">
+                                i
+                              </span>
+                              <span className="tf-info-pop" role="tooltip">
+                                {about}
+                              </span>
+                            </span>
                           </strong>
-                          <span className="muted small">{about}</span>
                         </td>
                         <td className="tf-col">
                           <input type="checkbox" aria-label={`Coaches and helpers: ${label}. Always on.`} title="Coaches and helpers always have this" checked disabled readOnly />

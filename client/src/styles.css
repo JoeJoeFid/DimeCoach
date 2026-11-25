@@ -23107,3 +23107,68 @@ button.hw-title {
 .tf-access td:first-child .tf-people .tf-person {
   display: inline-flex;
 }
+
+/* Access & permissions: what a line is, behind a small "i" beside its name. */
+.tf-access td:first-child .tf-info {
+  position: relative;
+  display: inline-flex;
+}
+.tf-access td:first-child .tf-info-i {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--muted);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.74rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+.tf-info:hover .tf-info-i,
+.tf-info:focus .tf-info-i {
+  border-color: var(--accent-edge);
+  color: var(--ink);
+}
+.tf-access td:first-child .tf-info-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -8px;
+  z-index: 25;
+  display: none;
+  width: 300px;
+  max-width: 70vw;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+}
+.tf-access td:first-child .tf-info:hover .tf-info-pop,
+.tf-access td:first-child .tf-info:focus .tf-info-pop {
+  display: block;
+}
+/* So the note can hang out of its box, the boxes do not cut off what leaves them on a screen wide enough not to need scrolling. */
+@media (min-width: 761px) {
+  .tf-box,
+  .tf-box .table-scroll {
+    overflow: visible;
+  }
+}
+.tf-box .tf-access tbody td {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
+/* Access & permissions: the line pointed at is faintly lit, so its boxes are easy to follow across. */
+.tf-box .tf-access tbody tr:not(.tf-people-row):hover td {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
