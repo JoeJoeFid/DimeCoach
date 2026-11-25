@@ -225,7 +225,7 @@ export function mountFilm(app) {
   });
   /** Tells one person a video was shared with them: a message here when they have an account, and an email with the way in. */
   async function tell(req, team, contact, share, title, note) {
-    const path = `/family/${slugOf(team)}?tab=film&share=${share}`;
+    const path = `/portal/${slugOf(team)}?tab=film&share=${share}`;
     if (contact.user_id) notify(contact.user_id, { kind: 'film', ref: String(share), title: `${req.user.name} shared a video with you`, body: `${title}, from ${team.name}.`, link: path });
     if (!contact.email) return { ok: !!contact.user_id, error: 'They have no email address.' };
     if (!mailerStatus().configured) return { ok: !!contact.user_id, error: 'Email is not set up on this site.' };

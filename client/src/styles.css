@@ -23499,3 +23499,23 @@ button.hw-title {
   margin-top: 0;
   padding-top: 12px;
 }
+
+/* The board's left side: the big card, and under it the way to the whole schedule. */
+.tl-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+.tl-left > .tl-focus {
+  align-self: stretch;
+}
+.btn.tl-full {
+  align-self: flex-start;
+  gap: 8px;
+}
+/* The parents' page: the board stands at the top, and the rest in two columns under it. */
+.fam-home {
+  margin-top: 16px;
+}

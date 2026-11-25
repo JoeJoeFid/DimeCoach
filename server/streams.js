@@ -360,7 +360,7 @@ export function mountStreams(app) {
       const watchers = all('SELECT user_id, kind FROM team_contacts WHERE team_id=? AND user_id IS NOT NULL AND can_watch=1', team.id).filter((c) => open[c.kind]?.live && groups.has(GROUP_OF[c.kind] || 'friends') && !coaches.includes(c.user_id));
       const what = { kind: 'live', ref: String(s.id), title: `${team.name} is live`, body: `${s.title || 'A game'} is being broadcast now. Tap to watch.` };
       if (groups.has('coaches')) for (const id of coaches) if (id !== req.user.id) notify(id, { ...what, link: s.plan_id ? `/go/plan/${team.id}/${s.plan_id}?view=video` : '/' });
-      for (const id of new Set(watchers.map((c) => c.user_id))) if (id !== req.user.id) notify(id, { ...what, link: `/family/${slugOf(team)}?tab=video` });
+      for (const id of new Set(watchers.map((c) => c.user_id))) if (id !== req.user.id) notify(id, { ...what, link: `/portal/${slugOf(team)}?tab=video` });
     }
   };
   // One piece of video, as the bytes of a small file, for a stream kept on this disk.

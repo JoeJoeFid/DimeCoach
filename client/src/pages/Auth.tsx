@@ -443,7 +443,7 @@ export function Join({ signedInAs, onSignedIn, onSignOut }: { /** Whoever is sig
     onSignedIn();
   });
   const enter = () => {
-    navigate(info?.family ? '/family' : '/', { replace: true });
+    navigate(info?.family ? '/portal' : '/', { replace: true });
     onSignedIn();
   };
 
@@ -673,7 +673,7 @@ export function WatchLink({ signedInAs, onSignedIn, onSignOut }: { signedInAs?: 
   /** In: the video is theirs to watch, on the team's page, or in the Filmroom for one of the team's own coaches. */
   const enter = async (made?: { name: string; email: string; password: string }) => {
     const r = await api.openFilmLink({ token, ...made });
-    navigate(r.coach ? '/filmroom' : `/family/${r.team_id}?tab=film${r.share ? `&share=${r.share}` : ''}`, { replace: true });
+    navigate(r.coach ? '/filmroom' : `/portal/${r.team_id}?tab=film${r.share ? `&share=${r.share}` : ''}`, { replace: true });
     onSignedIn();
   };
   const { busy, error, submit } = useSubmit(async () => {

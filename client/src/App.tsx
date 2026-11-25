@@ -262,6 +262,15 @@ export default function App() {
   );
 }
 
+/**
+ * A team's page for its parents, family and friends used to be at /family, and is now at /portal.
+ * An address from before the move, in an old message, email or bookmark, is sent on to the new one.
+ */
+export function OldAddress() {
+  const location = useLocation();
+  return <Navigate to={{ pathname: location.pathname.replace(/^\/family/, '/portal'), search: location.search }} replace />;
+}
+
 function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User; onChanged: () => void; choosingTeam: boolean; onTeamChosen: () => void }) {
   const teamKey = `practiceplan.teamId.${user.id}`;
   const [data, setData] = useState<Bootstrap | null>(null);
@@ -487,7 +496,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
   if (leaving) return <div className="page muted">Loading…</div>;
   // Choosing a team comes first: after signing in, when asked for from the menu, and whenever no team is chosen.
   // Someone with no team of their own who is on a team they follow stays there.
-  const following = !state.team && !picking && /^\/family\/[^/]+/.test(location.pathname);
+  const following = !state.team && !picking && /^\/portal\/[^/]+/.test(location.pathname);
   if (following) return <FamilyApp user={user} onChanged={onChanged} />;
   if (!printing && (picking || !state.team)) {
     const pick = (shared: boolean, id: number) => {
@@ -507,7 +516,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           onPick={pick}
           onFollow={(slug) => {
             donePicking();
-            navigate(`/family/${slug}`);
+            navigate(`/portal/${slug}`);
           }}
           onCreated={(t) => {
             setTeamId(t.id);
@@ -525,8 +534,9 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     <Routes>
       <Route path="/teams" element={<Teams />} />
       <Route path="/account" element={<Account onChanged={onChanged} />} />
-      <Route path="/family" element={<FamilyHome name={user.name} />} />
-      <Route path="/family/:teamId" element={<FamilyTeamPage />} />
+      <Route path="/family/*" element={<OldAddress />} />
+      <Route path="/portal" element={<FamilyHome name={user.name} />} />
+      <Route path="/portal/:teamId" element={<FamilyTeamPage />} />
       <Route path="/help" element={<Help />} />
       {/* The old Administration page was folded into System admin. An old link to it lands there. */}
       {user.is_system_admin && <Route path="/admin" element={<Navigate to="/system" replace />} />}
@@ -651,7 +661,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
                 </div>
               ))}
               {/* For a coach who is also a parent on someone else's team. */}
-              {!!data?.following && navLink({ to: '/family', label: 'Teams I follow', icon: icons.teams })}
+              {!!data?.following && navLink({ to: '/portal', label: 'Teams I follow', icon: icons.teams })}
             </nav>
             <div className="side-foot">
               <UserMenu

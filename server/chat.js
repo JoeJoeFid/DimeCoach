@@ -179,7 +179,7 @@ function listOut(user) {
 function chatPath(user, chat) {
   if (!user.follower) return `/chat/${chat.id}`;
   const team = (chat.team_id && followedTeams(user.id).find((t) => t.id === chat.team_id)) || followedTeams(user.id)[0];
-  return team ? `/family/${slugOf(team)}?tab=chat&chat=${chat.id}` : '/';
+  return team ? `/portal/${slugOf(team)}?tab=chat&chat=${chat.id}` : '/';
 }
 
 // Who has a chat open in front of them right now. They are not sent a notification for what they are watching arrive.

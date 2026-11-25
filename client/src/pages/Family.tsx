@@ -1,5 +1,6 @@
 // A team's page for its parents, family and friends: what is coming up, what the coaches say,
 // and whatever else the coach lets their kind of follower see. Nothing here changes the team.
+import NextUpBoard from '../components/NextUpBoard';
 import MonthGrid from '../components/MonthGrid';
 import { SCHEDULE_ICONS, ScheduleIcon, ScheduleShell, type ScheduleViewMode } from '../components/ScheduleShell';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -10,13 +11,13 @@ import { api, listenLive, type FamilyDay, type FamilyKind, type FamilyResource, 
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
 import { SharedPreview } from '../components/community';
-import { DateBlock, PageHead, Row } from '../components/cx';
+import { PageHead, Row } from '../components/cx';
 import { DrillBrowser, HomeworkCards, PlayBrowser, ResourceBrowser } from '../components/Browsers';
 import { TopTabs } from '../components/TopTabs';
 import SportIcon from '../components/SportIcon';
 import { PasswordForm } from './Auth';
 import { FollowedTeams, NEW_TEAM_KEY } from '../components/TeamPicker';
-import { NAV_ICONS, UserMenu } from '../App';
+import { NAV_ICONS, UserMenu, OldAddress } from '../App';
 import Inbox from '../components/Inbox';
 import { MyStats } from './Stats';
 import GameVideo from '../components/GameVideo';
@@ -57,14 +58,14 @@ export function FamilyApp({ user, onChanged }: { user: User; onChanged: () => vo
   // A team of their own is for someone who coaches. An account marked as paid becomes a coach's
   // account on the spot. Anyone else is shown how to get started.
   const newTeam = async () => {
-    if (!user.paid) return navigate('/family/coach');
+    if (!user.paid) return navigate('/portal/coach');
     try {
       await api.startCoaching();
       sessionStorage.setItem(NEW_TEAM_KEY, '1');
       navigate('/');
       onChanged();
     } catch {
-      navigate('/family/coach');
+      navigate('/portal/coach');
     }
   };
   const frame: Frame = { user, onNewTeam: newTeam, onPassword: () => setChanging(true), onSignOut: signOut, onChanged };
@@ -82,13 +83,15 @@ export function FamilyApp({ user, onChanged }: { user: User; onChanged: () => vo
         </div>
       </div>
     );
-  if (pathname === '/family/coach') return <StartCoaching user={user} onBack={() => navigate('/family')} onSignOut={signOut} />;
+  // An address from before the page moved from /family to /portal is sent on to the new one.
+  if (/^\/family(\/|$)/.test(pathname)) return <OldAddress />;
+  if (pathname === '/portal/coach') return <StartCoaching user={user} onBack={() => navigate('/portal')} onSignOut={signOut} />;
   // Choosing a team comes first, as it does for a coach: after signing in, and whenever "Switch team" is pressed.
-  if (!/^\/family\/[^/]+/.test(pathname)) return <FamilyPicker name={user.name} onPick={(slug) => navigate(`/family/${slug}`)} onNewTeam={newTeam} onPassword={() => setChanging(true)} onSignOut={signOut} />;
+  if (!/^\/portal\/[^/]+/.test(pathname)) return <FamilyPicker name={user.name} onPick={(slug) => navigate(`/portal/${slug}`)} onNewTeam={newTeam} onPassword={() => setChanging(true)} onSignOut={signOut} />;
   return (
     <Routes>
-      <Route path="/family/:teamId" element={<FamilyTeamPage frame={frame} />} />
-      <Route path="*" element={<Navigate to="/family" replace />} />
+      <Route path="/portal/:teamId" element={<FamilyTeamPage frame={frame} />} />
+      <Route path="*" element={<Navigate to="/portal" replace />} />
     </Routes>
   );
 }
@@ -239,7 +242,7 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
       {menuOpen && <div className="menu-scrim" onClick={() => setMenuOpen(false)} />}
       <aside className="sidebar">
         <div className="side-top">
-          <Link to="/family" className="brand">
+          <Link to="/portal" className="brand">
             <span className="brand-mark" aria-hidden="true" />
             Dime Coach
           </Link>
@@ -250,7 +253,7 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
         <div className="team-now">
           <strong>{team?.name ?? 'Your teams'}</strong>
           {team && <span className="muted small">{[team.sport, team.season].filter(Boolean).join(' · ')}</span>}
-          <button type="button" className="btn small" onClick={() => navigate('/family')}>
+          <button type="button" className="btn small" onClick={() => navigate('/portal')}>
             Switch team
           </button>
         </div>
@@ -317,7 +320,7 @@ export function FamilyHome({ name }: { name: string }) {
   }, []);
   if (error) return <p className="error">{error}</p>;
   if (!teams) return <p className="muted">Loading…</p>;
-  if (teams.length === 1) return <Navigate to={`/family/${teams[0].slug}`} replace />;
+  if (teams.length === 1) return <Navigate to={`/portal/${teams[0].slug}`} replace />;
   return (
     <div className="page cx fam">
       <PageHead eyebrow="Your teams" title={`Hello, ${name.split(' ')[0]}`} sub={teams.length ? 'Choose a team to see its schedule and what its coaches have shared.' : undefined} />
@@ -330,7 +333,7 @@ export function FamilyHome({ name }: { name: string }) {
           <ul className="cx-rows">
             {teams.map((t) => (
               <li key={t.id}>
-                <Link className="cx-row fam-team-row" to={`/family/${t.slug}`}>
+                <Link className="cx-row fam-team-row" to={`/portal/${t.slug}`}>
                   <SportIcon sport={t.sport} size={26} />
                   <span className="cx-row-text">
                     <strong>{t.name}</strong>
@@ -377,7 +380,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
   // An address written the old way, or with the team's old name, is put right once the team is known.
   const slug = data?.team.slug;
   useEffect(() => {
-    if (slug && slug !== id) navigate({ pathname: `/family/${slug}`, search: window.location.search }, { replace: true });
+    if (slug && slug !== id) navigate({ pathname: `/portal/${slug}`, search: window.location.search }, { replace: true });
   }, [slug, id, navigate]);
   useEffect(() => {
     setData(null);
@@ -402,7 +405,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
         <div className="card">
           <h2>This team's page is not open to you</h2>
           <p className="muted">{error}</p>
-          <Link className="btn" to="/family">
+          <Link className="btn" to="/portal">
             Your teams
           </Link>
         </div>
@@ -435,8 +438,6 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
   const go = (t: Tab, extra: Record<string, string> = {}) => setParams(t === 'home' ? {} : { tab: t, ...extra }, { replace: true });
   const openChat = (chatId: number) => go('chat', chatId ? { chat: String(chatId) } : {});
   const today = todayISO();
-  const coming = data.schedule.filter((d) => d.date >= today);
-  const next = coming[0];
 
   return framed(
     <div className="page cx fam">
@@ -446,7 +447,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
         sub={`You are here as ${asWhat(data.me.kind, data.me.players)}.`}
       >
         {others > 0 && !frame && (
-          <Link className="btn" to="/family">
+          <Link className="btn" to="/portal">
             Switch team
           </Link>
         )}
@@ -457,33 +458,10 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
       )}
 
       {tab === 'home' && (
-        <div className={`fam-home ${can.schedule ? 'with-schedule' : ''}`}>
-          {can.schedule && (
-            <section className="card cx-card fam-home-schedule">
-              <div className="cx-card-head">
-                <h2 className="fam-h">
-                  <BoxIcon kind="schedule" />
-                  Schedule
-                </h2>
-                <button type="button" className="link cx-card-action" onClick={() => go('schedule')}>
-                  Full schedule
-                </button>
-              </div>
-              {!next ? (
-                <p className="muted">Nothing on the schedule yet.</p>
-              ) : (
-                <>
-                  <NextUp day={next} today={today} />
-                  {coming.length > 1 && (
-                    <>
-                      <h3 className="fam-then">After that</h3>
-                      <DayList days={coming.slice(1, 8)} />
-                    </>
-                  )}
-                </>
-              )}
-            </section>
-          )}
+        <>
+        {/* The board a coach has at the top of their dashboard: what is next, large, and the schedule as a list beside it. Here a line opens to be read. */}
+        {can.schedule && (data.schedule.length === 0 ? <p className="muted">Nothing on the schedule yet.</p> : <HomeBoard days={data.schedule} today={today} sport={team.sport} onFull={() => go('schedule')} />)}
+        <div className="fam-home">
           {/* What is going on this minute: video going out, or a game being scored. First on the right, above the coaches. */}
           {(hasVideo || hasPlays) && (
             <section className={`card cx-card fam-now ${data.video.live || data.live_game ? 'on' : ''}`} aria-label="Live now">
@@ -567,6 +545,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
             </section>
           )}
         </div>
+        </>
       )}
 
       {tab === 'schedule' && <Schedule days={data.schedule} today={today} />}
@@ -772,15 +751,7 @@ function FamilyResources({ slug, resources }: { slug: string; resources: FamilyR
   );
 }
 
-/** "Today", "Tomorrow" or "In 4 days". */
-function howSoon(date: string, today: string) {
-  const days = Math.round((new Date(`${date}T12:00:00`).getTime() - new Date(`${today}T12:00:00`).getTime()) / 86_400_000);
-  return days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
-}
 const timesOf = (d: FamilyDay) => [clock(d.start_time), clock(d.end_time)].filter(Boolean).join(' – ');
-const dayLine = (d: FamilyDay) => [KIND_WORD[d.kind], timesOf(d), d.location].filter(Boolean).join(' · ');
-/** Whether there is more to a day than its line already says. */
-const hasMore = (d: FamilyDay) => !!d.summary;
 
 /** What a practice covers, part by part. `most` cuts a long one short. */
 function Parts({ day, most }: { day: FamilyDay; most?: number }) {
@@ -916,52 +887,27 @@ function useDayPeek() {
   return { on, drawn };
 }
 
-/** The very next thing on the schedule, made plain to see. */
-function NextUp({ day, today }: { day: FamilyDay; today: string }) {
+/** The top of the page: what is next and the schedule beside it, as on a coach's dashboard, with each thing opened to be read. */
+function HomeBoard({ days, today, sport, onFull }: { days: FamilyDay[]; today: string; sport: string; onFull: () => void }) {
   const { on, drawn } = useDayPeek();
+  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date) || (a.start_time || '').localeCompare(b.start_time || ''));
   return (
     <>
-      <button type="button" className={`fam-next ${day.kind}`} aria-label={`Next up: ${day.title}, ${fmtDateShort(day.date)}. Open it.`} {...on(day)}>
-        <DateBlock date={day.date} />
-        <span className="fam-next-text">
-          <span className="fam-next-tag">
-            Next up <i>{howSoon(day.date, today)}</i>
-          </span>
-          <strong>{day.title}</strong>
-          {day.score && <span className="fam-next-line fam-score">{scoreText(day)}</span>}
-          <span className="fam-next-line">{dayLine(day)}</span>
-          {day.summary && <span className="fam-next-line">{day.summary.minutes} minutes planned, in {plural(day.summary.items.length, 'part')}</span>}
-        </span>
-      </button>
-      {drawn}
-    </>
-  );
-}
-
-function DayList({ days, nextKey }: { days: FamilyDay[]; /** The next thing on the schedule, which is marked. */ nextKey?: string }) {
-  const { on, drawn } = useDayPeek();
-  return (
-    <>
-      <ul className="cx-rows">
-        {days.map((d) => (
-          <li key={d.key}>
-            <button type="button" className={`cx-row fam-day ${d.key === nextKey ? 'next' : ''}`} {...on(d)}>
-              <DateBlock date={d.date} />
-              <span className="cx-row-text">
-                <strong>
-                  {d.title}
-                  {d.key === nextKey && <span className="fam-next-pill">Next up</span>}
-                  {d.score && <span className={`fam-score-pill ${d.score.status}`}>{scoreText(d)}</span>}
-                </strong>
-                <span className="muted small">
-                  {dayLine(d)}
-                  {hasMore(d) && ` · ${d.summary!.minutes} minutes planned`}
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <NextUpBoard
+        entries={sorted.map((d) => ({ key: d.key, date: d.date, kind: d.kind, title: d.title, time: timesOf(d) || (d.kind === 'game' && !d.location ? '' : 'All day'), location: d.location, src: d }))}
+        today={today}
+        sport={sport}
+        // A game that is being scored, or was, says how it stands. Nothing else has a state a parent needs.
+        state={(e) => (e.src.score ? <span className={`fam-score-pill ${e.src.score.status}`}>{scoreText(e.src)}</span> : null)}
+        note={(e) => e.src.summary && <div className="muted small">{e.src.summary.minutes} minutes planned, in {plural(e.src.summary.items.length, 'part')}</div>}
+        actions={(e) => (
+          <button type="button" className="btn primary" onClick={on(e.src).onClick}>
+            View details
+          </button>
+        )}
+        way={(e) => ({ onClick: on(e.src).onClick, title: 'See the details' })}
+        fullSchedule={{ onClick: onFull }}
+      />
       {drawn}
     </>
   );

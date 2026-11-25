@@ -126,7 +126,7 @@ function addPost(team, user, role, kind, b, base = '') {
     for (const p of mentionedIn(body, boardPeople(team).filter((x) => x.id !== user.id)))
       mention(p.id, {
         by: user.name, where: `on the ${team.name} message board`, body, ref: `team-post-${postId}`, base,
-        link: p.coach ? `/go/board/${team.id}?post=${postId}` : `/family/${slugOf(team)}?tab=messages&show=board&post=${postId}`,
+        link: p.coach ? `/go/board/${team.id}?post=${postId}` : `/portal/${slugOf(team)}?tab=messages&show=board&post=${postId}`,
       });
   return '';
 }

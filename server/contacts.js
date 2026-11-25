@@ -142,7 +142,7 @@ export function mountContacts(app) {
         (note ? `${req.user.name} wrote:\n${note}\n\n` : '') +
         `Dime Coach is where the coaches of ${team.name} plan practices and games. The team has a page there for its parents, family and friends, with what the coaches choose to share, such as the schedule and news from them.\n\n` +
         (account
-          ? `You already have a Dime Coach account for this address. Sign in to open the team's page:\n\n${base}/family\n\n`
+          ? `You already have a Dime Coach account for this address. Sign in to open the team's page:\n\n${base}/portal\n\n`
           : `Make your account to open the team's page:\n\n${base}/join?token=${token}\n\nThe link works for ${FAMILY_INVITE_DAYS} days.\n\n`) +
         `If you would rather not be on the list, write to ${req.user.name} at ${req.user.email}.`,
       ...(token ? { secret: token } : {}),

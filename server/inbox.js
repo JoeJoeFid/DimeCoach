@@ -146,7 +146,7 @@ function tooMany(userId) {
 function inboxPath(user) {
   if (!user.follower) return '/messages';
   const team = get('SELECT t.* FROM team_contacts c JOIN teams t ON t.id=c.team_id WHERE c.user_id=? ORDER BY t.id LIMIT 1', user.id);
-  return team ? `/family/${slugOf(team)}?tab=inbox` : '/';
+  return team ? `/portal/${slugOf(team)}?tab=inbox` : '/';
 }
 /**
  * Emails each person a message was sent to, unless they turned those off: who wrote, the subject,
