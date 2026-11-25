@@ -1,17 +1,122 @@
 // Pictures, videos and links attached to practice items, drills and plays.
 //
-// Uploaded files live on disk next to the database, under uploads/. The images table (which holds
-// videos too) records who owns each file. Items, drills and plays refer to a file by id, so
-// duplicating a practice shares the same file. A hosted version would move the files to object
-// storage; only this module would change.
+// The images table (which holds videos too) records who owns each uploaded file. Items, drills and
+// plays refer to a file by id, so duplicating a practice shares the same file.
+//
+// Where a file is kept is this module's own business. With Cloudflare R2 set up (r2.js), a new
+// upload goes into the bucket under uploads/, and is handed out by a short-lived signed link that
+// this server makes only after checking who is asking. With R2 not set up, or not answering, a
+// file is kept on disk next to the database, under uploads/, as it always was. Each file's row
+// says which (`store`): '' on disk, 'r2' in the bucket, 'both' while a file copied to the bucket
+// still has its old copy on disk.
 import { fullMessage, spaceFor } from './quota.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { dbPath, get, run } from './db.js';
+import { Readable } from 'node:stream';
+import { all, db, dbPath, get, run } from './db.js';
+import { linkTo, r2Config, remove as removeFromR2, sizeOf } from './r2.js';
+import { isSystemAdmin } from './auth.js';
 
 const uploadsDir = path.join(path.dirname(dbPath), 'uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
+
+if (!all('PRAGMA table_info(images)').some((col) => col.name === 'store')) db.exec("ALTER TABLE images ADD COLUMN store TEXT DEFAULT ''");
+
+// --- Where a file is kept ---------------------------------------------------------
+const keyOf = (filename) => `uploads/${path.basename(filename)}`;
+const onDisk = (filename) => path.join(uploadsDir, path.basename(filename));
+/** How long a link to a file in the bucket is good for. Long enough for a printed sheet left open, short enough not to be worth passing on. */
+const FILE_LINK_SECONDS = 6 * 60 * 60;
+/** Puts a file's bytes in the bucket and checks they all arrived. False when R2 would not take them. */
+async function putInR2(cfg, filename, body, mime, bytes) {
+  try {
+    const res = await fetch(linkTo(cfg, 'PUT', keyOf(filename), 600), { method: 'PUT', headers: { 'Content-Type': mime }, body, signal: AbortSignal.timeout(10 * 60_000) });
+    if (!res.ok) return false;
+    return (await sizeOf(cfg, keyOf(filename))) === bytes;
+  } catch (e) {
+    console.error('Could not put an upload in R2:', e.message);
+    return false;
+  }
+}
+/**
+ * Answers a request for a file that the caller has already been found allowed to have. One kept
+ * in the bucket is answered with a link straight to it, or passed through this server when
+ * `through` is asked for (a page's script may read that; it may not read the bucket's own answer).
+ */
+export async function sendUpload(req, res, f, cacheControl) {
+  const cfg = r2Config();
+  const name = path.basename(f.filename);
+  if (f.store && cfg && (f.store === 'r2' || !fs.existsSync(onDisk(name)) || !req.query.disk)) {
+    const link = linkTo(cfg, 'GET', keyOf(name), FILE_LINK_SECONDS);
+    if (req.query.through) {
+      try {
+        const from = await fetch(link, { headers: req.headers.range ? { Range: req.headers.range } : {} });
+        if (!from.ok || !from.body) return res.status(from.status === 404 ? 404 : 502).json({ error: 'That file could not be fetched.' });
+        res.status(from.status).set({ 'Content-Type': f.mime, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=3600' });
+        for (const h of ['content-length', 'content-range', 'accept-ranges']) if (from.headers.get(h)) res.set(h, from.headers.get(h));
+        return Readable.fromWeb(from.body).pipe(res);
+      } catch {
+        return res.status(502).json({ error: 'That file could not be fetched.' });
+      }
+    }
+    // The link is kept by the browser for less time than it is good for, so a kept one never fails.
+    return res.set('Cache-Control', 'private, max-age=3600').redirect(302, link);
+  }
+  if (!fs.existsSync(onDisk(name))) return res.status(404).json({ error: 'Not found' });
+  res.sendFile(name, { root: uploadsDir, headers: { 'Content-Type': f.mime, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': cacheControl } });
+}
+/** Takes files away for good, wherever they are kept: off the disk, and out of the bucket. Given their names. */
+export function dropUploadFiles(filenames) {
+  const cfg = r2Config();
+  for (const f of filenames) {
+    fs.rm(onDisk(f), { force: true }, () => {});
+    // Asked for whether or not it was ever there: taking away what is not there is no failure.
+    if (cfg) removeFromR2(cfg, keyOf(f));
+  }
+}
+/** How many uploads are kept where, for the system administrator. */
+const storageStatus = () => {
+  const n = (where) => get(`SELECT COUNT(*) AS files, COALESCE(SUM(bytes), 0) AS bytes FROM images WHERE ${where}`);
+  return { r2: !!r2Config(), disk: n("COALESCE(store,'')=''"), both: n("store='both'"), bucket: n("store='r2'") };
+};
+/** Copies files still only on disk into the bucket, a few at a time, leaving the disk copy where it is. */
+async function copyToR2(limit) {
+  const cfg = r2Config();
+  if (!cfg) return { moved: 0, failed: 0 };
+  let moved = 0;
+  let failed = 0;
+  for (const f of all("SELECT id, filename, mime, bytes FROM images WHERE COALESCE(store,'')='' ORDER BY id LIMIT ?", limit)) {
+    const file = onDisk(f.filename);
+    if (!fs.existsSync(file)) {
+      failed++;
+      continue;
+    }
+    const bytes = fs.statSync(file).size;
+    if (await putInR2(cfg, f.filename, await fs.openAsBlob(file), f.mime, bytes)) {
+      run("UPDATE images SET store='both' WHERE id=?", f.id);
+      moved++;
+    } else failed++;
+  }
+  return { moved, failed };
+}
+/** Takes the disk copy away from every file that is also in the bucket, after checking once more that the bucket has all of it. */
+async function clearDiskCopies() {
+  const cfg = r2Config();
+  if (!cfg) return { cleared: 0, kept: 0 };
+  let cleared = 0;
+  let kept = 0;
+  for (const f of all("SELECT id, filename, bytes FROM images WHERE store='both' ORDER BY id")) {
+    const there = await sizeOf(cfg, keyOf(f.filename)).catch(() => null);
+    const file = onDisk(f.filename);
+    if (there !== null && (!fs.existsSync(file) || there === fs.statSync(file).size)) {
+      fs.rmSync(file, { force: true });
+      run("UPDATE images SET store='r2' WHERE id=?", f.id);
+      cleared++;
+    } else kept++;
+  }
+  return { cleared, kept };
+}
 
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 250 * 1024 * 1024;
@@ -76,14 +181,35 @@ export function deleteUpload(fileId, ownerId) {
   const f = get('SELECT id, filename FROM images WHERE id=? AND owner_id=?', fileId, ownerId);
   if (!f) return;
   run('DELETE FROM images WHERE id=?', f.id);
-  fs.rm(path.join(uploadsDir, path.basename(f.filename)), { force: true }, () => {});
+  dropUploadFiles([f.filename]);
 }
 
 export function mountImages(app) {
   // How much upload space the signed-in person has used, for the meter on the Resources page.
   app.get('/api/storage', (req, res) => res.json(spaceFor(req)));
 
-  app.post('/api/images', (req, res) => {
+  // Where uploads are kept, and moving the ones on disk into the bucket. The system administrator's alone.
+  const system = (req, res) => {
+    if (isSystemAdmin(req.user)) return true;
+    res.status(404).json({ error: 'Not found' });
+    return false;
+  };
+  app.get('/api/system/uploads', (req, res) => system(req, res) && res.json(storageStatus()));
+  // A few at a time, so no one request runs long: the page asks again until none are left.
+  app.post('/api/system/uploads/copy', async (req, res) => {
+    if (!system(req, res)) return;
+    if (!r2Config()) return res.status(400).json({ error: 'R2 is not set up on this server, so there is nowhere to copy uploads to.' });
+    const did = await copyToR2(10);
+    res.json({ ...storageStatus(), ...did });
+  });
+  app.post('/api/system/uploads/clear-disk', async (req, res) => {
+    if (!system(req, res)) return;
+    if (!r2Config()) return res.status(400).json({ error: 'R2 is not set up on this server.' });
+    const did = await clearDiskCopies();
+    res.json({ ...storageStatus(), ...did });
+  });
+
+  app.post('/api/images', async (req, res) => {
     const buf = Buffer.from(String(req.body.data || ''), 'base64');
     if (buf.length === 0) return res.status(400).json({ error: 'The picture was empty.' });
     if (buf.length > MAX_IMAGE_BYTES) return res.status(413).json({ error: 'That picture is too large. Use one under 6 MB.' });
@@ -92,11 +218,14 @@ export function mountImages(app) {
     const space = spaceFor(req);
     if (buf.length > space.left_bytes) return res.status(413).json({ error: fullMessage(space) });
     const filename = crypto.randomUUID() + kind.ext;
-    fs.writeFileSync(path.join(uploadsDir, filename), buf);
+    // Into the bucket when there is one. If it will not take the picture, the disk does, as before.
+    const cfg = r2Config();
+    const store = cfg && (await putInR2(cfg, filename, buf, kind.mime, buf.length)) ? 'r2' : '';
+    if (!store) fs.writeFileSync(path.join(uploadsDir, filename), buf);
     const dim = (v) => (Number.isFinite(Number(v)) ? Math.min(20000, Math.max(0, Math.round(Number(v)))) : 0);
     const r = run(
-      'INSERT INTO images (owner_id, filename, mime, width, height, bytes) VALUES (?,?,?,?,?,?)',
-      req.ownerId, filename, kind.mime, dim(req.body.width), dim(req.body.height), buf.length,
+      'INSERT INTO images (owner_id, filename, mime, width, height, bytes, store) VALUES (?,?,?,?,?,?,?)',
+      req.ownerId, filename, kind.mime, dim(req.body.width), dim(req.body.height), buf.length, store,
     );
     res.json({ id: Number(r.lastInsertRowid), width: dim(req.body.width), height: dim(req.body.height) });
   });
@@ -139,7 +268,7 @@ export function mountImages(app) {
         cleanup();
         return res.status(failed.status).json({ error: failed.error });
       }
-      out.end(() => {
+      out.end(async () => {
         const kind = sniff(head);
         if (bytes === 0 || !kind || !kind.mime.startsWith('video/')) {
           cleanup();
@@ -147,26 +276,27 @@ export function mountImages(app) {
         }
         const filename = crypto.randomUUID() + kind.ext;
         fs.renameSync(temp, path.join(uploadsDir, filename));
-        const r = run('INSERT INTO images (owner_id, filename, mime, bytes) VALUES (?,?,?,?)', req.ownerId, filename, kind.mime, bytes);
+        // It was written to disk as it came in, so it could be checked. From there it goes into the bucket when there is one, and the disk copy goes.
+        const cfg = r2Config();
+        let store = '';
+        if (cfg && (await putInR2(cfg, filename, await fs.openAsBlob(path.join(uploadsDir, filename)), kind.mime, bytes))) {
+          store = 'r2';
+          // Tried a few times: the file may still be held for a moment after being read.
+          fs.rm(path.join(uploadsDir, filename), { force: true, maxRetries: 5, retryDelay: 200 }, () => {});
+        }
+        const r = run('INSERT INTO images (owner_id, filename, mime, bytes, store) VALUES (?,?,?,?,?)', req.ownerId, filename, kind.mime, bytes, store);
         res.json({ id: Number(r.lastInsertRowid), mime: kind.mime, bytes });
       });
     });
   });
 
-  // One route serves both kinds. sendFile answers byte-range requests, which video players need to seek.
+  // One route serves both kinds. A file on disk is sent from here, answering the byte-range requests a video player makes to seek.
+  // One in the bucket is answered with a link to it, which answers those itself.
   const serve = (req, res) => {
-    const f = get('SELECT filename, mime FROM images WHERE id=? AND owner_id=?', Number(req.params.id), req.ownerId);
-    const name = f && path.basename(f.filename);
-    if (!name || !fs.existsSync(path.join(uploadsDir, name))) return res.status(404).json({ error: 'Not found' });
-    res.sendFile(name, {
-      root: uploadsDir,
-      headers: {
-        'Content-Type': f.mime,
-        'X-Content-Type-Options': 'nosniff',
-        // A file never changes once uploaded, so the browser can keep it. Private: it needs the sign-in cookie.
-        'Cache-Control': 'private, max-age=31536000, immutable',
-      },
-    });
+    const f = get('SELECT filename, mime, store FROM images WHERE id=? AND owner_id=?', Number(req.params.id), req.ownerId);
+    if (!f) return res.status(404).json({ error: 'Not found' });
+    // A file never changes once uploaded, so the browser can keep it. Private: it needs the sign-in cookie.
+    sendUpload(req, res, f, 'private, max-age=31536000, immutable');
   };
   app.get('/api/images/:id', serve);
   app.get('/api/videos/:id', serve);

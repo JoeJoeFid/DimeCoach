@@ -23920,3 +23920,25 @@ button.hw-title {
 .plan-collab-can {
   padding: 1px 8px;
 }
+
+/* System page: uploaded files counted by where they are kept. */
+.sys-storage {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+.sys-storage > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.sys-storage dt {
+  color: var(--ink-2);
+}
+.sys-storage dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

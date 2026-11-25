@@ -56,7 +56,7 @@ function fileName(title: string, type: string, part = 0) {
  * Sends this device's camera out to the team. It opens on the camera's picture with what to
  * decide before going live: whether the video is kept, where, and whether sound goes out.
  */
-function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number; planId?: number; title: string; canSave: boolean; onDone: (note: string) => void }) {
+function Broadcast({ teamId, planId, title, canSave, full, onDone }: { teamId: number; planId?: number; title: string; canSave: boolean; /** Saving is off because the account's storage is full. */ full?: boolean; onDone: (note: string) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const [media, setMedia] = useState<MediaStream | null>(null);
   const [facing, setFacing] = useState<'environment' | 'user'>('environment');
@@ -362,7 +362,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
                     </>
                   )}
                 </div>
-                {!canSave && <span className="muted small">Saving to Dime Coach is not turned on for this team.</span>}
+                {!canSave && <span className="muted small">{full ? 'This account\u2019s storage is full, so this broadcast cannot be saved to Dime Coach. Free some space in the Filmroom or Resources first.' : 'Saving to Dime Coach is not turned on for this team.'}</span>}
               </div>
             )}
             <div className="gv-opt">
@@ -1103,6 +1103,7 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
           planId={planId}
           title={title}
           canSave={can.save}
+          full={can.full}
           onDone={(note) => {
             setCasting(false);
             setNotice(note);
@@ -1144,7 +1145,7 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
         <div className="card">
           <h2>Saved video{planId ? ' of this game' : ''}</h2>
           <p className="muted small">
-            For this team's coaches. It is also in the Filmroom, where it can be cut into clips. {can.save ? '' : 'Saving video is not turned on for this team: the administrator decides which teams may keep video.'}
+            For this team's coaches. It is also in the Filmroom, where it can be cut into clips. {can.save ? '' : can.full ? 'This account\u2019s storage is full: no more video can be saved until some space is freed.' : 'Saving video is not turned on for this team: the administrator decides which teams may keep video.'}
             {list.free_bytes !== undefined && Number.isFinite(list.free_bytes) && ` The site has ${mb(list.free_bytes)} of room left.`}
           </p>
           {saved.length === 0 ? (

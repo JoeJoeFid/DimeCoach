@@ -231,6 +231,9 @@ export interface SystemState {
 export interface StorageSpace {
   used_bytes: number;
   files: number;
+  /** Of what is used: uploaded pictures and videos, and saved game video. */
+  upload_bytes?: number;
+  video_bytes?: number;
   cap_bytes: number;
   left_bytes: number;
 }
@@ -263,6 +266,14 @@ export interface CommunityNewsItem {
   /** The message itself, or the name of what was shared. */
   text: string;
   unread: boolean;
+}
+/** Uploaded files, counted by where they are kept. */
+export interface UploadStorage {
+  /** Whether R2 is set up on this server. */
+  r2: boolean;
+  disk: { files: number; bytes: number };
+  both: { files: number; bytes: number };
+  bucket: { files: number; bytes: number };
 }
 /** Someone a message can be written to: a name and how they are known in the group, never an address. */
 export interface ToPerson {
@@ -874,7 +885,7 @@ export interface GameStream {
   game: { id: number; title: string; date: string } | null;
 }
 export interface StreamList {
-  can: { watch: boolean; broadcast: boolean; save: boolean; coach: boolean };
+  can: { watch: boolean; broadcast: boolean; save: boolean; coach: boolean; /** The account's storage is full: a broadcast can go out, and cannot be kept. */ full?: boolean };
   live: GameStream[];
   saved: GameStream[];
   free_bytes?: number;
@@ -1111,6 +1122,12 @@ export const api = {
   systemDeletion: (id: number) => req<AccountDeletion>('GET', `/system/users/${id}/deletion`),
   systemDeleteUser: (id: number, confirmEmail: string) => req<SystemState>('DELETE', `/system/users/${id}`, { confirm_email: confirmEmail }),
   systemUserActivity: (id: number) => req<UserActivity>('GET', `/system/users/${id}/activity`),
+  /** Where uploaded pictures and videos are kept: on this server's disk, in R2, or both while being moved. */
+  uploadStorage: () => req<UploadStorage>('GET', '/system/uploads'),
+  /** Copies a few of the files still only on disk into R2. Asked again until none are left. */
+  copyUploads: () => req<UploadStorage & { moved: number; failed: number }>('POST', '/system/uploads/copy', {}),
+  /** Takes the disk copy away from every file that is also in R2. */
+  clearDiskUploads: () => req<UploadStorage & { cleared: number; kept: number }>('POST', '/system/uploads/clear-disk', {}),
   systemSetDefaults: (b: { default_cap_mb: number }) => req<SystemState>('PUT', '/system/settings', b),
   systemUpdateUser: (id: number, b: { upload_cap_mb?: number | null; is_admin?: boolean; password?: string; must_change?: boolean }) => req<SystemState>('PUT', `/system/users/${id}`, b),
   storage: () => req<StorageSpace>('GET', '/storage'),

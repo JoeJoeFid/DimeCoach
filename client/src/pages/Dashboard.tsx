@@ -232,7 +232,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <PracticeTimeline plans={plans || []} tags={sportTags} onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))} />
+      {/* What is next and the schedule beside it, in a box of their own, as on the team's page for parents. */}
+      <section className="card fam-board" aria-label="What is next, and the schedule">
+        <PracticeTimeline plans={plans || []} tags={sportTags} onChanged={() => api.plansFull(teamId, 'practice').then(setPlans, (e) => setError((e as Error).message))} />
+      </section>
 
       {/* Under the schedule: what has been told to the team's families, with a box to tell them something new, and the things done most often beside it. */}
       <div className="dash-row">

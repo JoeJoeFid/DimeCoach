@@ -151,7 +151,7 @@ export default function Resources() {
             }}
             beside={
               space && (
-                <span className="space-pill" title="How much of your upload space is used by pictures and videos">
+                <span className="space-pill" title="How much of your storage is used: uploaded pictures and videos, and saved game video">
                   <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.800" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M7 18.500a4.500 4.500 0 0 1-.600-8.960 6 6 0 0 1 11.600 1.500A3.750 3.750 0 0 1 17.500 18.500ZM12 16.500v-5M9.800 13.500 12 11.300l2.200 2.200" />
                   </svg>

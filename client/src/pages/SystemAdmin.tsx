@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser, type UserActivity } from '../api';
+import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser, type UserActivity, type UploadStorage } from '../api';
 import { useApp } from '../App';
 import { Field, Modal, MoreMenu, NameFields } from '../components/bits';
 import { TopTabs } from '../components/TopTabs';
@@ -178,7 +178,7 @@ export default function SystemAdmin() {
     if (value === u.upload_cap_mb) return;
     run(
       () => api.systemUpdateUser(u.id, { upload_cap_mb: value }),
-      value === null ? `${u.name} now has the default upload space.` : value === 0 ? `Uploads are turned off for ${u.name}.` : `${u.name} can now upload up to ${fmtSpace(value * MB)}.`,
+      value === null ? `${u.name} now has the default storage.` : value === 0 ? `Uploads are turned off for ${u.name}.` : `${u.name} can now upload up to ${fmtSpace(value * MB)}.`,
     );
   };
   const saveDefault = () => {
@@ -186,7 +186,7 @@ export default function SystemAdmin() {
     const value = Number(defaultCap);
     setDefaultCap(null);
     if (defaultCap.trim() === '' || value === state.default_cap_mb) return;
-    run(() => api.systemSetDefaults({ default_cap_mb: value }), `The default upload space is now ${fmtSpace(value * MB)}.`);
+    run(() => api.systemSetDefaults({ default_cap_mb: value }), `The default storage is now ${fmtSpace(value * MB)}.`);
   };
   /** Plan import runs Claude on the computer hosting Dime Coach, so it is granted person by person. */
   const setPaid = (u: SystemUser, on: boolean) => run(() => api.adminUpdateUser(u.id, { paid: on }), on ? `${u.name} is marked as paid, and can coach.` : `${u.name} is no longer marked as paid.`);
@@ -380,7 +380,7 @@ export default function SystemAdmin() {
                   <input className="input" required minLength={10} value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })} autoComplete="off" />
                 </Field>
               )}
-              <Field label="Upload space (MB)">
+              <Field label="Storage (MB)">
                 <input
                   className="input"
                   type="number"
@@ -445,7 +445,7 @@ export default function SystemAdmin() {
                     <th>Last active</th>
                     <th className="num">Sign-ins</th>
                     <th className="num">Time in the app</th>
-                    <th>Upload space used</th>
+                    <th>Storage used</th>
                     <th>Cap (MB)</th>
                     <th />
                   </tr>
@@ -501,7 +501,7 @@ export default function SystemAdmin() {
                             max={state.max_cap_mb}
                             step={50}
                             placeholder={`${state.default_cap_mb}`}
-                            aria-label={`Upload space for ${u.name} in MB`}
+                            aria-label={`Storage for ${u.name} in MB`}
                             value={caps[u.id] ?? (u.upload_cap_mb === null ? '' : String(u.upload_cap_mb))}
                             onChange={(e) => setCaps({ ...caps, [u.id]: e.target.value })}
                             onBlur={() => saveCap(u)}
@@ -630,13 +630,15 @@ export default function SystemAdmin() {
           {tab === 'system' && (
             <>
           <h2 className="sys-section" id="storage">
-            Upload space
+            Storage
           </h2>
           <div className="card">
-            <h2>Default upload space</h2>
+            <h2>Default storage</h2>
             <p className="muted small">
-              Applies to everyone who has no cap of their own. It counts uploaded pictures and videos. Links take no space. Set it to 0 to turn
-              uploads off by default.
+              One cap for everything a coach's account keeps, across all its teams: uploaded pictures and videos, and saved game video. Clips
+              and cuts are marks on saved video and take no space of their own, and neither do links. It applies to every account with no cap of its
+              own. At the cap, uploads and new saved video are refused; a broadcast that began with room is still saved. Set it to 0 to turn
+              uploads and saving off by default.
             </p>
             <div className="sys-default">
               <label className="cap-edit">
@@ -646,12 +648,12 @@ export default function SystemAdmin() {
                   min={0}
                   max={state.max_cap_mb}
                   step={50}
-                  aria-label="Default upload space in MB"
+                  aria-label="Default storage in MB"
                   value={defaultCap ?? String(state.default_cap_mb)}
                   onChange={(e) => setDefaultCap(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && saveDefault()}
                 />
-                <span className="muted small">MB per person</span>
+                <span className="muted small">MB per coach account</span>
               </label>
               <button className="btn" disabled={defaultCap === null || defaultCap.trim() === '' || Number(defaultCap) === state.default_cap_mb} onClick={saveDefault}>
                 Save default
@@ -659,6 +661,8 @@ export default function SystemAdmin() {
             </div>
           </div>
 
+
+          <UploadStorageCard />
 
           <h2 className="sys-section" id="backup">
             Backup
@@ -871,5 +875,97 @@ function ActivityModal({ person, onClose }: { person: SystemUser; onClose: () =>
         </div>
       )}
     </Modal>
+  );
+}
+
+/**
+ * Where uploaded pictures and videos are kept, and moving the ones on this server's disk into R2:
+ * first a copy, so nothing is lost if the bucket is not right, then the disk copies taken away.
+ */
+function UploadStorageCard() {
+  const [st, setSt] = useState<UploadStorage | null>(null);
+  const [busy, setBusy] = useState('');
+  const [said, setSaid] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.uploadStorage().then(setSt, (e) => setError((e as Error).message));
+  }, []);
+  const copy = async () => {
+    setBusy('Copying…');
+    setError('');
+    setSaid('');
+    try {
+      let moved = 0;
+      let failed = 0;
+      // A few at a time, until none are left on disk alone or a round moves nothing.
+      for (;;) {
+        const r = await api.copyUploads();
+        moved += r.moved;
+        failed += r.failed;
+        setSt(r);
+        setBusy(`Copying… ${moved} done`);
+        if (r.disk.files === 0 || r.moved === 0) break;
+      }
+      setSaid(`${moved} ${moved === 1 ? 'file was' : 'files were'} copied to R2.${failed ? ` ${failed} could not be copied and ${failed === 1 ? 'stays' : 'stay'} on disk.` : ''}`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setBusy('');
+  };
+  const clear = async () => {
+    if (!(await confirmDialog({ title: 'Remove the copies on this server?', body: 'Each file is checked in R2 first, and only then taken off this server’s disk. After that, R2 holds the only copy.', confirmLabel: 'Remove disk copies', danger: true }))) return;
+    setBusy('Removing…');
+    setError('');
+    try {
+      const r = await api.clearDiskUploads();
+      setSt(r);
+      setSaid(`${r.cleared} disk ${r.cleared === 1 ? 'copy was' : 'copies were'} removed.${r.kept ? ` ${r.kept} ${r.kept === 1 ? 'was' : 'were'} kept, because R2 did not have all of ${r.kept === 1 ? 'it' : 'them'}.` : ''}`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setBusy('');
+  };
+  const line = (n: { files: number; bytes: number }) => `${n.files} ${n.files === 1 ? 'file' : 'files'} · ${fmtSpace(n.bytes)}`;
+  return (
+    <div className="card">
+      <h2>Where uploads are kept</h2>
+      {!st ? (
+        <p className="muted small">{error || 'Loading…'}</p>
+      ) : (
+        <>
+          <p className="muted small">
+            {st.r2
+              ? 'R2 is set up. New pictures and videos go straight into it. Files uploaded before that are still on this server until you copy them across.'
+              : 'R2 is not set up on this server, so uploaded pictures and videos are kept on its own disk.'}
+          </p>
+          <dl className="sys-storage">
+            <div>
+              <dt>In R2</dt>
+              <dd>{line(st.bucket)}</dd>
+            </div>
+            <div>
+              <dt>In R2, with a copy still on this server</dt>
+              <dd>{line(st.both)}</dd>
+            </div>
+            <div>
+              <dt>On this server only</dt>
+              <dd>{line(st.disk)}</dd>
+            </div>
+          </dl>
+          {error && <p className="error small">{error}</p>}
+          {said && <p className="notice small">{said}</p>}
+          {st.r2 && (
+            <div className="sys-default">
+              <button className="btn" disabled={!!busy || st.disk.files === 0} onClick={copy}>
+                {busy.startsWith('Copying') ? busy : 'Copy to R2'}
+              </button>
+              <button className="btn" disabled={!!busy || st.both.files === 0} onClick={clear}>
+                {busy.startsWith('Removing') ? busy : 'Remove disk copies'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

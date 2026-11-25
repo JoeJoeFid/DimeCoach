@@ -4,6 +4,7 @@
 // data hangs off a workspace, so once a request is tied to a user, the rest of the API scopes
 // every query by that user's workspace. Today each user has exactly one workspace of their own;
 // the memberships table is what will let staff share one later.
+import { dropUploadFiles } from './images.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -872,7 +873,7 @@ export function mountAuth(app) {
     const users = all('SELECT * FROM users ORDER BY created_at, id').map(systemUserOut);
     const ago = (ms) => new Date(Date.now() - ms).toISOString();
     return {
-      default_cap_mb: defaultCapMb(), max_cap_mb: MAX_CAP_MB, total_bytes: get('SELECT COALESCE(SUM(bytes), 0) AS n FROM images').n, users,
+      default_cap_mb: defaultCapMb(), max_cap_mb: MAX_CAP_MB, total_bytes: get('SELECT COALESCE(SUM(bytes), 0) AS n FROM images').n + get("SELECT COALESCE(SUM(bytes), 0) AS n FROM streams WHERE (status='ended' AND saved=1) OR status='uploading'").n, users,
       disk: diskOut(),
       // Parents, family and friends a coach has put on a team's list who have no account yet.
       family_waiting: all(
@@ -938,7 +939,7 @@ export function mountAuth(app) {
   app.put('/api/system/settings', systemOnly, (req, res) => {
     const cap = parseCapMb(req.body.default_cap_mb);
     if (cap === undefined || cap === null) return res.status(400).json({ error: 'Enter the default upload space in MB, 0 or more.' });
-    setSetting('default_upload_cap_mb', String(cap));
+    setSetting('default_storage_cap_mb', String(cap));
     res.json(systemOut());
   });
   app.put('/api/system/users/:id', systemOnly, (req, res) => {
@@ -1103,7 +1104,7 @@ export function mountAuth(app) {
       ))
         files.push(...wipeWorkspace(o.id));
     });
-    for (const f of files) fs.rm(path.join(path.dirname(dbPath), 'uploads', path.basename(f)), { force: true }, () => {});
+    dropUploadFiles(files);
     res.json(systemOut());
   });
 

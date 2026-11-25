@@ -30,6 +30,7 @@
 // A stream is thrown away when it ends, unless its team is allowed to keep video (set by the
 // system administrator, team by team) and the broadcaster asked to save it. A saved one is for
 // the team's coaches.
+import { fullMessage, spaceOf } from './quota.js';
 import { settingsOf } from './family.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -70,6 +71,8 @@ const addColumn = (table, column, ddl) => {
 addColumn('teams', 'save_streams', 'INTEGER DEFAULT 0');
 // What each person around a team may do with its live video. Coaches may always do both.
 addColumn('team_contacts', 'can_watch', 'INTEGER DEFAULT 1');
+// Whether there was room to keep a broadcast when it began. One begun with room is kept at its end whatever has filled up since.
+addColumn('streams', 'room', 'INTEGER DEFAULT 1');
 addColumn('team_contacts', 'can_broadcast', 'INTEGER DEFAULT 0');
 // Video kept in R2: the folder its pieces are under. Empty for video kept on this disk.
 addColumn('streams', 'store_key', 'TEXT');
@@ -234,10 +237,12 @@ export function videoRole(user, teamId) {
   const open = settingsOf(team).access;
   return { team, coach, watch: coach || mine.some((c) => c.can_watch && open[c.kind]?.live), broadcast: coach || mine.some((c) => c.can_broadcast || open[c.kind]?.broadcast), save: !!team.save_streams };
 }
-/** Ends a stream. Its pieces are kept only when asked, and only for a team that may keep video. */
+/** Whether the account a team belongs to has any room left in its storage. */
+const roomIn = (team) => spaceOf(team.owner_id).left_bytes > 0;
+/** Ends a stream. Its pieces are kept only when asked, only for a team that may keep video, and only when there was room for it when it began. */
 function end(s, keep) {
   const team = get('SELECT save_streams FROM teams WHERE id=?', s.team_id);
-  const saved = keep && !!team?.save_streams && s.segments > 0;
+  const saved = keep && !!team?.save_streams && s.segments > 0 && s.room !== 0;
   run("UPDATE streams SET status='ended', saved=?, ended_at=? WHERE id=?", saved ? 1 : 0, nowIso(), s.id);
   if (!saved) {
     removeFiles(s.id);
@@ -289,7 +294,8 @@ export function mountStreams(app) {
     if (!role) return res.status(404).json({ error: 'Not found' });
     sweep(role.team.id);
     res.json({
-      can: { watch: role.watch, broadcast: role.broadcast, save: role.save && role.broadcast, coach: role.coach },
+      // `full`: the account's storage has no room left, so a new broadcast can go out but cannot be kept.
+      can: { watch: role.watch, broadcast: role.broadcast, save: role.save && role.broadcast && roomIn(role.team), coach: role.coach, full: role.save && role.broadcast && !roomIn(role.team) },
       live: role.watch ? all("SELECT * FROM streams WHERE team_id=? AND status='live' ORDER BY id DESC", role.team.id).map(streamOut) : [],
       // Saved video is for the coaches.
       saved: role.coach ? all("SELECT * FROM streams WHERE team_id=? AND status='ended' AND saved=1 ORDER BY id DESC", role.team.id).map(streamOut) : [],
@@ -306,6 +312,9 @@ export function mountStreams(app) {
     if (upload && !role.coach) return res.status(403).json({ error: 'Only the coaches of a team can add video to its games.' });
     if (upload && !role.save) return res.status(403).json({ error: 'Saving video is not turned on for this team. The administrator decides which teams may keep video.' });
     if (upload && !(req.body.layout === 'joined' && String(req.body.mime).startsWith('video/mp4'))) return res.status(400).json({ error: 'That video cannot be brought in.' });
+    // With the account's storage full, nothing more is brought in. A broadcast still goes out, and is not kept.
+    const room = roomIn(role.team);
+    if (upload && !room) return res.status(413).json({ error: fullMessage(spaceOf(role.team.owner_id)) });
     const cfg = r2Config();
     if (!cfg && freeBytes() < KEEP_FREE_BYTES) return res.status(507).json({ error: 'The site is out of room for video right now. Tell the administrator.' });
     // One camera per person: starting again ends what they had going. The same for bringing a video in.
@@ -325,13 +334,13 @@ export function mountStreams(app) {
     // Who to tell: everyone unless the broadcaster said which groups, which may be none.
     const tell = Array.isArray(req.body.tell) ? TELL.filter((g) => req.body.tell.includes(g)) : TELL;
     const made = run(
-      'INSERT INTO streams (team_id, plan_id, user_id, title, transport, store_key, mime, layout, tell, status, started_at, last_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-      role.team.id, plan?.id ?? null, req.user.id, str(req.body.title, 120).trim() || (plan ? gameName(plan) : ''), cfg ? 'r2' : 'segments', prefix, mime, layout, upload ? '' : tell.join(','), upload ? 'uploading' : 'live', nowIso(), nowIso(),
+      'INSERT INTO streams (room, team_id, plan_id, user_id, title, transport, store_key, mime, layout, tell, status, started_at, last_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      room ? 1 : 0, role.team.id, plan?.id ?? null, req.user.id, str(req.body.title, 120).trim() || (plan ? gameName(plan) : ''), cfg ? 'r2' : 'segments', prefix, mime, layout, upload ? '' : tell.join(','), upload ? 'uploading' : 'live', nowIso(), nowIso(),
     );
     if (cfg) run('INSERT INTO stream_objects (prefix, ext, issued_at) VALUES (?,?,?)', prefix, extOf(mime), nowIso());
     else fs.mkdirSync(dirOf(made.lastInsertRowid), { recursive: true });
     // `send` is how the app gets its pieces out: to this server, or by links it asks for.
-    res.json({ stream: streamOut(get('SELECT * FROM streams WHERE id=?', made.lastInsertRowid)), can_save: role.save, send: cfg ? 'links' : 'server', max_piece_bytes: MAX_SEGMENT_BYTES });
+    res.json({ stream: streamOut(get('SELECT * FROM streams WHERE id=?', made.lastInsertRowid)), can_save: role.save && room, send: cfg ? 'links' : 'server', max_piece_bytes: MAX_SEGMENT_BYTES });
   });
   // Every saved video of the teams being worked on, for Resources. A coach's page, so it goes by the workspace.
   app.get('/api/streams/saved', (req, res) => {

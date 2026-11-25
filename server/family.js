@@ -12,6 +12,7 @@ import { sharedOpening, withoutOpening } from './calendar.js';
 import { drillView, planView, playView } from './communities.js';
 import { resourceList } from './resources.js';
 import { filmFor } from './film.js';
+import { sendUpload } from './images.js';
 import { coachesOfTeam, deliver, followersOfTeam } from './inbox.js';
 import { mention, mentionedIn } from './notices.js';
 import { publicBase } from './invites.js';
@@ -19,7 +20,6 @@ import { scoreOfPlan } from './games.js';
 import { liveNow } from './streams.js';
 import { livePlays } from './liveFeed.js';
 
-const uploadsDir = path.join(path.dirname(dbPath), 'uploads');
 const addColumn = (table, column, ddl) => {
   if (!all(`PRAGMA table_info(${table})`).some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 };
@@ -388,10 +388,10 @@ export function mountFamily(app) {
     if (!f) return;
     const fileId = Number(req.params.fileId);
     const shared = f.can.resources && sharedResources(f.team, f.settings).some((r) => r.file_id === fileId);
-    const file = shared && get('SELECT filename, mime FROM images WHERE id=? AND owner_id=?', fileId, f.team.owner_id);
-    const name = file && path.basename(file.filename);
-    if (!name || !fs.existsSync(path.join(uploadsDir, name))) return res.status(404).json({ error: 'Not found' });
-    res.sendFile(name, { root: uploadsDir, headers: { 'Content-Type': file.mime, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=3600' } });
+    const file = shared && get('SELECT filename, mime, store FROM images WHERE id=? AND owner_id=?', fileId, f.team.owner_id);
+    if (!file) return res.status(404).json({ error: 'Not found' });
+    // From the disk or from the bucket, wherever it is kept: the check above is what lets them have it.
+    sendUpload(req, res, file, 'private, max-age=3600');
   });
 }
 

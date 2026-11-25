@@ -117,7 +117,7 @@ export function TheFile({ resource: r }: { resource: Resource }) {
   const share = async () => {
     setBusy(true);
     try {
-      const blob = await (await fetch(fileUrl(r))).blob();
+      const blob = await (await fetch(`${fileUrl(r)}?through=1`)).blob();
       const ext = (blob.type.split('/')[1] || (r.kind === 'video' ? 'mp4' : 'jpg')).replace('quicktime', 'mov').replace('jpeg', 'jpg');
       const file = new File([blob], `${r.title.replace(/[^\w .-]+/g, '').trim() || r.kind}.${ext}`, { type: blob.type });
       if (sheet && navigator.canShare?.({ files: [file] })) await navigator.share({ title: r.title, files: [file] });
