@@ -243,17 +243,17 @@ export default function Dashboard() {
         <section className="card dash-quick" aria-label="Quick actions">
           <h2>Quick actions</h2>
           {/* Straight into a new one, not the list of them. */}
-          <Link className="btn" to="/practices?new=1">
+          <Link className="btn primary" to="/practices?new=1">
             <HeadIcon d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M12 12.500v5M9.500 15h5" />
             Add practice or game
           </Link>
           {can('manage') && (
-            <Link className="btn" to="/teams?tab=people">
+            <Link className="btn primary" to="/teams?tab=people">
               <HeadIcon d="M9 11.500a3.500 3.500 0 1 0 0-7 3.500 3.500 0 0 0 0 7ZM2.500 20c.600-3.300 3.200-5 6.500-5s5.900 1.700 6.500 5M19 8v6M16 11h6" />
               Invite coaches, parents, etc.
             </Link>
           )}
-          <Link className="btn" to="/messages">
+          <Link className="btn primary" to="/messages">
             <HeadIcon d="M4 6h16v12H4ZM4 7l8 6 8-6" />
             Message someone
           </Link>
