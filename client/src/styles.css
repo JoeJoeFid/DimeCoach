@@ -22929,3 +22929,27 @@ button.hw-title {
 .film-share-btn svg {
   flex: none;
 }
+
+/* ---------- Access & permissions: the rows in named groups ---------- */
+.tf-access tr.tf-group th {
+  padding: 18px 12px 8px;
+  border-bottom: 1px solid var(--line-strong);
+  background: none;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+.tf-access tbody:first-of-type tr.tf-group th {
+  padding-top: 10px;
+}
+.tf-access tr.tf-group th small {
+  display: inline;
+  margin-left: 10px;
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}

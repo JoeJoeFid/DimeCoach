@@ -241,7 +241,7 @@ function ShareForm({ teamId, what, film, links, onFilm, onClose }: { teamId: num
   }, [teamId]);
   const has = film.shares.filter((s) => s.kind === what.kind && s.ref_id === what.id);
   const onTeam = film.team_shares.some((s) => s.kind === what.kind && s.ref_id === what.id);
-  // Who the team's page shows the Filmroom to, as it is set under "Who sees what".
+  // Who the team's page shows the Filmroom to, as it is set in the team's access settings.
   const [sees, setSees] = useState<string[] | null>(null);
   useEffect(() => {
     api.teamFamily(teamId).then((f) => setSees((['parent', 'family', 'friend'] as const).filter((k) => f.access[k].film).map((k) => ({ parent: 'parents', family: 'family', friend: 'friends' })[k])), () => {});

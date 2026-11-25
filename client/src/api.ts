@@ -787,7 +787,7 @@ export interface TeamContact {
   joined: boolean;
 }
 export type FamilyKind = 'parent' | 'family' | 'friend';
-export type FamilySection = 'schedule' | 'games' | 'practices' | 'live' | 'pbp' | 'news' | 'board' | 'homework' | 'playbook' | 'drills' | 'resources' | 'film' | 'roster';
+export type FamilySection = 'schedule' | 'games' | 'practices' | 'live' | 'broadcast' | 'pbp' | 'news' | 'board' | 'homework' | 'playbook' | 'drills' | 'resources' | 'film' | 'roster';
 /** Something written on a team's page: an announcement from a coach, or a message on the board. */
 export interface TeamPost {
   id: number;

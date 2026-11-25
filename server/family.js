@@ -43,13 +43,13 @@ addColumn('team_posts', 'audience', "TEXT NOT NULL DEFAULT ''");
 export const FAMILY_KINDS = ['parent', 'family', 'friend'];
 // 'games' and 'practices' say how much of the schedule is told: when and where games are, and what a practice covers.
 // 'film' is the Filmroom: the game videos, clips and cuts a coach has put on the team's page.
-// 'live' is watching a game's live video; 'pbp' is following a game play by play while it is scored.
-export const FAMILY_SECTIONS = ['schedule', 'games', 'practices', 'live', 'pbp', 'news', 'board', 'homework', 'playbook', 'drills', 'resources', 'film', 'roster'];
+// 'live' is watching a game's live video, and 'broadcast' sending it; 'pbp' is following a game play by play while it is scored.
+export const FAMILY_SECTIONS = ['schedule', 'games', 'practices', 'live', 'broadcast', 'pbp', 'news', 'board', 'homework', 'playbook', 'drills', 'resources', 'film', 'roster'];
 // A parent sees most things, family a little, and a friend the schedule, until a coach says otherwise.
 const DEFAULTS = {
-  parent: { schedule: true, games: true, practices: false, live: true, pbp: true, news: true, board: true, homework: true, playbook: true, drills: true, resources: true, film: true, roster: true },
-  family: { schedule: true, games: true, practices: false, live: true, pbp: true, news: true, board: false, homework: false, playbook: false, drills: false, resources: true, film: false, roster: false },
-  friend: { schedule: true, games: true, practices: false, live: true, pbp: true, news: false, board: false, homework: false, playbook: false, drills: false, resources: false, film: false, roster: false },
+  parent: { schedule: true, games: true, practices: false, live: true, broadcast: false, pbp: true, news: true, board: true, homework: true, playbook: true, drills: true, resources: true, film: true, roster: true },
+  family: { schedule: true, games: true, practices: false, live: true, broadcast: false, pbp: true, news: true, board: false, homework: false, playbook: false, drills: false, resources: true, film: false, roster: false },
+  friend: { schedule: true, games: true, practices: false, live: true, broadcast: false, pbp: true, news: false, board: false, homework: false, playbook: false, drills: false, resources: false, film: false, roster: false },
 };
 const str = (v, max = 200) => String(v ?? '').slice(0, max);
 const parse = (s, fallback) => {
@@ -317,7 +317,8 @@ export function mountFamily(app) {
         const mine = all('SELECT can_watch, can_broadcast FROM team_contacts WHERE team_id=? AND user_id=?', team.id, req.user.id);
         // Live video is open to their kind of follower, and has not been turned off for them alone.
         const watch = !!can.live && mine.some((c) => c.can_watch);
-        return { watch, broadcast: mine.some((c) => c.can_broadcast), live: watch && liveNow(team.id) };
+        // Broadcasting is open to their kind of follower, or was given to them alone.
+        return { watch, broadcast: !!can.broadcast || mine.some((c) => c.can_broadcast), live: watch && liveNow(team.id) };
       })(),
       // A game being scored right now, for those who are told about games: the score and how far along it is.
       live_game: can.schedule && can.games && can.pbp ? liveBrief(liveGame(team)) : null,

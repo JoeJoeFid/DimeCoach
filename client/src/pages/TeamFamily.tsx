@@ -15,20 +15,50 @@ const KINDS: [FamilyKind, string][] = [
   ['family', 'Family'],
   ['friend', 'Friends'],
 ];
-const SECTIONS: [FamilySection, string, string][] = [
-  ['schedule', 'Schedule', 'Practices, games and events on their days.'],
-  ['games', 'Game details', 'The time, place and opponent of each game. Without this a game shows only as a game on its day. Needs the schedule.'],
-  ['practices', 'Practice summaries', 'What each practice covers: its parts and how long each runs. Never your coach notes. Needs the schedule.'],
-  ['live', 'Live video', 'Watching a game while it is broadcast. One person can be turned off, or allowed to broadcast, under "Live video".'],
-  ['pbp', 'Live play-by-play', 'Following a game as it is scored: the score and each play as it happens. Needs the schedule and game details.'],
-  ['news', 'Announcements', 'What the coaches post for the people around the team.'],
-  ['board', 'Message board', 'Reading it and writing on it.'],
-  ['homework', 'Homework', 'Sheets set for the whole team, and for their own players.'],
-  ['playbook', 'Playbook', 'Only the plays you share with the team from the Playbook.'],
-  ['drills', 'Drills', 'Only the drills you share with the team from Drills, without your coach notes.'],
-  ['resources', 'Resources', 'Only the links, pictures and videos you share with the team from Resources.'],
-  ['film', 'Filmroom', 'Only the game videos, clips and cuts you share with the team from the Filmroom. Video shared with one person by name always shows to them.'],
-  ['roster', 'Roster', 'Players’ names and numbers. Never their positions, parents’ details or your notes.'],
+/** What can be opened to each kind of person, in groups: the part, what it is called, and what opening it gives. */
+const ACCESS: { group: string; about: string; rows: [FamilySection, string, string][] }[] = [
+  {
+    group: 'Schedule & games',
+    about: 'What they know about when and where the team plays and practices.',
+    rows: [
+      ['schedule', 'Schedule', 'Practices, games and events on their days.'],
+      ['games', 'Game details', 'The time, place and opponent of each game. Without this a game shows only as a game on its day. Needs the schedule.'],
+      ['practices', 'Practice summaries', 'What each practice covers: its parts and how long each runs. Never your coach notes. Needs the schedule.'],
+      ['pbp', 'Live play-by-play', 'Following a game as it is scored: the score and each play as it happens. Needs the schedule and game details.'],
+    ],
+  },
+  {
+    group: 'Video',
+    about: 'Live games and saved film.',
+    rows: [
+      ['live', 'Watch live video', 'Watching a game while it is broadcast. One person can be turned off under "Live video".'],
+      ['broadcast', 'Broadcast live video', 'Sending a game’s live video from their own phone or tablet. One person can be allowed alone under "Live video".'],
+      ['film', 'Filmroom', 'Only the game videos, clips and cuts you share with the team from the Filmroom. Video shared with one person by name always shows to them.'],
+    ],
+  },
+  {
+    group: 'Communication',
+    about: 'Hearing from the coaches, and talking with the team.',
+    rows: [
+      ['news', 'Announcements', 'What the coaches post for the people around the team.'],
+      ['board', 'Message board', 'Reading it and writing on it.'],
+    ],
+  },
+  {
+    group: 'Library',
+    about: 'What you share with the team to read, watch and work on.',
+    rows: [
+      ['homework', 'Homework', 'Sheets set for the whole team, and for their own players.'],
+      ['playbook', 'Playbook', 'Only the plays you share with the team from the Playbook.'],
+      ['drills', 'Drills', 'Only the drills you share with the team from Drills, without your coach notes.'],
+      ['resources', 'Resources', 'Only the links, pictures and videos you share with the team from Resources.'],
+    ],
+  },
+  {
+    group: 'Team',
+    about: 'Who is on the team.',
+    rows: [['roster', 'Roster', 'Players’ names and numbers. Never their positions, parents’ details or your notes.']],
+  },
 ];
 const ROLE: Record<TeamPost['role'], string> = { coach: 'Coach', parent: 'Parent', family: 'Family', friend: 'Friend' };
 const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -130,7 +160,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
         value={view}
         onChange={setView}
         tabs={[
-          ['access', 'Who sees what'],
+          ['access', 'Access & permissions'],
           ['messages', 'Announcements & board', data.news.length + data.board.length],
           ['video', 'Live video'],
         ]}
@@ -143,7 +173,7 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
           <table className="table tf-access">
             <thead>
               <tr>
-                <th>Part of the page</th>
+                <th>What they can see and do</th>
                 {KINDS.map(([k, label]) => (
                   <th key={k} className="tf-col">
                     {label}
@@ -152,21 +182,29 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
                 ))}
               </tr>
             </thead>
-            <tbody>
-              {SECTIONS.map(([s, label, about]) => (
-                <tr key={s}>
-                  <td>
-                    <strong>{label}</strong>
-                    <span className="muted small">{about}</span>
-                  </td>
-                  {KINDS.map(([k, kindLabel]) => (
-                    <td key={k} className="tf-col">
-                      <input type="checkbox" aria-label={`${kindLabel} see the ${label.toLowerCase()}`} checked={data.access[k][s]} disabled={!canEdit} onChange={() => toggle(k, s)} />
-                    </td>
-                  ))}
+            {ACCESS.map((g) => (
+              <tbody key={g.group}>
+                <tr className="tf-group">
+                  <th colSpan={KINDS.length + 1} scope="colgroup">
+                    {g.group}
+                    <small className="muted">{g.about}</small>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
+                {g.rows.map(([s, label, about]) => (
+                  <tr key={s}>
+                    <td>
+                      <strong>{label}</strong>
+                      <span className="muted small">{about}</span>
+                    </td>
+                    {KINDS.map(([k, kindLabel]) => (
+                      <td key={k} className="tf-col">
+                        <input type="checkbox" aria-label={`${kindLabel}: ${label}`} checked={data.access[k][s]} disabled={!canEdit} onChange={() => toggle(k, s)} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            ))}
           </table>
           {!canEdit && <p className="muted small">You can see these settings, but changing them needs permission to change the roster.</p>}
         </div>
@@ -186,10 +224,10 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
             {show === 'news'
               ? anyone('news')
                 ? 'Only coaches write announcements. They show first on the team’s page for everyone who may see them.'
-                : 'Announcements are not open to anyone yet. Turn them on under "Who sees what".'
+                : 'Announcements are not open to anyone yet. Turn them on under "Access & permissions".'
               : anyone('board')
                 ? 'Everyone the board is open to can read it and write on it, and so can the team’s coaches.'
-                : 'The message board is not open to anyone yet. Turn it on under "Who sees what".'}
+                : 'The message board is not open to anyone yet. Turn it on under "Access & permissions".'}
           </p>
           <form className="fields stack tf-write" onSubmit={post}>
             {show === 'news' && <input className="input" maxLength={120} aria-label="Headline" placeholder="Headline (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />}

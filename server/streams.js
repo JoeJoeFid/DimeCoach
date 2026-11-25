@@ -229,9 +229,10 @@ export function videoRole(user, teamId) {
   const coach = coachesOfTeam(team).some((p) => p.id === user.id) || isSystemAdmin(user);
   const mine = all('SELECT kind, can_watch, can_broadcast FROM team_contacts WHERE team_id=? AND user_id=?', team.id, user.id);
   if (!coach && mine.length === 0) return null;
-  // Someone on the team's list watches when live video is open to their kind ("Who sees what") and has not been turned off for them alone.
+  // Someone on the team's list watches when live video is open to their kind (the team's access settings) and has not been turned off for them alone.
+  // They broadcast when that is open to their kind, or was given to them alone.
   const open = settingsOf(team).access;
-  return { team, coach, watch: coach || mine.some((c) => c.can_watch && open[c.kind]?.live), broadcast: coach || mine.some((c) => c.can_broadcast), save: !!team.save_streams };
+  return { team, coach, watch: coach || mine.some((c) => c.can_watch && open[c.kind]?.live), broadcast: coach || mine.some((c) => c.can_broadcast || open[c.kind]?.broadcast), save: !!team.save_streams };
 }
 /** Ends a stream. Its pieces are kept only when asked, and only for a team that may keep video. */
 function end(s, keep) {
