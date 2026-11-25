@@ -479,6 +479,16 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           </div>
         )}
         <span className="spacer" />
+        {/* When the team's calendar was last brought in, and the button that brings it in again: beside the choice of view. */}
+        {kind === 'practice' && hasCalendar && (
+          <span className="ps-sync" role="status" title="Games and practices from GameChanger or your team app. They are not updated on their own: press Re-sync to bring in changes.">
+            <span className="sync-dot" aria-hidden="true" />
+            <span className="muted small">Synced {fmtSynced(team!.calendar_synced_at)}</span>
+            <button className="btn small" onClick={sync} disabled={syncing}>
+              {syncing ? 'Updating…' : 'Re-sync'}
+            </button>
+          </span>
+        )}
         {kind === 'practice' && (
           <div className="seg" role="group" aria-label="View">
             <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => chooseView('list')}>
@@ -495,18 +505,6 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       {sharing && <ShareDialog kind="plan" itemId={sharing.id} title={sharing.title || (kind === 'homework' ? 'Homework' : 'Practice')} onClose={() => setSharing(null)} />}
       {fromCommunity && <CommunityPicker kind="plan" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plans/${id}`)} />}
 
-      {kind === 'practice' && hasCalendar && (
-        <div className="sync-status" role="status">
-          <span className="sync-dot" aria-hidden="true" />
-          <span>
-            <strong>Team calendar</strong> last updated {fmtSynced(team!.calendar_synced_at)}
-            <span className="muted"> · games and practices from GameChanger or your team app. It is not updated on its own.</span>
-          </span>
-          <button className="btn small" onClick={sync} disabled={syncing}>
-            {syncing ? 'Updating…' : 'Re-sync'}
-          </button>
-        </div>
-      )}
       </div>
       {/* The calendar offer, for a team with no calendar linked. It shrinks to one line once a practice has been built. */}
       {kind === 'practice' && !hasCalendar && plans !== null && (

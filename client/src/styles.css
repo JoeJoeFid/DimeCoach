@@ -21629,3 +21629,19 @@ button.film-clip-play {
     font-size: 1.6rem;
   }
 }
+
+/* When the team's calendar was last brought in, with the button to do it again, on the line with the choice of list or calendar. */
+.ps-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  white-space: nowrap;
+}
+/* On a phone it goes onto a line of its own, above the choice of view, and does not push that off the side. */
+@media (max-width: 640px) {
+  .ps-tabs {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
