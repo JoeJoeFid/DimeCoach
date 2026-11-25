@@ -351,6 +351,49 @@ export function openBroadcast(camera: () => MediaStream | null, type: string, qu
     cutAt: Date.now(),
     out: null as ReturnType<typeof outbox> | null,
     seconds: 4,
+    // The size of the camera's picture when the recorder now running began, and whether that was seen or only what the camera said.
+    size: '',
+    seen: false,
+  };
+  // An eye on the camera's picture, for the size its frames really are. That is not always what was asked for, a camera
+  // can take a second or more to change after it is asked, and a phone turned on its side changes it unasked. It matters
+  // because a recording is one size from start to end: frames of another size arriving in it cannot be played by anyone.
+  const eye = document.createElement('video');
+  eye.muted = true;
+  eye.playsInline = true;
+  eye.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+  document.body.appendChild(eye);
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const frameSize = () => {
+    const m = camera();
+    if (m && eye.srcObject !== m) {
+      eye.srcObject = m;
+      eye.play().catch(() => {});
+    }
+    if (eye.videoWidth) return `${eye.videoWidth}x${eye.videoHeight}`;
+    const s = m?.getVideoTracks()[0]?.getSettings();
+    return s?.width ? `${s.width}x${s.height}` : '';
+  };
+  /** Waits until the camera's picture has stopped changing size: a moment for it to begin, then the same size for a while. */
+  const steady = async () => {
+    await sleep(500);
+    let last = frameSize();
+    let since = Date.now();
+    const until = since + 4000;
+    while (Date.now() < until && Date.now() - since < 700) {
+      await sleep(100);
+      const now = frameSize();
+      if (now !== last) {
+        last = now;
+        since = Date.now();
+      }
+    }
+  };
+  let watch = 0;
+  const shut = () => {
+    window.clearInterval(watch);
+    eye.srcObject = null;
+    eye.remove();
   };
   // The copy for this device, when one is wanted: an opening part and the fragments after it, which together are one video file,
   // and another such run for each change of quality. It has everything, even pieces that were dropped on the way out because the connection was slow.
@@ -401,6 +444,8 @@ export function openBroadcast(camera: () => MediaStream | null, type: string, qu
     };
     rec.start(1000);
     st.rec = rec;
+    st.size = frameSize();
+    st.seen = !!eye.videoWidth;
     return true;
   };
   /** Stops the recorder and waits for the last of what it had to be read. */
@@ -410,7 +455,10 @@ export function openBroadcast(camera: () => MediaStream | null, type: string, qu
     await new Promise((r) => setTimeout(r, 100));
     await st.reading;
   };
-  if (!type.startsWith('video/mp4') || !record()) return Promise.resolve(separate);
+  if (!type.startsWith('video/mp4') || !record()) {
+    shut();
+    return Promise.resolve(separate);
+  }
   return new Promise<Opening>((resolve) => {
     const timer = window.setTimeout(() => known(false), PROBE_MS);
     known = (fit) => {
@@ -418,25 +466,59 @@ export function openBroadcast(camera: () => MediaStream | null, type: string, qu
       window.clearTimeout(timer);
       if (!fit) {
         halt();
+        shut();
         return resolve(separate);
       }
       // Changes of quality happen one at a time, and stopping waits for one that is under way.
       let changing: Promise<void> = Promise.resolve();
+      // Set while the recorder is being changed on purpose, or the broadcast is stopping: the size is not watched then.
+      let hands = false;
+      let restarted = 0;
+      /**
+       * The picture changed size under a running recorder: the camera was slow to change, or the device was turned.
+       * The recorder is started again, so the new size has an opening part of its own. What the old one had not yet
+       * sent is let go, since the end of it is frames nobody can play.
+       */
+      const watchSize = () => {
+        const now = frameSize();
+        if (hands || !now || st.rec?.state !== 'recording') return;
+        // Only what the camera said was known when it began: what is seen now is taken as its size.
+        if (!st.seen) {
+          st.size = now;
+          st.seen = !!eye.videoWidth;
+          return;
+        }
+        if (now === st.size || Date.now() - restarted < 5000) return;
+        hands = true;
+        restarted = Date.now();
+        changing = changing
+          .then(async () => {
+            await halt();
+            st.parts = [];
+            await steady();
+            record();
+          })
+          .finally(() => (hands = false));
+      };
       resolve({
         layout: 'joined',
-        cancel: () => void halt(),
+        cancel: () => (shut(), void halt()),
         begin: (stream, how, onSignal, keep) => {
           if (keep) kept = [[st.first!, ...st.parts.map((p) => new Blob([p as BlobPart]))]];
           st.seconds = stream.segment_seconds;
           st.cutAt = Date.now();
           st.out = outbox(stream, how, type, onSignal, () => void halt());
           st.out.init(st.first!);
+          watch = window.setInterval(watchSize, 250);
           return {
             // It has been recording since it was opened.
             start: () => {},
             stop: async (wait = true) => {
+              hands = true;
+              window.clearInterval(watch);
               await changing;
               await halt();
+              shut();
               // What the recorder had left goes as the last piece.
               if (wait) flush();
               await st.out!.drain(wait);
@@ -445,13 +527,18 @@ export function openBroadcast(camera: () => MediaStream | null, type: string, qu
               (changing = changing.then(async () => {
                 if (q === st.quality) return;
                 st.quality = q;
-                // The recorder is stopped, what it had goes out as a piece, the camera is resized, and a new recorder carries on.
-                await halt();
-                flush();
-                await resize(camera(), q);
-                // The camera takes a moment to hand over pictures at its new size, and a recorder keeps the size of the first one it sees.
-                await new Promise((r) => setTimeout(r, 500));
-                record();
+                hands = true;
+                try {
+                  // The recorder is stopped, what it had goes out as a piece, the camera is resized, and a new recorder carries on.
+                  await halt();
+                  flush();
+                  await resize(camera(), q);
+                  // The new recorder waits until pictures at the new size are really coming: one begun on the old size is ruined when they do.
+                  await steady();
+                  record();
+                } finally {
+                  hands = false;
+                }
               })),
             recording: () => (kept ?? []).filter((run) => run.length > 1).map((run) => new Blob(run, { type: mp4 })),
           };

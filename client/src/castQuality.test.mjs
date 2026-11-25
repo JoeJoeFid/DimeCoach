@@ -33,15 +33,15 @@ test('far behind goes straight to the lightest, and a stalled piece does not wai
   assert.equal(autoStep(autoStart('high', 0), { behind: 0, stalled: true }, 1000).at, 'medium');
 });
 
-test('a connection with room to spare is stepped up, one step at a time', () => {
-  let [a, t] = run(autoStart('sd', 0), good('medium', 4));
-  assert.equal(a.at, 'sd', 'not before it has been steady a while');
+test('a connection with room to spare goes up in one change, to what it can carry, and no further than Auto goes', () => {
+  let [a, t] = run(autoStart('low', 0), good('medium', 4));
+  assert.equal(a.at, 'low', 'not before it has been steady a while');
   [a, t] = run(a, good('medium', 1), t);
-  assert.equal(a.at, 'medium');
-  [a, t] = run(a, good('medium', 6), t);
-  assert.equal(a.at, 'medium', 'fast enough for medium is not fast enough for high');
-  [a] = run(a, good('high', 5), t);
-  assert.equal(a.at, 'high');
+  assert.equal(a.at, 'medium', 'straight there, not by way of 480p');
+  [a] = run(a, good('high', 12), t);
+  assert.equal(a.at, 'medium', 'High is for choosing by hand');
+  [a] = run(autoStart('lowest', 0), good('sd', 5));
+  assert.equal(a.at, 'sd', 'only as far as the pieces have been going fast enough for');
 });
 
 test('one slow piece, or anything waiting, starts the count again', () => {

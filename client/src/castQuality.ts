@@ -18,6 +18,8 @@ export const QUALITIES: Record<Quality, { label: string; says: string; width: nu
 };
 /** From the lightest to the sharpest: every step Auto can take. */
 export const RUNGS: Quality[] = ['lowest', 'low', 'sd', 'medium', 'high'];
+/** As sharp as Auto goes. Sharper than this is a lot of data, and many cameras give a jerky picture at it: it is there to choose by hand. */
+export const AUTO_TOP: Quality = 'medium';
 /** The ones offered to choose by hand. The steps in between are Auto's, so the choice stays short. */
 export const PICKS: Quality[] = ['low', 'medium', 'high'];
 /** What a quality sends each second, in bits. */
@@ -61,9 +63,10 @@ export const autoStart = (at: Quality, now: number): Auto => ({ at, changed: now
 
 /**
  * The quality to carry on at, given what the sender just said. Down when pieces are piling up or
- * one stalled: one step, or straight to the lightest when far behind. Up one step when nothing
- * has been waiting for a while and the pieces have been going out at twice what the sharper
- * picture needs. A step up that has to be undone is left alone for longer each time.
+ * one stalled: one step, or straight to the lightest when far behind. Up when nothing has been
+ * waiting for a while: in one go to the sharpest picture the pieces have been going out twice
+ * fast enough for, since every change is a break in the video and two are worse than one. A step
+ * up that has to be undone is left alone for longer each time.
  */
 export function autoStep(a: Auto, said: Heard, now: number): Auto {
   const i = RUNGS.indexOf(a.at);
@@ -79,9 +82,13 @@ export function autoStep(a: Auto, said: Heard, now: number): Auto {
     }
     return next;
   }
-  const up = RUNGS[i + 1];
-  if (up && said.behind <= 1 && !said.stalled && now - a.changed >= STEADY_MS && rates.length >= STEADY_PIECES && Math.min(...rates) >= HEADROOM * bitsOf(up) && (a.barred[up] ?? 0) <= now)
-    return { ...a, at: up, changed: now, rose: now, rates: [] };
+  if (said.behind <= 1 && !said.stalled && now - a.changed >= STEADY_MS && rates.length >= STEADY_PIECES) {
+    const slowest = Math.min(...rates);
+    for (let j = RUNGS.indexOf(AUTO_TOP); j > i; j--) {
+      const up = RUNGS[j];
+      if (slowest >= HEADROOM * bitsOf(up) && (a.barred[up] ?? 0) <= now) return { ...a, at: up, changed: now, rose: now, rates: [] };
+    }
+  }
   // Anything waiting means the pieces are not going as they are made: the count of good ones starts again.
   return { ...a, rates: said.behind > 1 || said.stalled ? [] : rates };
 }

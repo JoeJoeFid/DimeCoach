@@ -409,7 +409,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
                 ))}
               </div>
               <span className="muted small">
-                {auto ? `Starts at Low, then moves up or down with the connection.${toDevice ? ' The copy on this device comes out as one file for each change.' : ''}` : `${QUALITIES[quality].says} You can change this while you are live.`}
+                {auto ? `Starts at Low, then moves up or down with the connection, as far as Medium.${toDevice ? ' The copy on this device comes out as one file for each change.' : ''}` : `${QUALITIES[quality].says} You can change this while you are live.`}
               </span>
             </div>
             <div className="gv-opt">
