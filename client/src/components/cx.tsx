@@ -258,6 +258,34 @@ export function LayoutToggle({ compact, onChange }: { compact: boolean; onChange
   );
 }
 /**
+ * A short list of choices for the box down the left of a list page, one above the other: "All", then
+ * each choice with how many it holds. Pressing the chosen one again goes back to all. Nothing is
+ * drawn when there are no choices.
+ */
+export function SideChoices<T extends string | number>({ title, all, allLabel = 'All', total, items, value, onChange }: { title: string; /** What `value` is when everything shows. */ all: T; allLabel?: string; total: number; items: { id: T; label: string; count: number; color?: string }[]; value: T; onChange: (id: T) => void }) {
+  if (!items.length) return null;
+  return (
+    <section>
+      <h2>{title}</h2>
+      <div className="ps-side-filter" role="group" aria-label={title}>
+        <button type="button" className={value === all ? 'on' : ''} aria-pressed={value === all} onClick={() => onChange(all)}>
+          <span>{allLabel}</span>
+          <span className="ps-side-count">{total}</span>
+        </button>
+        {items.map((c) => (
+          <button key={String(c.id)} type="button" className={value === c.id ? 'on' : ''} aria-pressed={value === c.id} onClick={() => onChange(value === c.id ? all : c.id)}>
+            <span>
+              {c.color && <span className="dot" style={{ background: c.color }} />}
+              {c.label}
+            </span>
+            <span className="ps-side-count">{c.count}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+/**
  * The row of categories under a list's filters: "All", then each category with how many it holds.
  * Pressing the chosen one again goes back to all. Nothing is drawn when there are no categories.
  */

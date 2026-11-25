@@ -532,7 +532,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
 
       </div>
       <div className={kind === 'practice' ? 'ps-layout' : ''}>
-      {/* Down the right: how the schedule is seen, which kinds of thing are in it, and the team calendar it is brought in from. */}
+      {/* Down the left: how the schedule is seen, which kinds of thing are in it, and the team calendar it is brought in from. */}
       {kind === 'practice' && (
         <aside className="card ps-side" aria-label="View and filters">
           <section>
@@ -623,7 +623,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       ) : weeks.length === 0 ? (
         <div className="empty">
           <h2>Nothing of that kind yet</h2>
-          <p>Choose "All" on the right to see everything.</p>
+          <p>Choose "All" on the left to see everything.</p>
         </div>
       ) : (
         weeks.map((w, n) => {

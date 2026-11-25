@@ -11,7 +11,7 @@ import { playBuilderSupports } from '../util';
 import { sportKind } from '../sports';
 import PlayIntro from '../components/PlayIntro';
 import { ShareIcon } from '../components/bits';
-import { CategoryChips, LayoutToggle, useCompact } from '../components/cx';
+import { LayoutToggle, useCompact, SideChoices } from '../components/cx';
 import { ShareItemDialog, SharedWithLine, useShareSummary } from '../components/ShareItem';
 
 const resourceLabel = (n: number) => (n > 0 ? `${n} resource${n === 1 ? '' : 's'}` : '');
@@ -166,20 +166,21 @@ export default function Playbook() {
           </button>
         </div>
       ) : (
-        <>
-          <div className="playbook-filters">
-            <input className="input grow" placeholder="Search plays" value={q} onChange={(e) => setQ(e.target.value)} />
-            <select className="input" aria-label="Filter by tag" value={label} onChange={(e) => setLabel(e.target.value)}>
-              <option value="">All tags</option>
-              {labels.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
-            <LayoutToggle compact={compact} onChange={setCompact} />
-          </div>
-          <CategoryChips all="" total={plays.length} value={category} onChange={setCategory} items={categories.map((c) => ({ id: c, label: c, count: plays.filter((p) => p.category === c).length }))} />
+        <div className="ps-layout">
+          {/* Down the left: the search, how the plays are laid out, and the categories and tags that narrow them. */}
+          <aside className="card ps-side" aria-label="Search and filters">
+            <section>
+              <h2>Search</h2>
+              <input className="input" type="search" placeholder="Search plays" aria-label="Search plays" value={q} onChange={(e) => setQ(e.target.value)} />
+            </section>
+            <section>
+              <h2>Layout</h2>
+              <LayoutToggle compact={compact} onChange={setCompact} />
+            </section>
+            <SideChoices title="Category" all="" total={plays.length} value={category} onChange={setCategory} items={categories.map((c) => ({ id: c, label: c, count: plays.filter((p) => p.category === c).length }))} />
+            <SideChoices title="Tags" all="" allLabel="All tags" total={plays.length} value={label} onChange={setLabel} items={labels.map((l) => ({ id: l, label: l, count: plays.filter((p) => p.labels.includes(l)).length }))} />
+          </aside>
+          <div className="ps-main">
           {shown.length === 0 ? (
             <p className="muted">No plays match.</p>
           ) : (
@@ -220,7 +221,8 @@ export default function Playbook() {
               ))}
             </div>
           )}
-        </>
+          </div>
+        </div>
       )}
     </div>
   );

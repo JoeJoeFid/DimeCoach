@@ -22411,21 +22411,6 @@ button.film-clip-play {
   opacity: 0.75;
 }
 
-/* Schedule: the view and filter column stands on the right of the list. */
-@media (min-width: 901px) {
-  .ps-layout {
-    grid-template-columns: minmax(0, 1fr) 210px;
-  }
-  .ps-layout > .ps-side {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .ps-layout > .ps-main {
-    grid-column: 1;
-    grid-row: 1;
-  }
-}
-
 /* A resource card no longer cuts off what hangs out of it, so the "..." list can open over the cards below. The picture keeps the card's rounded corners itself. */
 .res-card {
   overflow: visible;
@@ -22441,4 +22426,38 @@ button.film-clip-play {
 .res-card:has(.more-btn[aria-expanded='true']) {
   position: relative;
   z-index: 5;
+}
+
+/* ---------- The box down the left of a list page: search, layout and filters (Schedule, Playbook, Resources) ---------- */
+.ps-layout {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+.ps-side {
+  max-height: calc(100vh - var(--ps-sticky-h, 0px) - 28px);
+  overflow-y: auto;
+}
+.ps-side .input {
+  width: 100%;
+}
+.ps-side-filter button > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ps-side-filter button {
+  height: auto;
+  padding: 7px 10px;
+}
+@media (max-width: 900px) {
+  .ps-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ps-side {
+    max-height: none;
+  }
+  .ps-side section {
+    flex: 1 1 200px;
+  }
 }

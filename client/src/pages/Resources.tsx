@@ -9,7 +9,7 @@ import { prepareImage } from '../components/ItemImages';
 import { normalizeUrl } from '../components/ItemMedia';
 import { ResourceThumb, fileUrl, searchText } from '../components/ResourcePicker';
 import { Modal, MoreMenu, PlayIcon, ShareIcon } from '../components/bits';
-import { CategoryChips, LayoutToggle } from '../components/cx';
+import { LayoutToggle, SideChoices } from '../components/cx';
 import { ShareItemDialog, SharedWithBox, SharedWithLine, useShareSummary } from '../components/ShareItem';
 import { confirmDialog } from '../components/dialogs';
 import { deleteLater, usePendingDeletes } from '../components/toasts';
@@ -200,28 +200,31 @@ export default function Resources() {
         </form>
       )}
 
-      <div className="playbook-filters">
-        <input className="input grow" placeholder="Search by name, address, or the drill, play or practice it is on" value={q} onChange={(e) => setQ(e.target.value)} />
-        <div className="seg" role="group" aria-label="Kind of resource">
-          {FILTERS.map((f) => (
-            <button key={f.id} className={filter === f.id ? 'on' : ''} aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
-              {f.label} <span className="chip-num">{counts[f.id]}</span>
-            </button>
-          ))}
-        </div>
-        <LayoutToggle compact={compact} onChange={chooseCompact} />
-      </div>
-      <CategoryChips
-        all={0}
-        total={inKind.length}
-        value={tagId}
-        onChange={setTagId}
-        items={[
-          ...sportTags.map((t) => ({ id: t.id, label: t.name, color: t.color, count: inKind.filter((r) => r.tag_ids.includes(t.id)).length })),
-          ...(sportTags.length ? [{ id: -1, label: 'No category', count: inKind.filter((r) => !r.tag_ids.some((id) => sportTagIds.has(id))).length }] : []),
-        ]}
-      />
-
+      <div className="ps-layout">
+        {/* Down the left: the search, how the resources are laid out, and the kinds and categories that narrow them. */}
+        <aside className="card ps-side" aria-label="Search and filters">
+          <section>
+            <h2>Search</h2>
+            <input className="input" type="search" placeholder="Search resources" aria-label="Search by name, address, or the drill, play or practice it is on" value={q} onChange={(e) => setQ(e.target.value)} />
+          </section>
+          <section>
+            <h2>Layout</h2>
+            <LayoutToggle compact={compact} onChange={chooseCompact} />
+          </section>
+          <SideChoices title="Kind" all="all" total={counts.all} value={filter} onChange={setFilter} items={FILTERS.filter((f) => f.id !== 'all').map((f) => ({ id: f.id, label: f.label, count: counts[f.id] }))} />
+          <SideChoices
+            title="Category"
+            all={0}
+            total={inKind.length}
+            value={tagId}
+            onChange={setTagId}
+            items={[
+              ...sportTags.map((t) => ({ id: t.id, label: t.name, color: t.color, count: inKind.filter((r) => r.tag_ids.includes(t.id)).length })),
+              ...(sportTags.length ? [{ id: -1, label: 'No category', count: inKind.filter((r) => !r.tag_ids.some((id) => sportTagIds.has(id))).length }] : []),
+            ]}
+          />
+        </aside>
+        <div className="ps-main">
       {resources === null ? (
         <p className="muted">Loading…</p>
       ) : resources.length === 0 ? (
@@ -241,6 +244,8 @@ export default function Resources() {
           ))}
         </div>
       )}
+        </div>
+      </div>
 
       {tagged && (
         <Modal title={`Categories for "${tagged.title}"`} onClose={() => setTagging('')}>
