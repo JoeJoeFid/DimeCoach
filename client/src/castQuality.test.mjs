@@ -18,12 +18,12 @@ test('pieces piling up bring the quality down a step, once it has settled', () =
   a = autoStep(a, { behind: 3 }, 4000);
   assert.equal(a.at, 'medium');
   a = autoStep(a, { behind: 4 }, 8000);
-  assert.equal(a.at, 'low');
+  assert.equal(a.at, 'sd');
   // What is waiting is still the old size: nothing more is done straight away.
   a = autoStep(a, { behind: 4 }, 12000);
-  assert.equal(a.at, 'low');
+  assert.equal(a.at, 'sd');
   a = autoStep(a, { behind: 4 }, 16000);
-  assert.equal(a.at, 'lowest');
+  assert.equal(a.at, 'low');
   a = autoStep(a, { behind: 8 }, 40000);
   assert.equal(a.at, 'lowest');
 });
@@ -34,8 +34,8 @@ test('far behind goes straight to the lightest, and a stalled piece does not wai
 });
 
 test('a connection with room to spare is stepped up, one step at a time', () => {
-  let [a, t] = run(autoStart('low', 0), good('medium', 4));
-  assert.equal(a.at, 'low', 'not before it has been steady a while');
+  let [a, t] = run(autoStart('sd', 0), good('medium', 4));
+  assert.equal(a.at, 'sd', 'not before it has been steady a while');
   [a, t] = run(a, good('medium', 1), t);
   assert.equal(a.at, 'medium');
   [a, t] = run(a, good('medium', 6), t);
@@ -45,25 +45,25 @@ test('a connection with room to spare is stepped up, one step at a time', () => 
 });
 
 test('one slow piece, or anything waiting, starts the count again', () => {
-  let [a, t] = run(autoStart('low', 0), [...good('medium', 4), { behind: 0, rate: bitsOf('low') }, ...good('medium', 3)]);
-  assert.equal(a.at, 'low');
+  let [a, t] = run(autoStart('sd', 0), [...good('medium', 4), { behind: 0, rate: bitsOf('sd') }, ...good('medium', 3)]);
+  assert.equal(a.at, 'sd');
   [a, t] = run(a, [{ behind: 2 }, ...good('medium', 3)], t);
-  assert.equal(a.at, 'low');
+  assert.equal(a.at, 'sd');
   [a] = run(a, good('medium', 1), t);
   assert.equal(a.at, 'medium');
 });
 
 test('a step up that has to be undone is left alone for a while, longer each time', () => {
-  let [a, t] = run(autoStart('low', 0), good('medium', 5));
+  let [a, t] = run(autoStart('sd', 0), good('medium', 5));
   assert.equal(a.at, 'medium');
   [a, t] = run(a, [{ behind: 3 }, { behind: 3 }], t);
-  assert.equal(a.at, 'low');
+  assert.equal(a.at, 'sd');
   [a, t] = run(a, good('medium', 20), t);
-  assert.equal(a.at, 'low', 'still left alone 80 seconds on');
+  assert.equal(a.at, 'sd', 'still left alone 80 seconds on');
   [a, t] = run(a, good('medium', 12), t);
   assert.equal(a.at, 'medium', 'tried again after two minutes');
   [a, t] = run(a, [{ behind: 3 }, { behind: 3 }], t);
-  assert.equal(a.at, 'low');
+  assert.equal(a.at, 'sd');
   [a] = run(a, good('medium', 45), t);
-  assert.equal(a.at, 'low', 'four minutes this time');
+  assert.equal(a.at, 'sd', 'four minutes this time');
 });

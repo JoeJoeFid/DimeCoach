@@ -6,7 +6,7 @@
 // server/streams.js.
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
-import { QUALITIES, RUNGS, Stopped, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
+import { PICKS, QUALITIES, RUNGS, Stopped, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
 import { Modal } from './bits';
 import { confirmDialog } from './dialogs';
 
@@ -39,7 +39,7 @@ function lastSetup(): { keep: Keep; sound: boolean; tell: string[]; quality: Qua
   try {
     const v = JSON.parse(localStorage.getItem('dime.broadcast') || 'null');
     if (!v || !['none', 'device', 'site', 'both'].includes(v.keep)) return null;
-    return { keep: v.keep, sound: v.sound !== false, tell: Array.isArray(v.tell) ? TELL.map((g) => g.key).filter((k) => v.tell.includes(k)) : TELL.map((g) => g.key), quality: v.quality in QUALITIES ? v.quality : 'low', auto: v.auto !== false };
+    return { keep: v.keep, sound: v.sound !== false, tell: Array.isArray(v.tell) ? TELL.map((g) => g.key).filter((k) => v.tell.includes(k)) : TELL.map((g) => g.key), quality: PICKS.includes(v.quality) ? v.quality : 'low', auto: v.auto !== false };
   } catch {
     return null;
   }
@@ -76,7 +76,6 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
   const [sound, setSound] = useState(() => lastSetup()?.sound ?? true);
   // Who is told it has begun: everyone, unless the broadcaster opens the list and picks groups. None is nobody.
   const [tell, setTell] = useState<string[]>(() => lastSetup()?.tell ?? TELL.map((g) => g.key));
-  const [choosing, setChoosing] = useState(false);
   // How sharp the picture is. It can be changed while live, when the connection turns out better or worse than hoped.
   // Left on Auto, it starts at Low and moves with the connection: down when pieces pile up, back up when there is room to spare.
   const [auto, setAuto] = useState(() => lastSetup()?.auto ?? true);
@@ -317,7 +316,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
               <button type="button" className={auto ? 'on' : ''} aria-pressed={auto} disabled={ending} title="Moves with the connection: down when it is slow, up when there is room to spare" onClick={() => setAuto(true)}>
                 {auto ? `Auto · ${QUALITIES[quality].label}` : 'Auto'}
               </button>
-              {RUNGS.map((q) => (
+              {PICKS.map((q) => (
                 <button key={q} type="button" className={!auto && quality === q ? 'on' : ''} aria-pressed={!auto && quality === q} disabled={ending} title={QUALITIES[q].says} onClick={() => pickQuality(q)}>
                   {QUALITIES[q].label}
                 </button>
@@ -381,13 +380,11 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
                   ? 'Everyone who may watch gets a message and a notification.'
                   : tell.length === 0
                     ? 'Nobody is told. It still shows as live in the app.'
-                    : `Only ${TELL.filter((g) => tell.includes(g.key)).map((g) => g.label.toLowerCase()).join(', ')}.`}{' '}
-                <button type="button" className="link small" aria-expanded={choosing} onClick={() => setChoosing(!choosing)}>
-                  {choosing ? 'Hide' : 'Choose who'}
-                </button>
+                    : `Only ${TELL.filter((g) => tell.includes(g.key)).map((g) => g.label.toLowerCase()).join(', ')}.`}
               </span>
-              {choosing && (
-                <div className="gv-tell">
+              {/* Who is told, there to press whenever telling is on: the ones in green are told. */}
+              {tell.length > 0 && (
+                <div className="gv-tell" role="group" aria-label="Who is told">
                   {TELL.map((g) => {
                     const on = tell.includes(g.key);
                     return (
@@ -405,7 +402,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
                 <button type="button" className={auto ? 'on' : ''} aria-pressed={auto} onClick={() => (pickQuality('low', false), setAuto(true))}>
                   Auto
                 </button>
-                {RUNGS.map((q) => (
+                {PICKS.map((q) => (
                   <button key={q} type="button" className={!auto && quality === q ? 'on' : ''} aria-pressed={!auto && quality === q} onClick={() => pickQuality(q)}>
                     {QUALITIES[q].label}
                   </button>

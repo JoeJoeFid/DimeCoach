@@ -32,7 +32,7 @@ export interface Signal {
   /** Set when the broadcast cannot go on: it was ended elsewhere, or has run as long as it may. */
   error?: string;
 }
-export { QUALITIES, RUNGS, autoStart, autoStep, type Auto, type Quality } from './castQuality';
+export { PICKS, QUALITIES, RUNGS, autoStart, autoStep, type Auto, type Quality } from './castQuality';
 /** What to ask a camera for at a quality. A camera that cannot do it gives the nearest it can. */
 export const cameraSize = (q: Quality) => ({ width: { ideal: QUALITIES[q].width }, height: { ideal: QUALITIES[q].height } });
 const resize = (m: MediaStream | null, q: Quality) => m?.getVideoTracks()[0]?.applyConstraints(cameraSize(q)).catch(() => {}) ?? Promise.resolve();

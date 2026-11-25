@@ -7,15 +7,19 @@
  * sizes are ones cameras take pictures at: a recording comes out at the camera's own size, so a
  * size in between (540p, say) would be recorded at the next one up whatever was asked for.
  */
-export type Quality = 'lowest' | 'low' | 'medium' | 'high';
+export type Quality = 'lowest' | 'low' | 'sd' | 'medium' | 'high';
 export const QUALITIES: Record<Quality, { label: string; says: string; width: number; height: number; video: number; audio: number }> = {
   lowest: { label: 'Lowest', says: '360p, lighter still. For a poor connection.', width: 640, height: 360, video: 350_000, audio: 32_000 },
   low: { label: 'Low', says: '360p. For a weak connection.', width: 640, height: 360, video: 700_000, audio: 48_000 },
+  // Between Low and Medium, which are a long way apart. A camera with no wide picture this size gives the nearest it has.
+  sd: { label: '480p', says: '480p. Between Low and Medium.', width: 854, height: 480, video: 1_100_000, audio: 64_000 },
   medium: { label: 'Medium', says: '720p. A good balance.', width: 1280, height: 720, video: 1_800_000, audio: 64_000 },
   high: { label: 'High', says: '1080p. Needs a strong connection.', width: 1920, height: 1080, video: 4_000_000, audio: 64_000 },
 };
-/** From the lightest to the sharpest. */
-export const RUNGS: Quality[] = ['lowest', 'low', 'medium', 'high'];
+/** From the lightest to the sharpest: every step Auto can take. */
+export const RUNGS: Quality[] = ['lowest', 'low', 'sd', 'medium', 'high'];
+/** The ones offered to choose by hand. The steps in between are Auto's, so the choice stays short. */
+export const PICKS: Quality[] = ['low', 'medium', 'high'];
 /** What a quality sends each second, in bits. */
 export const bitsOf = (q: Quality) => QUALITIES[q].video + QUALITIES[q].audio;
 

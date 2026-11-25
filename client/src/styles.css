@@ -20369,6 +20369,12 @@ img.res-thumb.gv-poster {
     padding-left: 0;
   }
 }
+/* The groups that are told are green. */
+.gv-tell .chip.toggle.on {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
 
 /* ---------- Game video: filling the screen ---------- */
 .gv-full {
