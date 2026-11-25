@@ -16349,8 +16349,9 @@ button.fam-day.next {
 }
 
 /* A follower's pages in the same frame a coach has. */
+/* The same width a coach's pages have, so the portal and the dashboard line up. */
 .fam-frame .main > .page {
-  max-width: 1360px;
+  max-width: 1401px;
 }
 .fam-foot {
   display: flex;
@@ -23827,4 +23828,95 @@ button.hw-title {
   color: var(--ink-2);
   font-size: 0.7rem;
   font-weight: 550;
+}
+
+/* ---------- A practice's page, across the top: back, its name with the ball, saved or not, and Share and Print at the end ---------- */
+.plan-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+.plan-back {
+  padding-right: 16px;
+  border-right: 1px solid var(--line-strong);
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.plan-back:hover {
+  color: var(--ink);
+}
+.plan-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.plan-name > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The page's own rule draws a ball before every page's name; this one brings its own. */
+.main[data-sport] .plan-name::before {
+  content: none;
+}
+.save-state.plan-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-family: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.save-state.plan-saved.saved {
+  color: color-mix(in srgb, var(--good) 60%, var(--ink));
+  background: color-mix(in srgb, var(--good) 14%, var(--surface));
+}
+.plan-topbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.plan-topbar-actions .btn {
+  min-height: 42px;
+  gap: 8px;
+  padding: 0 16px;
+}
+/* ---------- Collaborators, kept short: a line for each person ---------- */
+.plan-collab {
+  gap: 6px;
+  padding: 10px 14px;
+}
+.plan-collab ul {
+  gap: 4px;
+}
+.plan-collab li {
+  gap: 8px;
+  min-height: 30px;
+}
+.plan-collab .avatar,
+.plan-collab li > :first-child {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  font-size: 0.7rem;
+}
+.plan-collab-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.plan-collab-can {
+  padding: 1px 8px;
 }

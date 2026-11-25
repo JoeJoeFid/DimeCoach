@@ -198,7 +198,6 @@ export function PlanCollaborators({ planId }: { planId: number }) {
           ))}
         </ul>
       )}
-      {people && people.length === 1 && <p className="muted small">Only you so far. Share the team with another coach to plan together.</p>}
     </section>
   );
 }

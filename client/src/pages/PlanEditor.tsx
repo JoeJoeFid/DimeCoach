@@ -1,3 +1,4 @@
+import SportIcon from '../components/SportIcon';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEventHandler, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useDraggable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent, type Modifier } from '@dnd-kit/core';
@@ -460,11 +461,37 @@ export default function PlanEditor() {
 
   return (
     <div className="page editor plan-editor">
-      <div className="crumbs">
-        <Link to={listPath}>← {isHomework ? 'Homework' : 'Schedule'}</Link>
-        <span className={`save-state ${saveState}`} role="status">
+      {/* Across the top: the way back, what this is with its sport's ball, whether it is saved, and at the far end the two things done with a finished plan. */}
+      <div className="plan-topbar">
+        <Link className="plan-back" to={listPath}>
+          ← {isHomework ? 'Homework' : 'Schedule'}
+        </Link>
+        <h1 className="plan-name">
+          <SportIcon sport={app.sport?.name} size={26} />
+          <span>{plan.title.trim() || (plan.is_template ? 'Template' : isHomework ? 'Homework' : gameMode ? 'Game' : 'Practice')}</span>
+        </h1>
+        <span className={`save-state plan-saved ${saveState}`} role="status">
+          {saveState === 'saved' && (
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.600" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12.500l4.500 4.500L19 7.500" />
+            </svg>
+          )}
           {saveState === 'saved' ? 'All changes saved' : saveState === 'error' ? 'Not saved' : 'Saving…'}
         </span>
+        {!plan.is_template && (
+          <div className="plan-topbar-actions">
+            <button type="button" className="btn" title="Share: send it to coaches, put it in a community, or make a link" onClick={() => setSharing(true)}>
+              <ShareIcon size={16} />
+              Share
+            </button>
+            <button type="button" className="btn primary" onClick={openPrint}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.900" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M7 8.500V4h10v4.500M7 17H5v-7.500h14V17h-2M7 14h10v6H7Z" />
+              </svg>
+              Print / View
+            </button>
+          </div>
+        )}
       </div>
 
       {plan.is_template && <p className="banner">This is a template. Use it from the list page to start a new plan.</p>}
@@ -713,12 +740,6 @@ export default function PlanEditor() {
               onPractice={() => update({ is_game: false })}
               actions={
                 <>
-                  <button className="btn primary" onClick={openPrint}>
-                    Print
-                  </button>
-                  <button type="button" className="btn icon-btn share-btn" aria-label="Share" title="Share: send it to coaches, put it in a community, or make a link" onClick={() => setSharing(true)}>
-                    <ShareIcon />
-                  </button>
                   <MoreMenu items={moreItems} />
                 </>
               }
@@ -743,16 +764,6 @@ export default function PlanEditor() {
                     <path d="M4 20h16M7 20v-6M12 20V5M17 20v-9" />
                   </svg>
                 </button>
-                {!plan.is_template && (
-                  <>
-                  <button className="btn primary" onClick={openPrint}>
-                    Print
-                  </button>
-                  <button type="button" className="btn icon-btn share-btn" aria-label="Share" title="Share: send it to coaches, put it in a community, or make a link" onClick={() => setSharing(true)}>
-                    <ShareIcon />
-                  </button>
-                  </>
-                )}
                 <MoreMenu items={moreItems} />
               </div>
             </div>
