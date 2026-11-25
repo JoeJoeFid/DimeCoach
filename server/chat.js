@@ -57,6 +57,12 @@ CREATE TABLE IF NOT EXISTS chat_reactions (
 CREATE INDEX IF NOT EXISTS idx_chat_reactions_message ON chat_reactions(message_id);
 `);
 
+// Deleting a chat is each person's own: what was said up to then is gone for them alone (`cleared` is the last line they
+// no longer see), and a chat they started or were brought into leaves their list (`hidden`) until someone writes in it again.
+// Everyone else keeps all of it.
+for (const [column, ddl] of [['cleared', 'INTEGER NOT NULL DEFAULT 0'], ['hidden', 'INTEGER NOT NULL DEFAULT 0']])
+  if (!db.prepare('PRAGMA table_info(chat_state)').all().some((c) => c.name === column)) db.exec(`ALTER TABLE chat_state ADD COLUMN ${column} ${ddl}`);
+
 const str = (v, max) => String(v ?? '').slice(0, max);
 const MAX_PEOPLE = 50;
 const PAGE = 60;
@@ -112,7 +118,8 @@ function chatsOf(user) {
     if (!seen.has(c.id) && c.families) mine.push(c);
     seen.add(c.id);
   }
-  return [...mine, ...all("SELECT c.* FROM chat_members m JOIN chats c ON c.id=m.chat_id WHERE m.user_id=? AND c.kind='group'", user.id)];
+  // Not the ones this person deleted from their list, until someone writes in them again.
+  return [...mine, ...all("SELECT c.* FROM chat_members m JOIN chats c ON c.id=m.chat_id WHERE m.user_id=? AND c.kind='group'", user.id).filter((c) => !stateOf(c.id, user.id).hidden)];
 }
 /** The chat with this number, if this person is in it. */
 function chatFor(user, id) {
@@ -132,22 +139,28 @@ function reactionsOf(messageId) {
   return kinds;
 }
 const lineOut = (m) => ({ id: m.id, chat_id: m.chat_id, user_id: m.user_id, by: m.by_name || 'Someone', kind: m.kind, body: m.body, at: m.created_at, reactions: m.kind === 'text' ? reactionsOf(m.id) : [] });
-const stateOf = (chatId, userId) => get('SELECT * FROM chat_state WHERE chat_id=? AND user_id=?', chatId, userId) ?? { last_read: 0, muted: 0 };
+function stateOf(chatId, userId) {
+  return get('SELECT * FROM chat_state WHERE chat_id=? AND user_id=?', chatId, userId) ?? { last_read: 0, muted: 0, cleared: 0, hidden: 0 };
+}
 const setState = (chatId, userId, change) => {
   const now = { ...stateOf(chatId, userId), ...change };
-  run('INSERT INTO chat_state (chat_id, user_id, last_read, muted) VALUES (?,?,?,?) ON CONFLICT(chat_id, user_id) DO UPDATE SET last_read=excluded.last_read, muted=excluded.muted', chatId, userId, now.last_read, now.muted ? 1 : 0);
+  run(
+    'INSERT INTO chat_state (chat_id, user_id, last_read, muted, cleared, hidden) VALUES (?,?,?,?,?,?) ON CONFLICT(chat_id, user_id) DO UPDATE SET last_read=excluded.last_read, muted=excluded.muted, cleared=excluded.cleared, hidden=excluded.hidden',
+    chatId, userId, now.last_read, now.muted ? 1 : 0, now.cleared || 0, now.hidden ? 1 : 0,
+  );
 };
 
 /** One chat as the list shows it: who is in it, the last thing said, and how much is unread. */
 function chatOut(chat, user) {
   const team = teamOf(chat);
   const state = stateOf(chat.id, user.id);
-  const last = get('SELECT m.*, u.name AS by_name FROM chat_messages m LEFT JOIN users u ON u.id=m.user_id WHERE m.chat_id=? ORDER BY m.id DESC LIMIT 1', chat.id);
+  // What this person deleted is not there for them, here or anywhere.
+  const last = get('SELECT m.*, u.name AS by_name FROM chat_messages m LEFT JOIN users u ON u.id=m.user_id WHERE m.chat_id=? AND m.id>? ORDER BY m.id DESC LIMIT 1', chat.id, state.cleared || 0);
   return {
     id: chat.id, kind: chat.kind, team_id: chat.team_id, name: chat.kind === 'team' ? team?.name || 'Team' : chat.name,
     families: !!chat.families, members: membersOf(chat), can_run: runs(chat, user.id), muted: !!state.muted,
     last: last ? lineOut(last) : null,
-    unread: get("SELECT COUNT(*) AS n FROM chat_messages WHERE chat_id=? AND id>? AND kind='text' AND COALESCE(user_id,0)<>?", chat.id, state.last_read, user.id).n,
+    unread: get("SELECT COUNT(*) AS n FROM chat_messages WHERE chat_id=? AND id>? AND kind='text' AND COALESCE(user_id,0)<>?", chat.id, Math.max(state.last_read, state.cleared || 0), user.id).n,
   };
 }
 // Unread chats count towards the number on the app's icon.
@@ -188,6 +201,8 @@ function tooFast(userId) {
 function say(chat, user, body, kind = 'text') {
   const at = new Date().toISOString();
   const id = Number(run('INSERT INTO chat_messages (chat_id, user_id, kind, body, created_at) VALUES (?,?,?,?,?)', chat.id, user.id, kind, body, at).lastInsertRowid);
+  // Something new brings the chat back for anyone who had deleted it from their list. They see it from here on.
+  run('UPDATE chat_state SET hidden=0 WHERE chat_id=? AND hidden=1', chat.id);
   // What a person says themselves, they have read.
   setState(chat.id, user.id, { last_read: id });
   const people = membersOf(chat);
@@ -227,7 +242,11 @@ export function mountChat(app) {
             AND EXISTS (SELECT 1 FROM chat_members m WHERE m.chat_id=c.id AND m.user_id=?)`,
         req.user.id, ids[0],
       );
-      if (both) return res.json({ id: both.id, ...listOut(req.user) });
+      // One they had deleted from their list is back in it, still without what they deleted.
+      if (both) {
+        if (stateOf(both.id, req.user.id).hidden) setState(both.id, req.user.id, { hidden: 0 });
+        return res.json({ id: both.id, ...listOut(req.user) });
+      }
     }
     const id = Number(run("INSERT INTO chats (kind, name, created_by) VALUES ('group', ?, ?)", name, req.user.id).lastInsertRowid);
     for (const userId of [req.user.id, ...ids]) run('INSERT INTO chat_members (chat_id, user_id) VALUES (?,?)', id, userId);
@@ -240,9 +259,10 @@ export function mountChat(app) {
     const chat = chatFor(req.user, req.params.id);
     if (!chat) return res.status(404).json({ error: 'That chat is not there, or you are no longer in it.' });
     const before = Number(req.query.before) || 0;
+    const cleared = stateOf(chat.id, req.user.id).cleared || 0;
     const rows = all(
-      `SELECT m.*, u.name AS by_name FROM chat_messages m LEFT JOIN users u ON u.id=m.user_id WHERE m.chat_id=? ${before ? 'AND m.id<?' : ''} ORDER BY m.id DESC LIMIT ${PAGE + 1}`,
-      ...(before ? [chat.id, before] : [chat.id]),
+      `SELECT m.*, u.name AS by_name FROM chat_messages m LEFT JOIN users u ON u.id=m.user_id WHERE m.chat_id=? AND m.id>? ${before ? 'AND m.id<?' : ''} ORDER BY m.id DESC LIMIT ${PAGE + 1}`,
+      ...(before ? [chat.id, cleared, before] : [chat.id, cleared]),
     );
     res.json({ chat: chatOut(chat, req.user), messages: rows.slice(0, PAGE).reverse().map(lineOut), more: rows.length > PAGE });
   });
@@ -354,6 +374,16 @@ export function mountChat(app) {
     }
     say(chat, req.user, `${req.user.name} added ${names.join(', ')}`, 'note');
     res.json(chatOut(chat, req.user));
+  });
+
+  // Deleting a chat from your own list. What has been said is gone for you alone: everyone else keeps it, and you are
+  // still in the chat, so it comes back when someone writes in it again, from that line on. A team's chat stays in the list, emptied.
+  app.delete('/api/chat/:id', (req, res) => {
+    const chat = chatFor(req.user, req.params.id);
+    if (!chat) return res.status(404).json({ error: 'That chat is not there, or you are no longer in it.' });
+    const newest = get('SELECT COALESCE(MAX(id), 0) AS id FROM chat_messages WHERE chat_id=?', chat.id).id;
+    setState(chat.id, req.user.id, { cleared: newest, last_read: Math.max(newest, stateOf(chat.id, req.user.id).last_read), hidden: chat.kind === 'group' ? 1 : 0 });
+    res.json(listOut(req.user));
   });
 
   // Leaving a group chat. A team's chat is left by leaving the team.

@@ -160,6 +160,7 @@ function ChatDetails({ chat, meId, onClose, onChanged, onLeft }: { chat: ChatRoo
   const [more, setMore] = useState<ToPerson[]>([]);
   const [error, setError] = useState('');
   const [leaving, setLeaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const run = async (work: () => Promise<ChatRoom>) => {
     setError('');
     try {
@@ -270,6 +271,28 @@ function ChatDetails({ chat, meId, onClose, onChanged, onLeft }: { chat: ChatRoo
               )}
             </div>
           ))}
+        {/* Deleting it is for this person alone: everyone else keeps the chat and all that was said. */}
+        <div className="chat-details-actions">
+          {deleting ? (
+            <>
+              <span className="muted small">
+                {chat.kind === 'group'
+                  ? 'Delete this chat from your list? What has been said is gone for you only. Everyone else keeps it, and it comes back if someone writes in it again.'
+                  : 'Clear this chat for you? What has been said is gone for you only. Everyone else keeps it, and the team’s chat stays in your list.'}
+              </span>
+              <button type="button" className="btn danger" onClick={() => api.chatDelete(chat.id).then(onLeft, (e) => setError((e as Error).message))}>
+                {chat.kind === 'group' ? 'Delete' : 'Clear'}
+              </button>
+              <button type="button" className="btn" onClick={() => setDeleting(false)}>
+                Keep
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn" onClick={() => setDeleting(true)}>
+              {chat.kind === 'group' ? 'Delete chat' : 'Clear chat'}
+            </button>
+          )}
+        </div>
         {error && <p className="error">{error}</p>}
       </div>
     </Modal>

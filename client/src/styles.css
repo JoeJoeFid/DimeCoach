@@ -8135,14 +8135,22 @@ fieldset.perm-list:disabled .check.perm {
     color: var(--ink);
     cursor: pointer;
   }
+  /* How many things in the menu want looking at, on the button that opens it: the same bubble the menu's own lines carry. */
   .menu-dot {
     position: absolute;
-    top: 8px;
-    right: 6px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
+    top: 2px;
+    right: 0;
+    display: grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
     background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1;
     box-shadow: 0 0 0 2px var(--side-bg);
     animation: nav-pulse 1.6s ease-in-out infinite;
   }
@@ -21461,82 +21469,123 @@ button.film-clip-play {
   margin-bottom: 0;
 }
 
-/* The "i" beside a page's name, and what it says when pressed. */
+/* The "i" beside a page's name. Pointing at it, or pressing it, shows what that part of the app is for. */
+.about {
+  position: relative;
+  display: inline-flex;
+  /* It sits on the line with the page's name, at its own size. */
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
 .about-btn {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 1.5px solid var(--line-strong);
+  width: 28px;
+  height: 28px;
+  padding: 0 0 1px;
+  border: none;
   border-radius: 50%;
-  background: var(--surface);
-  color: var(--ink-2);
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  background: var(--ink-2);
+  color: var(--bg);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.15rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  transition: background 0.12s, color 0.12s, transform 0.12s;
 }
-.about-btn:hover,
+.about:hover .about-btn,
+.about.open .about-btn,
 .about-btn:focus-visible {
   background: var(--accent);
-  border-color: var(--accent-edge);
   color: var(--accent-ink);
+  transform: scale(1.08);
 }
 .about-pop {
-  display: flex;
+  position: absolute;
+  z-index: 40;
+  left: -6px;
+  top: calc(100% + 10px);
+  display: none;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  width: min(380px, calc(100vw - 48px));
+  padding: 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.55), 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+  text-align: left;
+}
+/* The gap between the "i" and the card is part of it, so moving from one to the other does not close it. */
+.about-pop::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -12px;
+  height: 12px;
+}
+.about:hover .about-pop,
+.about:focus-within .about-pop,
+.about.open .about-pop {
+  display: flex;
+}
+.about-head {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .about-lead {
-  margin: 0;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-left: 4px solid var(--accent-edge);
   border-radius: 10px;
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
-  font-size: 1.12rem;
+  font-size: 1.05rem;
   font-weight: 650;
   line-height: 1.35;
   letter-spacing: -0.01em;
 }
-.about-pop ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.about-points {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
 }
-.about-pop li {
+.about-points > span {
   position: relative;
-  padding-left: 30px;
+  padding-left: 28px;
   color: var(--ink-2);
+  font-size: 0.93rem;
   line-height: 1.45;
 }
-.about-pop li::before {
+.about-points > span::before {
   content: '';
   position: absolute;
-  left: 2px;
-  top: 0.2em;
-  width: 18px;
-  height: 18px;
+  left: 1px;
+  top: 0.15em;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
   background: var(--accent);
 }
-.about-pop li::after {
+.about-points > span::after {
   content: '';
   position: absolute;
-  left: 8px;
-  top: calc(0.2em + 4px);
-  width: 5px;
-  height: 9px;
+  left: 7px;
+  top: calc(0.15em + 3.5px);
+  width: 4.5px;
+  height: 8.5px;
   border: solid var(--accent-ink);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
-}
-.about-foot {
-  display: flex;
-  justify-content: flex-end;
 }
 @media (max-width: 640px) {
   .team-title {

@@ -596,11 +596,16 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
         <div className={`shell ${navFolded ? 'nav-folded' : ''} ${menuOpen ? 'menu-open' : ''}`}>
           {/* Narrow screens only: the team, and the button that opens the menu. */}
           <header className="mobile-bar">
-            <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label={communityUnread > 0 ? `Menu, ${communityUnread} unread` : 'Menu'}>
+            <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label={communityUnread + chatUnread > 0 ? `Menu, ${communityUnread + chatUnread} unread` : 'Menu'}>
               <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                 <path d="M4 7h16M4 12h16M4 17h16" />
               </svg>
-              {communityUnread > 0 && <span className="menu-dot" aria-hidden="true" />}
+              {/* Something in the menu wants looking at: its count shows on the button while the menu is shut. */}
+              {communityUnread + chatUnread > 0 && (
+                <span className="menu-dot" aria-hidden="true">
+                  {communityUnread + chatUnread > 9 ? '9+' : communityUnread + chatUnread}
+                </span>
+              )}
             </button>
             {/* The mark and the team's name lead back to the dashboard, as the name at the top of the menu does. */}
             <Link to="/" className="mobile-home" aria-label={`${state.team!.name}: dashboard`}>

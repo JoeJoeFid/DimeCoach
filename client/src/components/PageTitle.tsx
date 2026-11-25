@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api, type RecordGame } from '../api';
 import { useApp } from '../App';
 import { fmtDateShort } from '../util';
-import { Modal } from './bits';
 import SportIcon from './SportIcon';
 
 /** What a part of the app is for, said when its "i" is pressed: one line, then the points worth knowing. */
@@ -84,6 +83,7 @@ function TeamRecord({ teamId }: { teamId: number }) {
  */
 export default function PageTitle({ children, about }: { children: ReactNode; /** What this part of the app is for, behind an "i" beside its name. */ about?: About }) {
   const { team, sport } = useApp();
+  // Pointing at the "i" shows what it has to say. Pressing it keeps that showing, which is how it is read on a phone.
   const [telling, setTelling] = useState(false);
   const name = typeof children === 'string' ? children : 'this page';
   return (
@@ -100,32 +100,24 @@ export default function PageTitle({ children, about }: { children: ReactNode; /*
       <h1 className="section-name">
         {children}
         {about && (
-          <button type="button" className="about-btn" aria-label={`What ${name} is for`} title={`What ${name} is for`} onClick={() => setTelling(true)}>
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 11v6M12 7.5h.01" />
-            </svg>
-          </button>
+          <span className={`about ${telling ? 'open' : ''}`} onMouseLeave={() => setTelling(false)}>
+            <button type="button" className="about-btn" aria-label={`What ${name} is for`} aria-expanded={telling} onClick={() => setTelling(!telling)} onBlur={() => setTelling(false)}>
+              i
+            </button>
+            <span className="about-pop" role="tooltip">
+              <span className="about-head">About {name}</span>
+              <span className="about-lead">{about.lead}</span>
+              {!!about.points?.length && (
+                <span className="about-points">
+                  {about.points.map((p) => (
+                    <span key={p}>{p}</span>
+                  ))}
+                </span>
+              )}
+            </span>
+          </span>
         )}
       </h1>
-      {about && telling && (
-        <Modal title={`About ${name}`} onClose={() => setTelling(false)}>
-          <div className="about-pop">
-            <p className="about-lead">{about.lead}</p>
-            {!!about.points?.length && (
-              <ul>
-                {about.points.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-            )}
-            <div className="about-foot">
-              <button type="button" className="btn primary" onClick={() => setTelling(false)}>
-                Got it
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </>
   );
 }

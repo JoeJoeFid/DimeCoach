@@ -212,10 +212,16 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
   return (
     <div className={`shell fam-frame ${menuOpen ? 'menu-open' : ''}`}>
       <header className="mobile-bar">
-        <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label="Menu">
+        <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label={unread + chatUnread > 0 ? `Menu, ${unread + chatUnread} unread` : 'Menu'}>
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
+          {/* Something in the menu wants looking at: its count shows on the button while the menu is shut. */}
+          {unread + chatUnread > 0 && (
+            <span className="menu-dot" aria-hidden="true">
+              {unread + chatUnread > 9 ? '9+' : unread + chatUnread}
+            </span>
+          )}
         </button>
         {/* The mark and the team's name lead back to the team's first page. */}
         <a

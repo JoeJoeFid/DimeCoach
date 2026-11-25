@@ -640,6 +640,17 @@ export interface Playing {
   ended?: boolean;
   /** This browser could not play it this way after all: the page falls back to playing piece by piece. */
   failed?: boolean;
+  /** Why not, in a few words, for the page to say. */
+  why?: string;
+  /** How far through the piece now showing it is, from 0 to 1. */
+  through?: number;
+}
+/** Why this browser cannot play a joined video as one unbroken video at all, or '' when it can. */
+export function cannotJoin(stream: GameStream): string {
+  const w = window as unknown as { ManagedMediaSource?: typeof MediaSource; MediaSource?: typeof MediaSource };
+  const Source = w.ManagedMediaSource ?? w.MediaSource;
+  if (!Source) return 'this browser has no player for it';
+  return Source.isTypeSupported(sourceType(stream.mime)) ? '' : `this browser does not play this kind of video (${sourceType(stream.mime)})`;
 }
 export interface JoinedPlayer {
   /** How far the stream has got, told again as it grows. */
@@ -709,12 +720,23 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
     for (const [piece, at] of starts) if (at <= el.currentTime + 0.001 && piece >= n) n = piece;
     return { n, off: Math.max(0, el.currentTime - (starts.get(n) ?? 0)) };
   };
+  /**
+   * How far through piece `n` it is, from 0 to 1. A piece is counted as a few seconds whatever it
+   * really runs, and they are not all one length: a bar that added the seconds played to the
+   * pieces before would jump at the end of a short one and go back at the end of a long one.
+   */
+  const through = (at: Mark) => {
+    const begins = starts.get(at.n) ?? 0;
+    const next = starts.get(at.n + 1);
+    const runs = next !== undefined && next > begins ? next - begins : Math.max(seconds, at.off + 0.5);
+    return Math.max(0, Math.min(at.off / runs, 0.999));
+  };
   const ms = new Source();
   const url = URL.createObjectURL(ms);
   // An iPhone's player asks for this before it will take video fed to it.
   if (w.ManagedMediaSource) (el as HTMLVideoElement & { disableRemotePlayback: boolean }).disableRemotePlayback = true;
   el.src = url;
-  const fail = () => !st.closed && onChange({ failed: true });
+  const fail = (why: string) => !st.closed && onChange({ failed: true, why });
   /** Resolves when the player has taken what it was just given. */
   const settled = (sb: SourceBuffer) =>
     new Promise<void>((ok, no) => {
@@ -829,14 +851,14 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
       }
       // A video that is over is told so, and plays out what it has.
       if ((!st.live || opts.end) && st.next >= upto() && ms.readyState === 'open' && !sb.updating) ms.endOfStream();
-    } catch {
-      fail();
+    } catch (e) {
+      fail(el.error ? `the picture could not be shown (${el.error.message || `error ${el.error.code}`})` : `the player would not take the video (${(e as Error)?.message || e})`);
     } finally {
       st.busy = false;
       if (!st.closed) sayAhead();
     }
   };
-  const opened = window.setTimeout(() => !st.sb && fail(), 6000);
+  const opened = window.setTimeout(() => !st.sb && fail('the player did not open in time'), 6000);
   ms.addEventListener(
     'sourceopen',
     async () => {
@@ -847,13 +869,13 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
         const k = get.initFor(from);
         const opening = await get.init(k);
         if (st.closed) return;
-        if (!opening) return void fail();
+        if (!opening) return void fail('the opening part of the video could not be fetched');
         await give(sb, opening);
         st.opening = k;
         st.sb = sb;
         fill();
-      } catch {
-        fail();
+      } catch (e) {
+        fail(`the player could not be set up (${(e as Error)?.message || e})`);
       }
     },
     { once: true },
@@ -861,7 +883,7 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
   const timer = window.setInterval(fill, 500);
   const onTime = () => {
     const at = where();
-    onChange({ piece: from + Math.floor(el.currentTime / seconds), at });
+    onChange({ piece: from + Math.floor(el.currentTime / seconds), at, through: through(at) });
     sayAhead();
     // Coming up to a hole is stepped over before the picture has to stop at it.
     hop();
@@ -893,6 +915,9 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
   el.addEventListener('waiting', onWaiting);
   el.addEventListener('playing', onPlaying);
   el.addEventListener('ended', onEnded);
+  // The picture itself could not be shown: said at once, with what the browser says about it.
+  const onError = () => el.error && fail(`the picture could not be shown (${el.error.message || `error ${el.error.code}`})`);
+  el.addEventListener('error', onError);
   return {
     more: (s) => {
       st.segments = s.segments;

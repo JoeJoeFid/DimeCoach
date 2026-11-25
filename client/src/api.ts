@@ -1209,6 +1209,8 @@ export const api = {
   chatUpdate: (id: number, b: { muted?: boolean; name?: string; families?: boolean }) => req<ChatRoom>('PUT', `/chat/${id}`, b),
   chatAdd: (id: number, add: number[]) => req<ChatRoom>('POST', `/chat/${id}/members`, { add }),
   chatLeave: (id: number) => req<ChatList>('POST', `/chat/${id}/leave`, {}),
+  /** Deletes a chat from this person's own list, with what was said in it. Everyone else keeps it. */
+  chatDelete: (id: number) => req<ChatList>('DELETE', `/chat/${id}`),
   messagesSent: () => req<CommunityNewsItem[]>('GET', '/messages/sent'),
   sendMessage: (b: { to: number[]; subject: string; body: string; reply_to?: number; /** Also email the people it goes to. */ email?: boolean }) => req<{ ok: true; sent: CommunityNewsItem[] }>('POST', '/messages/send', b),
   readDirect: (id: number) => req<CommunityNews>('POST', `/messages/direct/${id}/read`, {}),

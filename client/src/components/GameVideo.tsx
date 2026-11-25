@@ -6,7 +6,7 @@
 // server/streams.js.
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
-import { LIVE_BACK, PICKS, QUALITIES, RUNGS, Stopped, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
+import { LIVE_BACK, PICKS, QUALITIES, RUNGS, Stopped, cannotJoin, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
 import { BinIcon, Modal, PlayIcon } from './bits';
 import { confirmDialog } from './dialogs';
 
@@ -448,8 +448,9 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
  * is played as one unbroken video where the browser can, and piece by piece where it cannot.
  */
 export function StreamPlayer({ stream, onGone }: { stream: GameStream; onGone?: () => void }) {
-  const [plain, setPlain] = useState(false);
-  return stream.layout === 'joined' && !plain ? <JoinedVideo stream={stream} onGone={onGone} onFail={() => setPlain(true)} /> : <PieceVideo stream={stream} onGone={onGone} />;
+  // Why it is being played piece by piece, when it could have been one unbroken video: said under the player, so the cause can be found.
+  const [plain, setPlain] = useState('');
+  return stream.layout === 'joined' && !plain ? <JoinedVideo stream={stream} onGone={onGone} onFail={(why) => setPlain(why || 'it could not be played as one video')} /> : <PieceVideo stream={stream} onGone={onGone} why={plain} />;
 }
 
 type Fullable = HTMLElement & { webkitRequestFullscreen?: () => void };
@@ -564,7 +565,7 @@ function SeekBar({ at, meta, behind, onSeek, onLive, ahead }: { at: number; meta
 }
 
 /** A video whose pieces join up, played as one. */
-function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: () => void; onFail: () => void }) {
+function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: () => void; onFail: (why: string) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const [meta, setMeta] = useState(stream);
   const frame = useRef<HTMLDivElement>(null);
@@ -587,6 +588,8 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
   const playingRef = useRef(playing);
   playingRef.current = playing;
   const player = useRef<JoinedPlayer | null>(null);
+  // Play was refused because nobody has pressed anything yet: the button comes back. Anything else (the video moved on while it was starting) is not a stop.
+  const refused = (e: unknown) => (e as Error)?.name === 'NotAllowedError' && setPlaying(false);
   // How many times the player has given up on a live broadcast and been started again.
   const fails = useRef(0);
   // How far the stream has got, asked again while it is live.
@@ -604,11 +607,12 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
         // One piece that will not play (the camera changed under it, say) is no reason to watch the rest piece by piece,
         // with a stop at every join. Live, the player starts again from what comes next. Only when that keeps failing is it given up on.
         const m = metaRef.current;
-        if (m.status !== 'live' || (fails.current += 1) > 4) return onFail();
-        return setStart({ from: m.segments, off: 0, follow: true });
+        if (m.status !== 'live' || (fails.current += 1) > 4) return onFail(p.why || '');
+        // From just short of the newest: past the piece that would not play, with a few seconds already there to carry on with.
+        return setStart({ from: Math.max(0, m.segments - 2), off: 0, follow: true });
       }
       if (p.piece !== undefined) setAt(Math.min(p.piece, Math.max(0, metaRef.current.segments - 1)));
-      if (p.at) setSecs(Math.floor(p.at.n * metaRef.current.segment_seconds + p.at.off));
+      if (p.at) setSecs(Math.floor((p.at.n + (p.through ?? Math.min(p.at.off / metaRef.current.segment_seconds, 0.999))) * metaRef.current.segment_seconds));
       if (p.waiting !== undefined) setWaiting(p.waiting);
       if (p.ahead !== undefined) setAhead(p.ahead);
       if (p.ended) {
@@ -617,9 +621,9 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
         setOver(!metaRef.current.saved);
       }
     }, { offset: start.off });
-    if (!made) return onFail();
+    if (!made) return onFail(cannotJoin(metaRef.current));
     player.current = made;
-    if (playingRef.current) el.play().catch(() => setPlaying(false));
+    if (playingRef.current) el.play().catch(refused);
     return () => {
       player.current = null;
       made.close();
@@ -648,7 +652,7 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
   };
   const play = () => {
     setPlaying(true);
-    video.current?.play().catch(() => setPlaying(false));
+    video.current?.play().catch(refused);
   };
   return (
     <div className="gv-player" ref={frame}>
@@ -670,8 +674,11 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
 }
 
 /** A video played piece by piece, each a small video of its own. */
-function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => void }) {
+function PieceVideo({ stream, onGone, why }: { stream: GameStream; onGone?: () => void; /** Why a video that could have been one is being played in pieces. */ why?: string }) {
   const video = useRef<HTMLVideoElement>(null);
+  // Where the piece showing begins on the player's own clock: a piece of a joined video keeps the time it had in the whole, so it does not begin at nought.
+  const base = useRef(0);
+  const refused = (e: unknown) => (e as Error)?.name === 'NotAllowedError' && setPlaying(false);
   const [meta, setMeta] = useState(stream);
   const frame = useRef<HTMLDivElement>(null);
   const [full, toggleFull] = useFullScreen(frame, video);
@@ -730,8 +737,18 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
           // Starting part-way into it: set once the player knows the piece.
           const into = startAt.current;
           startAt.current = 0;
-          if (into) el.addEventListener('loadedmetadata', () => el.getAttribute('data-n') === String(at) && (el.currentTime = into), { once: true });
-          if (playingRef.current) el.play().catch(() => setPlaying(false));
+          // Not known until it plays: the first time the player gives is where this piece begins.
+          base.current = -1;
+          el.addEventListener(
+            'loadeddata',
+            () => {
+              if (el.getAttribute('data-n') !== String(at) || !into) return;
+              base.current = el.currentTime;
+              el.currentTime = base.current + into;
+            },
+            { once: true },
+          );
+          if (playingRef.current) el.play().catch(refused);
         },
         () => here.current && loaded.current === at && next(),
       );
@@ -783,11 +800,18 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
   };
   const onTime = () => {
     const el = video.current;
-    if (el && el.getAttribute('data-n') === String(at) && !startAt.current) setOff(Math.min(Math.floor(el.currentTime), meta.segment_seconds - 1));
+    if (!el || el.getAttribute('data-n') !== String(at) || startAt.current) return;
+    // Where this piece begins on the player's clock, which is not nought for a piece of a joined video.
+    // The player says nought as a piece loads, and only then where the piece really begins.
+    if (base.current < 0) {
+      if (el.currentTime === 0) return setOff(0);
+      base.current = el.currentTime;
+    }
+    setOff(Math.max(0, Math.min(Math.floor(el.currentTime - base.current), meta.segment_seconds - 1)));
   };
   const play = () => {
     setPlaying(true);
-    video.current?.play().catch(() => setPlaying(false));
+    video.current?.play().catch(refused);
   };
   return (
     <div className="gv-player" ref={frame}>
@@ -804,6 +828,7 @@ function PieceVideo({ stream, onGone }: { stream: GameStream; onGone?: () => voi
         <FullButton full={full} onClick={toggleFull} />
       </div>
       {!over && <SeekBar at={at * meta.segment_seconds + off} meta={meta} behind={live && !follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
+      {why && <p className="muted small gv-why">Playing a few seconds at a time, with a short stop between, because {why}.</p>}
     </div>
   );
 }
