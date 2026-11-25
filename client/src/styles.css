@@ -22425,3 +22425,20 @@ button.film-clip-play {
     grid-row: 1;
   }
 }
+
+/* A resource card no longer cuts off what hangs out of it, so the "..." list can open over the cards below. The picture keeps the card's rounded corners itself. */
+.res-card {
+  overflow: visible;
+}
+.res-card .res-preview {
+  overflow: hidden;
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+}
+.res-grid.compact .res-card .res-preview {
+  border-radius: calc(var(--radius-sm) - 1px) 0 0 calc(var(--radius-sm) - 1px);
+}
+/* The card with its list open stands above its neighbors. */
+.res-card:has(.more-btn[aria-expanded='true']) {
+  position: relative;
+  z-index: 5;
+}
