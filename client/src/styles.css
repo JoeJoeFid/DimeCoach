@@ -21647,27 +21647,55 @@ button.film-clip-play {
   }
 }
 
-/* The play builder: the court or field in a box of its own at the top. Which one, its color, and which way round it is seen. */
-.court-box {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 14px 28px;
+/* The play builder: the play's details on the left and, a quarter as wide beside them, the court or field in a box of its own:
+   which one, its color, and which way round it is seen. */
+.play-top {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(230px, 1fr);
+  gap: 14px;
+  align-items: stretch;
   margin-bottom: 14px;
 }
+.play-top > .card {
+  margin-bottom: 0;
+}
+.court-box {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .court-box h2 {
-  align-self: center;
   margin: 0;
-  min-width: 64px;
 }
 .court-box-part {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
+.court-box-part .input {
+  width: 100%;
+}
+.court-box .court-looks {
+  flex-wrap: wrap;
+}
 .court-box-turns {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+/* On a narrow screen the court's box goes under the details, across the page. */
+@media (max-width: 900px) {
+  .play-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .court-box {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px 24px;
+  }
+  .court-box h2 {
+    width: 100%;
+  }
 }

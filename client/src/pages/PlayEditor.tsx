@@ -887,54 +887,8 @@ export default function PlayEditor() {
       </div>
       {error && <p className="error">{error}</p>}
 
-      {/* The court or field itself, in a box of its own at the top: which one, how it is colored, and which way round it is seen. */}
-      <div className="card court-box" role="group" aria-label={surfaceWord(sport) === 'court' ? 'The court' : 'The field'}>
-        <h2>{surfaceWord(sport) === 'court' ? 'Court' : 'Field'}</h2>
-        <div className="court-box-part">
-          <span className="field-label">{surfaceWord(sport) === 'court' ? 'Which court' : 'Which field'}</span>
-          <select className="input" aria-label={surfaceWord(sport) === 'court' ? 'Court' : 'Field'} value={play.court} onChange={(e) => changeSurface(e.target.value as Play['court'])}>
-            {SURFACES[sport].map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="court-box-part">
-          <span className="field-label">{surfaceWord(sport) === 'court' ? 'Court color' : 'Field color'}</span>
-          <div className="court-looks" role="group" aria-label="How the court is colored">
-            {COURT_LOOKS.map(([id, label, hint]) => (
-              <button key={id} type="button" className={`court-look ${id || 'plain'} ${(play.theme || '') === id ? 'on' : ''}`} aria-pressed={(play.theme || '') === id} title={hint} onClick={() => update({ theme: id })}>
-                <span className="court-look-swatch" aria-hidden="true">
-                  <b>1</b>
-                </span>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {(play.court === 'half' || play.court === 'full') && (
-          <div className="court-box-part">
-            <span className="field-label">Which way round</span>
-            <div className="court-box-turns">
-              {play.court === 'half' && (
-                <button type="button" className="btn" onClick={flip} title="Turn the court so the basket is at the other end">
-                  Flip court
-                </button>
-              )}
-              <div className="seg" role="group" aria-label="How the court is seen">
-                <button type="button" className={play.upright ? 'on' : ''} aria-pressed={!!play.upright} title="See the court up and down, with the baskets top and bottom" onClick={() => !play.upright && update({ upright: true })}>
-                  Up and down
-                </button>
-                <button type="button" className={play.upright ? '' : 'on'} aria-pressed={!play.upright} title="See the court sideways, with the baskets left and right" onClick={() => play.upright && update({ upright: false })}>
-                  Sideways
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
+      {/* The play's own details on the left, and beside them, a quarter as wide, the court or field it is drawn on. */}
+      <div className="play-top">
       <div className={`card play-card ${headOpen ? 'open' : ''}`}>
         <button type="button" className="head-brief" onClick={() => setHeadOpen(!headOpen)} aria-expanded={headOpen}>
           <span className="head-brief-text">
@@ -1016,6 +970,54 @@ export default function PlayEditor() {
             </button>
           </div>
         </div>
+      </div>
+      {/* The court or field itself, in a box of its own beside the details: which one, how it is colored, and which way round it is seen. */}
+      <div className="card court-box" role="group" aria-label={surfaceWord(sport) === 'court' ? 'The court' : 'The field'}>
+        <h2>{surfaceWord(sport) === 'court' ? 'Court' : 'Field'}</h2>
+        <div className="court-box-part">
+          <span className="field-label">{surfaceWord(sport) === 'court' ? 'Which court' : 'Which field'}</span>
+          <select className="input" aria-label={surfaceWord(sport) === 'court' ? 'Court' : 'Field'} value={play.court} onChange={(e) => changeSurface(e.target.value as Play['court'])}>
+            {SURFACES[sport].map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="court-box-part">
+          <span className="field-label">{surfaceWord(sport) === 'court' ? 'Court color' : 'Field color'}</span>
+          <div className="court-looks" role="group" aria-label="How the court is colored">
+            {COURT_LOOKS.map(([id, label, hint]) => (
+              <button key={id} type="button" className={`court-look ${id || 'plain'} ${(play.theme || '') === id ? 'on' : ''}`} aria-pressed={(play.theme || '') === id} title={hint} onClick={() => update({ theme: id })}>
+                <span className="court-look-swatch" aria-hidden="true">
+                  <b>1</b>
+                </span>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {(play.court === 'half' || play.court === 'full') && (
+          <div className="court-box-part">
+            <span className="field-label">Which way round</span>
+            <div className="court-box-turns">
+              {play.court === 'half' && (
+                <button type="button" className="btn" onClick={flip} title="Turn the court so the basket is at the other end">
+                  Flip court
+                </button>
+              )}
+              <div className="seg" role="group" aria-label="How the court is seen">
+                <button type="button" className={play.upright ? 'on' : ''} aria-pressed={!!play.upright} title="See the court up and down, with the baskets top and bottom" onClick={() => !play.upright && update({ upright: true })}>
+                  Up and down
+                </button>
+                <button type="button" className={play.upright ? '' : 'on'} aria-pressed={!play.upright} title="See the court sideways, with the baskets left and right" onClick={() => play.upright && update({ upright: false })}>
+                  Sideways
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
       </div>
 
       <div className="card builder-bar">
