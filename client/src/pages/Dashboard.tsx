@@ -6,6 +6,7 @@ import { AudiencePick, DEFAULT_AUDIENCE, audienceWords } from './TeamFamily';
 import { useApp } from '../App';
 import type { Plan, Tag } from '../types';
 import PracticeTimeline from '../components/PracticeTimeline';
+import { SubTabs } from '../components/cx';
 import { DrillArt, PlayArt, TimelineArt } from '../components/Tour';
 import { sportKind } from '../sports';
 import { HEAT_BASE, HEAT_PRESETS, PERIODS, SCOPES, heatRamp, fmtDateShort, periodBounds, scopeOf, targetFor, type Period, type TargetScope, fmtDateTiny, fmtDuration, parseClock, planMinutes, todayISO } from '../util';
@@ -37,6 +38,8 @@ const HeadIcon = ({ d }: { d: string }) => (
   </svg>
 );
 
+type Insight = 'history' | 'time' | 'attention';
+
 export default function Dashboard() {
   const { team, sportTags, sport, can } = useApp();
   const [plans, setPlans] = useState<Plan[] | null>(null);
@@ -53,6 +56,8 @@ export default function Dashboard() {
   const scope = scopeOf(period);
   const scopeInfo = SCOPES.find((s) => s.id === scope)!;
   const [editTargets, setEditTargets] = useState(false);
+  // Which of the three closer looks at practice time is showing.
+  const [insight, setInsight] = useState<Insight>('history');
   // The viewer's own base color, shared by the category history and the category bars.
   const { user, refreshUser } = useApp();
   const [base, setBase] = useState(user.prefs.heat_color || HEAT_BASE);
@@ -252,23 +257,6 @@ export default function Dashboard() {
         </section>
       </div>
 
-      {/* What the numbers below cover, and the way to the full calendar. */}
-      <div className="dash-controls">
-        <label className="period">
-          <span className="field-label">Track over</span>
-          <select className="input" value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
-            {PERIODS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Link className="tl-cal-link" to="/practices?view=calendar">
-          View calendar <span aria-hidden="true">→</span>
-        </Link>
-      </div>
-
       {fresh ? (
         <>
           {/* Someone whose season is already in a team app can bring it in before planning anything. */}
@@ -330,7 +318,35 @@ export default function Dashboard() {
           </ol>
         </section>
         </>
-      ) : n === 0 ? (
+      ) : (
+        // Everything about how practice time has been spent, in one box: what it covers, the figures at a glance, and three ways of looking closer.
+        <section className="card insights" aria-label="Practice insights">
+          <div className="insights-head">
+            <h2>
+              <span className="insights-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.900" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.500h16M7 16v-5M12 16V6M17 16v-8" />
+                </svg>
+              </span>
+              Practice insights
+            </h2>
+            <div className="dash-controls">
+              <label className="period">
+                <span className="field-label">Track over</span>
+                <select className="input" value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
+                  {PERIODS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Link className="tl-cal-link" to="/practices?view=calendar">
+                View calendar <span aria-hidden="true">→</span>
+              </Link>
+            </div>
+          </div>
+          {n === 0 ? (
         <div className="empty">
           <h2>No practices {period === 'season' ? 'yet' : phrase}</h2>
           <p>
@@ -358,9 +374,19 @@ export default function Dashboard() {
             <Tile label="Need attention" value={String(stats.neglected.length)} sub={`not worked in ${NEGLECT_AFTER}+ practices`} tip={tileTip(attentionTip)} />
           </div>
 
-          <CategoryHistory perPlan={stats.perPlan} upcoming={stats.upcoming} tags={sportTags} showTip={showTip} base={base} onChoose={chooseColor} />
+          <SubTabs<Insight>
+            label="Ways of looking at practice time"
+            value={insight}
+            onChange={setInsight}
+            tabs={[
+              ['history', 'Category history'],
+              ['time', 'Time by category'],
+              ['attention', 'Needs attention', stats.neglected.length],
+            ]}
+          />
+          {insight === 'history' && <CategoryHistory perPlan={stats.perPlan} upcoming={stats.upcoming} tags={sportTags} showTip={showTip} base={base} onChoose={chooseColor} />}
 
-          <div className="dash-grid">
+          {insight === 'time' && (
             <section className="card">
               <div className="card-head">
                 <h2>Time by category, {phrase}</h2>
@@ -393,7 +419,9 @@ export default function Dashboard() {
                 }}
               />
             </section>
+          )}
 
+          {insight === 'attention' && (
             <section className="card">
               <h2>Needs attention</h2>
               <p className="muted small">Categories you have not worked on in the last {NEGLECT_AFTER} practices.</p>
@@ -425,9 +453,10 @@ export default function Dashboard() {
                 </ul>
               )}
             </section>
-          </div>
-
+          )}
         </>
+          )}
+        </section>
       )}
 
       {tip && (

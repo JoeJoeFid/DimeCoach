@@ -23172,3 +23172,62 @@ button.hw-title {
 .tf-box .tf-access tbody tr:not(.tf-people-row):hover td {
   background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
+
+/* The note opens above its "i", clear of the pointer. */
+.tf-access td:first-child .tf-info-pop {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+/* ---------- Dashboard: practice insights, one box for the figures and the three closer looks ---------- */
+.insights {
+  margin-top: 16px;
+  padding: 18px 20px 20px;
+}
+.insights-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+.insights-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 1.25rem;
+}
+.insights-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.insights .dash-controls {
+  margin: 0;
+}
+.insights .tiles {
+  margin-bottom: 16px;
+}
+.insights .tile {
+  background: var(--surface-2);
+}
+/* What a tab shows is part of this box, not a box inside it. */
+.insights > .card {
+  margin: 12px 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+.insights > .empty {
+  margin: 0;
+}
+.insights .bars .status-cell {
+  white-space: nowrap;
+}
