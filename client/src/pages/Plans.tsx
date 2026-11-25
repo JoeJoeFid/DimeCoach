@@ -79,7 +79,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
   }, [summary]);
   // A link can ask for the calendar outright, as "View calendar" on the dashboard does.
   const [view, setView] = useState<View>(() => (new URLSearchParams(window.location.search).get('view') === 'calendar' ? 'calendar' : savedView()));
-  /** Which kind of thing is listed. The list itself runs through the whole season, month after month. */
+  /** Which kind of thing is shown, in the list and on the calendar. */
   const [only, setOnly] = useState<Filter>('all');
   // Homework sheets are not tied to dates the same way, so only practices get the calendar.
   const calendar = kind === 'practice' && view === 'calendar';
@@ -398,11 +398,9 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     );
   };
 
-  // --- Everything in date order, a heading for each month and each week inside it, and the kind filter ---
+  // --- Everything in date order, a heading for each month and each week inside it ---
   const monthName = (ym: string) => new Date(`${ym}-15T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const shown = entries.map((e, i) => ({ e, i })).filter(({ e }) => only === 'all' || e.kind === only);
-  // The months that have something in them, for jumping straight to one.
-  const months = [...new Set(shown.map(({ e }) => e.date.slice(0, 7)))];
   // How tall the part that stays at the top is, so a month jumped to lands under it and not behind it.
   const stickyHead = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -414,7 +412,6 @@ export default function Plans({ kind }: { kind: PlanKind }) {
     watch.observe(el);
     return () => watch.disconnect();
   }, []);
-  const jumpToMonth = (ym: string) => document.getElementById(`month-${ym}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   const weeks: { label: string; rows: typeof shown }[] = [];
   for (const item of shown) {
     const day = new Date(`${item.e.date}T12:00:00`);
@@ -435,7 +432,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
 
   return (
     <div className={`page ${calendar ? '' : 'plans-page'}`}>
-      {/* The heading, the filters and the calendar's sync bar stay at the top while the list scrolls under them. */}
+      {/* The heading stays at the top while the list scrolls under it: the page's name, and the button that adds. */}
       <div className="ps-sticky" ref={stickyHead}>
       <div className="page-head ps-head">
         <div>
@@ -450,55 +447,13 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           </PageTitle>
         </div>
         <div className="head-actions">
-          {!calendar && months.length > 1 && (
-            <select className="input ps-jump" aria-label="Jump to a month" value="" onChange={(e) => e.target.value && jumpToMonth(e.target.value)}>
-              <option value="">Jump to a month…</option>
-              {months.map((ym) => (
-                <option key={ym} value={ym}>
-                  {monthName(ym)}
-                </option>
-              ))}
-            </select>
-          )}
           <div className="split-btn">
             <button className="btn primary" onClick={() => create()}>
-              + Add {noun}
+              + Add {kind === 'practice' ? 'event' : noun}
             </button>
             <MoreMenu items={addMenu} label={`More ways to add a ${noun}`} caret />
           </div>
         </div>
-      </div>
-      <div className="ps-tabs">
-        {kind === 'practice' && !calendar && (
-          <div className="ps-filter" role="group" aria-label="Show">
-            {FILTERS.map(([id, label]) => (
-              <button key={id} type="button" className={only === id ? 'on' : ''} aria-pressed={only === id} onClick={() => setOnly(id)}>
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-        <span className="spacer" />
-        {/* When the team's calendar was last brought in, and the button that brings it in again: beside the choice of view. */}
-        {kind === 'practice' && hasCalendar && (
-          <span className="ps-sync" role="status" title="Games and practices from GameChanger or your team app. They are not updated on their own: press Re-sync to bring in changes.">
-            <span className="sync-dot" aria-hidden="true" />
-            <span className="muted small">Synced {fmtSynced(team!.calendar_synced_at)}</span>
-            <button className="btn small" onClick={sync} disabled={syncing}>
-              {syncing ? 'Updating…' : 'Re-sync'}
-            </button>
-          </span>
-        )}
-        {kind === 'practice' && (
-          <div className="seg" role="group" aria-label="View">
-            <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => chooseView('list')}>
-              List
-            </button>
-            <button className={view === 'calendar' ? 'on' : ''} aria-pressed={view === 'calendar'} onClick={() => chooseView('calendar')}>
-              Calendar
-            </button>
-          </div>
-        )}
       </div>
       {error && <p className="error">{error}</p>}
       {summary && <Peek entry={summary.entry} at={summary} today={todayISO()} />}
@@ -506,6 +461,48 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       {fromCommunity && <CommunityPicker kind="plan" onClose={() => setFromCommunity(false)} onAdded={(id) => navigate(`/plans/${id}`)} />}
 
       </div>
+      <div className={kind === 'practice' ? 'ps-layout' : ''}>
+      {/* Down the left: how the schedule is seen, which kinds of thing are in it, and the team calendar it is brought in from. */}
+      {kind === 'practice' && (
+        <aside className="card ps-side" aria-label="View and filters">
+          <section>
+            <h2>View</h2>
+            <div className="seg" role="group" aria-label="View">
+              <button className={view === 'list' ? 'on' : ''} aria-pressed={view === 'list'} onClick={() => chooseView('list')}>
+                List
+              </button>
+              <button className={view === 'calendar' ? 'on' : ''} aria-pressed={view === 'calendar'} onClick={() => chooseView('calendar')}>
+                Calendar
+              </button>
+            </div>
+          </section>
+          <section>
+            <h2>Show</h2>
+            <div className="ps-side-filter" role="group" aria-label="Show">
+              {FILTERS.map(([id, label]) => (
+                <button key={id} type="button" className={only === id ? 'on' : ''} aria-pressed={only === id} onClick={() => setOnly(id)}>
+                  {label}
+                  <span className="ps-side-count">{id === 'all' ? entries.length : entries.filter((e) => e.kind === id).length}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+          {/* When the team's calendar was last brought in, and the button that brings it in again. */}
+          {hasCalendar && (
+            <section className="ps-side-sync" role="status" title="Games and practices from GameChanger or your team app. They are not updated on their own: press Re-sync to bring in changes.">
+              <h2>Team calendar</h2>
+              <span className="ps-sync">
+                <span className="sync-dot" aria-hidden="true" />
+                <span className="muted small">Synced {fmtSynced(team!.calendar_synced_at)}</span>
+              </span>
+              <button className="btn small" onClick={sync} disabled={syncing}>
+                {syncing ? 'Updating…' : 'Re-sync'}
+              </button>
+            </section>
+          )}
+        </aside>
+      )}
+      <div className="ps-main">
       {/* The calendar offer, for a team with no calendar linked. It shrinks to one line once a practice has been built. */}
       {kind === 'practice' && !hasCalendar && plans !== null && (
         <section className={`start-cal ${built ? 'compact' : ''}`} aria-label="Bring in your schedule">
@@ -529,25 +526,10 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           </Link>
         </section>
       )}
-      {kind === 'practice' && next && !calendar && (
-        <p className="muted small list-note">
-          <button
-                className="link"
-                onClick={() => {
-                  // The next one may be filtered out: show it, then bring it to the middle.
-                  setOnly('all');
-                  requestAnimationFrame(() => requestAnimationFrame(() => nextRow.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })));
-                }}
-              >
-                Jump to next up
-          </button>
-        </p>
-      )}
-
       {plans === null ? (
         <p className="muted">Loading…</p>
       ) : calendar ? (
-        <PlanCalendar entries={entries} today={today} nextKey={next?.key ?? null} onPlan={planFromCalendar} onAdd={createOn} />
+        <PlanCalendar entries={only === 'all' ? entries : entries.filter((e) => e.kind === only)} today={today} nextKey={next?.key ?? null} onPlan={planFromCalendar} onAdd={createOn} />
       ) : entries.length === 0 ? (
         <div className="empty">
           <h2>No {kind === 'practice' ? 'practices' : 'homework'} yet</h2>
@@ -563,7 +545,7 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       ) : weeks.length === 0 ? (
         <div className="empty">
           <h2>Nothing of that kind yet</h2>
-          <p>Choose "All" to see everything, or add a {noun}.</p>
+          <p>Choose "All" on the left to see everything.</p>
         </div>
       ) : (
         weeks.map((w, n) => {
@@ -614,6 +596,8 @@ export default function Plans({ kind }: { kind: PlanKind }) {
           </ul>
         </>
       )}
+      </div>
+      </div>
     </div>
   );
 }

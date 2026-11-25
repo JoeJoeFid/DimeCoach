@@ -235,7 +235,7 @@ export default function Dashboard() {
         <section className="card dash-quick" aria-label="Quick actions">
           <h2>Quick actions</h2>
           {/* Straight into a new one, not the list of them. */}
-          <Link className="btn primary" to="/practices?new=1">
+          <Link className="btn" to="/practices?new=1">
             <HeadIcon d="M5 6h14v14H5ZM5 10h14M9 3.500V7M15 3.500V7M12 12.500v5M9.500 15h5" />
             Add practice or game
           </Link>
@@ -701,10 +701,6 @@ function CategoryHistory({
           </label>
         </div>
       </div>
-      <p className="muted small">
-        Each column is a practice and each square shows the minutes that practice gave a category. The stronger the color, the more minutes. Select
-        a square to open the practice. The color you choose here is also used for the bars below.
-      </p>
       <div className="heat-scroll">
         <table className="heat" style={{ minWidth: 170 + columns.length * 50 }}>
           <colgroup>

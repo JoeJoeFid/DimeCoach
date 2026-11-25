@@ -22060,6 +22060,7 @@ button.film-clip-play {
   --go-hover: #dff76e;
 }
 .tl-card.tl-next,
+.plan-row.next,
 .plan-row.next:hover {
   --go: #151b00;
   --go-edge: #151b00;
@@ -22170,4 +22171,129 @@ button.film-clip-play {
 }
 .aud-pick .field-label {
   margin-right: 4px;
+}
+
+/* Schedule: the sync line and the choice of view sit in the heading, beside the button that adds. */
+.ps-head .ps-sync {
+  margin-bottom: 0;
+}
+.ps-head {
+  margin-bottom: 0;
+}
+
+/* The arrow half of a split primary button matches the lime half beside it. */
+.split-btn > .btn.primary {
+  border-radius: 10px 0 0 10px;
+}
+.split-btn .more-btn {
+  border-color: var(--go-edge);
+  border-left-color: color-mix(in srgb, var(--go-ink) 30%, var(--go));
+  border-radius: 0 10px 10px 0;
+  background: var(--go);
+  color: var(--go-ink);
+}
+.split-btn .more-btn:hover {
+  background: var(--go-hover);
+}
+
+/* ---------- Schedule: a narrow column down the left for the view, the kinds shown and the team calendar ---------- */
+.ps-layout {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.ps-main {
+  min-width: 0;
+}
+.ps-side {
+  position: sticky;
+  top: calc(var(--ps-sticky-h, 0px) + 14px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+  padding: 14px;
+}
+.ps-side section {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.ps-side h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ps-side .seg {
+  display: flex;
+}
+.ps-side .seg button {
+  flex: 1;
+  justify-content: center;
+}
+.ps-side-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ps-side-filter button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
+.ps-side-filter button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.ps-side-filter button.on {
+  background: var(--accent);
+  border-color: var(--accent-edge);
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+.ps-side-count {
+  font-size: 0.78rem;
+  font-weight: 550;
+  opacity: 0.7;
+}
+.ps-side .ps-sync {
+  margin: 0;
+  white-space: normal;
+}
+.ps-side-sync .btn {
+  align-self: flex-start;
+}
+/* On a narrow screen the column lies across the top, its parts side by side. */
+@media (max-width: 900px) {
+  .ps-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .ps-side {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+  }
+  .ps-side-filter {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
