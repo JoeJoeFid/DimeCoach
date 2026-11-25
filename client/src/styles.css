@@ -23521,11 +23521,12 @@ button.hw-title {
   margin-top: 16px;
 }
 
-/* The "i" beside a page's name, a little smaller. */
+/* The "i" beside a page's name, small beside the name it explains. */
 .about-btn {
-  width: 23px;
-  height: 23px;
-  font-size: 0.95rem;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 0.76rem;
 }
 
 /* A smaller line under an entry of a "..." list, saying more about it. */
@@ -23941,4 +23942,19 @@ button.hw-title {
   margin: 0;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+
+/* Dashboard: quick actions stand on the left at a quarter of the width, and announcements on the right. */
+@media (min-width: 1001px) {
+  .dash-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  }
+  .dash-row > .dash-quick {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .dash-row > .dash-news {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }
