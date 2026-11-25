@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
 import { PICKS, QUALITIES, RUNGS, Stopped, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
-import { Modal } from './bits';
+import { BinIcon, Modal, PlayIcon } from './bits';
 import { confirmDialog } from './dialogs';
 
 const mb = (bytes: number) => (bytes >= 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1024 / 1024))} MB`);
@@ -496,7 +496,7 @@ export function FullButton({ full, onClick }: { full: boolean; onClick: () => vo
  * before it. While it is being dragged it shows where it is held, and the video is only moved
  * once the hand rests: moving it at every step would fetch video nobody watches.
  */
-export function SeekInput({ value, max, label, say, onSeek }: { value: number; max: number; label: string; say: (seconds: number) => string; onSeek: (seconds: number) => void }) {
+export function SeekInput({ value, max, label, say, onSeek, loaded }: { value: number; max: number; label: string; say: (seconds: number) => string; onSeek: (seconds: number) => void; /** How far the video is loaded and ready, in seconds from its start: shown fainter on the bar, past where it is. */ loaded?: number }) {
   const [held, setHeld] = useState<number | null>(null);
   const timer = useRef(0);
   const seek = useRef(onSeek);
@@ -511,10 +511,21 @@ export function SeekInput({ value, max, label, say, onSeek }: { value: number; m
     }, 150);
   };
   const shown = held ?? Math.min(value, max);
+  const share = (n: number) => `${max > 0 ? Math.max(0, Math.min(100, (n / max) * 100)) : 0}%`;
   return (
     <>
       <span className="muted small">{say(shown)}</span>
-      <input type="range" min={0} max={max} step={1} value={shown} aria-label={label} onChange={(e) => change(Number(e.target.value))} />
+      <input
+        type="range"
+        className="gv-range"
+        min={0}
+        max={max}
+        step={1}
+        value={shown}
+        aria-label={label}
+        style={{ '--played': share(shown), '--loaded': share(Math.max(shown, held === null ? (loaded ?? 0) : 0)) } as React.CSSProperties}
+        onChange={(e) => change(Number(e.target.value))}
+      />
     </>
   );
 }
@@ -530,15 +541,15 @@ const markAt = (seconds: number, meta: GameStream) => {
  * live one runs from its start to now, and keeps growing: a viewer can go back to see something
  * again, forward as far as the newest, and straight back to live.
  */
-function SeekBar({ at, meta, behind, onSeek, onLive }: { at: number; meta: GameStream; behind: boolean; onSeek: (seconds: number) => void; onLive: () => void }) {
+function SeekBar({ at, meta, behind, onSeek, onLive, ahead }: { at: number; meta: GameStream; behind: boolean; onSeek: (seconds: number) => void; onLive: () => void; /** Seconds loaded past where it is, when the player says. */ ahead?: number }) {
   if (meta.segments <= 1) return null;
   const live = meta.status === 'live';
   const total = meta.segments * meta.segment_seconds;
-  // Watching live, the handle sits at the end and stays there as the video grows.
-  const shown = live && !behind ? total : Math.min(at, total);
+  // Where it really is: watching live that is a few seconds short of the end, with what is in hand showing fainter up to it.
+  const shown = Math.min(at, total);
   return (
     <div className="gv-seek">
-      <SeekInput value={shown} max={total} label={live ? 'Go back or forward through the broadcast' : 'Move through the video'} say={span} onSeek={onSeek} />
+      <SeekInput value={shown} max={total} loaded={ahead === undefined ? undefined : shown + ahead} label={live ? 'Go back or forward through the broadcast' : 'Move through the video'} say={span} onSeek={onSeek} />
       {!live ? (
         <span className="muted small">{span(meta.segments * meta.segment_seconds)}</span>
       ) : behind ? (
@@ -566,6 +577,8 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
   // How far in it is, in whole seconds: what the bar shows.
   const [secs, setSecs] = useState(from * stream.segment_seconds);
   const [waiting, setWaiting] = useState(false);
+  // Seconds loaded past where it is.
+  const [ahead, setAhead] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [over, setOver] = useState(false);
   const live = meta.status === 'live';
@@ -574,6 +587,8 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
   const playingRef = useRef(playing);
   playingRef.current = playing;
   const player = useRef<JoinedPlayer | null>(null);
+  // How many times the player has given up on a live broadcast and been started again.
+  const fails = useRef(0);
   // How far the stream has got, asked again while it is live.
   useEffect(() => {
     if (meta.status !== 'live') return;
@@ -585,10 +600,17 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
     const el = video.current;
     if (!el) return;
     const made = joinedPlayer(el, metaRef.current, from, start.follow, (p) => {
-      if (p.failed) return onFail();
+      if (p.failed) {
+        // One piece that will not play (the camera changed under it, say) is no reason to watch the rest piece by piece,
+        // with a stop at every join. Live, the player starts again from what comes next. Only when that keeps failing is it given up on.
+        const m = metaRef.current;
+        if (m.status !== 'live' || (fails.current += 1) > 4) return onFail();
+        return setStart({ from: m.segments, off: 0, follow: true });
+      }
       if (p.piece !== undefined) setAt(Math.min(p.piece, Math.max(0, metaRef.current.segments - 1)));
       if (p.at) setSecs(Math.floor(p.at.n * metaRef.current.segment_seconds + p.at.off));
       if (p.waiting !== undefined) setWaiting(p.waiting);
+      if (p.ahead !== undefined) setAhead(p.ahead);
       if (p.ended) {
         setPlaying(false);
         // A broadcast that was not saved is gone once it has played out.
@@ -642,7 +664,7 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
         {over && <span className="gv-wait">This broadcast has ended.</span>}
         <FullButton full={full} onClick={toggleFull} />
       </div>
-      {!over && <SeekBar at={secs} meta={meta} behind={live && !start.follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
+      {!over && <SeekBar at={secs} ahead={ahead} meta={meta} behind={live && !start.follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
     </div>
   );
 }
@@ -998,9 +1020,15 @@ export function GameVideoCard({ stream: s, onPlay, playLabel = 'Play', children 
           {day(s.started_at)} · {mb(s.bytes)} · from {s.by}
         </span>
         <div className="res-actions">
-          <button type="button" className="btn small" onClick={onPlay}>
-            {playLabel}
-          </button>
+          {playLabel === 'Play' ? (
+            <button type="button" className="btn small icon-btn" onClick={onPlay} aria-label={`Play ${s.title || 'Game video'}`} title="Play">
+              <PlayIcon />
+            </button>
+          ) : (
+            <button type="button" className="btn small" onClick={onPlay}>
+              {playLabel}
+            </button>
+          )}
           {children}
         </div>
       </div>
@@ -1058,6 +1086,17 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
         />
       ) : (
         <>
+          {/* Going live from this device: at the top right of the page, where it is found without reading down. */}
+          {can.broadcast && (
+            <div className="gv-top">
+              <button type="button" className="btn gv-go" title="Uses this device's camera and microphone. You choose whether the video is kept before you go live." onClick={() => (setNotice(''), setCasting(true))}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM8.1 15.9a5.5 5.5 0 0 1 0-7.800M15.9 8.100a5.500 5.500 0 0 1 0 7.800M5.300 18.700a9.500 9.500 0 0 1 0-13.400M18.700 5.300a9.500 9.500 0 0 1 0 13.400" />
+                </svg>
+                Broadcast from this device
+              </button>
+            </div>
+          )}
           {live.length === 0 ? (
             <div className="card gv-none">
               <h2>{planId ? 'This game is not live right now' : 'Nothing is live right now'}</h2>
@@ -1074,16 +1113,6 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
               </div>
             ))
           )}
-          {can.broadcast && (
-            <div className="gv-actions">
-              <button type="button" className="btn primary" onClick={() => (setNotice(''), setCasting(true))}>
-                Broadcast from this device
-              </button>
-              <span className="muted small">
-                Uses this device's camera and microphone. You choose whether the video is kept before you go live.
-              </span>
-            </div>
-          )}
         </>
       )}
       {can.coach && !casting && (
@@ -1099,8 +1128,8 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
             <div className="res-grid gv-saved">
               {saved.map((s) => (
                 <GameVideoCard key={s.id} stream={s} onPlay={() => setWatching(s)}>
-                  <button type="button" className="btn small res-remove" onClick={() => remove(s)}>
-                    Delete
+                  <button type="button" className="btn small icon-btn danger res-remove" aria-label={`Delete ${s.title || 'Game video'}`} title="Delete" onClick={() => remove(s)}>
+                    <BinIcon />
                   </button>
                 </GameVideoCard>
               ))}

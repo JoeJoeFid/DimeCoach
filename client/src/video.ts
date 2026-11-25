@@ -634,6 +634,8 @@ export interface Playing {
   at?: Mark;
   /** Caught up with a live stream, and waiting for more. */
   waiting?: boolean;
+  /** How many seconds past where it is are loaded and ready to play. */
+  ahead?: number;
   /** A saved video has played to its end. */
   ended?: boolean;
   /** This browser could not play it this way after all: the page falls back to playing piece by piece. */
@@ -647,8 +649,14 @@ export interface JoinedPlayer {
   close: () => void;
 }
 /** How much is kept ready ahead of what is showing, in pieces, and how much is kept behind, in seconds. */
-const AHEAD_PIECES = 3;
+const AHEAD_PIECES = 5;
 const KEEP_BEHIND = 30;
+/**
+ * How many seconds a viewer watching live has in hand before the picture moves. Pieces come one
+ * every few seconds and never exactly on time, so a viewer with nothing in hand stops for a moment
+ * at the end of every piece. One who has run out waits once, for this much, and then plays smoothly.
+ */
+const CUSHION = 6;
 
 /** The name a browser's player wants for this kind of video. */
 function sourceType(mime: string) {
@@ -674,7 +682,10 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
   const get = pieceFetcher(stream);
   const seconds = stream.segment_seconds;
   // `opening` is the opening part the player was last given: the next piece may need another.
-  const st = { next: from, segments: stream.segments, live: stream.status === 'live', busy: false, closed: false, sb: null as SourceBuffer | null, opening: -1, sought: !opts.offset, done: false };
+  const st = { next: from, segments: stream.segments, live: stream.status === 'live', busy: false, closed: false, sb: null as SourceBuffer | null, opening: -1, sought: !opts.offset, done: false, hold: follow && stream.status === 'live' };
+  // Held still, not paused: the person pressed play and it stays pressed.
+  el.playbackRate = st.hold ? 0 : 1;
+  if (st.hold) onChange({ waiting: true });
   // Where each piece begins on the player's own clock, noted as it is fed in: what turns the clock into a mark.
   const starts = new Map<number, number>();
   /** No piece past the end of a clip is fetched. */
@@ -705,6 +716,18 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
     await taken;
   };
   const ahead = (sb: SourceBuffer) => (sb.buffered.length ? sb.buffered.end(sb.buffered.length - 1) - el.currentTime : 0);
+  /** How much is loaded past where it is, said whenever it may have changed, for the bar to show. */
+  let saidAhead = -1;
+  const sayAhead = () => {
+    const sb = st.sb;
+    let n = 0;
+    try {
+      n = sb ? Math.max(0, Math.round(ahead(sb))) : 0;
+    } catch {
+      // The player has let go of its video.
+    }
+    if (n !== saidAhead) onChange({ ahead: (saidAhead = n) });
+  };
   /** Feeds the player what it has room for, and lets go of what is long past. */
   const fill = async () => {
     const sb = st.sb;
@@ -757,12 +780,19 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
         }
         st.next += 1;
       }
+      // Enough in hand, or no more coming: on it goes.
+      if (st.hold && (ahead(sb) >= CUSHION || !st.live)) {
+        st.hold = false;
+        el.playbackRate = 1;
+        onChange({ waiting: false });
+      }
       // A video that is over is told so, and plays out what it has.
       if ((!st.live || opts.end) && st.next >= upto() && ms.readyState === 'open' && !sb.updating) ms.endOfStream();
     } catch {
       fail();
     } finally {
       st.busy = false;
+      if (!st.closed) sayAhead();
     }
   };
   const opened = window.setTimeout(() => !st.sb && fail(), 6000);
@@ -791,6 +821,7 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
   const onTime = () => {
     const at = where();
     onChange({ piece: from + Math.floor(el.currentTime / seconds), at });
+    sayAhead();
     // The end of a clip: stopped there, and said once.
     if (opts.end && !st.done && (at.n > opts.end.n || (at.n === opts.end.n && at.off >= opts.end.off))) {
       st.done = true;
@@ -798,8 +829,16 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
       onChange({ ended: true });
     }
   };
-  const onWaiting = () => onChange({ waiting: st.live && st.next >= st.segments });
-  const onPlaying = () => onChange({ waiting: false });
+  const onWaiting = () => {
+    const dry = st.live && st.next >= st.segments;
+    // Run out while watching live: it waits until there is some in hand again, not just for the next piece.
+    if (dry && follow && !st.hold) {
+      st.hold = true;
+      el.playbackRate = 0;
+    }
+    onChange({ waiting: dry || st.hold });
+  };
+  const onPlaying = () => !st.hold && onChange({ waiting: false });
   const onEnded = () => {
     if (st.done) return;
     st.done = true;
@@ -835,6 +874,7 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
       return false;
     },
     close: () => {
+      el.playbackRate = 1;
       st.closed = true;
       window.clearTimeout(opened);
       window.clearInterval(timer);

@@ -140,6 +140,19 @@ export const ShareIcon = ({ size = 18 }: { size?: number }) => (
   </svg>
 );
 
+/** The bin on a Delete button. */
+export const BinIcon = ({ size = 17 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5" />
+  </svg>
+);
+/** The triangle on a Play button. */
+export const PlayIcon = ({ size = 17 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden="true">
+    <path d="M8 5.5v13l10.5-6.5Z" />
+  </svg>
+);
+
 /** A whole name as its first word and the rest, for filling the two boxes from a name written as one. */
 export const splitName = (name: string) => {
   const n = name.trim().replace(/\s+/g, ' ');

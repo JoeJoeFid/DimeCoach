@@ -6,6 +6,7 @@ import { api, type TeamContact, type TeamContacts } from '../api';
 import { useApp } from '../App';
 import type { Player, StaffMember, Team, TeamInvite, TeamPerm } from '../types';
 import { Field, Modal } from '../components/bits';
+import { TopTabs } from '../components/TopTabs';
 import SportIcon from '../components/SportIcon';
 import PageTitle from '../components/PageTitle';
 import { fmtSynced, roomyScreen } from '../util';
@@ -822,13 +823,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
 
   return (
     <div className="team-panel">
-      <div className="seg team-tabs" role="tablist" aria-label="Parts of this team">
-        {TABS.map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <TopTabs tabs={TABS} value={tab} onChange={setTab} label="Parts of this team" />
 
       {tab === 'team' && (
       <div className="card">

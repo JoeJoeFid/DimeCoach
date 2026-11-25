@@ -5,19 +5,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, type Film, type FilmClip, type FilmLink, type FilmPeople, type FilmReel, type FilmShare, type GameStream } from '../api';
 import { useApp } from '../App';
 import PageTitle from '../components/PageTitle';
-import { Field, Modal, ShareIcon } from '../components/bits';
+import { BinIcon, Field, Modal, ShareIcon } from '../components/bits';
 import { SubTabs } from '../components/cx';
 import { confirmDialog } from '../components/dialogs';
 import { GameVideoCard } from '../components/GameVideo';
 import { CutIcon, FilmPlayer, ReelPlayer, canClip, clock, scenes, stripItem } from '../components/Film';
 
 type Tab = 'games' | 'clips' | 'videos';
-/** The bin on a Delete button, as on the Drills page. */
-const BinIcon = () => (
-  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5M10 11v5M14 11v5" />
-  </svg>
-);
 const day = (at: string) => new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 /** Which game a video is of, in words, for asking before anything of it is deleted. */
 const gameOf = (v: GameStream | undefined) => {
@@ -126,9 +120,7 @@ export default function Filmroom() {
           ['clips', 'Clips', film?.clips.length],
           [
             'videos',
-            <span className="cut-tab" key="cuts">
-              <CutIcon size={16} /> Cuts
-            </span>,
+            'Cuts',
             film?.reels.length,
           ],
         ]}

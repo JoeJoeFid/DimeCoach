@@ -91,6 +91,8 @@ export const FilmPlayer = forwardRef<FilmHandle, FilmPlayerProps>(function FilmP
   const [at, setAt] = useState<FilmMark>(range.from);
   const [playing, setPlaying] = useState(!!autoPlay);
   const [plain, setPlain] = useState(!canClip(stream));
+  // Seconds loaded past where it is.
+  const [ahead, setAhead] = useState(0);
   const atRef = useRef(at);
   const wantPlay = useRef(!!autoPlay);
   const moved = useRef(0);
@@ -109,6 +111,7 @@ export const FilmPlayer = forwardRef<FilmHandle, FilmPlayerProps>(function FilmP
       false,
       (now) => {
         if (now.failed) return setPlain(true);
+        if (now.ahead !== undefined) setAhead(now.ahead);
         if (now.at) {
           atRef.current = now.at;
           setAt(now.at);
@@ -189,7 +192,7 @@ export const FilmPlayer = forwardRef<FilmHandle, FilmPlayerProps>(function FilmP
       </div>
       {!end && !range.end && last > 0 && (
         <div className="gv-seek">
-          <SeekInput value={Math.floor(markSeconds(at, stream))} max={total} label="Move through the video" say={clock} onSeek={seek} />
+          <SeekInput value={Math.floor(markSeconds(at, stream))} loaded={plain ? undefined : Math.floor(markSeconds(at, stream)) + ahead} max={total} label="Move through the video" say={clock} onSeek={seek} />
           <span className="muted small">{clock(stream.seconds)}</span>
         </div>
       )}

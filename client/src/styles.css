@@ -17417,6 +17417,50 @@ button.play-card {
   flex: 1;
   accent-color: var(--ink);
 }
+/* The bar under a video, drawn here so it can show three things: what has played, what is loaded
+   and ready past that (fainter), and the rest (fainter still). */
+.gv-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  margin: 8px 0;
+  border-radius: 3px;
+  background: linear-gradient(
+    to right,
+    var(--ink) 0 var(--played, 0%),
+    color-mix(in srgb, var(--ink) 42%, transparent) var(--played, 0%) var(--loaded, 0%),
+    color-mix(in srgb, var(--ink) 14%, transparent) var(--loaded, 0%) 100%
+  );
+  cursor: pointer;
+}
+.gv-range::-webkit-slider-runnable-track {
+  height: 6px;
+  background: none;
+}
+.gv-range::-moz-range-track {
+  height: 6px;
+  background: none;
+}
+.gv-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.gv-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.gv-range:focus-visible {
+  outline: 2px solid var(--accent-edge);
+  outline-offset: 4px;
+}
 .gv-people td:not(:first-child),
 .gv-people th:not(:first-child) {
   text-align: center;
@@ -21304,4 +21348,108 @@ button.film-clip-play {
 }
 .btn .cut-icon {
   margin-right: 6px;
+}
+
+/* ---------- The tabs across the top of a page ----------
+   One rounded bar. Each tab is a sign and a word; the chosen one is filled in the accent colour,
+   with dark words on it. A fine line stands between the ones that are not chosen. */
+.toptabs {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin-bottom: 18px;
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent), 0 8px 24px -14px color-mix(in srgb, var(--accent) 60%, transparent);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.toptabs::-webkit-scrollbar {
+  display: none;
+}
+.toptabs button {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.02rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.toptabs button:hover:not(.on) {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.toptabs button + button::before {
+  content: '';
+  position: absolute;
+  left: -0.5px;
+  top: 30%;
+  bottom: 30%;
+  width: 1px;
+  background: var(--line-strong);
+}
+.toptabs button.on::before,
+.toptabs button.on + button::before,
+.toptabs button:hover::before,
+.toptabs button:hover + button::before {
+  content: none;
+}
+.toptabs button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.toptabs-sign {
+  flex: none;
+}
+.toptabs .cm-count {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  color: inherit;
+}
+.toptabs button.on .cm-count {
+  background: rgb(0 0 0 / 0.14);
+}
+.fam .toptabs {
+  margin-bottom: 16px;
+}
+@media (max-width: 640px) {
+  .toptabs button {
+    min-height: 42px;
+    padding: 0 16px;
+    gap: 7px;
+    font-size: 0.95rem;
+  }
+}
+
+/* Going live from this device: a green button at the top right of the game's video. */
+.gv-top {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+.btn.gv-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+  font-weight: 650;
+}
+.btn.gv-go:hover {
+  background: color-mix(in srgb, var(--good) 86%, #000);
+  border-color: color-mix(in srgb, var(--good) 86%, #000);
 }

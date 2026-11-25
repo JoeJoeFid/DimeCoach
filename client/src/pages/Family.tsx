@@ -10,6 +10,7 @@ import { Modal } from '../components/bits';
 import { SharedPreview } from '../components/community';
 import { PlayDiagram } from '../components/PlayDiagram';
 import { CategoryChips, DateBlock, LayoutToggle, PageHead, Row, useCompact } from '../components/cx';
+import { TopTabs } from '../components/TopTabs';
 import SportIcon from '../components/SportIcon';
 import { PasswordForm } from './Auth';
 import { FollowedTeams, NEW_TEAM_KEY } from '../components/TeamPicker';
@@ -447,14 +448,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
       </PageHead>
       {/* In the frame, the parts of the page are in the menu at the side. */}
       {tabs.length > 1 && !frame && (
-        <nav className="seg team-tabs cx-seg-tabs" aria-label={`Parts of ${team.name}`}>
-          {tabs.map(([t, label, count]) => (
-            <button key={t} type="button" className={tab === t ? 'on' : ''} aria-current={tab === t ? 'page' : undefined} onClick={() => go(t)}>
-              {label}
-              {!!count && <span className="cm-count">{count}</span>}
-            </button>
-          ))}
-        </nav>
+        <TopTabs nav tabs={tabs} value={tab} onChange={go} label={`Parts of ${team.name}`} />
       )}
 
       {tab === 'home' && (

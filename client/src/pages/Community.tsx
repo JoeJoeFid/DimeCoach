@@ -13,6 +13,7 @@ import { LapsedBanner, OrgAnnouncements, OrgLibrarySettings, OrgLog, OrgVenues, 
 import { ManageOverview, OrgSchedule, OrgUsage, type ManageGo } from './OrgManage';
 import { OrgPlayers } from './OrgPlayers';
 import { Badge, PageHead, Row } from '../components/cx';
+import { TopTabs } from '../components/TopTabs';
 
 // A community has two sides. Everyone sees the community side: home, the shared library, the
 // discussions and the members. The people who run an organization also have the management side.
@@ -416,14 +417,7 @@ export default function CommunityPage() {
           <MoreMenu items={topMenu} label={`More for ${c.name}`} />
         </span>
       </header>
-      <nav className="seg team-tabs cx-seg-tabs" role="tablist" aria-label={side === 'manage' ? 'Management' : 'Community'}>
-        {tabs.map(([t, label, count]) => (
-          <button key={t} type="button" role="tab" className={onTab(t) ? 'on' : ''} aria-selected={onTab(t)} onClick={() => open(t)}>
-            {label}
-            {count > 0 && <span className="cm-count">{count}</span>}
-          </button>
-        ))}
-      </nav>
+      <TopTabs tabs={tabs} value={at} onChange={open} isOn={onTab} label={side === 'manage' ? 'Management' : 'Community'} />
       {error && <p className="error">{error}</p>}
       {notice && <p className="banner ok">{notice}</p>}
       <LapsedBanner c={c} />

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api, type AdminSettings, type SignIn, type SystemState, type SystemUser, type UserActivity } from '../api';
 import { useApp } from '../App';
 import { Field, Modal, MoreMenu, NameFields } from '../components/bits';
+import { TopTabs } from '../components/TopTabs';
 import RegistrationCard from '../components/RegistrationCard';
 import SportIcon from '../components/SportIcon';
 import AccessibilityCard, { PlayImportCard, SavedVideoCard } from '../components/AccessibilityCard';
@@ -289,13 +290,7 @@ export default function SystemAdmin() {
         <p className="muted">Loading…</p>
       ) : (
         <>
-          <nav className="cx-tabs sys-tabs" role="tablist" aria-label="System administration">
-            {SYS_TABS.map(([id, label]) => (
-              <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setParams(id === 'people' ? {} : { tab: id }, { replace: true })}>
-                {label}
-              </button>
-            ))}
-          </nav>
+          <TopTabs tabs={SYS_TABS} value={tab} onChange={(id) => setParams(id === 'people' ? {} : { tab: id }, { replace: true })} label="System administration" />
           {tab === 'people' && (
             <>
           <div className="sys-top">

@@ -1,6 +1,7 @@
 // The building blocks of the community and organization pages: a page heading, number tiles,
 // rows that lead somewhere, things that need attention, and the "season › league › team" selectors.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { TopTabs } from './TopTabs';
 
 /** The top of a page: where you are in small letters, the title, a line under it, and its main action. */
 export function PageHead({ eyebrow, title, sub, children }: { eyebrow: string; title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
@@ -211,8 +212,9 @@ export function Crumbs({ items }: { items: Crumb[] }) {
 
 /** Smaller tabs inside a page. */
 export function SubTabs<T extends string>({ tabs, value, onChange, label, boxed }: { /** Each tab: what it is, what it says (words, or words with an icon), and a count when it has one. */ tabs: [T, ReactNode, number?][]; value: T; onChange: (t: T) => void; label: string; /** Drawn as the boxed bar at the top of a page, as on Team. */ boxed?: boolean }) {
+  if (boxed) return <TopTabs tabs={tabs} value={value} onChange={onChange} label={label} />;
   return (
-    <div className={boxed ? 'seg team-tabs cx-seg-tabs' : 'cx-subtabs'} role="tablist" aria-label={label}>
+    <div className="cx-subtabs" role="tablist" aria-label={label}>
       {tabs.map(([id, text, count]) => (
         <button key={id} type="button" role="tab" aria-selected={value === id} className={value === id ? 'on' : ''} onClick={() => onChange(id)}>
           {text}
