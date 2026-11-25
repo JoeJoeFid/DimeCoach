@@ -5,7 +5,6 @@ import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../App';
 import { MentionArea, MentionText, useFocusPost } from '../components/Mentions';
-import { StreamPeople } from '../components/GameVideo';
 import { api, type Audience, type FamilyKind, type FamilySection, type FamilySettings, type TeamPost, type StreamPerson } from '../api';
 import type { Team } from '../types';
 import { SubTabs } from '../components/cx';
@@ -99,7 +98,7 @@ const ACCESS: { group: string; /** The line drawing beside its name. */ icon: st
     icon: 'M3.500 6.500h12v11h-12ZM15.500 10.500l5-3v9l-5-3',
     about: 'Live games and saved film.',
     rows: [
-      ['live', 'Watch live video', 'Watching a game while it is broadcast. One person can be turned off under "Live video".'],
+      ['live', 'Watch live video', 'Watching a game while it is broadcast.'],
       ['broadcast', 'Broadcast live video', 'Sending a game’s live video from their own phone or tablet. Tick a whole group, choose people by name below, or both.'],
       ['film', 'Filmroom', 'Only the game videos, clips and cuts you share with the team from the Filmroom. Video shared with one person by name always shows to them.'],
     ],
@@ -133,7 +132,7 @@ const ACCESS: { group: string; /** The line drawing beside its name. */ icon: st
 ];
 const ROLE: Record<TeamPost['role'], string> = { coach: 'Coach', parent: 'Parent', family: 'Family', friend: 'Friend' };
 const when = (at: string) => new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-type View = 'access' | 'messages' | 'video';
+type View = 'access' | 'messages';
 
 /** Who an announcement goes out to unless the coach says otherwise. */
 export const DEFAULT_AUDIENCE: Audience[] = ['coach', 'parent'];
@@ -233,11 +232,9 @@ export function FamilyPageCard({ team, canEdit }: { team: Team; canEdit: boolean
         tabs={[
           ['access', 'What each group can do'],
           ['messages', 'Announcements & board', data.news.length + data.board.length],
-          ['video', 'Live video'],
         ]}
       />
 
-      {view === 'video' && <StreamPeople teamId={team.id} />}
 
       {view === 'access' && (
         <div className="tf-boxes">
