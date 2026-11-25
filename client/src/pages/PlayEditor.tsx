@@ -898,7 +898,7 @@ export default function PlayEditor() {
             <ShareIcon size={16} /> Share
           </button>
           <button className="btn" onClick={() => setWatching(true)} title="Watch the play move, step by step">
-            ▶ Play animation
+            ▶ Watch the play
           </button>
           {lineups(play.court).map((l) => (
             <button key={l.id} className="btn" onClick={() => addLineup(l)} title="Places everyone in their usual starting spots on this step. Drag them where you want them.">
@@ -1022,9 +1022,18 @@ export default function PlayEditor() {
       <div className="builder">
         <div className="builder-left">
           <div className="card builder-steps">
-            <h4>
-              Steps <span className="hint">{play.frames.length}</span>
-            </h4>
+            {/* What this box is, said plainly: the play as a row of moments, one picture each. */}
+            <div className="box-title">
+              <span className="box-title-sign" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 5.500h12v9H4zM8 18.500h12v-9" />
+                </svg>
+              </span>
+              <h3>
+                Steps <span className="box-title-count">{play.frames.length}</span>
+              </h3>
+            </div>
+            <p className="muted small box-sub">Each step is one moment of the play. Pick one to draw on it.</p>
             <DndContext sensors={stepSensors} collisionDetection={closestCenter} onDragEnd={moveStep}>
               <SortableContext items={play.frames.map((_, i) => String(i))} strategy={rectSortingStrategy}>
                 {/* When any step has a note, every step becomes a row: its picture, then its note beside it. */}
@@ -1394,11 +1403,20 @@ export default function PlayEditor() {
         </div>
 
         <div className="card builder-settings">
-          <h4>
-            Step {index + 1} <span className="hint">of {play.frames.length}</span>
-          </h4>
-          <button className="btn primary" onClick={() => setWatching(true)}>
-            ▶ Play animation
+          {/* What this box is for: how the step that is open moves, what is said about it, and watching the play run. */}
+          <div className="box-title">
+            <span className="box-title-sign" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 18c3-9 7-12 14-12M19 6l-4-.500M19 6l-1.300 3.800M6 18h.01" />
+              </svg>
+            </span>
+            <h3>
+              How step {index + 1} moves <span className="box-title-count">of {play.frames.length}</span>
+            </h3>
+          </div>
+          <p className="muted small box-sub">Choose who moves first in this step, add a note for it, and watch the play run.</p>
+          <button className="btn primary" onClick={() => setWatching(true)} title="Watch the whole play move, step by step">
+            ▶ Watch the play
           </button>
           <div className="order">
             <h4>

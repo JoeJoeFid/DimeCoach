@@ -21797,17 +21797,18 @@ button.film-clip-play {
 .builder-mid .builder-bar .tool-group {
   gap: 4px;
 }
-/* What can be changed about the thing selected, on a line under the tools. The room for it is always there, so the court
-   does not move when something is picked; the line above it only shows when there is something on it. */
+/* What can be changed about the thing selected, on a line under the tools. It is only there while something is selected:
+   with nothing picked, the tools end at their own last row. */
 .builder-mid .bar-selection {
-  min-height: 40px;
+  min-height: 0;
   margin-top: 6px;
   padding: 6px 0 0;
   border-left: none;
   border-top: 1px solid var(--line);
 }
+.builder-mid .bar-selection:empty,
 .builder-mid .bar-selection:has(.selection:empty) {
-  border-top-color: transparent;
+  display: none;
 }
 /* The court fits on the screen under its tools. */
 @media (min-width: 1101px) {
@@ -21839,4 +21840,40 @@ button.film-clip-play {
   .builder-mid .builder-bar .tool-group {
     gap: 2px;
   }
+}
+
+/* The name of a box in the play builder: a sign, what it is in plain words, and a line under it saying what it is for. */
+.box-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.box-title-sign {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.box-title h3 {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.box-title-count {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.box-sub {
+  margin: -4px 0 0;
+  line-height: 1.4;
 }
