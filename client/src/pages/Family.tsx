@@ -461,7 +461,11 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
       {tab === 'home' && (
         <>
         {/* The board a coach has at the top of their dashboard: what is next, large, and the schedule as a list beside it. Here a line opens to be read. */}
-        {can.schedule && (data.schedule.length === 0 ? <p className="muted">Nothing on the schedule yet.</p> : <HomeBoard days={data.schedule} today={today} sport={team.sport} onFull={() => go('schedule')} />)}
+        {can.schedule && (
+          <section className="card fam-board" aria-label="What is next, and the schedule">
+            {data.schedule.length === 0 ? <p className="muted">Nothing on the schedule yet.</p> : <HomeBoard days={data.schedule} today={today} sport={team.sport} onFull={() => go('schedule')} />}
+          </section>
+        )}
         <div className="fam-home">
           {/* What is going on this minute: video going out, or a game being scored. First on the right, above the coaches. */}
           {(hasVideo || hasPlays) && (
@@ -473,7 +477,18 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
                 </h2>
               </div>
               {!data.video.live && !data.live_game ? (
-                <p className="muted">Nothing is live right now. A game's video or play by play shows here the moment it starts.</p>
+                <div className="fam-quiet">
+                  {/* A screen with nothing on it yet, between two clouds. */}
+                  <svg viewBox="0 0 220 76" width="220" height="76" fill="none" aria-hidden="true">
+                    <path className="fam-quiet-cloud" d="M12 62a14 14 0 0 1 14-14 18 18 0 0 1 34-3 12 12 0 0 1 14 17Z" />
+                    <path className="fam-quiet-cloud" d="M150 62a11 11 0 0 1 11-11 15 15 0 0 1 28-2 10 10 0 0 1 12 13Z" />
+                    <rect className="fam-quiet-screen" x="80" y="16" width="62" height="44" rx="9" />
+                    <path className="fam-quiet-play" d="M105 29v18l15-9Z" />
+                    <path className="fam-quiet-spark" d="M148 14l8-8M153 21l11-4M150 28h9" />
+                  </svg>
+                  <strong>Nothing is live right now.</strong>
+                  <span className="muted small">A game's video or play by play shows here the moment it starts.</span>
+                </div>
               ) : (
                 <ul className="fam-now-list">
                   {data.live_game && (
@@ -511,7 +526,7 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
               <div className="cx-card-head">
                 <h2 className="fam-h">
                   <BoxIcon kind="news" />
-                  From the coaches
+                  Coach announcements
                 </h2>
                 {data.news.length > 1 && (
                   <button type="button" className="link cx-card-action" onClick={() => go('messages')}>
@@ -519,7 +534,14 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
                   </button>
                 )}
               </div>
-              {data.news.length === 0 ? <p className="muted">No announcements yet.</p> : <Post post={data.news[0]} />}
+              {data.news.length === 0 ? (
+                <p className="muted">No announcements yet.</p>
+              ) : (
+                // The newest one, set apart in a card of its own with the lime down its side.
+                <div className="fam-latest">
+                  <Post post={data.news[0]} />
+                </div>
+              )}
             </section>
           )}
           {data.homework.length > 0 && (

@@ -23592,3 +23592,194 @@ button.hw-title {
 .info-tip:focus .info-tip-pop {
   display: block;
 }
+
+/* ---------- The portal's dashboard boxes: flat, with a wide colored tab for each one's picture ---------- */
+.fam-home > .card,
+.fam-board {
+  padding: 18px 20px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.fam-board {
+  margin: 0;
+}
+/* The board sits inside its box with no frame or name of its own. */
+.fam-board .timeline {
+  margin: 0;
+}
+.fam-home .cx-card-head {
+  margin-bottom: 14px;
+}
+.fam-home .fam-h {
+  gap: 14px;
+  font-size: 1.2rem;
+}
+.fam-home .fam-ico {
+  width: 46px;
+  height: 34px;
+  border-radius: 11px;
+  transform: none;
+}
+.fam-home .card:hover > .cx-card-head .fam-ico {
+  transform: none;
+}
+.fam-home .fam-ico svg {
+  width: 20px;
+  height: 20px;
+}
+/* Nothing live: a quiet picture, and the words under it in the middle. */
+.fam-quiet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px 10px;
+  text-align: center;
+}
+.fam-quiet svg {
+  margin-bottom: 8px;
+}
+.fam-quiet strong {
+  font-size: 1.02rem;
+}
+.fam-quiet .muted {
+  max-width: 260px;
+}
+.fam-quiet-cloud {
+  fill: var(--surface-3);
+}
+.fam-quiet-screen {
+  fill: var(--surface-3);
+  stroke: var(--muted);
+  stroke-width: 4;
+}
+.fam-quiet-play {
+  fill: var(--accent);
+}
+.fam-quiet-spark {
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+/* The newest announcement, in a card of its own. */
+.fam-latest {
+  padding: 4px 18px 16px;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.fam-latest .fam-post {
+  border-top: none;
+}
+.fam-latest .fam-post h3 {
+  margin-top: 10px;
+  font-size: 1.15rem;
+}
+
+/* ---------- A practice's page: its details and the coaches' talk in a row at the top, then the two working columns ---------- */
+.plan-top {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+.plan-top.alone {
+  grid-template-columns: minmax(0, 1fr);
+}
+.plan-top > .plan-head {
+  margin: 0;
+}
+.plan-top-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  /* As tall as the details beside it, and no taller: a long talk scrolls inside. */
+  max-height: 460px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.plan-top-side > * {
+  margin: 0;
+}
+/* With the side column gone, what is added from and the schedule itself share the width. */
+.plan-layout {
+  grid-template-columns: clamp(340px, 38%, 620px) minmax(0, 1fr);
+}
+.plan-layout.game {
+  grid-template-columns: minmax(0, 1fr);
+}
+.plan-previous-btn {
+  align-self: flex-start;
+  gap: 7px;
+}
+@media (max-width: 1000px) {
+  .plan-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .plan-top-side {
+    max-height: none;
+  }
+}
+@media (max-width: 900px) {
+  .plan-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Going through earlier practices: the list on the left, what the chosen one held on the right. */
+.prev-browse {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.prev-browse-list {
+  max-height: 60vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.prev-browse-list button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.prev-browse-list button:hover {
+  background: var(--surface-2);
+}
+.prev-browse-list button.on {
+  border-color: var(--accent-edge);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.prev-browse-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.prev-browse-nav .btn {
+  margin-left: auto;
+}
+.prev-browse-summary {
+  min-width: 0;
+}
+@media (max-width: 700px) {
+  .prev-browse {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .prev-browse-list {
+    max-height: 180px;
+  }
+}

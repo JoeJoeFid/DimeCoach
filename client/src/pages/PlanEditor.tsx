@@ -53,6 +53,8 @@ export default function PlanEditor() {
   const [players, setPlayers] = useState<Player[]>([]);
   // On a phone the details are one line until asked for, so the schedule comes first.
   const [headOpen, setHeadOpen] = useState(false);
+  // Whether the box of earlier practices is open.
+  const [lookingBack, setLookingBack] = useState(false);
   const [glancing, setGlancing] = useState(false);
   const [drills, setDrills] = useState<Drill[]>([]);
   const [plays, setPlays] = useState<Play[]>([]);
@@ -530,7 +532,8 @@ export default function PlanEditor() {
         )}
         {gameMode && gameView === 'score' && <ScoreGameView planId={plan.id} />}
         {gameMode && gameView === 'video' && <GameVideo teamId={plan.team_id} planId={plan.id} title={plan.title || (plan.game?.opponent ? `vs. ${plan.game.opponent}` : 'Game')} />}
-        <div hidden={gameView !== 'plan'} className={`card plan-head ${headOpen ? 'open' : ''} ${gameMode ? 'game' : ''}`}>
+        <div hidden={gameView !== 'plan'} className={`plan-top ${plan.is_template ? 'alone' : ''}`}>
+        <div className={`card plan-head ${headOpen ? 'open' : ''} ${gameMode ? 'game' : ''}`}>
           <button type="button" className="head-brief" onClick={() => setHeadOpen(!headOpen)} aria-expanded={headOpen}>
             <span className="head-brief-text">
               <strong>{plan.title || 'Untitled'}</strong>
@@ -634,6 +637,13 @@ export default function PlanEditor() {
                   </div>
                 </div>
               )}
+              {/* Earlier ones are for building this one: what was done, and where the time went. */}
+              <button type="button" className="btn small plan-previous-btn" onClick={() => setLookingBack(true)}>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.900" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 12a8 8 0 1 0 2.600-5.900M4 5v4.500h4.500M12 8v4.500l3 1.800" />
+                </svg>
+                See previous {isHomework ? 'homework' : 'practices'}
+              </button>
               {isHomework && !plan.is_template && (
                 <div className="assigned">
                   <span className="field-label">For</span>
@@ -682,6 +692,14 @@ export default function PlanEditor() {
               </label>
             </div>
           </div>
+        </div>
+          {/* Coaches talk about the plan here, beside its details. A template is not a day anyone is planning, so it has none. */}
+          {!plan.is_template && (
+            <div className="plan-top-side">
+              <PlanCollaborators planId={plan.id} />
+              <PlanDiscussion planId={plan.id} what={gameMode ? 'game' : isHomework ? 'homework sheet' : 'practice'} />
+            </div>
+          )}
         </div>
 
         <div hidden={gameView !== 'plan'} className={`plan-layout ${gameMode ? 'game' : ''}`}>
@@ -816,17 +834,11 @@ export default function PlanEditor() {
           </div>
             </>
           )}
-          <div className="plan-side">
-            {/* Coaches talk about the plan here. A template is not a day anyone is planning, so it has none. */}
-            {!plan.is_template && <PlanCollaborators planId={plan.id} />}
-            {!plan.is_template && <PlanDiscussion planId={plan.id} what={gameMode ? 'game' : isHomework ? 'homework sheet' : 'practice'} />}
-            {/* Earlier practices are for building a practice. A game has no use for them. */}
-            {!gameMode && <PreviousPractices current={plan} tags={tags} />}
-          </div>
         </div>
         <DragOverlay dropAnimation={null} modifiers={[centreOnPointer]}>{incoming && <div className="palette-tile lifted">{paletteLabel(incoming, drills)}</div>}</DragOverlay>
       </DndContext>
 
+      {lookingBack && <PreviousBrowser current={plan} tags={tags} onClose={() => setLookingBack(false)} />}
       {glancing && (
         <Modal title="At a glance" onClose={() => setGlancing(false)}>
           <Glance mins={mins} tags={tags} total={total} ends={!isHomework && slots.length > 0 ? fmtClock(slots[slots.length - 1].end) : ''} />
@@ -894,21 +906,15 @@ export default function PlanEditor() {
 }
 
 type Minutes = ReturnType<typeof planMinutes>;
-const PREVIOUS_SHOWN = 8;
-const SUMMARY_WIDTH = 360;
-/** With the schedule on the left and the categories on the right. */
-const SUMMARY_WIDE = 620;
-/** The most activities listed in the summary of an earlier practice, so it stays a glance. */
-const PREVIOUS_ROWS = 16;
 /** True when a practice has time under at least one category, so there are bars to show. */
 const hasCategories = (mins: { byTag: Map<number, number> }) => [...mins.byTag.keys()].some((k) => k !== 0);
 /**
- * The practices before this one. Pointing at one (or tabbing to it) opens a summary beside the
- * list: what was done and when, and the same category breakdown as "At a glance". Clicking opens it.
+ * The practices before this one, to go through one at a time: a list of them down the left, and
+ * beside it what the chosen one held, when, and where its time went. Arrows step through them.
  */
-function PreviousPractices({ current, tags }: { current: Plan; tags: Tag[] }) {
+function PreviousBrowser({ current, tags, onClose }: { current: Plan; tags: Tag[]; onClose: () => void }) {
   const [plans, setPlans] = useState<Plan[] | null>(null);
-  const [shown, setShown] = useState<{ plan: Plan; top: number; right: number } | null>(null);
+  const [at, setAt] = useState(0);
   const noun = current.kind === 'homework' ? 'homework' : 'practices';
   useEffect(() => {
     let alive = true;
@@ -922,74 +928,52 @@ function PreviousPractices({ current, tags }: { current: Plan; tags: Tag[] }) {
   }, [current.team_id, current.kind]);
   // Earlier than this plan's own date, or than today when it has none. Newest first.
   const before = current.date || new Date().toLocaleDateString('en-CA');
-  const earlier = (plans || [])
-    .filter((p) => p.id !== current.id && !p.is_template && p.items.length > 0 && p.date && p.date <= before)
-    .sort((a, b) => (a.date < b.date ? 1 : -1))
-    .slice(0, PREVIOUS_SHOWN);
+  const earlier = (plans || []).filter((p) => p.id !== current.id && !p.is_template && p.items.length > 0 && p.date && p.date <= before).sort((a, b) => (a.date < b.date ? 1 : -1));
   const tagIds = new Set(tags.map((t) => t.id));
-  const point = (plan: Plan, el: HTMLElement) => {
-    const r = el.getBoundingClientRect();
-    const box = el.closest('.plan-previous')!.getBoundingClientRect();
-    setShown({ plan, top: r.top, right: window.innerWidth - box.left + 10 });
-  };
-  const summary = shown && { mins: planMinutes(shown.plan, tagIds), slots: schedule(shown.plan.start_time, shown.plan.items) };
-  // The summary opens level with the practice pointed at, then moves up as far as it must to fit on the screen.
-  const popup = useRef<HTMLDivElement>(null);
-  const [popupTop, setPopupTop] = useState(12);
-  useLayoutEffect(() => {
-    if (!shown || !popup.current) return;
-    const room = window.innerHeight - popup.current.offsetHeight - 12;
-    setPopupTop(Math.max(12, Math.min(shown.top - 16, room)));
-  }, [shown]);
+  const shown = earlier[Math.min(at, earlier.length - 1)];
   return (
-    <aside className="plan-previous" aria-label={`Previous ${noun}`} onMouseLeave={() => setShown(null)}>
-      <h2>Previous {noun}</h2>
+    <Modal title={`Previous ${noun}`} onClose={onClose} wide>
       {plans === null ? (
-        <p className="muted small">Loading…</p>
+        <p className="muted">Loading…</p>
       ) : earlier.length === 0 ? (
-        <p className="muted small">Nothing earlier than this one yet.</p>
+        <p className="muted">Nothing earlier than this one yet.</p>
       ) : (
-        <ul className="previous-list">
-          {earlier.map((p) => {
-            const mins = planMinutes(p, tagIds);
-            return (
-              <li key={p.id}>
-                <Link to={`/plans/${p.id}`} className={shown?.plan.id === p.id ? 'on' : ''} onMouseEnter={(e) => point(p, e.currentTarget)} onFocus={(e) => point(p, e.currentTarget)} onBlur={() => setShown(null)}>
-                  <strong>{fmtDateShort(p.date)}</strong>
-                  <span className="muted small">
-                    {[p.is_game ? 'Game' : p.title, fmtDuration(mins.work + mins.breaks)].filter(Boolean).join(' · ')}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {shown && summary && (
-        <div ref={popup} className="previous-summary" role="status" style={{ right: shown.right, top: popupTop, width: hasCategories(summary.mins) ? SUMMARY_WIDE : SUMMARY_WIDTH }}>
-          <h3>
-            {fmtDateShort(shown.plan.date)}
-            <span className="muted"> · {fmtDuration(summary.mins.work + summary.mins.breaks)}</span>
-          </h3>
-          {(shown.plan.title || shown.plan.location) && <p className="muted small">{[shown.plan.title, shown.plan.location].filter(Boolean).join(' · ')}</p>}
-          <div className={`previous-cols ${hasCategories(summary.mins) ? 'two' : ''}`}>
-          <ol className="previous-items">
-            {shown.plan.items.slice(0, PREVIOUS_ROWS).map((it, i) => (
-              <li key={it.key} className={it.kind === 'break' ? 'break' : ''}>
-                {shown.plan.kind === 'practice' && <time>{fmtClock(summary.slots[i].start)}</time>}
-                <span>{it.title || (it.kind === 'break' ? 'Break' : 'Untitled item')}</span>
-                <span className="glance-min">{it.duration_min} min</span>
-              </li>
-            ))}
-            {shown.plan.items.length > PREVIOUS_ROWS && <li className="break">and {shown.plan.items.length - PREVIOUS_ROWS} more</li>}
-          </ol>
-          <div className="previous-cats">
-            <CategoryRows mins={summary.mins} tags={tags} empty="No categories were set on this one." />
-          </div>
+        <div className="prev-browse">
+          <ul className="previous-list prev-browse-list" aria-label={`Previous ${noun}`}>
+            {earlier.map((p, i) => {
+              const mins = planMinutes(p, tagIds);
+              return (
+                <li key={p.id}>
+                  <button type="button" className={shown.id === p.id ? 'on' : ''} aria-pressed={shown.id === p.id} onClick={() => setAt(i)}>
+                    <strong>{fmtDateShort(p.date)}</strong>
+                    <span className="muted small">{[p.is_game ? 'Game' : p.title, fmtDuration(mins.work + mins.breaks)].filter(Boolean).join(' · ')}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="prev-browse-main">
+            <div className="prev-browse-nav">
+              <button type="button" className="tl-arrow" aria-label="A later one" disabled={at <= 0} onClick={() => setAt(at - 1)}>
+                ‹
+              </button>
+              <span className="muted small">
+                {Math.min(at, earlier.length - 1) + 1} of {earlier.length}
+              </span>
+              <button type="button" className="tl-arrow" aria-label="An earlier one" disabled={at >= earlier.length - 1} onClick={() => setAt(at + 1)}>
+                ›
+              </button>
+              <Link className="btn small" to={`/plans/${shown.id}`} onClick={onClose}>
+                Open it
+              </Link>
+            </div>
+            <div className="prev-browse-summary">
+              <PlanSummary plan={shown} tags={tags} wide />
+            </div>
           </div>
         </div>
       )}
-    </aside>
+    </Modal>
   );
 }
 
