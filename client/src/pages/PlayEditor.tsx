@@ -1094,9 +1094,15 @@ export default function PlayEditor() {
                 ))}
                 <div className="tool-group">
                   <button type="button" className="tool" disabled={past.current.length === 0} onClick={undo} title="Undo (Ctrl+Z)">
+                    <svg className="tool-icon plain" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" />
+                    </svg>
                     Undo
                   </button>
                   <button type="button" className="tool" disabled={future.current.length === 0} onClick={redo} title="Redo (Ctrl+Y)">
+                    <svg className="tool-icon plain" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" />
+                    </svg>
                     Redo
                   </button>
                 </div>

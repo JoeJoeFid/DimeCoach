@@ -21769,7 +21769,7 @@ button.film-clip-play {
 }
 /* The tools run along in the order they come, onto a second line only where the column is too narrow for one. */
 .builder-mid .builder-bar .toolbar {
-  gap: 6px 4px;
+  gap: 6px 2px;
 }
 .builder-mid .builder-bar .toolbar::before {
   content: none;
@@ -21780,30 +21780,19 @@ button.film-clip-play {
 }
 .builder-mid .builder-bar .tool-group + .tool-group,
 .builder-mid .builder-bar .tool-group:nth-child(3) {
-  margin-left: 2px;
-  padding-left: 6px;
+  margin-left: 0;
+  padding-left: 4px;
   border-left: 1px solid var(--line);
 }
-/* Undo and redo sit at the end of the line under the tools, out of the way of the tools themselves. */
-.builder-mid .builder-bar {
-  position: relative;
-}
+/* Undo and redo are the last of the tools, at the far end of their row. */
 .builder-mid .builder-bar .tool-group:last-child {
-  position: absolute;
-  right: 12px;
-  bottom: 8px;
-  margin: 0;
-  padding: 0;
-  border: none;
-}
-.builder-mid .bar-selection {
-  padding-right: 120px;
+  margin-left: auto;
 }
 .builder-mid .builder-bar .tool,
 .builder-mid .builder-bar .tool-group:has(.tool:nth-child(3):last-child) .tool {
-  gap: 3px;
-  padding: 0 4px;
-  font-size: 0.78rem;
+  gap: 2px;
+  padding: 0 2px;
+  font-size: 0.75rem;
 }
 .builder-mid .builder-bar .tool-icon {
   width: 18px;
@@ -21814,20 +21803,19 @@ button.film-clip-play {
   margin: 0 1px;
 }
 .builder-mid .builder-bar .tool-group {
-  gap: 2px;
+  gap: 1px;
 }
-/* What can be changed about the thing selected, on a line under the tools. The line is always there, so the court does not move when something is picked. */
+/* What can be changed about the thing selected, on a line under the tools. The room for it is always there, so the court
+   does not move when something is picked; the line above it only shows when there is something on it. */
 .builder-mid .bar-selection {
-  min-height: 42px;
-  margin-top: 8px;
+  min-height: 40px;
+  margin-top: 6px;
   padding: 6px 0 0;
   border-left: none;
   border-top: 1px solid var(--line);
 }
-.builder-mid .bar-selection:has(.selection:empty)::before {
-  content: 'Select something on the court to change it.';
-  color: var(--muted);
-  font-size: 0.82rem;
+.builder-mid .bar-selection:has(.selection:empty) {
+  border-top-color: transparent;
 }
 /* The court fits on the screen under its tools. */
 @media (min-width: 1101px) {
