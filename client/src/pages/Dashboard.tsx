@@ -326,11 +326,6 @@ export default function Dashboard() {
         <section className="card insights" aria-label="Practice insights">
           <div className="insights-head">
             <h2>
-              <span className="insights-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.900" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 19.500h16M7 16v-5M12 16V6M17 16v-8" />
-                </svg>
-              </span>
               Practice insights
             </h2>
             <div className="dash-controls">

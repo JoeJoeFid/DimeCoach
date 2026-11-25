@@ -23958,3 +23958,9 @@ button.hw-title {
     grid-row: 1;
   }
 }
+
+/* Dashboard: the three boxes' names are one size. */
+.dash-news .card-head h2,
+.dash-quick h2 {
+  font-size: 1.25rem;
+}
