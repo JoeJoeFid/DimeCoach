@@ -215,7 +215,14 @@ export default function Dashboard() {
     <div className="page heat-scope" style={rampVars}>
       <div className="page-head">
         <div>
-          <PageTitle>Dashboard</PageTitle>
+          <PageTitle
+            about={{
+              lead: 'Your team at a glance.',
+              points: ['What is coming up next, and what has happened lately.', 'Short ways into the parts of the app you use most.'],
+            }}
+          >
+            Dashboard
+          </PageTitle>
         </div>
         <div className="head-actions">
           {can('manage') && (

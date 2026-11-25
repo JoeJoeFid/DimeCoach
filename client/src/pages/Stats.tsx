@@ -415,8 +415,14 @@ export default function Stats() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Stats</PageTitle>
-          <p className="muted">The team's numbers from the games you score, and the sheets kept for single players.</p>
+          <PageTitle
+            about={{
+              lead: 'The team’s numbers.',
+              points: ['Season totals and averages from the games you score.', 'The sheets kept for single players, by you or by their parents.', 'Scoring setup decides what is counted when a game is scored.'],
+            }}
+          >
+            Stats
+          </PageTitle>
         </div>
       </div>
       {error && <p className="error">{error}</p>}

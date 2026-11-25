@@ -13,8 +13,14 @@ export default function Messages() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Messages</PageTitle>
-          <p className="muted">Messages from the people you coach and work with, and what has happened that involves you.</p>
+          <PageTitle
+            about={{
+              lead: 'Your inbox.',
+              points: ['Messages from the people you coach and work with.', 'Notices about what has happened that involves you.', 'Sent keeps what you wrote to others.'],
+            }}
+          >
+            Messages
+          </PageTitle>
         </div>
       </div>
       <Inbox user={app.user} onUnread={app.setCommunityUnread} onUserChanged={app.reload} />

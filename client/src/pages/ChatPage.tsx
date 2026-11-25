@@ -14,7 +14,14 @@ export default function ChatPage() {
     <div className="page chat-page">
       <div className="page-head">
         <div>
-          <PageTitle>Chat</PageTitle>
+          <PageTitle
+            about={{
+              lead: 'Talk with your team and with other coaches.',
+              points: ['The team’s chat is there for everyone on it.', 'Start a chat of your own with one person or a few.'],
+            }}
+          >
+            Chat
+          </PageTitle>
         </div>
       </div>
       <Chat me={app.user} openId={openId} onOpen={onOpen} />

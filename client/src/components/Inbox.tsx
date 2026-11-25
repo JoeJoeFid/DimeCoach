@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link } from 'react-router-dom';
 import { api, type CommunityNews, type CommunityNewsItem, type ToGroup, type ToPerson, type User } from '../api';
 import { Modal } from './bits';
+import { TopTabs } from './TopTabs';
 import { confirmDialog } from './dialogs';
 import { MentionText } from './Mentions';
 import { disablePush, enablePush, pushState, type PushState } from '../push';
@@ -423,14 +424,15 @@ export default function Inbox({ user, onUnread, onUserChanged }: { user: User; o
   return (
     <div className="inbox">
       <div className="inbox-bar">
-        <div className="seg" role="group" aria-label="Folder">
-          <button type="button" className={folder === 'inbox' ? 'on' : ''} aria-pressed={folder === 'inbox'} onClick={() => choose('inbox')}>
-            Inbox {unread > 0 && <span className="chip-num">{unread}</span>}
-          </button>
-          <button type="button" className={folder === 'sent' ? 'on' : ''} aria-pressed={folder === 'sent'} onClick={() => choose('sent')}>
-            Sent
-          </button>
-        </div>
+        <TopTabs<'inbox' | 'sent'>
+          label="Folder"
+          value={folder}
+          onChange={choose}
+          tabs={[
+            ['inbox', 'Inbox', unread],
+            ['sent', 'Sent'],
+          ]}
+        />
         <span className="inbox-space" />
         {folder === 'inbox' && !reading && news && news.items.some((i) => i.unread && i.kind !== 'invite') && (
           <button type="button" className="btn small" onClick={() => api.markMessagesRead().then(got, failed)}>

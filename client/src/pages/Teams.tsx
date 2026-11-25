@@ -90,8 +90,14 @@ export default function Teams() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Team</PageTitle>
-          <p className="muted">This team's details, who helps coach it, its schedule link and its players. To work on another team, use "Switch team" at the top of the menu.</p>
+          <PageTitle
+            about={{
+              lead: 'This team’s details and the people around it.',
+              points: ['Its roster, who helps coach it, its parents and family, and its schedule link.', 'To work on another team, use "Switch team" at the top of the menu.'],
+            }}
+          >
+            Team
+          </PageTitle>
         </div>
       </div>
       {error && <p className="error">{error}</p>}

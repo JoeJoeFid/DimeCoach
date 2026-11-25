@@ -298,8 +298,11 @@ export default function Help() {
     <div className="page help">
       <div className="page-head">
         <div>
-          <PageTitle>Help</PageTitle>
-          <p className="muted">How to do the common things in Dime Coach, step by step.</p>
+          <PageTitle
+            about={{ lead: 'How to do the common things in Dime Coach, step by step.' }}
+          >
+            Help
+          </PageTitle>
         </div>
       </div>
       <input className="input help-search" type="search" autoFocus={roomyScreen()} aria-label="Search help" placeholder="Search help, such as “print” or “roster”" value={q} onChange={(e) => setQ(e.target.value)} />

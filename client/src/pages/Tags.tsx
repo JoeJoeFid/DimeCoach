@@ -34,13 +34,19 @@ export default function Tags() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Categories</PageTitle>
-          <p className="muted">
-            The learning objectives you tag {sport?.name.toLowerCase()} items with. A target is the share of practice time you want spent
-            working on a category. An item counts in full toward every category it is tagged with, so targets do not need to add up to 100%.
-            Set one default, then override it for a single practice, a week, a month or the season where the mix should differ. A blank override
-            uses the default.
-          </p>
+          <PageTitle
+            about={{
+              lead: `The learning objectives you tag ${sport?.name.toLowerCase()} items with.`,
+              points: [
+                'A target is the share of practice time you want spent working on a category.',
+                'An item counts in full toward every category it is tagged with, so targets do not need to add up to 100%.',
+                'Set one default, then override it for a single practice, a week, a month or the season where the mix should differ.',
+                'A blank override uses the default.',
+              ],
+            }}
+          >
+            Categories
+          </PageTitle>
         </div>
       </div>
       {error && <p className="error">{error}</p>}

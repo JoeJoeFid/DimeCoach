@@ -103,8 +103,14 @@ export default function Filmroom() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Filmroom</PageTitle>
-          <p className="muted">Saved game video, the clips you cut from it, and the cuts you put together from them: film review, highlights, scouting.</p>
+          <PageTitle
+            about={{
+              lead: 'Your team’s game film, and what you make from it.',
+              points: ['Game videos: what was saved from a broadcast, or brought in from a file.', 'Clips: the moments you cut out of a game video.', 'Cuts: clips and videos put together in order, for film review, highlights or scouting.'],
+            }}
+          >
+            Filmroom
+          </PageTitle>
         </div>
         <Link className="btn primary" to="/filmroom/new">
           <CutIcon /> Create a new cut

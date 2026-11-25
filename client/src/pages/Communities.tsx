@@ -73,8 +73,14 @@ export default function Communities() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Communities</PageTitle>
-          <p className="muted">Groups of coaches who talk to each other and, if the group allows it, share drills, plays and practice plans.</p>
+          <PageTitle
+            about={{
+              lead: 'Groups of coaches who talk to each other.',
+              points: ['Ask questions and trade ideas in a group’s discussions.', 'If the group allows it, members share drills, plays and practice plans.'],
+            }}
+          >
+            Communities
+          </PageTitle>
         </div>
         <div className="head-actions">
           {/* A code someone sent goes in here. */}

@@ -144,8 +144,14 @@ export default function CoachLibraryPage() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Coach library</PageTitle>
-          <p className="muted">Drills, plays and practices picked out for every coach. Take a copy of anything here and make it your own.</p>
+          <PageTitle
+            about={{
+              lead: 'Drills, plays and practices picked out for every coach.',
+              points: ['Take a copy of anything here and make it your own.', 'Your copy is yours to change: the one here stays as it is.'],
+            }}
+          >
+            Coach library
+          </PageTitle>
         </div>
         {lib?.can_manage && (
           <div className="head-actions">

@@ -156,11 +156,14 @@ export default function Resources() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Resources</PageTitle>
-          <p className="muted">
-            Every link, picture and video in one place: the ones you save here, and the ones already on your drills, plays and practices. Anything
-            here can be attached to a drill, play or practice item.
-          </p>
+          <PageTitle
+            about={{
+              lead: 'Every link, picture and video in one place.',
+              points: ['The ones you save here, and the ones already on your drills, plays and practices.', 'Anything here can be attached to a drill, a play or a practice item.'],
+            }}
+          >
+            Resources
+          </PageTitle>
         </div>
         <div className="head-actions">
           <input ref={imageInput} type="file" accept="image/*" multiple hidden onChange={(e) => addImages(e.target.files)} />

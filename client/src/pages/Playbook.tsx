@@ -120,8 +120,14 @@ export default function Playbook() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Playbook</PageTitle>
-          <p className="muted">Diagram your {sport!.name.toLowerCase()} plays step by step. Attach them to practice items, or print them on their own.</p>
+          <PageTitle
+            about={{
+              lead: `Diagram your ${sport!.name.toLowerCase()} plays step by step.`,
+              points: ['Draw a play one step at a time and watch it run.', 'Attach plays to practice items, so the team works on them.', 'Print them on their own, or share them with the team.'],
+            }}
+          >
+            Playbook
+          </PageTitle>
         </div>
         <div className="head-actions">
           <button className="btn ghost" onClick={() => setShowIntro(true)}>

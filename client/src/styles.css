@@ -7989,9 +7989,9 @@ fieldset.perm-list:disabled .check.perm {
   align-items: center;
   flex-wrap: wrap;
   gap: 4px 12px;
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   max-width: none;
-  font-size: 2.25rem;
+  font-size: 2.9rem;
   font-weight: 750;
   letter-spacing: -0.04em;
   line-height: 1.1;
@@ -8001,14 +8001,17 @@ fieldset.perm-list:disabled .check.perm {
   max-width: none;
 }
 .team-title-season {
-  font-size: 1rem;
+  font-size: 1.4rem;
   font-weight: 500;
   letter-spacing: 0;
   color: var(--muted);
 }
 .page-head h1.section-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 0 4px;
-  font-size: 1.5rem;
+  font-size: 2.1rem;
   font-weight: 650;
   letter-spacing: -0.02em;
   color: var(--ink-2);
@@ -19037,15 +19040,15 @@ mark.hit {
   position: relative;
   display: inline-block;
   /* It sits on the line with the team's name, at its own size. */
-  font-size: 1rem;
+  font-size: 1.25rem;
   font-weight: 400;
   letter-spacing: 0;
   line-height: 1.4;
 }
 .team-logo {
   width: auto;
-  max-width: 96px;
-  height: 44px;
+  max-width: 120px;
+  height: 54px;
   border-radius: 8px;
   object-fit: contain;
 }
@@ -19081,20 +19084,20 @@ mark.hit {
   display: inline-flex;
   align-items: baseline;
   gap: 7px;
-  padding: 3px 10px;
+  padding: 5px 14px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   background: var(--surface);
   color: var(--ink);
   font: inherit;
   font-family: var(--mono);
-  font-size: 0.92rem;
+  font-size: 1.2rem;
   font-weight: 650;
   cursor: default;
 }
 .team-record-word {
   font-family: var(--sans);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -21452,4 +21455,97 @@ button.film-clip-play {
 .btn.gv-go:hover {
   background: color-mix(in srgb, var(--good) 86%, #000);
   border-color: color-mix(in srgb, var(--good) 86%, #000);
+}
+/* In a row with other things, as over the inbox, the row keeps the space under it. */
+.inbox-bar .toptabs {
+  margin-bottom: 0;
+}
+
+/* The "i" beside a page's name, and what it says when pressed. */
+.about-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.about-btn:hover,
+.about-btn:focus-visible {
+  background: var(--accent);
+  border-color: var(--accent-edge);
+  color: var(--accent-ink);
+}
+.about-pop {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.about-lead {
+  margin: 0;
+  padding: 14px 16px;
+  border-left: 4px solid var(--accent-edge);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  font-size: 1.12rem;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+.about-pop ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.about-pop li {
+  position: relative;
+  padding-left: 30px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+.about-pop li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.2em;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.about-pop li::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: calc(0.2em + 4px);
+  width: 5px;
+  height: 9px;
+  border: solid var(--accent-ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.about-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+@media (max-width: 640px) {
+  .team-title {
+    font-size: 2.1rem;
+  }
+  .team-title-season {
+    font-size: 1.15rem;
+  }
+  .page-head h1.section-name {
+    font-size: 1.7rem;
+  }
 }

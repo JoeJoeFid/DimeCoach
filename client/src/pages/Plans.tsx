@@ -439,7 +439,15 @@ export default function Plans({ kind }: { kind: PlanKind }) {
       <div className="ps-sticky" ref={stickyHead}>
       <div className="page-head ps-head">
         <div>
-          <PageTitle>{kind === 'practice' ? 'Schedule' : 'Homework'}</PageTitle>
+          <PageTitle
+            about={
+              kind === 'practice'
+                ? { lead: 'Every practice and game for this team.', points: ['Plan a practice minute by minute, or set up a game.', 'Open a game to plan it, keep score, or broadcast it.', 'See it as a list or as a calendar.'] }
+                : { lead: 'Work for players to do away from practice.', points: ['Put homework together the way a practice is put together.', 'Parents and players see it on the team’s page.'] }
+            }
+          >
+            {kind === 'practice' ? 'Schedule' : 'Homework'}
+          </PageTitle>
         </div>
         <div className="head-actions">
           {!calendar && months.length > 1 && (

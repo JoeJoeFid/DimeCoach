@@ -2,7 +2,14 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api, type RecordGame } from '../api';
 import { useApp } from '../App';
 import { fmtDateShort } from '../util';
+import { Modal } from './bits';
 import SportIcon from './SportIcon';
+
+/** What a part of the app is for, said when its "i" is pressed: one line, then the points worth knowing. */
+export interface About {
+  lead: string;
+  points?: string[];
+}
 
 /** The games last read for each team, so the record is there at once when the next page opens. */
 const known = new Map<number, RecordGame[]>();
@@ -75,20 +82,50 @@ function TeamRecord({ teamId }: { teamId: number }) {
  * largest, then the season and the record of wins and losses; under that, the name of the part
  * of the app being looked at.
  */
-export default function PageTitle({ children }: { children: ReactNode }) {
+export default function PageTitle({ children, about }: { children: ReactNode; /** What this part of the app is for, behind an "i" beside its name. */ about?: About }) {
   const { team, sport } = useApp();
+  const [telling, setTelling] = useState(false);
+  const name = typeof children === 'string' ? children : 'this page';
   return (
     <>
       {team && (
         <p className="team-title">
           {team.logo && <img className="team-logo" src={team.logo} alt="" />}
-          <SportIcon sport={sport?.name} size={34} />
+          <SportIcon sport={sport?.name} size={42} />
           <span>{team.name}</span>
           {team.season && <span className="team-title-season">{team.season}</span>}
           <TeamRecord teamId={team.id} />
         </p>
       )}
-      <h1 className="section-name">{children}</h1>
+      <h1 className="section-name">
+        {children}
+        {about && (
+          <button type="button" className="about-btn" aria-label={`What ${name} is for`} title={`What ${name} is for`} onClick={() => setTelling(true)}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 11v6M12 7.5h.01" />
+            </svg>
+          </button>
+        )}
+      </h1>
+      {about && telling && (
+        <Modal title={`About ${name}`} onClose={() => setTelling(false)}>
+          <div className="about-pop">
+            <p className="about-lead">{about.lead}</p>
+            {!!about.points?.length && (
+              <ul>
+                {about.points.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            )}
+            <div className="about-foot">
+              <button type="button" className="btn primary" onClick={() => setTelling(false)}>
+                Got it
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

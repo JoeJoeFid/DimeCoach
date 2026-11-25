@@ -29,6 +29,7 @@ const SIGNS = {
   layers: 'M12 4.500 20 9l-8 4.500L4 9ZM4.500 13 12 17.200 19.500 13',
   dots: 'M6 12h.01M12 12h.01M18 12h.01',
   shield: 'M12 4l7 2.500v5c0 4.200-2.800 7.300-7 8.500-4.200-1.200-7-4.300-7-8.500v-5Z',
+  send: 'M20 4 3.500 10.500l6.500 3 3 6.500ZM10 13.500 20 4',
   heart: 'M12 19.500s-7-4.300-7-9.300A3.700 3.700 0 0 1 12 8a3.700 3.700 0 0 1 7 2.200c0 5-7 9.300-7 9.300Z',
 } as const;
 export type Sign = keyof typeof SIGNS;
@@ -47,6 +48,8 @@ const SIGN_OF: Record<string, Sign> = {
   // A community, and running an organization.
   library: 'book', discussions: 'chat', members: 'users', overview: 'grid', seasons: 'layers', players: 'user', coaches: 'shield', more: 'dots',
   // System administration.
+  // Messages.
+  sent: 'send',
   access: 'key', email: 'mail', organizations: 'building', content: 'folder', system: 'gear',
 };
 

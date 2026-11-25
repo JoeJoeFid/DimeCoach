@@ -78,11 +78,14 @@ export default function Library() {
     <div className="page">
       <div className="page-head">
         <div>
-          <PageTitle>Drills</PageTitle>
-          <p className="muted">
-            Reusable {sport?.name.toLowerCase()} items. Adding one to a practice makes a copy, so editing a drill here never changes past
-            practices.
-          </p>
+          <PageTitle
+            about={{
+              lead: 'Your library of drills, built once and used again and again.',
+              points: ['Add a drill to any practice from here or from the practice itself.', 'Adding one to a practice makes a copy, so editing a drill here never changes past practices.', 'Give a drill a diagram, links, video and categories so it is easy to find and to teach.'],
+            }}
+          >
+            Drills
+          </PageTitle>
         </div>
         <div className="head-actions">
           <button className="btn" onClick={() => setImporting(true)}>
