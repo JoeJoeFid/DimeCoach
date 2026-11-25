@@ -6,7 +6,7 @@
 // server/streams.js.
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { api, type GameStream, type StreamList, type StreamPerson } from '../api';
-import { PICKS, QUALITIES, RUNGS, Stopped, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
+import { LIVE_BACK, PICKS, QUALITIES, RUNGS, Stopped, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
 import { BinIcon, Modal, PlayIcon } from './bits';
 import { confirmDialog } from './dialogs';
 
@@ -409,7 +409,7 @@ function Broadcast({ teamId, planId, title, canSave, onDone }: { teamId: number;
                 ))}
               </div>
               <span className="muted small">
-                {auto ? `Starts at Low, then moves up or down with the connection, as far as Medium.${toDevice ? ' The copy on this device comes out as one file for each change.' : ''}` : `${QUALITIES[quality].says} You can change this while you are live.`}
+                {auto ? `Starts at Low, then moves up or down with the connection.${toDevice ? ' The copy on this device comes out as one file for each change.' : ''}` : `${QUALITIES[quality].says} You can change this while you are live.`}
               </span>
             </div>
             <div className="gv-opt">
@@ -571,7 +571,7 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
   const [full, toggleFull] = useFullScreen(frame, video);
   // Where playing starts from: moving through the video starts it again from there. `follow` is
   // watching live, kept near the newest; going back through a live broadcast turns it off.
-  const [start, setStart] = useState({ from: stream.status === 'live' ? Math.max(0, stream.segments - 2) : 0, off: 0, follow: stream.status === 'live' });
+  const [start, setStart] = useState({ from: stream.status === 'live' ? Math.max(0, stream.segments - LIVE_BACK) : 0, off: 0, follow: stream.status === 'live' });
   const from = start.from;
   const [at, setAt] = useState(from);
   // How far in it is, in whole seconds: what the bar shows.
@@ -628,7 +628,7 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
   }, [start]);
   useEffect(() => player.current?.more(meta), [meta]);
   const toLive = () => {
-    const n = Math.max(0, metaRef.current.segments - 2);
+    const n = Math.max(0, metaRef.current.segments - LIVE_BACK);
     setOver(false);
     setAt(n);
     setSecs(n * metaRef.current.segment_seconds);
@@ -664,7 +664,7 @@ function JoinedVideo({ stream, onGone, onFail }: { stream: GameStream; onGone?: 
         {over && <span className="gv-wait">This broadcast has ended.</span>}
         <FullButton full={full} onClick={toggleFull} />
       </div>
-      {!over && <SeekBar at={secs} ahead={ahead} meta={meta} behind={live && !start.follow && at < meta.segments - 3} onSeek={seek} onLive={toLive} />}
+      {!over && <SeekBar at={secs} ahead={ahead} meta={meta} behind={live && !start.follow && at < meta.segments - LIVE_BACK - 2} onSeek={seek} onLive={toLive} />}
     </div>
   );
 }

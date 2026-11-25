@@ -38,8 +38,10 @@ test('a connection with room to spare goes up in one change, to what it can carr
   assert.equal(a.at, 'low', 'not before it has been steady a while');
   [a, t] = run(a, good('medium', 1), t);
   assert.equal(a.at, 'medium', 'straight there, not by way of 480p');
-  [a] = run(a, good('high', 12), t);
-  assert.equal(a.at, 'medium', 'High is for choosing by hand');
+  [a] = run(a, good('medium', 12), t);
+  assert.equal(a.at, 'medium', 'fast enough for Medium is not fast enough for High');
+  [a] = run(autoStart('low', 0), good('high', 5));
+  assert.equal(a.at, 'high', 'all the way in one change where there is room');
   [a] = run(autoStart('lowest', 0), good('sd', 5));
   assert.equal(a.at, 'sd', 'only as far as the pieces have been going fast enough for');
 });

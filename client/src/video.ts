@@ -376,11 +376,11 @@ export function openBroadcast(camera: () => MediaStream | null, type: string, qu
   };
   /** Waits until the camera's picture has stopped changing size: a moment for it to begin, then the same size for a while. */
   const steady = async () => {
-    await sleep(500);
+    await sleep(300);
     let last = frameSize();
     let since = Date.now();
     const until = since + 4000;
-    while (Date.now() < until && Date.now() - since < 700) {
+    while (Date.now() < until && Date.now() - since < 500) {
       await sleep(100);
       const now = frameSize();
       if (now !== last) {
@@ -656,7 +656,21 @@ const KEEP_BEHIND = 30;
  * every few seconds and never exactly on time, so a viewer with nothing in hand stops for a moment
  * at the end of every piece. One who has run out waits once, for this much, and then plays smoothly.
  */
-const CUSHION = 6;
+const CUSHION = 8;
+/**
+ * Watching live is watching a little behind, on purpose: smooth and sharp matter more than being
+ * on the instant. A viewer starts this many pieces back from the newest, so there is video in hand
+ * from the first moment, and stays under half a minute behind.
+ */
+export const LIVE_BACK = 5;
+/**
+ * What is in hand is kept topped up without stopping: with less than LOW seconds the video runs a
+ * touch slow, too little to notice, until there are FULL seconds again. Every late piece and every
+ * change of quality eats into what is in hand, and without this only a stop would put it back.
+ */
+const LOW = 10;
+const FULL = 16;
+const SLOW = 0.94;
 
 /** The name a browser's player wants for this kind of video. */
 function sourceType(mime: string) {
@@ -716,6 +730,33 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
     await taken;
   };
   const ahead = (sb: SourceBuffer) => (sb.buffered.length ? sb.buffered.end(sb.buffered.length - 1) - el.currentTime : 0);
+  /**
+   * Steps over a hole in the video when playing has reached one and there is more past it, and
+   * says whether it did. A hole is left where one recording ends and another begins (the
+   * broadcaster changed the quality): the sound and the picture of a recording do not end at quite
+   * the same moment, and the next one begins after the later of the two. Left alone, the picture
+   * stops at it.
+   */
+  const hop = () => {
+    const sb = st.sb;
+    if (!sb || el.paused || st.closed) return false;
+    try {
+      const t = el.currentTime;
+      for (let i = 0; i < sb.buffered.length; i++) {
+        const from = sb.buffered.start(i);
+        const to = sb.buffered.end(i);
+        // In the middle of what is loaded: no hole here.
+        if (from <= t && t < to - 0.25) return false;
+        if (from > t) {
+          el.currentTime = from + 0.01;
+          return true;
+        }
+      }
+    } catch {
+      // The player has let go of its video.
+    }
+    return false;
+  };
   /** How much is loaded past where it is, said whenever it may have changed, for the bar to show. */
   let saidAhead = -1;
   const sayAhead = () => {
@@ -739,15 +780,9 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
         sb.remove(0, el.currentTime - KEEP_BEHIND);
         await gone;
       }
-      // Stopped at a small hole in the video with more just past it: stepped over.
-      if (!el.paused && el.readyState < 3) {
-        for (let i = 0; i < sb.buffered.length; i++) {
-          const gap = sb.buffered.start(i) - el.currentTime;
-          if (gap > 0 && gap < 1.5) el.currentTime = sb.buffered.start(i) + 0.01;
-        }
-      }
+      if (el.readyState < 3) hop();
       // Fallen far behind a live stream: step over to near the front.
-      if (follow && st.live && st.segments - st.next > 6) st.next = st.segments - 2;
+      if (follow && st.live && st.segments - st.next > LIVE_BACK + 4) st.next = st.segments - LIVE_BACK;
       while (!st.closed && st.next < upto() && ahead(sb) < AHEAD_PIECES * seconds) {
         let opening: Blob | null = null;
         let part: Blob | null;
@@ -786,6 +821,12 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
         el.playbackRate = 1;
         onChange({ waiting: false });
       }
+      // Watching live with little in hand: a touch slow until it is topped up. Not for someone who went back to see something again.
+      if (!st.hold) {
+        const have = ahead(sb);
+        if (!st.live || !follow || have >= FULL) el.playbackRate = 1;
+        else if (have < LOW) el.playbackRate = SLOW;
+      }
       // A video that is over is told so, and plays out what it has.
       if ((!st.live || opts.end) && st.next >= upto() && ms.readyState === 'open' && !sb.updating) ms.endOfStream();
     } catch {
@@ -822,6 +863,8 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
     const at = where();
     onChange({ piece: from + Math.floor(el.currentTime / seconds), at });
     sayAhead();
+    // Coming up to a hole is stepped over before the picture has to stop at it.
+    hop();
     // The end of a clip: stopped there, and said once.
     if (opts.end && !st.done && (at.n > opts.end.n || (at.n === opts.end.n && at.off >= opts.end.off))) {
       st.done = true;
@@ -830,6 +873,8 @@ export function joinedPlayer(el: HTMLVideoElement, stream: GameStream, from: num
     }
   };
   const onWaiting = () => {
+    // Stopped at a hole with more past it is not running out: it is stepped over and carries on.
+    if (hop()) return;
     const dry = st.live && st.next >= st.segments;
     // Run out while watching live: it waits until there is some in hand again, not just for the next piece.
     if (dry && follow && !st.hold) {

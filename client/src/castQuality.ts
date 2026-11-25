@@ -18,8 +18,8 @@ export const QUALITIES: Record<Quality, { label: string; says: string; width: nu
 };
 /** From the lightest to the sharpest: every step Auto can take. */
 export const RUNGS: Quality[] = ['lowest', 'low', 'sd', 'medium', 'high'];
-/** As sharp as Auto goes. Sharper than this is a lot of data, and many cameras give a jerky picture at it: it is there to choose by hand. */
-export const AUTO_TOP: Quality = 'medium';
+/** As sharp as Auto goes: all the way, where the connection has room to spare. Viewers watch far enough behind to ride out the change. */
+export const AUTO_TOP: Quality = 'high';
 /** The ones offered to choose by hand. The steps in between are Auto's, so the choice stays short. */
 export const PICKS: Quality[] = ['low', 'medium', 'high'];
 /** What a quality sends each second, in bits. */
