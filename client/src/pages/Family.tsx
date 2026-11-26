@@ -452,36 +452,9 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
   const go = (t: Tab, extra: Record<string, string> = {}) => setParams(t === 'home' ? {} : { tab: t, ...extra }, { replace: true });
   const openChat = (chatId: number) => go('chat', chatId ? { chat: String(chatId) } : {});
   const today = todayISO();
-
-  return framed(
-    <div className="page cx fam">
-      <PageHead
-        eyebrow={[team.organization, team.sport, team.season].filter(Boolean).join(' · ') || 'Team'}
-        title={team.name}
-        sub={`You are here as ${asWhat(data.me.kind, data.me.players)}.`}
-      >
-        {others > 0 && !frame && (
-          <Link className="btn" to="/portal">
-            Switch team
-          </Link>
-        )}
-      </PageHead>
-      {/* In the frame, the parts of the page are in the menu at the side. */}
-      {tabs.length > 1 && !frame && (
-        <TopTabs nav tabs={tabs} value={tab} onChange={go} label={`Parts of ${team.name}`} />
-      )}
-
-      {tab === 'home' && (
-        <>
-        {/* The board a coach has at the top of their dashboard: what is next, large, and the schedule as a list beside it. Here a line opens to be read. */}
-        {can.schedule && (
-          <section className="card fam-board" aria-label="What is next, and the schedule">
-            {data.schedule.length === 0 ? <p className="muted">Nothing on the schedule yet.</p> : <HomeBoard days={data.schedule} today={today} sport={team.sport} onFull={() => go('schedule')} />}
-          </section>
-        )}
-        <div className="fam-home">
-          {/* What is going on this minute: video going out, or a game being scored. First on the right, above the coaches. */}
-          {(hasVideo || hasPlays) && (
+  const liveNow = !!data.video.live || !!data.live_game;
+  // Drawn in two places: in its usual one, and above the schedule, where a tablet or phone shows it while something is live.
+  const liveCard = (hasVideo || hasPlays) && (
             <section className={`card cx-card fam-now ${data.video.live || data.live_game ? 'on' : ''}`} aria-label="Live now">
               <div className="cx-card-head">
                 <h2 className="fam-h">
@@ -533,7 +506,38 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
                 </ul>
               )}
             </section>
-          )}
+            );
+
+  return framed(
+    <div className="page cx fam">
+      <PageHead
+        eyebrow={[team.organization, team.sport, team.season].filter(Boolean).join(' · ') || 'Team'}
+        title={team.name}
+        sub={`You are here as ${asWhat(data.me.kind, data.me.players)}.`}
+      >
+        {others > 0 && !frame && (
+          <Link className="btn" to="/portal">
+            Switch team
+          </Link>
+        )}
+      </PageHead>
+      {/* In the frame, the parts of the page are in the menu at the side. */}
+      {tabs.length > 1 && !frame && (
+        <TopTabs nav tabs={tabs} value={tab} onChange={go} label={`Parts of ${team.name}`} />
+      )}
+
+      {tab === 'home' && (
+        <>
+        {/* The board a coach has at the top of their dashboard: what is next, large, and the schedule as a list beside it. Here a line opens to be read. */}
+        {liveNow && <div className="fam-home fam-live-top">{liveCard}</div>}
+        {can.schedule && (
+          <section className="card fam-board" aria-label="What is next, and the schedule">
+            {data.schedule.length === 0 ? <p className="muted">Nothing on the schedule yet.</p> : <HomeBoard days={data.schedule} today={today} sport={team.sport} onFull={() => go('schedule')} />}
+          </section>
+        )}
+        <div className="fam-home">
+          {/* What is going on this minute: video going out, or a game being scored. First on the right, above the coaches. */}
+          {liveCard}
           {can.news && (
             <section className="card cx-card">
               <div className="cx-card-head">

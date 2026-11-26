@@ -62,17 +62,18 @@ export const TabSign = ({ sign, size = 20 }: { sign: Sign; size?: number }) => (
 /**
  * The tabs across the top of a page. Each is [what the page calls it, what it says, a count when
  * it has one]. `nav` is for tabs that are places to go, not panels of one page. `isOn` is for a
- * page where a tab also stands for others that are not on the bar.
+ * page where a tab also stands for others that are not on the bar. `fold` is for a bar too long
+ * for a phone: there, only the chosen tab keeps its words and the rest are their signs alone.
  */
-export function TopTabs<T extends string>({ tabs, value, onChange, label, nav, isOn }: { tabs: [T, ReactNode, number?][]; value: T; onChange: (t: T) => void; label: string; nav?: boolean; isOn?: (t: T) => boolean }) {
+export function TopTabs<T extends string>({ tabs, value, onChange, label, nav, isOn, fold }: { tabs: [T, ReactNode, number?][]; value: T; onChange: (t: T) => void; label: string; nav?: boolean; isOn?: (t: T) => boolean; fold?: boolean }) {
   const Bar = nav ? 'nav' : 'div';
   return (
-    <Bar className="toptabs" role={nav ? undefined : 'tablist'} aria-label={label}>
+    <Bar className={`toptabs ${fold ? 'fold' : ''}`} role={nav ? undefined : 'tablist'} aria-label={label}>
       {tabs.map(([id, text, count]) => {
         const on = isOn ? isOn(id) : value === id;
         const sign = SIGN_OF[id];
         return (
-          <button key={id} type="button" role={nav ? undefined : 'tab'} aria-selected={nav ? undefined : on} aria-current={nav && on ? 'page' : undefined} className={on ? 'on' : ''} onClick={() => onChange(id)}>
+          <button key={id} type="button" role={nav ? undefined : 'tab'} aria-selected={nav ? undefined : on} aria-current={nav && on ? 'page' : undefined} className={on ? 'on' : ''} title={fold && typeof text === 'string' ? text : undefined} onClick={() => onChange(id)}>
             {sign && <TabSign sign={sign} />}
             <span>{text}</span>
             {!!count && <span className="cm-count">{count}</span>}

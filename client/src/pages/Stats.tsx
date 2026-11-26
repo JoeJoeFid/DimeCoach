@@ -443,6 +443,7 @@ export default function Stats() {
       {error && <p className="error">{error}</p>}
       <SubTabs<View>
         boxed
+        fold
         label="Stats"
         value={view}
         onChange={setView}

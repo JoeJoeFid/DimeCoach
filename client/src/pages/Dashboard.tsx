@@ -1,7 +1,9 @@
 import PageTitle from '../components/PageTitle';
 import { useEffect, useMemo, useRef, useState, type FocusEvent, type HTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type Audience, type TeamPost } from '../api';
+import { api, type Audience, type GameStream, type TeamPost } from '../api';
+import GameVideo from '../components/GameVideo';
+import { Modal } from '../components/bits';
 import { AudiencePick, DEFAULT_AUDIENCE, audienceWords } from './TeamFamily';
 import { useApp } from '../App';
 import type { Plan, Tag } from '../types';
@@ -39,6 +41,65 @@ const HeadIcon = ({ d }: { d: string }) => (
 );
 
 type Insight = 'history' | 'time' | 'attention';
+
+/**
+ * Game video going out this minute. Nothing at all when there is none. The stylesheet shows it on
+ * a tablet or phone only, where it leads the page.
+ */
+function LiveNow({ teamId }: { teamId: number }) {
+  const [live, setLive] = useState<GameStream[]>([]);
+  const [watching, setWatching] = useState(false);
+  useEffect(() => {
+    setLive([]);
+    let gone = false;
+    const load = () => api.streams(teamId).then((l) => !gone && setLive(l.can.watch ? l.live : []), () => {});
+    load();
+    // Someone going live, or stopping, shows at once.
+    window.addEventListener('dime:news', load);
+    const timer = window.setInterval(load, 30_000);
+    return () => {
+      gone = true;
+      window.removeEventListener('dime:news', load);
+      window.clearInterval(timer);
+    };
+  }, [teamId]);
+  if (live.length === 0) return null;
+  const inside = (s: GameStream) => (
+    <>
+      <span className="gv-badge">LIVE</span>
+      <span className="fam-now-text">
+        <strong>{s.title || 'Game video'}</strong>
+        <span className="muted small">Being broadcast now</span>
+      </span>
+      <span className="fam-now-go">Watch</span>
+    </>
+  );
+  return (
+    <section className="card fam-now on dash-live" aria-label="Live now">
+      <ul className="fam-now-list">
+        {live.map((s) => (
+          <li key={s.id}>
+            {/* A broadcast of a game on the schedule opens on that game's page. One on its own opens here. */}
+            {s.plan_id ? (
+              <Link className="fam-now-row" to={`/plans/${s.plan_id}?view=video`}>
+                {inside(s)}
+              </Link>
+            ) : (
+              <button type="button" className="fam-now-row" onClick={() => setWatching(true)}>
+                {inside(s)}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {watching && (
+        <Modal wide title="Game video" onClose={() => setWatching(false)}>
+          <GameVideo teamId={teamId} />
+        </Modal>
+      )}
+    </section>
+  );
+}
 
 export default function Dashboard() {
   const { team, sportTags, sport, can } = useApp();
@@ -231,6 +292,8 @@ export default function Dashboard() {
           </PageTitle>
         </div>
       </div>
+
+      <LiveNow teamId={teamId} />
 
       {/* What is next and the schedule beside it, in a box of their own, as on the team's page for parents. */}
       <section className="card fam-board" aria-label="What is next, and the schedule">

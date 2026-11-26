@@ -833,7 +833,7 @@ function TeamPanel({ team, onError }: { team: Team; onError: (msg: string) => vo
 
   return (
     <div className="team-panel">
-      <TopTabs tabs={TABS} value={tab} onChange={setTab} label="Parts of this team" />
+      <TopTabs fold tabs={TABS} value={tab} onChange={setTab} label="Parts of this team" />
 
       {tab === 'team' && (
       <div className="card">
