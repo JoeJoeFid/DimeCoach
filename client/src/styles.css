@@ -8234,16 +8234,17 @@ body {
   }
   .bn-sheet {
     position: fixed;
-    left: 0;
-    right: 0;
+    left: 8px;
     bottom: calc(var(--bn) + 8px);
     z-index: 46;
     display: flex;
     flex-direction: column;
     gap: 2px;
-    width: min(440px, calc(100vw - 16px));
+    /* As wide as its longest line. The script puts it over the button that opened it. */
+    width: max-content;
+    min-width: 170px;
+    max-width: calc(100vw - 16px);
     max-height: calc(100dvh - var(--bn) - 24px);
-    margin: 0 auto;
     padding: 8px;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -8275,7 +8276,11 @@ body {
     font-size: 1rem;
     font-weight: 500;
     text-align: left;
+    white-space: nowrap;
     cursor: pointer;
+  }
+  .bn-row > span:not(.nav-badge) {
+    padding-right: 6px;
   }
   .bn-row svg {
     flex: none;
@@ -24133,4 +24138,133 @@ a.fam-now-row {
 }
 .sidebar > .side-nav > * {
   flex-shrink: 0;
+}
+
+/* ---------- Small screens: search and layout share one line, and each filter lies under them, edge to edge ---------- */
+/* A narrow window, or a touch screen up to the size of a large tablet on its side: wherever the menu is the bar along the bottom. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1400px) {
+  .ps-layout:has(> .ps-side.tall) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .ps-side.tall {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 12px;
+    padding: 12px;
+  }
+  .ps-side.tall > section {
+    flex: 1 1 100%;
+    gap: 6px;
+  }
+  .ps-side.tall > section:nth-child(1) {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+  .ps-side.tall > section:nth-child(2) {
+    flex: 0 0 auto;
+  }
+  /* The box to type in and the two buttons say what they are. */
+  .ps-side.tall > section:nth-child(-n + 2) > h2 {
+    display: none;
+  }
+  .ps-side.tall .ps-side-filter {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .ps-side.tall .ps-side-filter button {
+    min-height: 32px;
+    padding: 4px 10px;
+    border-color: var(--line);
+    border-radius: 999px;
+    font-size: 0.86rem;
+  }
+  .ps-side.tall .ps-side-filter button.on {
+    border-color: var(--accent-edge);
+  }
+}
+
+/* Dashboard, stacked: the quick actions are as wide as their words, side by side. */
+@media (max-width: 1000px) {
+  .dash-quick {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .dash-quick h2 {
+    flex: 1 1 100%;
+  }
+  .dash-quick .btn {
+    flex: 0 1 auto;
+  }
+}
+
+/* ---------- Play editor, stacked: the court's settings fold under one line ---------- */
+.court-fold {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .court-settings > h2 {
+    display: none;
+  }
+  .court-fold {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 40px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .court-fold-text {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+    min-width: 0;
+  }
+  .court-fold-text strong {
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+  .court-fold-text .muted {
+    font-size: 0.88rem;
+  }
+  .court-fold svg {
+    flex: none;
+    color: var(--ink-2);
+    transition: transform 0.15s ease;
+  }
+  .court-settings.open .court-fold svg {
+    transform: rotate(180deg);
+  }
+  .court-settings:not(.open) > :not(.court-fold) {
+    display: none;
+  }
+  .play-info-part.court-settings:not(.open) {
+    padding-top: 8px;
+    margin-bottom: -6px;
+  }
+}
+
+/* ---------- Play editor: what can be done with a step ---------- */
+.step-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+@media (max-width: 1100px) {
+  .step-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }

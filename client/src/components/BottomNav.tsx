@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { InstallDialog } from './InstallApp';
 
@@ -52,8 +52,8 @@ const typedInto = (el: Element | null) => {
 
 /**
  * The menu on a tablet or phone: a bar across the bottom with a button for the dashboard, one for
- * each group of pages, and one for the person signed in. A group's pages open in a sheet above the
- * bar. A coach's menu and a follower's are both drawn by this; each hands in its own pages. The
+ * each group of pages, and one for the person signed in. A group's pages open in a small menu above
+ * its button, as wide as its longest line. A coach's menu and a follower's are both drawn by this; each hands in its own pages. The
  * stylesheet decides which screens show it, so on a wide screen it is not seen at all.
  */
 export default function BottomNav({
@@ -77,7 +77,25 @@ export default function BottomNav({
   const [open, setOpen] = useState<string | null>(null);
   const [installing, setInstalling] = useState(false);
   const [typing, setTyping] = useState(false);
+  const bar = useRef<HTMLElement>(null);
+  const sheet = useRef<HTMLDivElement>(null);
   useEffect(() => setOpen(null), [where]);
+  // The menu stands over the middle of the button that opened it, pulled in where that would put it off the screen.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const el = sheet.current;
+      const btn = bar.current?.querySelector<HTMLElement>('.bn-tab.open');
+      if (!el || !btn) return;
+      const b = btn.getBoundingClientRect();
+      const w = el.offsetWidth;
+      const left = Math.max(8, Math.min(b.left + b.width / 2 - w / 2, document.documentElement.clientWidth - w - 8));
+      el.style.left = `${Math.round(left)}px`;
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(null);
@@ -120,7 +138,7 @@ export default function BottomNav({
       {installing && createPortal(<InstallDialog onClose={() => setInstalling(false)} />, document.body)}
       {open && <div className="bn-scrim" onClick={close} />}
       {open && (
-        <div className="bn-sheet" role="menu" aria-label={open === 'profile' ? 'You and your team' : open}>
+        <div ref={sheet} className="bn-sheet" role="menu" aria-label={open === 'profile' ? 'You and your team' : open}>
           {group ? (
             <>
               <span className="bn-sheet-title">{group.title}</span>
@@ -150,7 +168,7 @@ export default function BottomNav({
           )}
         </div>
       )}
-      <nav className="bottom-nav" aria-label="Main">
+      <nav ref={bar} className="bottom-nav" aria-label="Main">
         {tab('home', home.label, home.icon, home.active, home.badge ?? 0, () => {
           close();
           home.go();

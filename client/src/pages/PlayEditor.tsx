@@ -39,7 +39,7 @@ import { beatsOf, describeLine, ordinal, sequenceOf, withOrder, withSequence, ty
 import { END, HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, sources, syncEnds, targets, withEnd } from '../playLogic';
 import Attachments from '../components/Attachments';
 import PlayIntro from '../components/PlayIntro';
-import { Field, Modal, ShareIcon } from '../components/bits';
+import { Field, Modal, MoreMenu, ShareIcon } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater } from '../components/toasts';
 import { TAG_COLORS } from '../util';
@@ -194,6 +194,7 @@ export default function PlayEditor() {
   useEffect(() => setNoting(false), [step]);
   // On a phone the details are one line until asked for, so the court comes first.
   const [headOpen, setHeadOpen] = useState(false);
+  const [courtOpen, setCourtOpen] = useState(false);
   /** A tool being dragged from the palette: which one, and where the pointer is on the page. */
   const [carry, setCarry] = useState<{ tool: Tool; x: number; y: number } | null>(null);
   const carrying = useRef<{ tool: Tool; x: number; y: number; active: boolean } | null>(null);
@@ -891,26 +892,32 @@ export default function PlayEditor() {
           </span>
         </div>
         <div className="head-actions">
-          <Link className="btn primary" to={`/plays/${play.id}/print`} onClick={() => flush()}>
-            Print
-          </Link>
-          <button className="btn" onClick={duplicate}>
-            Duplicate
+          <button className="btn primary" onClick={() => setWatching(true)} title="Watch the play move, step by step">
+            ▶ Watch the play
           </button>
           <button className="btn share-btn" onClick={() => setSharing(true)}>
             <ShareIcon size={16} /> Share
-          </button>
-          <button className="btn" onClick={() => setWatching(true)} title="Watch the play move, step by step">
-            ▶ Watch the play
           </button>
           {lineups(play.court).map((l) => (
             <button key={l.id} className="btn" onClick={() => addLineup(l)} title="Places everyone in their usual starting spots on this step. Drag them where you want them.">
               {l.label}
             </button>
           ))}
-          <button className="btn danger" onClick={remove}>
-            Delete
-          </button>
+          {/* The less-used things, behind "...". */}
+          <MoreMenu
+            label="More for this play"
+            items={[
+              {
+                label: 'Print',
+                onSelect: async () => {
+                  await flush();
+                  navigate(`/plays/${play.id}/print`);
+                },
+              },
+              { label: 'Duplicate', onSelect: duplicate },
+              { label: 'Delete', danger: true, onSelect: remove },
+            ]}
+          />
         </div>
       </div>
       {error && <p className="error">{error}</p>}
@@ -971,8 +978,18 @@ export default function PlayEditor() {
               />
             </Field>
           </section>
-          <section className="play-info-part court-settings" role="group" aria-label={surfaceWord(sport) === 'court' ? 'Court settings' : 'Field settings'}>
+          <section className={`play-info-part court-settings ${courtOpen ? 'open' : ''}`} role="group" aria-label={surfaceWord(sport) === 'court' ? 'Court settings' : 'Field settings'}>
             <h2>{surfaceWord(sport) === 'court' ? 'Court settings' : 'Field settings'}</h2>
+            {/* On a tablet or phone the stylesheet shows this in place of the heading, and keeps the settings shut until it is pressed. */}
+            <button type="button" className="court-fold" aria-expanded={courtOpen} onClick={() => setCourtOpen(!courtOpen)}>
+              <span className="court-fold-text">
+                <strong>{surfaceWord(sport) === 'court' ? 'Court settings' : 'Field settings'}</strong>
+                <span className="muted">{SURFACES[sport].find((v) => v.id === play.court)?.label}</span>
+              </span>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
             <div className="play-info-row">
               <div className="court-box-part">
                 <span className="field-label">{surfaceWord(sport) === 'court' ? 'Which court' : 'Which field'}</span>
@@ -1060,17 +1077,20 @@ export default function PlayEditor() {
               </SortableContext>
             </DndContext>
             {play.frames.length > 1 && <p className="muted small step-help">Drag a step to change the order.</p>}
-            <button className="btn small" onClick={addStep} title="Players and the ball start where their lines end in this step">
-              + Next step
-            </button>
-            <button className="btn small" onClick={duplicateStep} disabled={play.frames.length >= MAX_STEPS} title="An exact copy of this step, placed right after it">
-              Duplicate step {index + 1}
-            </button>
-            {play.frames.length > 1 && (
-              <button className="btn small danger" onClick={removeStep}>
-                Delete step {index + 1}
+            {/* One above the other in the narrow column; side by side, as wide as their words, when the box runs across the page. */}
+            <div className="step-buttons">
+              <button className="btn small" onClick={addStep} title="Players and the ball start where their lines end in this step">
+                + Next step
               </button>
-            )}
+              <button className="btn small" onClick={duplicateStep} disabled={play.frames.length >= MAX_STEPS} title="An exact copy of this step, placed right after it">
+                Duplicate step {index + 1}
+              </button>
+              {play.frames.length > 1 && (
+                <button className="btn small danger" onClick={removeStep}>
+                  Delete step {index + 1}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
