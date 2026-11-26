@@ -646,7 +646,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
           {/* The same menu for a tablet or phone: a bar across the bottom. The stylesheet shows one or the other. */}
           <BottomNav
             where={location.pathname + location.search}
-            hidden={/^\/(plays\/\d+|plans\/\d+\/score|filmroom\/(video|new|reel))\b/.test(location.pathname)}
+            hidden={/^\/(plans\/\d+\/score|filmroom\/(video|new|reel))\b/.test(location.pathname)}
             home={{ key: HOME.to, label: HOME.label, icon: HOME.icon, active: location.pathname === '/', go: () => navigate('/') }}
             groups={NAV_GROUPS.map((g) => ({
               title: g.title,

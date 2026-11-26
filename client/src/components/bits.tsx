@@ -55,6 +55,22 @@ export function Modal({ title, onClose, children, wide, label }: { title: ReactN
   );
 }
 
+/**
+ * Whether what is being edited has been kept: a green pill with a tick once it has, "Saving…" while
+ * it is on its way, and "Not saved" in red when it could not be. One look for every editor.
+ */
+export function SaveState({ state }: { state: 'saved' | 'dirty' | 'saving' | 'error' }) {
+  return (
+    <span className={`save-state ${state}`} role="status">
+      {state === 'saved' && (
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M5 12.5l4.500 4.500L19 7.500" />
+        </svg>
+      )}
+      {state === 'saved' ? 'All changes saved' : state === 'error' ? 'Not saved' : 'Saving…'}
+    </span>
+  );
+}
 export function Field({ label, children, grow }: { label: ReactNode; children: ReactNode; grow?: boolean }) {
   return (
     <label className={`field ${grow ? 'grow' : ''}`}>

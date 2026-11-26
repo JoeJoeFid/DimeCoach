@@ -9,7 +9,7 @@ import { useApp } from '../App';
 import type { Drill, ImportDraft, Item, Plan, Play, Player, Tag, Team } from '../types';
 import { blankItem, clean, fmtClock, fmtDateShort, parseClock, fmtDuration, hasTerms, htmlPreview, htmlText, isBlankHtml, searchSnippet, searchTerms, planMinutes, roomyScreen, schedule, slotGroups, slotLabel, type Slot } from '../util';
 import ItemBody from '../components/ItemBody';
-import { Field, Modal, MoreMenu, TagChip, type MenuItem, ShareIcon } from '../components/bits';
+import { Field, Modal, MoreMenu, SaveState, TagChip, type MenuItem, ShareIcon } from '../components/bits';
 import { CommunityPicker, ShareDialog } from '../components/community';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater, showUndo } from '../components/toasts';
@@ -470,14 +470,7 @@ export default function PlanEditor() {
           <SportIcon sport={app.sport?.name} size={26} colored />
           <span>{plan.title.trim() || (plan.is_template ? 'Template' : isHomework ? 'Homework' : gameMode ? 'Game' : 'Practice')}</span>
         </h1>
-        <span className={`save-state plan-saved ${saveState}`} role="status">
-          {saveState === 'saved' && (
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.600" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M5 12.500l4.500 4.500L19 7.500" />
-            </svg>
-          )}
-          {saveState === 'saved' ? 'All changes saved' : saveState === 'error' ? 'Not saved' : 'Saving…'}
-        </span>
+        <SaveState state={saveState} />
         {!plan.is_template && (
           <div className="plan-topbar-actions">
             <button type="button" className="btn" title="Share: send it to coaches, put it in a community, or make a link" onClick={() => setSharing(true)}>

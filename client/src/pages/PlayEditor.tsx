@@ -39,7 +39,7 @@ import { beatsOf, describeLine, ordinal, sequenceOf, withOrder, withSequence, ty
 import { END, HOLD, carryForward, describeAnchor, followAnchor, nearestAnchor, sources, syncEnds, targets, withEnd } from '../playLogic';
 import Attachments from '../components/Attachments';
 import PlayIntro from '../components/PlayIntro';
-import { Field, Modal, MoreMenu, ShareIcon } from '../components/bits';
+import { Field, Modal, MoreMenu, SaveState, ShareIcon } from '../components/bits';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { deleteLater } from '../components/toasts';
 import { TAG_COLORS } from '../util';
@@ -887,9 +887,7 @@ export default function PlayEditor() {
       <div className="play-topline">
         <div className="crumbs">
           <Link to="/playbook">← Playbook</Link>
-          <span className={`save-state ${saveState}`} role="status">
-            {saveState === 'saved' ? 'All changes saved' : saveState === 'error' ? 'Not saved' : 'Saving…'}
-          </span>
+          <SaveState state={saveState} />
         </div>
         <div className="head-actions">
           <button className="btn primary" onClick={() => setWatching(true)} title="Watch the play move, step by step">

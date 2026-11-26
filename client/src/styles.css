@@ -23966,7 +23966,7 @@ button.hw-title {
 .main[data-sport] .plan-name::before {
   content: none;
 }
-.save-state.plan-saved {
+.save-state {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -23977,7 +23977,7 @@ button.hw-title {
   font-size: 0.8rem;
   white-space: nowrap;
 }
-.save-state.plan-saved.saved {
+.save-state.saved {
   color: color-mix(in srgb, var(--good) 60%, var(--ink));
   background: color-mix(in srgb, var(--good) 14%, var(--surface));
 }
@@ -24071,8 +24071,8 @@ button.hw-title {
   }
 }
 
-/* ---------- Phones: a long bar of tabs keeps the words of the chosen one only ---------- */
-@media (max-width: 700px) {
+/* ---------- Tablets and phones: a long bar of tabs keeps the words of the chosen one only ---------- */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1400px) {
   .toptabs.fold {
     display: flex;
     overflow: visible;
@@ -24266,5 +24266,16 @@ a.fam-now-row {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 8px;
+  }
+}
+
+/* ---------- Tablets and phones: the page moves up and down only ---------- */
+/* Anything a little too wide is cut at the edge of the screen in place of letting the whole page slide sideways. Tables and bars of tabs that are meant to be pushed sideways have scrolling of their own and keep it. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1400px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
+    overscroll-behavior-x: none;
   }
 }
