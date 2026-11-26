@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { SIGNED_OUT_EVENT, api, listenLive, type AccountRole, type AuthStatus, type Bootstrap, type User } from './api';
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { sportKind } from './sports';
@@ -10,6 +10,7 @@ import { ToastHost, flushDeletes, showNews } from './components/toasts';
 import { ThemeToggle } from './theme';
 import Tour from './components/Tour';
 import TeamPicker from './components/TeamPicker';
+import BottomNav, { BottomRow } from './components/BottomNav';
 import { Join, PasswordForm, Setup, SignedOut, WatchLink, Welcome } from './pages/Auth';
 import SystemAdmin from './pages/SystemAdmin';
 import Communities from './pages/Communities';
@@ -105,10 +106,12 @@ interface NavItem {
 }
 const HOME: NavItem = { to: '/', label: 'Dashboard', end: true, icon: icons.dashboard };
 /** The sidebar, grouped by what the pages are for. */
-const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
+const NAV_GROUPS: { title: string; /** For its button in the bar across the bottom of a small screen. */ icon: string; /** Pages of its own that are not in the menu: its editors. */ also?: RegExp; items: NavItem[] }[] = [
   {
     // The dated things a coach builds and sends out.
     title: 'Plan',
+    icon: icons.practices,
+    also: /^\/(plans|import)\b/,
     items: [
       { to: '/practices', label: 'Schedule', icon: icons.practices },
       { to: '/homework', label: 'Homework', icon: icons.homework },
@@ -117,6 +120,8 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     // Reusable material to pull from when planning.
     title: 'Library',
+    icon: icons.library,
+    also: /^\/plays\b/,
     items: [
       { to: '/library', label: 'Drills', icon: icons.library },
       { to: '/playbook', label: 'Playbook', icon: icons.playbook },
@@ -127,6 +132,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     // Occasional setup: who is on the team, and what gets tracked.
     title: 'Team',
+    icon: icons.teams,
     items: [
       { to: '/teams', label: 'Team', icon: icons.teams },
       { to: '/stats', label: 'Stats', icon: icons.stats },
@@ -136,6 +142,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     // Other coaches: talking, and trading drills, plays and plans.
     title: 'Community',
+    icon: icons.community,
     items: [
       { to: '/chat', label: 'Chat', icon: icons.chat },
       { to: '/messages', label: 'Messages', icon: icons.messages },
@@ -297,15 +304,6 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
   useEffect(() => {
     setNavFolded(inEditor || localStorage.getItem(navKey) === '1');
   }, [inEditor, navKey]);
-  // On a narrow screen the menu is a panel that slides in from the left. Going anywhere closes it.
-  const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => setMenuOpen(false), [location.pathname, location.search]);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [menuOpen]);
   const foldNav = (folded: boolean) => {
     setNavFolded(folded);
     if (!inEditor) localStorage.setItem(navKey, folded ? '1' : '0');
@@ -603,27 +601,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
       {printing ? (
         routes
       ) : (
-        <div className={`shell ${navFolded ? 'nav-folded' : ''} ${menuOpen ? 'menu-open' : ''}`}>
-          {/* Narrow screens only: the team, and the button that opens the menu. */}
-          <header className="mobile-bar">
-            <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label={communityUnread + chatUnread > 0 ? `Menu, ${communityUnread + chatUnread} unread` : 'Menu'}>
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <path d="M4 7h16M4 12h16M4 17h16" />
-              </svg>
-              {/* Something in the menu wants looking at: its count shows on the button while the menu is shut. */}
-              {communityUnread + chatUnread > 0 && (
-                <span className="menu-dot" aria-hidden="true">
-                  {communityUnread + chatUnread > 9 ? '9+' : communityUnread + chatUnread}
-                </span>
-              )}
-            </button>
-            {/* The mark and the team's name lead back to the dashboard, as the name at the top of the menu does. */}
-            <Link to="/" className="mobile-home" aria-label={`${state.team!.name}: dashboard`}>
-              <span className="brand-mark" aria-hidden="true" />
-              <span className="mobile-team">{state.team!.name}</span>
-            </Link>
-          </header>
-          {menuOpen && <div className="menu-scrim" onClick={() => setMenuOpen(false)} />}
+        <div className={`shell ${navFolded ? 'nav-folded' : ''}`}>
           <aside className="sidebar">
             <div className="side-top">
               <NavLink to="/" className="brand">
@@ -633,9 +611,6 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
               <button type="button" className={`nav-fold ${navFolded ? 'open-it' : ''}`} onClick={() => foldNav(!navFolded)} aria-expanded={!navFolded} aria-label={navFolded ? 'Show the menu' : 'Hide the menu'} title={navFolded ? 'Show the menu' : 'Hide the menu'}>
                 {navFolded ? '»' : '«'}
               </button>
-              <button type="button" className="menu-close" onClick={() => setMenuOpen(false)} aria-label="Close the menu">
-                ✕
-              </button>
             </div>
             {/* The team being worked on. Changing it means going back to the choosing screen. */}
             <div className="team-now">
@@ -644,10 +619,7 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
               <button
                 type="button"
                 className="btn small"
-                onClick={() => {
-                  setMenuOpen(false);
-                  pickTeam();
-                }}
+                onClick={pickTeam}
               >
                 Switch team
               </button>
@@ -666,14 +638,64 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
             <div className="side-foot">
               <UserMenu
                 user={user}
-                onTour={() => {
-                  setMenuOpen(false);
-                  setTouring(true);
-                }}
+                onTour={() => setTouring(true)}
                 onSignOut={signOut}
               />
             </div>
           </aside>
+          {/* The same menu for a tablet or phone: a bar across the bottom. The stylesheet shows one or the other. */}
+          <BottomNav
+            where={location.pathname + location.search}
+            hidden={/^\/(plays\/\d+|plans\/\d+\/score|filmroom\/(video|new|reel))\b/.test(location.pathname)}
+            home={{ key: HOME.to, label: HOME.label, icon: HOME.icon, active: location.pathname === '/', go: () => navigate('/') }}
+            groups={NAV_GROUPS.map((g) => ({
+              title: g.title,
+              icon: g.icon,
+              active: g.also?.test(location.pathname),
+              items: g.items.map((n) => ({
+                key: n.to,
+                label: n.label,
+                icon: n.icon,
+                active: location.pathname === n.to || location.pathname.startsWith(`${n.to}/`),
+                go: () => navigate(n.to),
+                badge: n.to === '/messages' ? communityUnread : n.to === '/chat' ? chatUnread : 0,
+              })),
+            }))}
+            profileActive={/^\/(account|help|system|portal)\b/.test(location.pathname)}
+            profile={(close, install) => (
+              <>
+                <div className="bn-team">
+                  <div>
+                    <strong>{state.team!.name}</strong>
+                    <span className="muted small">{[state.sport?.name, state.team!.season].filter(Boolean).join(' · ')}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn small"
+                    onClick={() => {
+                      close();
+                      pickTeam();
+                    }}
+                  >
+                    Switch team
+                  </button>
+                </div>
+                {!!data?.following && (
+                  <BottomRow
+                    icon={icons.teams}
+                    label="Teams I follow"
+                    onClick={() => {
+                      close();
+                      navigate('/portal');
+                    }}
+                  />
+                )}
+                <div className="user-pop">
+                  <UserActions user={user} onTour={() => setTouring(true)} onSignOut={signOut} onDone={close} onInstall={install} />
+                </div>
+              </>
+            )}
+          />
           {/* The sport of the team being worked on: page titles show its ball beside them. */}
           <main className="main" data-sport={state.team ? (sportKind(state.sport?.name) ?? 'other') : undefined}>
             {state.access && <SharedBar />}
@@ -725,6 +747,59 @@ const MENU_ICONS = {
   help: 'M5 4.500h9.500a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3ZM5 17a3 3 0 0 1 3-3h9.500M9 8.500h5',
   app: 'M8 3.500h8a1.500 1.500 0 0 1 1.500 1.500v14a1.500 1.500 0 0 1-1.500 1.500H8A1.500 1.500 0 0 1 6.500 19V5A1.500 1.500 0 0 1 8 3.500ZM12 8v6M9.500 11.500l2.500 2.500 2.500-2.500',
 };
+/** What someone can do about their own account: the lines of the list, wherever it is shown. */
+export function UserActions({
+  user,
+  onTour,
+  onSignOut,
+  onPassword,
+  onDone,
+  onInstall,
+}: {
+  user: User;
+  /** Left out where there is no tour to take. */
+  onTour?: () => void;
+  onSignOut: () => void;
+  /** For an account that only follows teams: it has a password to change, and no account page or help of a coach's. */
+  onPassword?: () => void;
+  /** One of them was chosen: whatever holds the list shuts. */
+  onDone: () => void;
+  /** Opens the steps for getting the app. Whatever holds the list draws them, since the list itself is gone by then. */
+  onInstall: () => void;
+}) {
+  const navigate = useNavigate();
+  const item = (label: string, icon: string, run: () => void) => (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={() => {
+        onDone();
+        run();
+      }}
+    >
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d={icon} />
+      </svg>
+      {label}
+    </button>
+  );
+  return (
+    <>
+      <span className="user-pop-email">{user.email}</span>
+      {onPassword ? item('Change password', MENU_ICONS.account, onPassword) : item('Account', MENU_ICONS.account, () => navigate('/account'))}
+      {!onPassword && user.is_system_admin && item('System admin', icons.system, () => navigate('/system'))}
+      {!onPassword && item('Help', MENU_ICONS.help, () => navigate('/help'))}
+      {onTour && item('Take the tour', MENU_ICONS.tour, onTour)}
+      {!isInstalled() && item('Get the app', MENU_ICONS.app, onInstall)}
+      <div className="user-pop-row">
+        <span>Appearance</span>
+        <ThemeToggle />
+      </div>
+      <div className="user-pop-end">{item('Sign out', MENU_ICONS.signOut, onSignOut)}</div>
+    </>
+  );
+}
+
 /**
  * The person signed in, at the foot of the menu. Pressing it opens a list above it with their
  * account, the tour, the color theme and signing out.
@@ -736,13 +811,10 @@ export function UserMenu({
   onPassword,
 }: {
   user: User;
-  /** Left out where there is no tour to take. */
   onTour?: () => void;
   onSignOut: () => void;
-  /** For an account that only follows teams: it has a password to change, and no account page or help of a coach's. */
   onPassword?: () => void;
 }) {
-  const navigate = useNavigate();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -760,38 +832,13 @@ export function UserMenu({
       window.removeEventListener('keydown', away);
     };
   }, [open]);
-  const item = (label: string, icon: string, run: () => void) => (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={() => {
-        setOpen(false);
-        run();
-      }}
-    >
-      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d={icon} />
-      </svg>
-      {label}
-    </button>
-  );
   return (
     <div className="user-menu" ref={root}>
-      {/* Drawn at the top of the page, not in here: on a phone this menu sits in a panel that slides in, which would cut the dialog off at its own edge. */}
+      {/* Drawn at the top of the page, not in here, so the menu's own edges never cut the dialog off. */}
       {installing && createPortal(<InstallDialog onClose={() => setInstalling(false)} />, document.body)}
       {open && (
         <div className="user-pop" role="menu" aria-label="Your account">
-          <span className="user-pop-email">{user.email}</span>
-          {onPassword ? item('Change password', MENU_ICONS.account, onPassword) : item('Account', MENU_ICONS.account, () => navigate('/account'))}
-          {!onPassword && user.is_system_admin && item('System admin', icons.system, () => navigate('/system'))}
-          {!onPassword && item('Help', MENU_ICONS.help, () => navigate('/help'))}
-          {onTour && item('Take the tour', MENU_ICONS.tour, onTour)}
-          {!isInstalled() && item('Get the app', MENU_ICONS.app, () => setInstalling(true))}
-          <div className="user-pop-row">
-            <span>Appearance</span>
-            <ThemeToggle />
-          </div>
-          <div className="user-pop-end">{item('Sign out', MENU_ICONS.signOut, onSignOut)}</div>
+          <UserActions user={user} onTour={onTour} onSignOut={onSignOut} onPassword={onPassword} onDone={() => setOpen(false)} onInstall={() => setInstalling(true)} />
         </div>
       )}
       <button type="button" className="user-chip" aria-haspopup="menu" aria-expanded={open} title={user.name} onClick={() => setOpen(!open)}>

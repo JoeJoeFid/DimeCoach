@@ -17,7 +17,8 @@ import { TopTabs } from '../components/TopTabs';
 import SportIcon from '../components/SportIcon';
 import { PasswordForm } from './Auth';
 import { FollowedTeams, NEW_TEAM_KEY } from '../components/TeamPicker';
-import { NAV_ICONS, UserMenu, OldAddress } from '../App';
+import { NAV_ICONS, UserActions, UserMenu, OldAddress } from '../App';
+import BottomNav, { BottomRow, type BottomItem } from '../components/BottomNav';
 import Inbox from '../components/Inbox';
 import { MyStats } from './Stats';
 import GameVideo from '../components/GameVideo';
@@ -143,11 +144,11 @@ function StartCoaching({ user, onBack, onSignOut }: { user: User; onBack: () => 
 
 /** The parts of a team's page in the menu at the side, grouped as a coach's menu is. */
 // Worked out when it is drawn: the icons belong to the app's own file, which is still loading when this one is read.
-const sideGroups = (): { title: string; items: [Tab, string][] }[] => [
-  { title: 'Plan', items: [['schedule', NAV_ICONS.practices], ['homework', NAV_ICONS.homework], ['video', NAV_ICONS.video]] },
-  { title: 'Library', items: [['drills', NAV_ICONS.library], ['playbook', NAV_ICONS.playbook], ['resources', NAV_ICONS.resources], ['film', NAV_ICONS.filmroom]] },
-  { title: 'Team', items: [['roster', NAV_ICONS.teams], ['stats', NAV_ICONS.stats]] },
-  { title: 'Community', items: [['chat', NAV_ICONS.chat], ['inbox', NAV_ICONS.messages], ['messages', NAV_ICONS.community]] },
+const sideGroups = (): { title: string; /** For its button in the bar across the bottom of a small screen. */ icon: string; items: [Tab, string][] }[] => [
+  { title: 'Plan', icon: NAV_ICONS.practices, items: [['schedule', NAV_ICONS.practices], ['homework', NAV_ICONS.homework], ['video', NAV_ICONS.video]] },
+  { title: 'Library', icon: NAV_ICONS.library, items: [['drills', NAV_ICONS.library], ['playbook', NAV_ICONS.playbook], ['resources', NAV_ICONS.resources], ['film', NAV_ICONS.filmroom]] },
+  { title: 'Team', icon: NAV_ICONS.teams, items: [['roster', NAV_ICONS.teams], ['stats', NAV_ICONS.stats]] },
+  { title: 'Community', icon: NAV_ICONS.community, items: [['chat', NAV_ICONS.chat], ['inbox', NAV_ICONS.messages], ['messages', NAV_ICONS.community]] },
 ];
 
 /**
@@ -155,7 +156,6 @@ const sideGroups = (): { title: string; items: [Tab, string][] }[] => [
  * the parts of the team's page the coaches have opened to them.
  */
 function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; team?: FamilyTeam['team']; tabs: [Tab, string, number?][]; tab: Tab; go: (t: Tab) => void; children: ReactNode }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
   // Unread messages light up Messages in the menu, as they do for a coach.
   const chatUnread = useChatUnread();
@@ -190,7 +190,6 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
         aria-current={tab === t ? 'page' : undefined}
         onClick={(e) => {
           e.preventDefault();
-          setMenuOpen(false);
           go(t);
         }}
       >
@@ -212,43 +211,13 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
     );
   };
   return (
-    <div className={`shell fam-frame ${menuOpen ? 'menu-open' : ''}`}>
-      <header className="mobile-bar">
-        <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-label={unread + chatUnread > 0 ? `Menu, ${unread + chatUnread} unread` : 'Menu'}>
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-            <path d="M4 7h16M4 12h16M4 17h16" />
-          </svg>
-          {/* Something in the menu wants looking at: its count shows on the button while the menu is shut. */}
-          {unread + chatUnread > 0 && (
-            <span className="menu-dot" aria-hidden="true">
-              {unread + chatUnread > 9 ? '9+' : unread + chatUnread}
-            </span>
-          )}
-        </button>
-        {/* The mark and the team's name lead back to the team's first page. */}
-        <a
-          href="?"
-          className="mobile-home"
-          aria-label={`${team?.name ?? 'Dime Coach'}: home`}
-          onClick={(e) => {
-            e.preventDefault();
-            go('home');
-          }}
-        >
-          <span className="brand-mark" aria-hidden="true" />
-          <span className="mobile-team">{team?.name ?? 'Dime Coach'}</span>
-        </a>
-      </header>
-      {menuOpen && <div className="menu-scrim" onClick={() => setMenuOpen(false)} />}
+    <div className="shell fam-frame">
       <aside className="sidebar">
         <div className="side-top">
           <Link to="/portal" className="brand">
             <span className="brand-mark" aria-hidden="true" />
             Dime Coach
           </Link>
-          <button type="button" className="menu-close" onClick={() => setMenuOpen(false)} aria-label="Close the menu">
-            ✕
-          </button>
         </div>
         <div className="team-now">
           <strong>{team?.name ?? 'Your teams'}</strong>
@@ -276,6 +245,50 @@ function FamilyFrame({ frame, team, tabs, tab, go, children }: { frame: Frame; t
           <UserMenu user={frame.user} onPassword={frame.onPassword} onSignOut={frame.onSignOut} />
         </div>
       </aside>
+      {/* The same menu for a tablet or phone, drawn by what draws a coach's. */}
+      <BottomNav
+        where={tab}
+        home={{ key: 'home', label: 'Dashboard', icon: NAV_ICONS.dashboard, active: tab === 'home' && !!has('home'), go: () => (has('home') ? go('home') : navigate('/portal')) }}
+        groups={sideGroups().map((g) => ({
+          title: g.title,
+          icon: g.icon,
+          items: g.items.flatMap(([t, icon]): BottomItem[] => {
+            const found = has(t);
+            return found ? [{ key: t, label: found[1], icon, active: tab === t, go: () => go(t), badge: t === 'inbox' ? unread : t === 'chat' ? chatUnread : 0 }] : [];
+          }),
+        }))}
+        profile={(close, install) => (
+          <>
+            <div className="bn-team">
+              <div>
+                <strong>{team?.name ?? 'Your teams'}</strong>
+                {team && <span className="muted small">{[team.sport, team.season].filter(Boolean).join(' · ')}</span>}
+              </div>
+              <button
+                type="button"
+                className="btn small"
+                onClick={() => {
+                  close();
+                  navigate('/portal');
+                }}
+              >
+                Switch team
+              </button>
+            </div>
+            <BottomRow
+              icon="M12 5v14M5 12h14"
+              label="New team"
+              onClick={() => {
+                close();
+                frame.onNewTeam();
+              }}
+            />
+            <div className="user-pop">
+              <UserActions user={frame.user} onPassword={frame.onPassword} onSignOut={frame.onSignOut} onDone={close} onInstall={install} />
+            </div>
+          </>
+        )}
+      />
       <main className="main">{children}</main>
     </div>
   );

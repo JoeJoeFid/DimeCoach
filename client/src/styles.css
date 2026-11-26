@@ -6687,7 +6687,8 @@ fieldset.plain {
 .toast-stack {
   position: fixed;
   right: 20px;
-  bottom: 20px;
+  /* Above the menu bar where there is one across the bottom. */
+  bottom: calc(20px + var(--bn));
   z-index: 120;
   display: flex;
   flex-direction: column;
@@ -8112,139 +8113,241 @@ fieldset.perm-list:disabled .check.perm {
   border-color: rgba(21, 27, 0, 0.32);
 }
 
-/* ---------- Narrow screens: a slim bar, and the menu as a panel that slides in ---------- */
-.mobile-bar,
-.menu-close,
-.menu-scrim {
+/* ---------- Tablets and phones: the menu is a bar across the bottom ---------- */
+/* How much of the foot of the screen the bar takes: nothing where there is no bar. */
+:root {
+  --bn: 0px;
+}
+.bottom-nav,
+.bn-sheet,
+.bn-scrim {
   display: none;
 }
-@media (max-width: 900px) {
-  .mobile-bar {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: 52px;
-    padding: 0 12px 0 6px;
-    background: var(--side-bg);
-    border-bottom: 1px solid var(--side-line);
+/* A phone on its side keeps the page clear of the notch. */
+body {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+/* A narrow window, or a touch screen up to the size of a large tablet on its side. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1400px) {
+  :root {
+    --bn: calc(60px + env(safe-area-inset-bottom, 0px));
   }
-  .menu-btn {
+  /* Typing, or on a page that wants the whole screen: the bar is away and so is its room. */
+  :root.bn-off {
+    --bn: 0px;
+  }
+  .shell,
+  .shell.nav-folded {
+    display: block;
+  }
+  .shell > .sidebar {
+    display: none;
+  }
+  .shell > .main {
+    padding-bottom: var(--bn);
+  }
+  .bottom-nav {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 45;
+    display: flex;
+    justify-content: center;
+    height: var(--bn);
+    padding: 0 max(4px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(4px, env(safe-area-inset-left, 0px));
+    background: var(--side-bg);
+    border-top: 1px solid var(--side-line);
+  }
+  .bn-off .bottom-nav,
+  .bn-off .bn-sheet,
+  .bn-off .bn-scrim {
+    display: none;
+  }
+  .bn-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 2px;
+    border: none;
+    background: none;
+    color: var(--ink-2);
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bn-icon {
     position: relative;
     display: grid;
     place-items: center;
-    width: 44px;
-    height: 44px;
+    width: 46px;
+    height: 28px;
+    border-radius: 999px;
+  }
+  .bn-icon .nav-badge {
+    position: absolute;
+    top: -5px;
+    right: -6px;
+    margin: 0;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 0.68rem;
+    box-shadow: 0 0 0 2px var(--side-bg);
+  }
+  .bn-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.68rem;
+    font-weight: 550;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+  /* Where you are: the picture sits on the accent, in the dark ink that goes with it. */
+  .bn-tab.active {
+    color: var(--ink);
+  }
+  .bn-tab.active .bn-icon {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  .bn-tab.active .bn-label {
+    font-weight: 700;
+  }
+  /* The one whose pages are showing above the bar. */
+  .bn-tab.open:not(.active) .bn-icon {
+    background: var(--side-active);
+    color: var(--ink);
+  }
+  .bn-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 44;
+    background: rgb(0 0 0 / 0.4);
+  }
+  .bn-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--bn) + 8px);
+    z-index: 46;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: min(440px, calc(100vw - 16px));
+    max-height: calc(100dvh - var(--bn) - 24px);
+    margin: 0 auto;
+    padding: 8px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 16px;
+    box-shadow: var(--shadow-3);
+    animation: bn-rise 0.16s ease-out;
+  }
+  .bn-sheet-title {
+    padding: 6px 10px 4px;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .bn-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 8px 10px;
     border: none;
     border-radius: 10px;
     background: none;
     color: var(--ink);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: left;
     cursor: pointer;
   }
-  /* How many things in the menu want looking at, on the button that opens it: the same bubble the menu's own lines carry. */
-  .menu-dot {
-    position: absolute;
-    top: 2px;
-    right: 0;
-    display: grid;
-    place-items: center;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-size: 0.72rem;
-    font-weight: 800;
-    line-height: 1;
-    box-shadow: 0 0 0 2px var(--side-bg);
-    animation: nav-pulse 1.6s ease-in-out infinite;
+  .bn-row svg {
+    flex: none;
+    opacity: 0.75;
   }
-  .mobile-team {
+  .bn-row:hover {
+    background: var(--surface-3);
+  }
+  .bn-row.active {
+    background: var(--surface-3);
+    font-weight: 650;
+  }
+  .bn-row.active svg {
+    opacity: 1;
+  }
+  /* The team being worked on, at the head of the profile sheet. */
+  .bn-team {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+    padding: 6px 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .bn-team > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     min-width: 0;
+  }
+  .bn-team strong {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 650;
-    letter-spacing: -0.02em;
   }
-  .sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 60;
-    width: min(300px, 86vw);
-    height: 100dvh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    transform: translateX(-102%);
-    visibility: hidden;
-    transition: transform 0.2s ease, visibility 0.2s;
-    box-shadow: 12px 0 40px rgb(0 0 0 / 0.35);
-  }
-  .menu-open .sidebar {
-    transform: none;
-    visibility: visible;
-  }
-  .menu-scrim {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 55;
-    background: rgb(0 0 0 / 0.5);
-  }
-  .menu-close {
-    display: grid;
-    place-items: center;
-    width: 40px;
-    height: 40px;
-    margin: -6px -4px -6px 0;
-    border: none;
-    border-radius: 10px;
-    background: none;
-    color: var(--ink-2);
-    font-size: 1.05rem;
-    cursor: pointer;
-  }
-  .sidebar .side-nav {
+  .bn-team .btn {
     flex: none;
   }
-  .sidebar .side-nav a {
-    min-height: 44px;
+  /* The account's own list, laid into the sheet instead of floating over the side menu. */
+  .bn-sheet .user-pop {
+    position: static;
+    width: auto;
+    max-width: none;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+  .bn-sheet .user-pop button[role='menuitem'] {
+    min-height: 46px;
+    gap: 12px;
     font-size: 1rem;
   }
-  /* The menu can be longer than the screen. The person at its foot stays in view while the rest
-     scrolls, so the list that opens above them is never off the bottom. */
-  .sidebar .side-foot {
-    position: sticky;
-    bottom: -16px;
-    z-index: 2;
-    margin-top: auto;
-    margin-bottom: -16px;
-    padding-top: 8px;
-    padding-bottom: 16px;
-    background: var(--side-bg);
-  }
-  .user-pop {
-    max-height: calc(100dvh - 96px);
-    overflow-y: auto;
-  }
-  /* The folded look belongs to wide screens only. */
-  .nav-folded .nav-badge {
-    position: static;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
-    font-size: 0.72rem;
+}
+@keyframes bn-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }
-@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
-  .sidebar {
-    transition: none;
-  }
-  .menu-dot {
+@media (prefers-reduced-motion: reduce) {
+  .bn-sheet {
     animation: none;
+  }
+}
+@media print {
+  .bottom-nav,
+  .bn-sheet,
+  .bn-scrim {
+    display: none !important;
   }
 }
 
@@ -18315,7 +18418,7 @@ button.play-card {
 .chat {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
-  height: calc(100dvh - 190px);
+  height: calc(100dvh - 190px - var(--bn));
   min-height: 420px;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -18725,12 +18828,12 @@ button.play-card {
   }
   .chat {
     grid-template-columns: minmax(0, 1fr);
-    height: calc(100dvh - 76px);
+    height: calc(100dvh - 24px - var(--bn));
     min-height: 0;
     margin: 0 -8px;
   }
   .fam .chat {
-    height: calc(100dvh - 150px);
+    height: calc(100dvh - 98px - var(--bn));
   }
   .chat.has-open .chat-list,
   .chat:not(.has-open) .chat-thread {
@@ -18815,17 +18918,6 @@ button.play-card {
 .roster-add-existing .input {
   flex: 1;
   min-width: 0;
-}
-
-/* The mark and team name in a phone's top bar are one link home. */
-.mobile-home {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  min-height: 44px;
-  color: inherit;
-  text-decoration: none;
 }
 
 /* ---------- Chat: emoji on a bubble, and the panel to pick them from ---------- */
@@ -23963,4 +24055,13 @@ button.hw-title {
 .dash-news .card-head h2,
 .dash-quick h2 {
   font-size: 1.25rem;
+}
+/* The narrowest phones: six names still fit side by side. */
+@media (max-width: 380px) {
+  .bn-label {
+    font-size: 0.62rem;
+  }
+  .bn-icon {
+    width: 40px;
+  }
 }
