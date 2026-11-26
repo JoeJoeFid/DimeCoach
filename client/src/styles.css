@@ -24279,3 +24279,14 @@ a.fam-now-row {
     overscroll-behavior-x: none;
   }
 }
+
+/* ---------- A phone or tablet with the app on its home screen: the page starts under the clock and battery, not behind them ---------- */
+/* The page is drawn to the very edges of the glass so the bar along the bottom can reach them. The top needs the same care. */
+body {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.sp-top,
+.sp-head,
+.ps-sticky {
+  top: env(safe-area-inset-top, 0px);
+}
