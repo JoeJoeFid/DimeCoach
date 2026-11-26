@@ -24290,3 +24290,15 @@ body {
 .ps-sticky {
   top: env(safe-area-inset-top, 0px);
 }
+
+/* Pop-up windows cover the whole glass, so they keep clear of the clock at the top and the bar at the bottom themselves. */
+.modal-back {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 7vh);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 7vh);
+}
+@media (max-width: 700px) {
+  .modal-back {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  }
+}
