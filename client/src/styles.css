@@ -24120,3 +24120,17 @@ a.fam-now-row {
     display: none;
   }
 }
+
+/* ---------- A wide window that is not tall: the side menu's list scrolls ---------- */
+/* The name and team above it and the person below it stay put; only the pages between them move. */
+.sidebar > .side-nav {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--side-line) transparent;
+}
+.sidebar > .side-nav > * {
+  flex-shrink: 0;
+}

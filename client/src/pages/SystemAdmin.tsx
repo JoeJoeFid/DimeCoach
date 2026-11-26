@@ -290,7 +290,7 @@ export default function SystemAdmin() {
         <p className="muted">Loading…</p>
       ) : (
         <>
-          <TopTabs tabs={SYS_TABS} value={tab} onChange={(id) => setParams(id === 'people' ? {} : { tab: id }, { replace: true })} label="System administration" />
+          <TopTabs fold tabs={SYS_TABS} value={tab} onChange={(id) => setParams(id === 'people' ? {} : { tab: id }, { replace: true })} label="System administration" />
           {tab === 'people' && (
             <>
           <div className="sys-top">
