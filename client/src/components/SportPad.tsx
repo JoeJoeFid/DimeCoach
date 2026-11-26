@@ -3,7 +3,8 @@
 // (../sportScoring.ts). It wears the basketball pad's clothes (ScorePad.tsx) and keeps its plays
 // the same way, so a game of any sport is saved and followed alike.
 import { useState, type ReactNode } from 'react';
-import { BottomSheet, PlayerGrid, type PadPlayer } from './ScorePad';
+import { BottomSheet, PeriodChanger, PlayerGrid, ordinalPart, type PadPlayer } from './ScorePad';
+import SportIcon from './SportIcon';
 import { newId, type GameEvent, type ScoreState } from '../scoring';
 import { lineText, playOf, playText, sportScore, tallyOf, type SportDef, type SportEvent, type SportPlay } from '../sportScoring';
 
@@ -318,16 +319,17 @@ export default function SportPad({
       )}
       {/* The part of the game it is in, and ending it. */}
       {sheet?.kind === 'options' && (
-        <BottomSheet title={final ? 'Final' : `${def.period} ${state.period}`} sub={final || !def.sets ? undefined : 'A set counts for whoever is ahead once you move on to the next one, or end the game.'} onClose={() => setSheet(null)}>
+        <BottomSheet title={final ? 'Final' : `Change ${def.period}`} icon={<SportIcon sport={def.kind} size={26} />} sub={final || !def.sets ? undefined : 'A set counts for whoever is ahead once you move on to the next one, or end the game.'} onClose={() => setSheet(null)}>
           {!final && (
-            <div className="sp-two">
-              <button type="button" className="btn" disabled={state.period <= 1} onClick={() => setState({ period: state.period - 1 })}>
-                ‹ Previous {def.period.toLowerCase()}
-              </button>
-              <button type="button" className="btn primary" disabled={state.period >= 20} onClick={() => (setState({ period: state.period + 1 }), setSheet(null))}>
-                Next {def.period.toLowerCase()} ›
-              </button>
-            </div>
+            <PeriodChanger
+              sport={def.kind}
+              word={def.period}
+              current={state.period}
+              regular={def.kind === 'baseball' ? 7 : def.kind === 'football' ? 4 : 3}
+              detail={(n) => (def.kind === 'football' && n > 4 ? 'Overtime' : ordinalPart(n, def.period))}
+              onPick={(n) => setState({ period: n })}
+              onNext={() => (setState({ period: state.period + 1 }), setSheet(null))}
+            />
           )}
           {final ? (
             <button type="button" className="btn primary sp-wide" onClick={() => (setState({ status: 'live' }), setSheet(null))}>

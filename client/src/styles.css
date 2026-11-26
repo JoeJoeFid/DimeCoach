@@ -24302,3 +24302,310 @@ body {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
   }
 }
+
+/* ---------- Keeping score: glass boxes, keys with a shine, and the sport's own floor drawn faintly behind ---------- */
+/* The page behind the pad: a glow of the accent in two corners and line art of the floor, top left and bottom right. */
+.main:has(.sp) {
+  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Crect x=%2220%22 y=%2260%22 width=%22560%22 height=%22480%22/%3E%3Cpath d=%22M300 60v480%22/%3E%3Ccircle cx=%22300%22 cy=%22300%22 r=%2290%22/%3E%3Ccircle cx=%22300%22 cy=%22300%22 r=%226%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Crect x=%2220%22 y=%2260%22 width=%22560%22 height=%22480%22/%3E%3Cpath d=%22M300 60v480%22/%3E%3Ccircle cx=%22300%22 cy=%22300%22 r=%2290%22/%3E%3Ccircle cx=%22300%22 cy=%22300%22 r=%226%22/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
+  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
+}
+.main[data-sport='basketball']:has(.sp) {
+  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Crect x=%2220%22 y=%2220%22 width=%22560%22 height=%22560%22/%3E%3Crect x=%22210%22 y=%2220%22 width=%22180%22 height=%22230%22/%3E%3Ccircle cx=%22300%22 cy=%22250%22 r=%2272%22/%3E%3Cpath d=%22M60 20v110a240 240 0 0 0 480 0V20%22/%3E%3Cpath d=%22M262 62h76%22/%3E%3Ccircle cx=%22300%22 cy=%2282%22 r=%2214%22/%3E%3Cpath d=%22M228 580a72 72 0 0 1 144 0%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Crect x=%2220%22 y=%2220%22 width=%22560%22 height=%22560%22/%3E%3Crect x=%22210%22 y=%2220%22 width=%22180%22 height=%22230%22/%3E%3Ccircle cx=%22300%22 cy=%22250%22 r=%2272%22/%3E%3Cpath d=%22M60 20v110a240 240 0 0 0 480 0V20%22/%3E%3Cpath d=%22M262 62h76%22/%3E%3Ccircle cx=%22300%22 cy=%2282%22 r=%2214%22/%3E%3Cpath d=%22M228 580a72 72 0 0 1 144 0%22/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
+  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
+}
+.main[data-sport='baseball']:has(.sp) {
+  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Cpath d=%22M300 560L40 300M300 560l260-260%22/%3E%3Cpath d=%22M300 560L170 430l130-130 130 130Z%22/%3E%3Ccircle cx=%22300%22 cy=%22430%22 r=%2222%22/%3E%3Cpath d=%22M118 378a260 260 0 0 1 364 0%22/%3E%3Cpath d=%22M40 300a370 370 0 0 1 520 0%22/%3E%3Ccircle cx=%22300%22 cy=%22560%22 r=%2226%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Cpath d=%22M300 560L40 300M300 560l260-260%22/%3E%3Cpath d=%22M300 560L170 430l130-130 130 130Z%22/%3E%3Ccircle cx=%22300%22 cy=%22430%22 r=%2222%22/%3E%3Cpath d=%22M118 378a260 260 0 0 1 364 0%22/%3E%3Cpath d=%22M40 300a370 370 0 0 1 520 0%22/%3E%3Ccircle cx=%22300%22 cy=%22560%22 r=%2226%22/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
+  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
+}
+.main[data-sport='football']:has(.sp) {
+  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Crect x=%2220%22 y=%2260%22 width=%22560%22 height=%22480%22/%3E%3Cpath d=%22M90 60v480%22/%3E%3Cpath d=%22M160 60v480%22/%3E%3Cpath d=%22M230 60v480%22/%3E%3Cpath d=%22M300 60v480%22/%3E%3Cpath d=%22M370 60v480%22/%3E%3Cpath d=%22M440 60v480%22/%3E%3Cpath d=%22M510 60v480%22/%3E%3Cpath d=%22M34 226v12M34 362v12%22/%3E%3Cpath d=%22M48 226v12M48 362v12%22/%3E%3Cpath d=%22M62 226v12M62 362v12%22/%3E%3Cpath d=%22M76 226v12M76 362v12%22/%3E%3Cpath d=%22M90 226v12M90 362v12%22/%3E%3Cpath d=%22M104 226v12M104 362v12%22/%3E%3Cpath d=%22M118 226v12M118 362v12%22/%3E%3Cpath d=%22M132 226v12M132 362v12%22/%3E%3Cpath d=%22M146 226v12M146 362v12%22/%3E%3Cpath d=%22M160 226v12M160 362v12%22/%3E%3Cpath d=%22M174 226v12M174 362v12%22/%3E%3Cpath d=%22M188 226v12M188 362v12%22/%3E%3Cpath d=%22M202 226v12M202 362v12%22/%3E%3Cpath d=%22M216 226v12M216 362v12%22/%3E%3Cpath d=%22M230 226v12M230 362v12%22/%3E%3Cpath d=%22M244 226v12M244 362v12%22/%3E%3Cpath d=%22M258 226v12M258 362v12%22/%3E%3Cpath d=%22M272 226v12M272 362v12%22/%3E%3Cpath d=%22M286 226v12M286 362v12%22/%3E%3Cpath d=%22M300 226v12M300 362v12%22/%3E%3Cpath d=%22M314 226v12M314 362v12%22/%3E%3Cpath d=%22M328 226v12M328 362v12%22/%3E%3Cpath d=%22M342 226v12M342 362v12%22/%3E%3Cpath d=%22M356 226v12M356 362v12%22/%3E%3Cpath d=%22M370 226v12M370 362v12%22/%3E%3Cpath d=%22M384 226v12M384 362v12%22/%3E%3Cpath d=%22M398 226v12M398 362v12%22/%3E%3Cpath d=%22M412 226v12M412 362v12%22/%3E%3Cpath d=%22M426 226v12M426 362v12%22/%3E%3Cpath d=%22M440 226v12M440 362v12%22/%3E%3Cpath d=%22M454 226v12M454 362v12%22/%3E%3Cpath d=%22M468 226v12M468 362v12%22/%3E%3Cpath d=%22M482 226v12M482 362v12%22/%3E%3Cpath d=%22M496 226v12M496 362v12%22/%3E%3Cpath d=%22M510 226v12M510 362v12%22/%3E%3Cpath d=%22M524 226v12M524 362v12%22/%3E%3Cpath d=%22M538 226v12M538 362v12%22/%3E%3Cpath d=%22M552 226v12M552 362v12%22/%3E%3Cpath d=%22M566 226v12M566 362v12%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Crect x=%2220%22 y=%2260%22 width=%22560%22 height=%22480%22/%3E%3Cpath d=%22M90 60v480%22/%3E%3Cpath d=%22M160 60v480%22/%3E%3Cpath d=%22M230 60v480%22/%3E%3Cpath d=%22M300 60v480%22/%3E%3Cpath d=%22M370 60v480%22/%3E%3Cpath d=%22M440 60v480%22/%3E%3Cpath d=%22M510 60v480%22/%3E%3Cpath d=%22M34 226v12M34 362v12%22/%3E%3Cpath d=%22M48 226v12M48 362v12%22/%3E%3Cpath d=%22M62 226v12M62 362v12%22/%3E%3Cpath d=%22M76 226v12M76 362v12%22/%3E%3Cpath d=%22M90 226v12M90 362v12%22/%3E%3Cpath d=%22M104 226v12M104 362v12%22/%3E%3Cpath d=%22M118 226v12M118 362v12%22/%3E%3Cpath d=%22M132 226v12M132 362v12%22/%3E%3Cpath d=%22M146 226v12M146 362v12%22/%3E%3Cpath d=%22M160 226v12M160 362v12%22/%3E%3Cpath d=%22M174 226v12M174 362v12%22/%3E%3Cpath d=%22M188 226v12M188 362v12%22/%3E%3Cpath d=%22M202 226v12M202 362v12%22/%3E%3Cpath d=%22M216 226v12M216 362v12%22/%3E%3Cpath d=%22M230 226v12M230 362v12%22/%3E%3Cpath d=%22M244 226v12M244 362v12%22/%3E%3Cpath d=%22M258 226v12M258 362v12%22/%3E%3Cpath d=%22M272 226v12M272 362v12%22/%3E%3Cpath d=%22M286 226v12M286 362v12%22/%3E%3Cpath d=%22M300 226v12M300 362v12%22/%3E%3Cpath d=%22M314 226v12M314 362v12%22/%3E%3Cpath d=%22M328 226v12M328 362v12%22/%3E%3Cpath d=%22M342 226v12M342 362v12%22/%3E%3Cpath d=%22M356 226v12M356 362v12%22/%3E%3Cpath d=%22M370 226v12M370 362v12%22/%3E%3Cpath d=%22M384 226v12M384 362v12%22/%3E%3Cpath d=%22M398 226v12M398 362v12%22/%3E%3Cpath d=%22M412 226v12M412 362v12%22/%3E%3Cpath d=%22M426 226v12M426 362v12%22/%3E%3Cpath d=%22M440 226v12M440 362v12%22/%3E%3Cpath d=%22M454 226v12M454 362v12%22/%3E%3Cpath d=%22M468 226v12M468 362v12%22/%3E%3Cpath d=%22M482 226v12M482 362v12%22/%3E%3Cpath d=%22M496 226v12M496 362v12%22/%3E%3Cpath d=%22M510 226v12M510 362v12%22/%3E%3Cpath d=%22M524 226v12M524 362v12%22/%3E%3Cpath d=%22M538 226v12M538 362v12%22/%3E%3Cpath d=%22M552 226v12M552 362v12%22/%3E%3Cpath d=%22M566 226v12M566 362v12%22/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
+  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
+}
+.main[data-sport='volleyball']:has(.sp) {
+  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Crect x=%2260%22 y=%22120%22 width=%22480%22 height=%22360%22/%3E%3Cpath d=%22M300 96v408%22/%3E%3Cpath d=%22M220 120v360M380 120v360%22/%3E%3Cpath d=%22M60 120h-28M60 480h-28M540 120h28M540 480h28%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Crect x=%2260%22 y=%22120%22 width=%22480%22 height=%22360%22/%3E%3Cpath d=%22M300 96v408%22/%3E%3Cpath d=%22M220 120v360M380 120v360%22/%3E%3Cpath d=%22M60 120h-28M60 480h-28M540 120h28M540 480h28%22/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
+  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
+}
+
+.sp-head,
+.sp-team,
+.sp-team.other {
+  border-color: var(--line-strong);
+  border-radius: 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 86%, transparent), color-mix(in srgb, var(--surface) 90%, transparent));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 30px rgb(0 0 0 / 0.18);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.sp-team {
+  padding: 16px;
+}
+.sp-team > header strong,
+.sp-team > header h3 {
+  font-size: 1.12rem;
+  letter-spacing: -0.01em;
+}
+.sp-tabs {
+  margin: 0 -14px;
+  padding: 0 14px;
+}
+.sp-tabs button {
+  padding: 12px 4px;
+  font-size: 1rem;
+}
+/* The chosen tab is underlined in the accent, as a bar and never as lettering. */
+.sp-tabs button.on {
+  border-bottom-color: var(--accent);
+}
+.sp-scoreline .sp-score {
+  font-size: 2.5rem;
+  letter-spacing: -0.02em;
+}
+/* Every key: a little light along its top edge, a little shade under it. */
+:where(.sp) .sp-key {
+  border-color: var(--line-strong);
+  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 70%, var(--surface-3)), var(--surface));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.22);
+  transition: transform 0.08s ease, filter 0.12s ease;
+}
+:where(.sp) .sp-key:hover {
+  filter: brightness(1.06);
+}
+/* A basket made: the accent, lighter at the top. Twos and threes are the same; where they stand tells them apart. */
+.sp-key.make,
+.sp-key.make.three {
+  border-color: #5f9c14;
+  background: linear-gradient(180deg, #cdee45 0%, #9bd524 48%, #74b619 100%);
+  color: #10170a;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), inset 0 -10px 18px rgb(0 0 0 / 0.07), 0 3px 12px rgb(132 204 22 / 0.2);
+}
+.sp-key.ft {
+  border-color: #b97a0c;
+  background: linear-gradient(180deg, #ffcf5c 0%, #f3aa1f 55%, #df9210 100%);
+  color: #1c1303;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), inset 0 -8px 14px rgb(0 0 0 / 0.07), 0 3px 12px rgb(245 158 11 / 0.18);
+}
+.sp-key.miss,
+.sp-key.miss.three {
+  border-color: #b34843;
+  background: linear-gradient(180deg, #f7a39c 0%, #e5716a 55%, #d15650 100%);
+  color: #220908;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 -8px 14px rgb(0 0 0 / 0.08), 0 3px 12px rgb(220 80 75 / 0.16);
+}
+.sp-big {
+  gap: 10px;
+}
+.sp-big .sp-key.make b {
+  font-size: 2.1rem;
+  letter-spacing: -0.02em;
+}
+.sp-big .sp-key.make span:not(.chip-num),
+.sp-big .sp-key.miss span:not(.chip-num) {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+.sp-big .sp-key.miss b {
+  font-size: 1.7rem;
+  letter-spacing: -0.02em;
+}
+.sp-big .sp-key.ft,
+.sp-lite .sp-key.ft {
+  font-size: 1.05rem;
+}
+.sp-small {
+  gap: 10px;
+}
+.sp-small .sp-key {
+  font-size: 1.02rem;
+  font-weight: 650;
+}
+.sp-lite .sp-key.make b {
+  font-size: 1.45rem;
+}
+.sp-swap {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 70%, var(--surface-3)), var(--surface));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 1px 2px rgb(0 0 0 / 0.22);
+}
+.sp-plays > header h3 {
+  font-size: 1.12rem;
+}
+
+/* ---------- Keeping score: changing the period ---------- */
+.sp-sheet-head.lead > div {
+  text-align: left;
+}
+.sp-sheet-head.lead strong {
+  font-size: 1.15rem;
+}
+.sp-sheet-head.lead .sport-icon {
+  flex: none;
+  color: var(--accent-edge);
+}
+/* The banner is dark in both themes, so its pale lettering can always be read. */
+.sp-now {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  padding: 14px 18px 16px 38px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: radial-gradient(70% 120% at 100% 50%, rgb(132 204 22 / 0.28), transparent 70%), linear-gradient(180deg, #1c2412, #10160b);
+  color: #e8ebe2;
+}
+.sp-now::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 22px;
+  bottom: 40px;
+  width: 4px;
+  border-radius: 2px;
+  background: #c5f03c;
+}
+.sp-now::after {
+  content: '';
+  position: absolute;
+  top: -40%;
+  right: -4%;
+  width: 46%;
+  height: 180%;
+  background: center / contain no-repeat;
+  pointer-events: none;
+}
+.sp-now.k-basketball::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%23bef264%22 stroke-opacity=%22.3%22 stroke-width=%225%22 transform=%22rotate%28-90 300 300%29%22%3E%3Crect x=%22210%22 y=%2220%22 width=%22180%22 height=%22230%22/%3E%3Ccircle cx=%22300%22 cy=%22250%22 r=%2272%22/%3E%3Cpath d=%22M60 20v110a240 240 0 0 0 480 0V20%22/%3E%3Ccircle cx=%22300%22 cy=%2282%22 r=%2214%22/%3E%3C/g%3E%3C/svg%3E");
+}
+.sp-now.k-baseball::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%23bef264%22 stroke-opacity=%22.3%22 stroke-width=%225%22 transform=%22rotate%28-90 300 300%29%22%3E%3Cpath d=%22M300 560L40 300M300 560l260-260%22/%3E%3Cpath d=%22M300 560L170 430l130-130 130 130Z%22/%3E%3Ccircle cx=%22300%22 cy=%22430%22 r=%2222%22/%3E%3Cpath d=%22M118 378a260 260 0 0 1 364 0%22/%3E%3Cpath d=%22M40 300a370 370 0 0 1 520 0%22/%3E%3C/g%3E%3C/svg%3E");
+}
+.sp-now.k-football::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%23bef264%22 stroke-opacity=%22.3%22 stroke-width=%225%22 transform=%22rotate%28-90 300 300%29%22%3E%3Cpath d=%22M60 20v560%22/%3E%3Cpath d=%22M140 20v560%22/%3E%3Cpath d=%22M220 20v560%22/%3E%3Cpath d=%22M300 20v560%22/%3E%3Cpath d=%22M380 20v560%22/%3E%3Cpath d=%22M460 20v560%22/%3E%3Cpath d=%22M540 20v560%22/%3E%3Cpath d=%22M28 226v14M28 362v14%22/%3E%3Cpath d=%22M44 226v14M44 362v14%22/%3E%3Cpath d=%22M60 226v14M60 362v14%22/%3E%3Cpath d=%22M76 226v14M76 362v14%22/%3E%3Cpath d=%22M92 226v14M92 362v14%22/%3E%3Cpath d=%22M108 226v14M108 362v14%22/%3E%3Cpath d=%22M124 226v14M124 362v14%22/%3E%3Cpath d=%22M140 226v14M140 362v14%22/%3E%3Cpath d=%22M156 226v14M156 362v14%22/%3E%3Cpath d=%22M172 226v14M172 362v14%22/%3E%3Cpath d=%22M188 226v14M188 362v14%22/%3E%3Cpath d=%22M204 226v14M204 362v14%22/%3E%3Cpath d=%22M220 226v14M220 362v14%22/%3E%3Cpath d=%22M236 226v14M236 362v14%22/%3E%3Cpath d=%22M252 226v14M252 362v14%22/%3E%3Cpath d=%22M268 226v14M268 362v14%22/%3E%3Cpath d=%22M284 226v14M284 362v14%22/%3E%3Cpath d=%22M300 226v14M300 362v14%22/%3E%3Cpath d=%22M316 226v14M316 362v14%22/%3E%3Cpath d=%22M332 226v14M332 362v14%22/%3E%3Cpath d=%22M348 226v14M348 362v14%22/%3E%3Cpath d=%22M364 226v14M364 362v14%22/%3E%3Cpath d=%22M380 226v14M380 362v14%22/%3E%3Cpath d=%22M396 226v14M396 362v14%22/%3E%3Cpath d=%22M412 226v14M412 362v14%22/%3E%3Cpath d=%22M428 226v14M428 362v14%22/%3E%3Cpath d=%22M444 226v14M444 362v14%22/%3E%3Cpath d=%22M460 226v14M460 362v14%22/%3E%3Cpath d=%22M476 226v14M476 362v14%22/%3E%3Cpath d=%22M492 226v14M492 362v14%22/%3E%3Cpath d=%22M508 226v14M508 362v14%22/%3E%3Cpath d=%22M524 226v14M524 362v14%22/%3E%3Cpath d=%22M540 226v14M540 362v14%22/%3E%3Cpath d=%22M556 226v14M556 362v14%22/%3E%3Cpath d=%22M572 226v14M572 362v14%22/%3E%3C/g%3E%3C/svg%3E");
+}
+.sp-now.k-volleyball::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%23bef264%22 stroke-opacity=%22.3%22 stroke-width=%225%22 transform=%22rotate%28-90 300 300%29%22%3E%3Crect x=%2260%22 y=%22120%22 width=%22480%22 height=%22360%22/%3E%3Cpath d=%22M300 96v408%22/%3E%3Cpath d=%22M220 120v360M380 120v360%22/%3E%3C/g%3E%3C/svg%3E");
+}
+.sp-now-in {
+  font-size: 1rem;
+  color: #c9cfc0;
+}
+.sp-now strong {
+  font-size: 2.5rem;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #e6fba6;
+}
+.sp-now-pill {
+  margin-top: 6px;
+  padding: 3px 14px;
+  border: 1px solid #a3d42a;
+  border-radius: 999px;
+  background: rgb(163 212 42 / 0.2);
+  color: #e6fba6;
+  font-weight: 700;
+}
+.sp-pick-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+}
+.sp-pick-head > span {
+  display: grid;
+}
+.sp-pick-head strong {
+  font-size: 1.1rem;
+}
+.sp-pick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.sp-pick.many {
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+}
+.sp-pick-card {
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 1px;
+  min-height: 84px;
+  padding: 12px 44px 12px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sp-pick-card:hover {
+  background: var(--surface-3);
+}
+.sp-pick-card strong {
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+}
+.sp-pick-sub {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.sp-pick-card.on {
+  border: 2px solid var(--accent);
+  padding: 11px 43px 11px 17px;
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 28%, transparent);
+  cursor: default;
+}
+.sp-pick-tag {
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sp-pick-tick {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.sp-pick.many .sp-pick-card {
+  min-height: 72px;
+  padding: 10px 12px;
+}
+.sp-pick.many .sp-pick-card.on {
+  padding: 9px 11px;
+}
+.sp-pick.many .sp-pick-card strong {
+  font-size: 1.05rem;
+}
+.sp-pick.many .sp-pick-tick {
+  display: none;
+}
+.sp-sheet .sp-options {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}

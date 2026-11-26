@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import { DEFAULT_SCORING, byPeriod, clockText, linesOf, newId, periodName, playWords, scoreOf, type EvType, type GameEvent, type ScoreState, type ScoringConfig, type StatLine } from '../scoring';
 import { COURT, Court } from './PlayDiagram';
 import { confirmDialog } from './dialogs';
+import SportIcon from './SportIcon';
 
 export interface PadPlayer {
   id: number;
@@ -42,7 +43,7 @@ type Sheet =
   | { kind: 'options' };
 
 /** A panel that comes up from the bottom of the screen over the scoring pad. */
-export function BottomSheet({ title, sub, onClose, onBack, children }: { title: ReactNode; sub?: ReactNode; onClose: () => void; onBack?: () => void; children: ReactNode }) {
+export function BottomSheet({ title, sub, onClose, onBack, icon, children }: { title: ReactNode; sub?: ReactNode; onClose: () => void; onBack?: () => void; /** A sign before the title, which then stands at the left and not in the middle. */ icon?: ReactNode; children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -52,7 +53,8 @@ export function BottomSheet({ title, sub, onClose, onBack, children }: { title: 
     <div className="sp-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="sp-sheet" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
         <span className="sp-grip" aria-hidden="true" />
-        <header className="sp-sheet-head">
+        <header className={`sp-sheet-head ${icon ? 'lead' : ''}`}>
+          {icon}
           {onBack && (
             <button type="button" className="btn ghost sp-back" onClick={onBack} aria-label="Back">
               ‹
@@ -913,32 +915,29 @@ export default function ScorePad({
       )}
       {/* The period, and how the game is being kept. */}
       {sheet?.kind === 'options' && (
-        <BottomSheet title={final ? 'Final' : `Period ${state.period}`} sub={final ? undefined : pName(state.period)} onClose={() => setSheet(null)}>
+        <BottomSheet title={final ? 'Final' : 'Change Period'} icon={<SportIcon sport="basketball" size={26} />} onClose={() => setSheet(null)}>
           {!final && (
-            <div className="sp-two">
-              <button type="button" className="btn" disabled={state.period <= 1} onClick={() => toPeriod(state.period - 1)}>
-                ‹ Previous period
-              </button>
-              <button type="button" className="btn primary" onClick={() => toPeriod(state.period + 1)}>
-                Next period ›
-              </button>
-            </div>
+            <PeriodChanger
+              sport="basketball"
+              word="Period"
+              current={state.period}
+              regular={state.halves ? 2 : 4}
+              detail={(n) => `${pName(n)} • ${n <= (state.halves ? 2 : 4) ? ordinalPart(n, state.halves ? 'Half' : 'Quarter') : 'Overtime'}`}
+              onPick={toPeriod}
+              onNext={() => toPeriod(state.period + 1)}
+              toggle={
+                <div className="seg" role="group" aria-label="Halves or quarters">
+                  <button type="button" className={state.halves ? 'on' : ''} aria-pressed={!!state.halves} onClick={() => setState({ halves: true })}>
+                    Halves
+                  </button>
+                  <button type="button" className={state.halves ? '' : 'on'} aria-pressed={!state.halves} onClick={() => setState({ halves: false })}>
+                    Quarters
+                  </button>
+                </div>
+              }
+            />
           )}
           <div className="sp-options">
-            <div className="sp-halves">
-              <span>
-                <strong>Periods in this game</strong>
-                <span className="muted small">{state.halves ? 'Two halves, then overtime.' : 'Four quarters, then overtime.'}</span>
-              </span>
-              <div className="seg" role="group" aria-label="Halves or quarters">
-                <button type="button" className={state.halves ? 'on' : ''} aria-pressed={!!state.halves} onClick={() => setState({ halves: true })}>
-                  Halves
-                </button>
-                <button type="button" className={state.halves ? '' : 'on'} aria-pressed={!state.halves} onClick={() => setState({ halves: false })}>
-                  Quarters
-                </button>
-              </div>
-            </div>
             <label className="check setting">
               <input type="checkbox" checked={state.timed} onChange={(e) => (setRunningSince(null), setState({ timed: e.target.checked, clock_left: state.clock_left ?? state.period_secs }))} />
               <span>
@@ -965,6 +964,84 @@ export default function ScorePad({
         </BottomSheet>
       )}
     </div>
+  );
+}
+
+const ORDINALS = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth'];
+/** "Third Inning" from 3 and "Inning". Past the ninth: "Inning 12". */
+export const ordinalPart = (p: number, word: string) => (ORDINALS[p - 1] ? `${ORDINALS[p - 1]} ${word}` : `${word} ${p}`);
+
+/**
+ * Changing the part of the game: a banner saying which one it is in, a card for each to jump straight
+ * to, and back-one and on-one under them. Every sport's pad uses it; each says what its parts are called.
+ */
+export function PeriodChanger({
+  sport,
+  word,
+  current,
+  regular,
+  detail,
+  onPick,
+  onNext,
+  toggle,
+}: {
+  /** Which floor is drawn faintly in the banner. */
+  sport: string;
+  /** What a part is called: "Period", "Inning", "Set". */
+  word: string;
+  current: number;
+  /** How many parts a game has before any extra ones. That many cards are always shown. */
+  regular: number;
+  /** The line under a part's name: "H1 • First Half". */
+  detail: (p: number) => string;
+  onPick: (p: number) => void;
+  onNext: () => void;
+  /** Something beside "Select a period", such as halves or quarters. */
+  toggle?: ReactNode;
+}) {
+  const lower = word.toLowerCase();
+  const count = Math.max(regular, current);
+  return (
+    <>
+      <div className={`sp-now k-${sport}`}>
+        <span className="sp-now-in">You are in</span>
+        <strong>
+          {word} {current}
+        </strong>
+        <span className="sp-now-pill">{detail(current)}</span>
+      </div>
+      <div className="sp-pick-head">
+        <span>
+          <strong>Select {/^[aeiou]/i.test(word) ? 'an' : 'a'} {lower}</strong>
+          <span className="muted small">Choose the current {lower} of the game.</span>
+        </span>
+        {toggle}
+      </div>
+      <div className={`sp-pick ${count > 4 ? 'many' : ''}`} role="group" aria-label={`${word}s`}>
+        {Array.from({ length: count }, (_, i) => i + 1).map((n) => (
+          <button key={n} type="button" className={`sp-pick-card ${n === current ? 'on' : ''}`} aria-pressed={n === current} onClick={() => n !== current && onPick(n)}>
+            {n === current && <span className="sp-pick-tag">Current</span>}
+            <strong>
+              {word} {n}
+            </strong>
+            <span className="sp-pick-sub">{detail(n)}</span>
+            {n === current && (
+              <span className="sp-pick-tick" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12.5l4.500 4.500L19 7.500" />
+                </svg>
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="btn sp-wide" disabled={current <= 1} onClick={() => onPick(current - 1)}>
+        ‹ Previous {lower}
+      </button>
+      <button type="button" className="btn primary sp-wide" disabled={current >= 20} onClick={onNext}>
+        Next {lower} ›
+      </button>
+    </>
   );
 }
 
