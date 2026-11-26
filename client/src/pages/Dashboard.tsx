@@ -75,7 +75,7 @@ function LiveNow({ teamId }: { teamId: number }) {
     </>
   );
   return (
-    <section className="card fam-now on dash-live" aria-label="Live now">
+    <section className="card fam-now on dash-live" aria-label="Broadcast">
       <ul className="fam-now-list">
         {live.map((s) => (
           <li key={s.id}>

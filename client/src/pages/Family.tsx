@@ -11,7 +11,7 @@ import { api, listenLive, type FamilyDay, type FamilyKind, type FamilyResource, 
 import { fmtClock, fmtDateShort, parseClock, todayISO } from '../util';
 import { Modal } from '../components/bits';
 import { SharedPreview } from '../components/community';
-import { PageHead, Row } from '../components/cx';
+import { BroadcastHead, BroadcastQuiet, PageHead, Row } from '../components/cx';
 import { DrillBrowser, HomeworkCards, PlayBrowser, ResourceBrowser } from '../components/Browsers';
 import { TopTabs } from '../components/TopTabs';
 import SportIcon from '../components/SportIcon';
@@ -455,26 +455,12 @@ export function FamilyTeamPage({ frame }: { /** Present for an account that only
   const liveNow = !!data.video.live || !!data.live_game;
   // Drawn in two places: in its usual one, and above the schedule, where a tablet or phone shows it while something is live.
   const liveCard = (hasVideo || hasPlays) && (
-            <section className={`card cx-card fam-now ${data.video.live || data.live_game ? 'on' : ''}`} aria-label="Live now">
-              <div className="cx-card-head">
-                <h2 className="fam-h">
-                  <BoxIcon kind="live" />
-                  Live now
-                </h2>
-              </div>
+            <section className={`card cx-card fam-now ${data.video.live || data.live_game ? 'on' : ''}`} aria-label="Broadcast">
+              <BroadcastHead />
               {!data.video.live && !data.live_game ? (
-                <div className="fam-quiet">
-                  {/* A screen with nothing on it yet, between two clouds. */}
-                  <svg viewBox="0 0 220 76" width="220" height="76" fill="none" aria-hidden="true">
-                    <path className="fam-quiet-cloud" d="M12 62a14 14 0 0 1 14-14 18 18 0 0 1 34-3 12 12 0 0 1 14 17Z" />
-                    <path className="fam-quiet-cloud" d="M150 62a11 11 0 0 1 11-11 15 15 0 0 1 28-2 10 10 0 0 1 12 13Z" />
-                    <rect className="fam-quiet-screen" x="80" y="16" width="62" height="44" rx="9" />
-                    <path className="fam-quiet-play" d="M105 29v18l15-9Z" />
-                    <path className="fam-quiet-spark" d="M148 14l8-8M153 21l11-4M150 28h9" />
-                  </svg>
-                  <strong>Nothing is live right now.</strong>
+                <BroadcastQuiet title="Nothing is live right now.">
                   <span className="muted small">A game's video or play by play shows here the moment it starts.</span>
-                </div>
+                </BroadcastQuiet>
               ) : (
                 <ul className="fam-now-list">
                   {data.live_game && (

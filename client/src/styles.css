@@ -24304,36 +24304,10 @@ body {
 }
 
 /* ---------- Keeping score: glass boxes, keys with a shine, and the sport's own floor drawn faintly behind ---------- */
-/* The page behind the pad: a glow of the accent in two corners and line art of the floor, top left and bottom right. */
+/* The page behind the pad: a glow of the accent in two corners. */
 .main:has(.sp) {
-  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Crect x=%2220%22 y=%2260%22 width=%22560%22 height=%22480%22/%3E%3Cpath d=%22M300 60v480%22/%3E%3Ccircle cx=%22300%22 cy=%22300%22 r=%2290%22/%3E%3Ccircle cx=%22300%22 cy=%22300%22 r=%226%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Crect x=%2220%22 y=%2260%22 width=%22560%22 height=%22480%22/%3E%3Cpath d=%22M300 60v480%22/%3E%3Ccircle cx=%22300%22 cy=%22300%22 r=%2290%22/%3E%3Ccircle cx=%22300%22 cy=%22300%22 r=%226%22/%3E%3C/g%3E%3C/svg%3E");
+  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%);
   background-repeat: no-repeat;
-  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
-  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
-}
-.main[data-sport='basketball']:has(.sp) {
-  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Crect x=%2220%22 y=%2220%22 width=%22560%22 height=%22560%22/%3E%3Crect x=%22210%22 y=%2220%22 width=%22180%22 height=%22230%22/%3E%3Ccircle cx=%22300%22 cy=%22250%22 r=%2272%22/%3E%3Cpath d=%22M60 20v110a240 240 0 0 0 480 0V20%22/%3E%3Cpath d=%22M262 62h76%22/%3E%3Ccircle cx=%22300%22 cy=%2282%22 r=%2214%22/%3E%3Cpath d=%22M228 580a72 72 0 0 1 144 0%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Crect x=%2220%22 y=%2220%22 width=%22560%22 height=%22560%22/%3E%3Crect x=%22210%22 y=%2220%22 width=%22180%22 height=%22230%22/%3E%3Ccircle cx=%22300%22 cy=%22250%22 r=%2272%22/%3E%3Cpath d=%22M60 20v110a240 240 0 0 0 480 0V20%22/%3E%3Cpath d=%22M262 62h76%22/%3E%3Ccircle cx=%22300%22 cy=%2282%22 r=%2214%22/%3E%3Cpath d=%22M228 580a72 72 0 0 1 144 0%22/%3E%3C/g%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
-  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
-}
-.main[data-sport='baseball']:has(.sp) {
-  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Cpath d=%22M300 560L40 300M300 560l260-260%22/%3E%3Cpath d=%22M300 560L170 430l130-130 130 130Z%22/%3E%3Ccircle cx=%22300%22 cy=%22430%22 r=%2222%22/%3E%3Cpath d=%22M118 378a260 260 0 0 1 364 0%22/%3E%3Cpath d=%22M40 300a370 370 0 0 1 520 0%22/%3E%3Ccircle cx=%22300%22 cy=%22560%22 r=%2226%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Cpath d=%22M300 560L40 300M300 560l260-260%22/%3E%3Cpath d=%22M300 560L170 430l130-130 130 130Z%22/%3E%3Ccircle cx=%22300%22 cy=%22430%22 r=%2222%22/%3E%3Cpath d=%22M118 378a260 260 0 0 1 364 0%22/%3E%3Cpath d=%22M40 300a370 370 0 0 1 520 0%22/%3E%3Ccircle cx=%22300%22 cy=%22560%22 r=%2226%22/%3E%3C/g%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
-  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
-}
-.main[data-sport='football']:has(.sp) {
-  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Crect x=%2220%22 y=%2260%22 width=%22560%22 height=%22480%22/%3E%3Cpath d=%22M90 60v480%22/%3E%3Cpath d=%22M160 60v480%22/%3E%3Cpath d=%22M230 60v480%22/%3E%3Cpath d=%22M300 60v480%22/%3E%3Cpath d=%22M370 60v480%22/%3E%3Cpath d=%22M440 60v480%22/%3E%3Cpath d=%22M510 60v480%22/%3E%3Cpath d=%22M34 226v12M34 362v12%22/%3E%3Cpath d=%22M48 226v12M48 362v12%22/%3E%3Cpath d=%22M62 226v12M62 362v12%22/%3E%3Cpath d=%22M76 226v12M76 362v12%22/%3E%3Cpath d=%22M90 226v12M90 362v12%22/%3E%3Cpath d=%22M104 226v12M104 362v12%22/%3E%3Cpath d=%22M118 226v12M118 362v12%22/%3E%3Cpath d=%22M132 226v12M132 362v12%22/%3E%3Cpath d=%22M146 226v12M146 362v12%22/%3E%3Cpath d=%22M160 226v12M160 362v12%22/%3E%3Cpath d=%22M174 226v12M174 362v12%22/%3E%3Cpath d=%22M188 226v12M188 362v12%22/%3E%3Cpath d=%22M202 226v12M202 362v12%22/%3E%3Cpath d=%22M216 226v12M216 362v12%22/%3E%3Cpath d=%22M230 226v12M230 362v12%22/%3E%3Cpath d=%22M244 226v12M244 362v12%22/%3E%3Cpath d=%22M258 226v12M258 362v12%22/%3E%3Cpath d=%22M272 226v12M272 362v12%22/%3E%3Cpath d=%22M286 226v12M286 362v12%22/%3E%3Cpath d=%22M300 226v12M300 362v12%22/%3E%3Cpath d=%22M314 226v12M314 362v12%22/%3E%3Cpath d=%22M328 226v12M328 362v12%22/%3E%3Cpath d=%22M342 226v12M342 362v12%22/%3E%3Cpath d=%22M356 226v12M356 362v12%22/%3E%3Cpath d=%22M370 226v12M370 362v12%22/%3E%3Cpath d=%22M384 226v12M384 362v12%22/%3E%3Cpath d=%22M398 226v12M398 362v12%22/%3E%3Cpath d=%22M412 226v12M412 362v12%22/%3E%3Cpath d=%22M426 226v12M426 362v12%22/%3E%3Cpath d=%22M440 226v12M440 362v12%22/%3E%3Cpath d=%22M454 226v12M454 362v12%22/%3E%3Cpath d=%22M468 226v12M468 362v12%22/%3E%3Cpath d=%22M482 226v12M482 362v12%22/%3E%3Cpath d=%22M496 226v12M496 362v12%22/%3E%3Cpath d=%22M510 226v12M510 362v12%22/%3E%3Cpath d=%22M524 226v12M524 362v12%22/%3E%3Cpath d=%22M538 226v12M538 362v12%22/%3E%3Cpath d=%22M552 226v12M552 362v12%22/%3E%3Cpath d=%22M566 226v12M566 362v12%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Crect x=%2220%22 y=%2260%22 width=%22560%22 height=%22480%22/%3E%3Cpath d=%22M90 60v480%22/%3E%3Cpath d=%22M160 60v480%22/%3E%3Cpath d=%22M230 60v480%22/%3E%3Cpath d=%22M300 60v480%22/%3E%3Cpath d=%22M370 60v480%22/%3E%3Cpath d=%22M440 60v480%22/%3E%3Cpath d=%22M510 60v480%22/%3E%3Cpath d=%22M34 226v12M34 362v12%22/%3E%3Cpath d=%22M48 226v12M48 362v12%22/%3E%3Cpath d=%22M62 226v12M62 362v12%22/%3E%3Cpath d=%22M76 226v12M76 362v12%22/%3E%3Cpath d=%22M90 226v12M90 362v12%22/%3E%3Cpath d=%22M104 226v12M104 362v12%22/%3E%3Cpath d=%22M118 226v12M118 362v12%22/%3E%3Cpath d=%22M132 226v12M132 362v12%22/%3E%3Cpath d=%22M146 226v12M146 362v12%22/%3E%3Cpath d=%22M160 226v12M160 362v12%22/%3E%3Cpath d=%22M174 226v12M174 362v12%22/%3E%3Cpath d=%22M188 226v12M188 362v12%22/%3E%3Cpath d=%22M202 226v12M202 362v12%22/%3E%3Cpath d=%22M216 226v12M216 362v12%22/%3E%3Cpath d=%22M230 226v12M230 362v12%22/%3E%3Cpath d=%22M244 226v12M244 362v12%22/%3E%3Cpath d=%22M258 226v12M258 362v12%22/%3E%3Cpath d=%22M272 226v12M272 362v12%22/%3E%3Cpath d=%22M286 226v12M286 362v12%22/%3E%3Cpath d=%22M300 226v12M300 362v12%22/%3E%3Cpath d=%22M314 226v12M314 362v12%22/%3E%3Cpath d=%22M328 226v12M328 362v12%22/%3E%3Cpath d=%22M342 226v12M342 362v12%22/%3E%3Cpath d=%22M356 226v12M356 362v12%22/%3E%3Cpath d=%22M370 226v12M370 362v12%22/%3E%3Cpath d=%22M384 226v12M384 362v12%22/%3E%3Cpath d=%22M398 226v12M398 362v12%22/%3E%3Cpath d=%22M412 226v12M412 362v12%22/%3E%3Cpath d=%22M426 226v12M426 362v12%22/%3E%3Cpath d=%22M440 226v12M440 362v12%22/%3E%3Cpath d=%22M454 226v12M454 362v12%22/%3E%3Cpath d=%22M468 226v12M468 362v12%22/%3E%3Cpath d=%22M482 226v12M482 362v12%22/%3E%3Cpath d=%22M496 226v12M496 362v12%22/%3E%3Cpath d=%22M510 226v12M510 362v12%22/%3E%3Cpath d=%22M524 226v12M524 362v12%22/%3E%3Cpath d=%22M538 226v12M538 362v12%22/%3E%3Cpath d=%22M552 226v12M552 362v12%22/%3E%3Cpath d=%22M566 226v12M566 362v12%22/%3E%3C/g%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
-  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
-}
-.main[data-sport='volleyball']:has(.sp) {
-  background-image: radial-gradient(46% 38% at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%), radial-gradient(40% 34% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22%3E%3Crect x=%2260%22 y=%22120%22 width=%22480%22 height=%22360%22/%3E%3Cpath d=%22M300 96v408%22/%3E%3Cpath d=%22M220 120v360M380 120v360%22/%3E%3Cpath d=%22M60 120h-28M60 480h-28M540 120h28M540 480h28%22/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 600 600%22%3E%3Cg fill=%22none%22 stroke=%22%238a8f85%22 stroke-opacity=%22.17%22 stroke-width=%222.5%22 transform=%22rotate%28180 300 300%29%22%3E%3Crect x=%2260%22 y=%22120%22 width=%22480%22 height=%22360%22/%3E%3Cpath d=%22M300 96v408%22/%3E%3Cpath d=%22M220 120v360M380 120v360%22/%3E%3Cpath d=%22M60 120h-28M60 480h-28M540 120h28M540 480h28%22/%3E%3C/g%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: 0 0, 0 0, left -90px top -70px, right -110px bottom -60px;
-  background-size: auto, auto, min(560px, 70vw), min(620px, 78vw);
 }
 
 .sp-head,
@@ -24457,21 +24431,11 @@ body {
   display: grid;
   justify-items: start;
   gap: 2px;
-  padding: 14px 18px 16px 38px;
+  padding: 14px 18px 16px 20px;
   overflow: hidden;
   border-radius: 12px;
   background: radial-gradient(70% 120% at 100% 50%, rgb(132 204 22 / 0.28), transparent 70%), linear-gradient(180deg, #1c2412, #10160b);
   color: #e8ebe2;
-}
-.sp-now::before {
-  content: '';
-  position: absolute;
-  left: 18px;
-  top: 22px;
-  bottom: 40px;
-  width: 4px;
-  border-radius: 2px;
-  background: #c5f03c;
 }
 .sp-now::after {
   content: '';
@@ -24608,4 +24572,30 @@ body {
 .sp-sheet .sp-options {
   padding-top: 14px;
   border-top: 1px solid var(--line);
+}
+
+/* A game's details, its coaches and their talk, and the plan itself belong to the Plan tab. Their own layout must not bring them back on Score or Video. */
+.plan-top[hidden],
+.plan-layout[hidden] {
+  display: none;
+}
+
+/* A game's Video tab with nothing on air: the same box as on the team's page for parents. */
+.gv-none .cx-card-head {
+  margin-bottom: 14px;
+}
+.gv-none .fam-h {
+  gap: 14px;
+  margin: 0;
+  font-size: 1.2rem;
+}
+.gv-none .fam-ico {
+  width: 46px;
+  height: 34px;
+  border-radius: 11px;
+  transform: none;
+}
+.gv-none .fam-ico svg {
+  width: 20px;
+  height: 20px;
 }

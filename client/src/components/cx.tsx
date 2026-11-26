@@ -257,6 +257,37 @@ export function LayoutToggle({ compact, onChange }: { compact: boolean; onChange
     </div>
   );
 }
+/** The heading of the box that says what is on air: a broadcast sign on a red tile, and "Broadcast". */
+export function BroadcastHead() {
+  return (
+    <div className="cx-card-head">
+      <h2 className="fam-h">
+        <span className="fam-ico live" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 13.5a1.500 1.500 0 1 0 0-3 1.500 1.500 0 0 0 0 3ZM8.500 15.500a5 5 0 0 1 0-7M15.500 8.500a5 5 0 0 1 0 7M5.800 18.200a9 9 0 0 1 0-12.400M18.200 5.800a9 9 0 0 1 0 12.400" />
+          </svg>
+        </span>
+        Broadcast
+      </h2>
+    </div>
+  );
+}
+/** Nothing on air: a screen with nothing on it yet, between two clouds, and the words under it. */
+export function BroadcastQuiet({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="fam-quiet">
+      <svg viewBox="0 0 220 76" width="220" height="76" fill="none" aria-hidden="true">
+        <path className="fam-quiet-cloud" d="M12 62a14 14 0 0 1 14-14 18 18 0 0 1 34-3 12 12 0 0 1 14 17Z" />
+        <path className="fam-quiet-cloud" d="M150 62a11 11 0 0 1 11-11 15 15 0 0 1 28-2 10 10 0 0 1 12 13Z" />
+        <rect className="fam-quiet-screen" x="80" y="16" width="62" height="44" rx="9" />
+        <path className="fam-quiet-play" d="M105 29v18l15-9Z" />
+        <path className="fam-quiet-spark" d="M148 14l8-8M153 21l11-4M150 28h9" />
+      </svg>
+      <strong>{title}</strong>
+      {children}
+    </div>
+  );
+}
 /**
  * A thing's categories as a row of their colors, for the compact list of resources. Pointing at it,
  * or reaching it with the keyboard, names them. Nothing is drawn with no categories.

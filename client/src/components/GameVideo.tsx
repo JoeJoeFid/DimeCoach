@@ -9,6 +9,7 @@ import { api, type GameStream, type StreamList, type StreamPerson } from '../api
 import { LIVE_BACK, PICKS, QUALITIES, RUNGS, Stopped, cannotJoin, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
 import { BinIcon, Modal, PlayIcon } from './bits';
 import { confirmDialog } from './dialogs';
+import { BroadcastHead, BroadcastQuiet } from './cx';
 
 const mb = (bytes: number) => (bytes >= 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1024 / 1024))} MB`);
 const span = (secs: number) => {
@@ -1124,11 +1125,13 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
             </div>
           )}
           {live.length === 0 ? (
-            <div className="card gv-none">
-              <h2>{planId ? 'This game is not live right now' : 'Nothing is live right now'}</h2>
-              <p className="muted">{can.watch ? 'When someone broadcasts it, the video shows here to watch.' : 'Watching live video has not been turned on for you on this team.'}</p>
-              {elsewhere.length > 0 && <p className="muted small">Another of this team's games is being broadcast now: {elsewhere.map((s) => s.title || 'a game').join(', ')}.</p>}
-            </div>
+            <section className="card cx-card fam-now gv-none" aria-label="Broadcast">
+              <BroadcastHead />
+              <BroadcastQuiet title={planId ? 'This game is not live right now.' : 'Nothing is live right now.'}>
+                <span className="muted small">{can.watch ? 'When someone broadcasts it, the video shows here to watch.' : 'Watching live video has not been turned on for you on this team.'}</span>
+                {elsewhere.length > 0 && <span className="muted small">Another of this team's games is being broadcast now: {elsewhere.map((s) => s.title || 'a game').join(', ')}.</span>}
+              </BroadcastQuiet>
+            </section>
           ) : (
             live.map((s) => (
               <div key={s.id} className="card gv-live">

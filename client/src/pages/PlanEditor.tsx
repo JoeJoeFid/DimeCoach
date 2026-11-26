@@ -520,22 +520,6 @@ export default function PlanEditor() {
         }}
         onDragEnd={onDragEnd}
       >
-        {/* On the game's video, which game it is leads the page: its name, and when and where it is. The plan has these in its own box. */}
-        {gameMode && gameView === 'video' && (
-          <header className="game-title">
-            <h1>{plan.title || (plan.game?.opponent ? `vs. ${plan.game.opponent}` : 'Game')}</h1>
-            <p className="muted">
-              {[
-                plan.date && new Date(`${plan.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }),
-                // With morning or afternoon said: a time on its own could be either.
-                plan.start_time && new Date(2000, 0, 1, 0, parseClock(plan.start_time)).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
-                plan.location,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-          </header>
-        )}
         {/* A game has three parts: what is planned, keeping score, and its video. */}
         {gameMode && (
           <SubTabs<'plan' | 'score' | 'video'>
