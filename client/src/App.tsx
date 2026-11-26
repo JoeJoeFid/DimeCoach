@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom';
 import { SIGNED_OUT_EVENT, api, listenLive, type AccountRole, type AuthStatus, type Bootstrap, type User } from './api';
 import type { Sport, Tag, Team, TeamPerm } from './types';
 import { sportKind } from './sports';
@@ -159,6 +159,11 @@ export default function App() {
   // Set by signing in, and cleared once a team is picked: coming back to an open session skips the question.
   const [justSignedIn, setJustSignedIn] = useState(false);
   const { pathname, search } = useLocation();
+  // A page opened from another starts at its top, not as far down as the last one was left. Going back keeps the place the browser remembers.
+  const arrivedBy = useNavigationType();
+  useEffect(() => {
+    if (arrivedBy !== 'POP') window.scrollTo(0, 0);
+  }, [pathname, arrivedBy]);
 
   // A device that already allows notifications is put on the list of whoever is signed in on it.
   const signedInAs = auth?.user?.id;
