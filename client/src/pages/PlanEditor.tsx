@@ -471,7 +471,8 @@ export default function PlanEditor() {
           <span>{plan.title.trim() || (plan.is_template ? 'Template' : isHomework ? 'Homework' : gameMode ? 'Game' : 'Practice')}</span>
         </h1>
         <SaveState state={saveState} />
-        {!plan.is_template && (
+        {/* Sharing and printing are of the plan. A game's score and video have neither. */}
+        {!plan.is_template && gameView === 'plan' && (
           <div className="plan-topbar-actions">
             <button type="button" className="btn" title="Share: send it to coaches, put it in a community, or make a link" onClick={() => setSharing(true)}>
               <ShareIcon size={16} />

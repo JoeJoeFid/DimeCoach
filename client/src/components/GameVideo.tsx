@@ -1148,8 +1148,8 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
         <div className="card">
           <h2>Saved video{planId ? ' of this game' : ''}</h2>
           <p className="muted small">
-            For this team's coaches. It is also in the Filmroom, where it can be cut into clips. {can.save ? '' : can.full ? 'This account\u2019s storage is full: no more video can be saved until some space is freed.' : 'Saving video is not turned on for this team: the administrator decides which teams may keep video.'}
-            {list.free_bytes !== undefined && Number.isFinite(list.free_bytes) && ` The site has ${mb(list.free_bytes)} of room left.`}
+            {can.save ? '' : can.full ? 'This account\u2019s storage is full: no more video can be saved until some space is freed.' : 'Saving video is not turned on for this team: the administrator decides which teams may keep video.'}
+            {list.free_bytes !== undefined && Number.isFinite(list.free_bytes) && `${can.save ? '' : ' '}The site has ${mb(list.free_bytes)} of room left.`}
           </p>
           {saved.length === 0 ? (
             <p className="muted">No saved video yet.</p>

@@ -5612,10 +5612,9 @@ fieldset.plain {
 }
 
 /* ---------- Practice editor: drills to drag in on the left, the plan on the right ---------- */
+/* As wide as every other page, with the same room at its sides. */
 .page.plan-editor {
-  max-width: 1760px;
-  padding-left: 20px;
-  padding-right: 20px;
+  max-width: 1401px;
 }
 .plan-layout {
   display: grid;

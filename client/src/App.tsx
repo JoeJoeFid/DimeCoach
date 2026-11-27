@@ -301,10 +301,10 @@ function SignedIn({ user, onChanged, choosingTeam, onTeamChosen }: { user: User;
     setPicking(false);
     onTeamChosen();
   };
-  // Whether the side menu is folded down to its icons. Everywhere but the editors it is the
-  // person's own choice, remembered on this computer. Opening an editor folds it; leaving puts it back.
+  // Whether the side menu is folded down to its icons. Everywhere but the play designer it is the
+  // person's own choice, remembered on this computer. Opening the play designer folds it; leaving puts it back. A practice or game leaves it as it is.
   const navKey = `practiceplan.navFolded.${user.id}`;
-  const inEditor = /^\/(plans|plays)\/\d+$/.test(location.pathname);
+  const inEditor = /^\/plays\/\d+$/.test(location.pathname);
   const [navFolded, setNavFolded] = useState(() => inEditor || localStorage.getItem(navKey) === '1');
   useEffect(() => {
     setNavFolded(inEditor || localStorage.getItem(navKey) === '1');
