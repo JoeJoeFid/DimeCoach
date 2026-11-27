@@ -24598,3 +24598,70 @@ body {
   width: 20px;
   height: 20px;
 }
+
+/* ---------- A game's Video tab with nothing on air: the picture, a fine line, and the words with the button to go live ---------- */
+.card.gv-none {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line-strong));
+  border-radius: 18px;
+  background: radial-gradient(42% 90% at 100% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%), radial-gradient(36% 70% at 0% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%), var(--surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 10px 30px rgb(0 0 0 / 0.16);
+}
+.gv-none-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  padding: 4px 8px 14px;
+}
+.gv-none-art {
+  display: grid;
+  place-items: center;
+  padding: 8px 24px;
+}
+.gv-none-art .bc-art {
+  width: min(100%, 330px);
+  height: auto;
+}
+.gv-none-text {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 10px 0 10px 40px;
+  border-left: 1px solid var(--line-strong);
+}
+.gv-none-text strong {
+  font-size: 1.35rem;
+  letter-spacing: -0.015em;
+}
+.gv-none-text .muted:not(.small) {
+  max-width: 300px;
+  font-size: 1.02rem;
+}
+/* Going live is the thing to do here: the accent, with dark lettering, and a little glow. */
+.btn.primary.gv-go {
+  margin-top: 12px;
+  min-height: 46px;
+  padding: 0 24px;
+  border-color: var(--accent-edge);
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.gv-top .btn.primary.gv-go {
+  margin-top: 0;
+}
+@media (max-width: 700px) {
+  .gv-none-body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 0 6px;
+  }
+  .gv-none-text {
+    justify-items: center;
+    padding: 12px 0 0;
+    border-left: none;
+    text-align: center;
+  }
+}

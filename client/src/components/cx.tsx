@@ -272,17 +272,23 @@ export function BroadcastHead() {
     </div>
   );
 }
-/** Nothing on air: a screen with nothing on it yet, between two clouds, and the words under it. */
+/** The picture for nothing on air: a screen with nothing on it yet, between two clouds. */
+export function BroadcastArt() {
+  return (
+    <svg className="bc-art" viewBox="0 0 220 76" width="220" height="76" fill="none" aria-hidden="true">
+      <path className="fam-quiet-cloud" d="M12 62a14 14 0 0 1 14-14 18 18 0 0 1 34-3 12 12 0 0 1 14 17Z" />
+      <path className="fam-quiet-cloud" d="M150 62a11 11 0 0 1 11-11 15 15 0 0 1 28-2 10 10 0 0 1 12 13Z" />
+      <rect className="fam-quiet-screen" x="80" y="16" width="62" height="44" rx="9" />
+      <path className="fam-quiet-play" d="M105 29v18l15-9Z" />
+      <path className="fam-quiet-spark" d="M148 14l8-8M153 21l11-4M150 28h9" />
+    </svg>
+  );
+}
+/** Nothing on air: the picture, and the words under it. */
 export function BroadcastQuiet({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="fam-quiet">
-      <svg viewBox="0 0 220 76" width="220" height="76" fill="none" aria-hidden="true">
-        <path className="fam-quiet-cloud" d="M12 62a14 14 0 0 1 14-14 18 18 0 0 1 34-3 12 12 0 0 1 14 17Z" />
-        <path className="fam-quiet-cloud" d="M150 62a11 11 0 0 1 11-11 15 15 0 0 1 28-2 10 10 0 0 1 12 13Z" />
-        <rect className="fam-quiet-screen" x="80" y="16" width="62" height="44" rx="9" />
-        <path className="fam-quiet-play" d="M105 29v18l15-9Z" />
-        <path className="fam-quiet-spark" d="M148 14l8-8M153 21l11-4M150 28h9" />
-      </svg>
+      <BroadcastArt />
       <strong>{title}</strong>
       {children}
     </div>

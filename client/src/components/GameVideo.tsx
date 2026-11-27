@@ -9,7 +9,7 @@ import { api, type GameStream, type StreamList, type StreamPerson } from '../api
 import { LIVE_BACK, PICKS, QUALITIES, RUNGS, Stopped, cannotJoin, autoStart, autoStep, bringInVideo, cameraSize, joinedPlayer, openBroadcast, pieceBroadcaster, pieceFetcher, type Auto, type Bringing, type Broadcaster, type JoinedPlayer, type Quality } from '../video';
 import { BinIcon, Modal, PlayIcon } from './bits';
 import { confirmDialog } from './dialogs';
-import { BroadcastHead, BroadcastQuiet } from './cx';
+import { BroadcastArt, BroadcastHead } from './cx';
 
 const mb = (bytes: number) => (bytes >= 1024 * 1024 * 1024 ? `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1024 / 1024))} MB`);
 const span = (secs: number) => {
@@ -1094,6 +1094,14 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
   const live = list.live.filter(ofGame);
   const elsewhere = list.live.filter((s) => !ofGame(s));
   const saved = list.saved.filter(ofGame);
+  const goLive = (
+    <button type="button" className="btn primary gv-go" title="Uses this device's camera and microphone. You choose whether the video is kept before you go live." onClick={() => (setNotice(''), setCasting(true))}>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM8.1 15.9a5.5 5.5 0 0 1 0-7.800M15.9 8.100a5.500 5.500 0 0 1 0 7.800M5.300 18.700a9.500 9.500 0 0 1 0-13.400M18.700 5.300a9.500 9.500 0 0 1 0 13.400" />
+      </svg>
+      Broadcast from this device
+    </button>
+  );
   return (
     <div className="gv">
       {error && <p className="error">{error}</p>}
@@ -1113,24 +1121,23 @@ export default function GameVideo({ teamId, planId, title = '' }: { teamId: numb
         />
       ) : (
         <>
-          {/* Going live from this device: at the top right of the page, where it is found without reading down. */}
-          {can.broadcast && (
-            <div className="gv-top">
-              <button type="button" className="btn gv-go" title="Uses this device's camera and microphone. You choose whether the video is kept before you go live." onClick={() => (setNotice(''), setCasting(true))}>
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM8.1 15.9a5.5 5.5 0 0 1 0-7.800M15.9 8.100a5.500 5.500 0 0 1 0 7.800M5.300 18.700a9.500 9.500 0 0 1 0-13.400M18.700 5.300a9.500 9.500 0 0 1 0 13.400" />
-                </svg>
-                Broadcast from this device
-              </button>
-            </div>
-          )}
+          {/* Going live from this device. With nothing on air the button is in the box that says so; with something on air it stands above it. */}
+          {can.broadcast && live.length > 0 && <div className="gv-top">{goLive}</div>}
           {live.length === 0 ? (
             <section className="card cx-card fam-now gv-none" aria-label="Broadcast">
               <BroadcastHead />
-              <BroadcastQuiet title={planId ? 'This game is not live right now.' : 'Nothing is live right now.'}>
-                <span className="muted small">{can.watch ? 'When someone broadcasts it, the video shows here to watch.' : 'Watching live video has not been turned on for you on this team.'}</span>
-                {elsewhere.length > 0 && <span className="muted small">Another of this team's games is being broadcast now: {elsewhere.map((s) => s.title || 'a game').join(', ')}.</span>}
-              </BroadcastQuiet>
+              {/* The picture on one side, and on the other what is so and what can be done about it. */}
+              <div className="gv-none-body">
+                <div className="gv-none-art">
+                  <BroadcastArt />
+                </div>
+                <div className="gv-none-text">
+                  <strong>{planId ? 'This game is not live right now.' : 'Nothing is live right now.'}</strong>
+                  <span className="muted">{can.watch ? 'When someone broadcasts it, the video shows here to watch.' : 'Watching live video has not been turned on for you on this team.'}</span>
+                  {elsewhere.length > 0 && <span className="muted small">Another of this team's games is being broadcast now: {elsewhere.map((s) => s.title || 'a game').join(', ')}.</span>}
+                  {can.broadcast && goLive}
+                </div>
+              </div>
             </section>
           ) : (
             live.map((s) => (
